@@ -448,6 +448,12 @@ public partial class MainWindowViewModel
         set => Snip.CaptureWithoutStealingFocus = value;
     }
 
+    public bool FreezeScreenOnScreenshot
+    {
+        get => Snip.FreezeScreenOnScreenshot;
+        set => Snip.FreezeScreenOnScreenshot = value;
+    }
+
     public CaptureDelay CaptureDelay
     {
         get => Snip.CaptureDelay;

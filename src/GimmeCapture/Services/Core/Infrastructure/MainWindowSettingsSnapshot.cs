@@ -18,6 +18,7 @@ public sealed class MainWindowSettingsSnapshot
     public required bool HideSnipSelectionDecoration { get; init; }
     public required bool AutoPinScreenshotSelection { get; init; }
     public required bool CaptureWithoutStealingFocus { get; init; }
+    public required bool FreezeScreenOnScreenshot { get; init; }
     public required CaptureDelay CaptureDelay { get; init; }
     public required OcrTextLayout OcrTextLayout { get; init; }
     public required bool SaveOcrTextToFile { get; init; }
@@ -97,6 +98,7 @@ public sealed class MainWindowSettingsSnapshot
             HideSnipSelectionDecoration = settings.HideSnipSelectionDecoration,
             AutoPinScreenshotSelection = settings.AutoPinScreenshotSelection,
             CaptureWithoutStealingFocus = settings.CaptureWithoutStealingFocus,
+            FreezeScreenOnScreenshot = settings.FreezeScreenOnScreenshot,
             CaptureDelay = settings.CaptureDelay,
             OcrTextLayout = settings.OcrTextLayout,
             SaveOcrTextToFile = settings.SaveOcrTextToFile,
@@ -176,6 +178,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.HideSnipSelectionDecoration = HideSnipSelectionDecoration;
         settings.AutoPinScreenshotSelection = AutoPinScreenshotSelection;
         settings.CaptureWithoutStealingFocus = CaptureWithoutStealingFocus;
+        settings.FreezeScreenOnScreenshot = FreezeScreenOnScreenshot;
         settings.CaptureDelay = CaptureDelay;
         settings.OcrTextLayout = OcrTextLayout;
         settings.SaveOcrTextToFile = SaveOcrTextToFile;

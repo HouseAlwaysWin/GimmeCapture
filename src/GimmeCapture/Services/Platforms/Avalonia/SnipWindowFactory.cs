@@ -111,9 +111,39 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             snipVm.InitializeTranslationToolbarPosition();
         }
 
+        // Freeze-frame: for a plain screenshot (not recording/translation/scrolling), snapshot the WHOLE desktop
+        // BEFORE the overlay is shown, so shell "light dismiss" popups (tray flyout / Start menu / left-click
+        // dropdowns) — which close the instant any full-screen overlay appears over them — are captured. The user
+        // then selects/annotates on this frozen still (see FreezeScreenOnScreenshot). Grabbed here, before Show(),
+        // so the overlay itself is never in the still (no self-exclusion needed).
+        bool freezeApplies = vm.FreezeScreenOnScreenshot
+            && (mode == CaptureMode.Normal || mode == CaptureMode.Copy || mode == CaptureMode.TextCopy || mode == CaptureMode.Pin)
+            && snip.Width > 1 && snip.Height > 1;
+        if (freezeApplies)
+        {
+            try
+            {
+                var grabOffset = snip.Position;
+                double grabScaling = snip.Screens?.Primary?.Scaling ?? 1.0;
+                var grabRegion = new global::Avalonia.Rect(0, 0, snip.Width, snip.Height);
+                // CaptureScreenAsync awaits Task.Run internally; wrap in an outer Task.Run so blocking here (on the
+                // UI thread) can't deadlock on the captured context. A fast GDI grab (~tens of ms) — an acceptable
+                // pre-overlay pause, and it must complete before Show() so the still predates the overlay.
+                var frozen = System.Threading.Tasks.Task.Run(() =>
+                    _screenCaptureService.CaptureScreenAsync(grabRegion, grabOffset, grabScaling, includeCursor: false)
+                ).GetAwaiter().GetResult();
+                snipVm.SetFrozenScreenSnapshot(frozen, grabScaling);
+            }
+            catch (Exception ex)
+            {
+                GimmeCapture.Services.Core.Infrastructure.AppLog.Warning("SnipWindowFactory.FreezeGrab", ex);
+            }
+        }
+
         // Open without stealing foreground focus so focus-sensitive target UI (dropdowns, right-click context
         // menus) stays open and can be captured. ShowActivated must be set BEFORE Show(). Translation mode is
-        // excluded (it needs real focus for its text controls) — see ShouldAvoidStealingFocus.
+        // excluded (it needs real focus for its text controls) — see ShouldAvoidStealingFocus. In freeze-frame
+        // mode ShouldAvoidStealingFocus is false (the still is already grabbed, so focus no longer matters).
         if (snipVm.ShouldAvoidStealingFocus)
         {
             snip.ShowActivated = false;

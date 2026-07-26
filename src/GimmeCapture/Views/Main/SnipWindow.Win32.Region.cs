@@ -502,6 +502,20 @@ public partial class SnipWindow : Window
         _useHitTestRegions = false;
         _hitTestRegions.Clear();
 
+        // Freeze-frame: the overlay shows an OPAQUE frozen still, so it must NOT punch pass-through holes — a hole
+        // would reveal the LIVE desktop through the frozen picture, and "click the live app inside the selection"
+        // is meaningless on a still. Keep the whole window opaque + fully hit-testable (with _useHitTestRegions
+        // false, WM_NCHITTEST never returns HTTRANSPARENT); only a 1×1 stub is punched so DWM doesn't flag it a
+        // full-screen occluder. The selection border / handles / toolbar paint on top of the still as normal.
+        if (_viewModel?.IsFrozenFrameActive == true)
+        {
+            double fScaling = this.RenderScaling;
+            int fWidth = (int)(this.Bounds.Width * fScaling);
+            int fHeight = (int)(this.Bounds.Height * fScaling);
+            Win32Helpers.SetMultiWindowHoleRegion(hwnd, fWidth, fHeight, new[] { new Rect(0, 0, 1, 1) }, 0);
+            return;
+        }
+
         bool isTranslation = _viewModel?.IsTranslationMode ?? false;
 
         if (!isDrawingMode && (isTranslation || (state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10)))

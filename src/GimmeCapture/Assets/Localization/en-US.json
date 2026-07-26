@@ -311,6 +311,8 @@
   "AutoPinScreenshotSelection": "Lock selected screenshot instead of click-through",
   "CaptureWithoutStealingFocus": "Don't steal focus when capturing (keeps dropdowns / right-click menus open)",
   "CaptureWithoutStealingFocusHint": "Lets you capture menus that close on focus loss: just select, then Ctrl+C / Ctrl+S. Note: single-key edit hotkeys and text annotation need one click on the overlay first.",
+  "FreezeScreenOnScreenshot": "Freeze the screen when taking a screenshot (captures the tray flyout, Start menu, any dropdown)",
+  "FreezeScreenOnScreenshotHint": "Snapshots the whole desktop the instant you trigger a screenshot, then you select on the frozen image — so shell popups that close on any overlay are captured too. The overlay shows a still, not the live screen. Doesn't apply to recording / translation.",
   "TipLockSelection": "Lock selection (no click-through)",
   "ShowSnipCursor": "Show Cursor in Snip",
   "UseFixedRecordPath": "Always save to same file",

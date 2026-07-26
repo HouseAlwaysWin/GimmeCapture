@@ -125,6 +125,15 @@ public class AppSettings
     /// overlay first. Translation mode is unaffected (keeps its own focus handling).
     /// </summary>
     public bool CaptureWithoutStealingFocus { get; set; } = true;
+    /// <summary>
+    /// When true, a screenshot (Normal/Copy/TextCopy/Pin) freezes the whole desktop into a still image the
+    /// instant the overlay is triggered, and the user selects/annotates on that frozen image. This is the only
+    /// reliable way to capture "light dismiss" shell UI — the Windows tray flyout, Start menu, and most
+    /// left-click dropdowns — which close as soon as any full-screen overlay appears over them. Trade-off: the
+    /// overlay shows a frozen still (not the live see-through), and clicking the live app inside the selection is
+    /// disabled. Does not apply to Recording / Translation / scrolling capture (inherently live).
+    /// </summary>
+    public bool FreezeScreenOnScreenshot { get; set; } = true;
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public CaptureDelay CaptureDelay { get; set; } = CaptureDelay.Off;
     [JsonConverter(typeof(JsonStringEnumConverter))]

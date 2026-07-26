@@ -297,6 +297,8 @@
   "AutoPinScreenshotSelection": "選択したスクリーンショットを固定して透過クリックしない",
   "CaptureWithoutStealingFocus": "キャプチャ時にフォーカスを奪わない（ドロップダウン／右クリックメニューを閉じない）",
   "CaptureWithoutStealingFocusHint": "フォーカスが外れると閉じるメニューをキャプチャできます：範囲を選択して Ctrl+C／Ctrl+S。注意：単一キーの編集ショートカットとテキスト注釈は、先にオーバーレイを一度クリックする必要があります。",
+  "FreezeScreenOnScreenshot": "スクリーンショット時に画面を固定（タスクトレイのフライアウト・スタートメニュー・任意のドロップダウンをキャプチャ）",
+  "FreezeScreenOnScreenshotHint": "スクリーンショットを起動した瞬間にデスクトップ全体を静止画として取り込み、その固定画像上で範囲選択します。オーバーレイが乗ると閉じるシェルのポップアップもキャプチャできます。オーバーレイは静止画で、ライブ画面ではありません。録画／翻訳には適用されません。",
   "TipLockSelection": "選択を固定（透過クリックしない）",
   "ShowSnipCursor": "キャプチャ時にカーソルを表示",
   "UseFixedRecordPath": "固定録畫パスを使用",

@@ -91,6 +91,13 @@ public class SnipSettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _captureWithoutStealingFocus, value);
     }
 
+    private bool _freezeScreenOnScreenshot = true;
+    public bool FreezeScreenOnScreenshot
+    {
+        get => _freezeScreenOnScreenshot;
+        set => this.RaiseAndSetIfChanged(ref _freezeScreenOnScreenshot, value);
+    }
+
     private bool _showSnipCursor;
     public bool ShowSnipCursor
     {
