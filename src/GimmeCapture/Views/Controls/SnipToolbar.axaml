@@ -200,10 +200,12 @@
                     IsVisible="{Binding !IsTranslationMode}">
                 <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" Width="14" Height="14"/>
             </Button>
-            <!-- Freeze screen on screenshot — screenshot mode toggle; same switch as the "freeze screen when
-                 taking a screenshot" setting. Captures shell popups (tray flyout / Start menu / dropdowns). -->
+            <!-- Freeze screen — LIVE toggle: freezes/unfreezes the CURRENT overlay immediately (active = this
+                 overlay is currently showing a frozen still). The FreezeScreenOnScreenshot setting decides the
+                 initial state per capture; this button flips it live. Catching shell popups (tray flyout / Start
+                 menu) still needs the setting ON, so the still predates the overlay. -->
             <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
-                    Classes.active="{Binding FreezeScreenOnScreenshot}"
+                    Classes.active="{Binding IsFrozenFrameActive}"
                     Command="{Binding ToggleFreezeScreenCommand}"
                     IsVisible="{Binding IsScreenshotMode}"
                     ToolTip.Tip="{Binding [TipFreezeScreen], Source={x:Static infra:LocalizationService.Instance}}">

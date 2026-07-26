@@ -156,14 +156,14 @@ public class SnipWindowViewModelTests
         Assert.True(vm.ToolbarLeft > -10000);
     }
 
-    [Theory]
-    [InlineData(false, SnipAutoAction.None)]
-    [InlineData(true, SnipAutoAction.None)]
-    public void ResolveAutoActionMode_Normal_DoesNotAutoPin(bool autoPinSelection, SnipAutoAction expectedAction)
+    [Fact]
+    public void ResolveAutoActionMode_Normal_ReturnsNone()
     {
-        var action = SnipWindowViewModel.ResolveAutoActionMode(CaptureMode.Normal, autoPinSelection);
+        // A plain screenshot has no auto-action (the old auto-pin-on-normal branch was removed when lock-selection
+        // was consolidated into freeze-frame).
+        var action = SnipWindowViewModel.ResolveAutoActionMode(CaptureMode.Normal);
 
-        Assert.Equal(expectedAction, action);
+        Assert.Equal(SnipAutoAction.None, action);
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public class SnipWindowViewModelTests
     [InlineData(CaptureMode.TextCopy, SnipAutoAction.TextCopy)]
     public void ResolveAutoActionMode_PreservesExplicitCaptureModes(CaptureMode mode, SnipAutoAction expectedAction)
     {
-        var action = SnipWindowViewModel.ResolveAutoActionMode(mode, autoPinScreenshotSelection: true);
+        var action = SnipWindowViewModel.ResolveAutoActionMode(mode);
 
         Assert.Equal(expectedAction, action);
     }
@@ -272,6 +272,60 @@ public class SnipWindowViewModelTests
 
             Assert.Single(vm.TranslationOcrSearchRects);
             Assert.True(vm.IsTranslationOcrSearchActive);
+        }
+        finally
+        {
+            vm.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task ToggleFreezeFrameLive_WhenLive_GrabsWholeDesktopWithViewportGeometry()
+    {
+        // The toolbar's live freeze button grabs the WHOLE desktop (viewport rect at ScreenOffset/VisualScaling),
+        // exactly like the OCR full-screen grab and the factory's pre-overlay freeze — so the frozen still lines up
+        // with the selection math (which crops SelectionRect × scaling out of it).
+        var capture = new Mock<IScreenCaptureService>();
+        capture
+            .Setup(c => c.CaptureScreenAsync(It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(), It.IsAny<bool>()))
+            .ReturnsAsync(new SkiaSharp.SKBitmap(4, 4));
+        var vm = new SnipWindowViewModel(Colors.Red, 2.0, capture.Object);
+        try
+        {
+            vm.ViewportSize = new Size(800, 600);
+            vm.ScreenOffset = new PixelPoint(0, 0);
+            vm.VisualScaling = 1.0;
+
+            await vm.ToggleFreezeFrameLiveAsync();
+
+            capture.Verify(
+                c => c.CaptureScreenAsync(new Rect(0, 0, 800, 600), new PixelPoint(0, 0), 1.0, false),
+                Times.Once);
+        }
+        finally
+        {
+            vm.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task ToggleFreezeFrameLive_InRecordingMode_IsNoOp()
+    {
+        // Recording (like translation / scrolling) is inherently live — the button is hidden there and the command
+        // must not grab or freeze if it is ever invoked (e.g. by a stray hotkey) in those modes.
+        var capture = new Mock<IScreenCaptureService>();
+        var vm = new SnipWindowViewModel(Colors.Red, 2.0, capture.Object);
+        try
+        {
+            vm.CurrentMode = SnipMode.Recording;
+            vm.ViewportSize = new Size(800, 600);
+
+            await vm.ToggleFreezeFrameLiveAsync();
+
+            Assert.False(vm.IsFrozenFrameActive);
+            capture.Verify(
+                c => c.CaptureScreenAsync(It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(), It.IsAny<bool>()),
+                Times.Never);
         }
         finally
         {

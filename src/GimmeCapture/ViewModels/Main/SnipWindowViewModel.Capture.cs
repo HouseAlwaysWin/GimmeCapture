@@ -168,6 +168,67 @@ public partial class SnipWindowViewModel
             : await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, includeCursor: false);
     }
 
+    /// <summary>
+    /// Toolbar "freeze screen" button: toggles THIS overlay's freeze state live, with immediate effect — unlike the
+    /// FreezeScreenOnScreenshot setting, which only decides the initial state of the NEXT capture. Unfreeze drops
+    /// the still and returns to the live see-through overlay; freeze grabs the whole desktop right now (the overlay
+    /// is excluded from that grab, so it isn't baked into the still and there is no flicker) and switches to the
+    /// opaque still. Screenshot family only — recording/translation/scrolling are inherently live (the toolbar
+    /// button is hidden there; these guards also make the command a no-op if invoked by hotkey in those modes).
+    /// NOTE: freezing here happens AFTER the overlay is already up, so it can't recover a shell "light dismiss"
+    /// popup (tray flyout / Start menu) the overlay already closed — that still needs the setting ON so the still
+    /// predates the overlay. This button freezes/holds whatever is currently on screen.
+    /// </summary>
+    internal async Task ToggleFreezeFrameLiveAsync()
+    {
+        if (CurrentMode == SnipMode.Recording || CurrentMode == SnipMode.Translation || _manualScrollActive)
+        {
+            return;
+        }
+
+        if (IsFrozenFrameActive)
+        {
+            // Frozen → live: drop the still (SetFrozenScreenSnapshot disposes it) and re-run the region logic, which
+            // now takes the live see-through / pass-through branch instead of the opaque freeze branch.
+            SetFrozenScreenSnapshot(null, 1.0);
+            RefreshInteractionRegion();
+            return;
+        }
+
+        // Live → frozen: grab the whole desktop now. ViewportSize / ScreenOffset / VisualScaling are the same trio
+        // the OCR full-screen grab and the factory's pre-overlay freeze grab use.
+        if (ViewportSize.Width <= 1 || ViewportSize.Height <= 1)
+        {
+            return;
+        }
+
+        double grabScaling = VisualScaling <= 0 ? 1.0 : VisualScaling;
+        var grabRegion = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
+        Func<Task<SKBitmap>> grab =
+            () => _captureService.CaptureScreenAsync(grabRegion, ScreenOffset, grabScaling, includeCursor: false);
+
+        SKBitmap? frozen;
+        try
+        {
+            // The View-wired excluded-grab wrapper hides the overlay from the screen grab via WDA_EXCLUDEFROMCAPTURE
+            // for ~50 ms so the still doesn't include the overlay's own chrome — the overlay stays visible, so the
+            // user sees no flicker. Falls back to a bare grab off-Windows / in design.
+            frozen = RunTranslationOcrGrabExcludedAsync != null
+                ? await RunTranslationOcrGrabExcludedAsync(grab)
+                : await grab();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("SnipWindowViewModel.ToggleFreezeFrameLive", ex);
+            return;
+        }
+
+        // Transfers ownership + activates freeze-frame mode (or resets to live if the display conversion failed);
+        // then re-run the region logic so the overlay becomes opaque + fully hit-testable over the still.
+        SetFrozenScreenSnapshot(frozen, grabScaling);
+        RefreshInteractionRegion();
+    }
+
     private async Task ExecuteCopyCaptureAsync()
     {
         await HideOverlayForCaptureUnlessFrozenAsync();

@@ -337,8 +337,9 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> CopyCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> SaveCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> PinCommand { get; set; } = null!;
-    // Toolbar toggle for the "freeze screen on screenshot" setting (the toolbar button and the settings
-    // checkbox are the same switch). Persists the preference for the next capture.
+    // Toolbar "freeze screen" toggle: freezes/unfreezes the CURRENT overlay live, with immediate effect. Distinct
+    // from the FreezeScreenOnScreenshot setting, which only decides the initial state of the NEXT capture. See
+    // ToggleFreezeFrameLiveAsync.
     public ReactiveCommand<Unit, Unit> ToggleFreezeScreenCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ScrollingCaptureCommand { get; set; } = null!;
     public ReactiveCommand<ScrollingCaptureDirection, Unit> SetScrollDirectionCommand { get; set; } = null!;
@@ -533,8 +534,8 @@ public partial class SnipWindowViewModel
 
         PinCommand = CreateAsyncCommand(ExecutePinActionAsync, nameof(PinCommand), canExecuteHotkeys);
 
-        ToggleFreezeScreenCommand = CreateCommand(
-            () => FreezeScreenOnScreenshot = !FreezeScreenOnScreenshot, nameof(ToggleFreezeScreenCommand), canExecuteHotkeys);
+        ToggleFreezeScreenCommand = CreateAsyncCommand(
+            ToggleFreezeFrameLiveAsync, nameof(ToggleFreezeScreenCommand), canExecuteHotkeys);
 
         CopyCommand = CreateAsyncCommand(
             async () =>
