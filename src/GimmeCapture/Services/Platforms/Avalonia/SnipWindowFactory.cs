@@ -111,6 +111,14 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             snipVm.InitializeTranslationToolbarPosition();
         }
 
+        // Open without stealing foreground focus so focus-sensitive target UI (dropdowns, right-click context
+        // menus) stays open and can be captured. ShowActivated must be set BEFORE Show(). Translation mode is
+        // excluded (it needs real focus for its text controls) — see ShouldAvoidStealingFocus.
+        if (snipVm.ShouldAvoidStealingFocus)
+        {
+            snip.ShowActivated = false;
+        }
+
         snip.DataContext = snipVm;
         snip.Show();
     }

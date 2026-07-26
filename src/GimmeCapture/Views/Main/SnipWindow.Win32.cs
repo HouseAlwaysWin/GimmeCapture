@@ -46,12 +46,14 @@ public partial class SnipWindow : Window
     private const int GWLP_WNDPROC = -4;
     private const int GWL_EXSTYLE = -20;
     private const long WS_EX_TRANSPARENT = 0x20;
+    private const long WS_EX_NOACTIVATE = 0x08000000;
     private const uint WM_NCHITTEST = 0x0084;
     private const int HTTRANSPARENT = -1;
 
     private WndProcDelegate? _wndProcDelegate;
     private IntPtr _oldWndProc;
     private bool _translationClickThroughExStyleActive;
+    private bool _overlayNoActivateExStyleActive;
 
     /// <summary>
     /// While the translation toolbar is HIDDEN, add <c>WS_EX_TRANSPARENT</c> to the overlay so a Chromium
@@ -96,6 +98,46 @@ public partial class SnipWindow : Window
         catch (Exception e)
         {
             AppLog.Warning("SnipWindow.SyncTranslationClickThroughExStyle", e);
+        }
+    }
+
+    /// <summary>
+    /// Applies (or removes) <c>WS_EX_NOACTIVATE</c> on the overlay so it can be shown on top and receive mouse
+    /// clicks WITHOUT stealing foreground focus — a normal top-most window activates on click, and that focus
+    /// transfer is exactly what closes a target app's dropdown / right-click menu before it can be captured.
+    /// Enabled when <see cref="SnipWindowViewModel.ShouldAvoidStealingFocus"/> (the CaptureWithoutStealingFocus
+    /// setting, non-translation), and temporarily removed while the annotation text editor is open so the
+    /// textbox can take real keyboard focus. Keyboard shortcuts still work via the process-global LL hook.
+    /// Windows-only; no-op elsewhere.
+    /// </summary>
+    private void SyncOverlayNoActivateExStyle()
+    {
+        if (!OperatingSystem.IsWindows() || _viewModel == null) return;
+
+        bool want = _viewModel.ShouldAvoidStealingFocus && !_viewModel.IsEnteringText;
+        if (want == _overlayNoActivateExStyleActive) return;
+
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero) return;
+
+        try
+        {
+            long ex = IntPtr.Size == 8
+                ? GetWindowLongPtr64(hwnd, GWL_EXSTYLE).ToInt64()
+                : GetWindowLong32(hwnd, GWL_EXSTYLE);
+            long updated = want ? (ex | WS_EX_NOACTIVATE) : (ex & ~WS_EX_NOACTIVATE);
+            if (updated != ex)
+            {
+                if (IntPtr.Size == 8)
+                    SetWindowLongPtr64(hwnd, GWL_EXSTYLE, new IntPtr(updated));
+                else
+                    SetWindowLongPtr32(hwnd, GWL_EXSTYLE, new IntPtr((int)updated));
+            }
+            _overlayNoActivateExStyleActive = want;
+        }
+        catch (Exception e)
+        {
+            AppLog.Warning("SnipWindow.SyncOverlayNoActivateExStyle", e);
         }
     }
 

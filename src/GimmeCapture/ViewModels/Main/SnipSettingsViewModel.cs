@@ -84,6 +84,13 @@ public class SnipSettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _autoPinScreenshotSelection, value);
     }
 
+    private bool _captureWithoutStealingFocus = true;
+    public bool CaptureWithoutStealingFocus
+    {
+        get => _captureWithoutStealingFocus;
+        set => this.RaiseAndSetIfChanged(ref _captureWithoutStealingFocus, value);
+    }
+
     private bool _showSnipCursor;
     public bool ShowSnipCursor
     {

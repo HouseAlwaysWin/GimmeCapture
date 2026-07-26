@@ -45,6 +45,8 @@ public partial class SnipWindow : Window
         _recordingStateSubscription = null;
         _translationModeSubscription?.Dispose();
         _translationModeSubscription = null;
+        _overlayActivationSubscription?.Dispose();
+        _overlayActivationSubscription = null;
         ResetTranslationSelectionModifierState();
 
         _viewModel = DataContext as SnipWindowViewModel;
@@ -60,6 +62,15 @@ public partial class SnipWindow : Window
                         ResetTranslationSelectionModifierState();
                     }
                 });
+
+            // Re-apply WS_EX_NOACTIVATE when the situation changes: a mode switch flips ShouldAvoidStealingFocus
+            // (translation needs real focus), and entering/leaving the annotation text editor toggles the
+            // temporary override so the textbox can take keyboard focus for typing.
+            _overlayActivationSubscription = Observable.Merge(
+                    vm.WhenAnyValue(x => x.IsTranslationMode).Select(_ => 0),
+                    vm.WhenAnyValue(x => x.IsEnteringText).Select(_ => 0))
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(_ => SyncOverlayNoActivateExStyle());
 
             _viewportBoundsSubscription = this.GetObservable(Visual.BoundsProperty)
                 .Subscribe(b => vm.ViewportSize = b.Size);
