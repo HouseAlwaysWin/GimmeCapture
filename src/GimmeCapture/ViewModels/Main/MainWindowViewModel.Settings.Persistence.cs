@@ -41,8 +41,8 @@ public partial class MainWindowViewModel
             HideSnipPinDecoration = HideSnipPinDecoration,
             HideSnipPinBorder = HideSnipPinBorder,
             HideSnipSelectionDecoration = HideSnipSelectionDecoration,
-            AutoPinScreenshotSelection = AutoPinScreenshotSelection,
             CaptureWithoutStealingFocus = CaptureWithoutStealingFocus,
+            FreezeScreenOnScreenshot = FreezeScreenOnScreenshot,
             CaptureDelay = CaptureDelay,
             OcrTextLayout = OcrTextLayout,
             SaveOcrTextToFile = SaveOcrTextToFile,
@@ -138,8 +138,8 @@ public partial class MainWindowViewModel
         HideRecordPinDecoration = snapshot.HideRecordPinDecoration;
         HideRecordPinBorder = snapshot.HideRecordPinBorder;
         HideSnipSelectionDecoration = snapshot.HideSnipSelectionDecoration;
-        AutoPinScreenshotSelection = snapshot.AutoPinScreenshotSelection;
         CaptureWithoutStealingFocus = snapshot.CaptureWithoutStealingFocus;
+        FreezeScreenOnScreenshot = snapshot.FreezeScreenOnScreenshot;
         CaptureDelay = snapshot.CaptureDelay;
         OcrTextLayout = snapshot.OcrTextLayout;
         SaveOcrTextToFile = snapshot.SaveOcrTextToFile;

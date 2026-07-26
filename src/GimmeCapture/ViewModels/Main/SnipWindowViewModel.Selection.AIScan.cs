@@ -780,7 +780,10 @@ public partial class SnipWindowViewModel
             new Rect(0, 0, ViewportSize.Width, ViewportSize.Height),
             ScreenOffset,
             VisualScaling,
-            _mainVm?.AppSettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese);
+            _mainVm?.AppSettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese,
+            // Freeze-frame: OCR the frozen still (the overlay is opaque, so a live grab would capture our own
+            // frozen image + chrome). Null in the normal live path.
+            PreCapturedFrame: IsFrozenFrameActive ? FrozenScreenSkBitmap : null);
     }
 
     private void ApplyOcrScanResult(AIScanSessionResult result, System.Threading.CancellationToken token)

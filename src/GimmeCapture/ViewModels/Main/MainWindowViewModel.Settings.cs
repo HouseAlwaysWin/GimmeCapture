@@ -460,16 +460,16 @@ public partial class MainWindowViewModel
         set => Snip.HideSnipSelectionDecoration = value;
     }
 
-    public bool AutoPinScreenshotSelection
-    {
-        get => Snip.AutoPinScreenshotSelection;
-        set => Snip.AutoPinScreenshotSelection = value;
-    }
-
     public bool CaptureWithoutStealingFocus
     {
         get => Snip.CaptureWithoutStealingFocus;
         set => Snip.CaptureWithoutStealingFocus = value;
+    }
+
+    public bool FreezeScreenOnScreenshot
+    {
+        get => Snip.FreezeScreenOnScreenshot;
+        set => Snip.FreezeScreenOnScreenshot = value;
     }
 
     public CaptureDelay CaptureDelay

@@ -338,9 +338,10 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> SaveCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> PinCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> UploadCommand { get; set; } = null!;
-    // Toolbar toggle mirroring the "lock selected screenshot instead of click-through" setting: flips the
-    // live lock on the current selection and persists the preference (see ToggleLockSelectionSnapshot).
-    public ReactiveCommand<Unit, Unit> ToggleLockSelectionSnapshotCommand { get; set; } = null!;
+    // Toolbar "freeze screen" toggle: freezes/unfreezes the CURRENT overlay live, with immediate effect. Distinct
+    // from the FreezeScreenOnScreenshot setting, which only decides the initial state of the NEXT capture. See
+    // ToggleFreezeFrameLiveAsync. (Replaces the old lock-selection toggle, consolidated into freeze-frame.)
+    public ReactiveCommand<Unit, Unit> ToggleFreezeScreenCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ScrollingCaptureCommand { get; set; } = null!;
     public ReactiveCommand<ScrollingCaptureDirection, Unit> SetScrollDirectionCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> CloseCommand { get; set; } = null!;
@@ -477,8 +478,8 @@ public partial class SnipWindowViewModel
         switch (mode)
         {
             case CaptureMode.Normal:
-                LockSelectedScreenshotSelection = _mainVm?.AutoPinScreenshotSelection == true;
-                AutoActionMode = ResolveAutoActionMode(mode, _mainVm?.AutoPinScreenshotSelection == true);
+                LockSelectedScreenshotSelection = false;
+                AutoActionMode = ResolveAutoActionMode(mode);
                 HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
                 // Reused overlay: the snip hotkey was pressed while the overlay is still open, so OnOpened does
                 // NOT run again and the open-time OCR auto-scan never re-fires. Re-trigger it here so re-entering
@@ -512,7 +513,7 @@ public partial class SnipWindowViewModel
         }
     }
 
-    internal static SnipAutoAction ResolveAutoActionMode(CaptureMode mode, bool autoPinScreenshotSelection)
+    internal static SnipAutoAction ResolveAutoActionMode(CaptureMode mode)
     {
         return mode switch
         {
@@ -534,8 +535,8 @@ public partial class SnipWindowViewModel
 
         PinCommand = CreateAsyncCommand(ExecutePinActionAsync, nameof(PinCommand), canExecuteHotkeys);
 
-        ToggleLockSelectionSnapshotCommand = CreateCommand(
-            ToggleLockSelectionSnapshot, nameof(ToggleLockSelectionSnapshotCommand), canExecuteHotkeys);
+        ToggleFreezeScreenCommand = CreateAsyncCommand(
+            ToggleFreezeFrameLiveAsync, nameof(ToggleFreezeScreenCommand), canExecuteHotkeys);
 
         CopyCommand = CreateAsyncCommand(
             async () =>

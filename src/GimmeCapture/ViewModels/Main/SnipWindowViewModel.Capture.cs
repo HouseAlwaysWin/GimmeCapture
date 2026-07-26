@@ -35,20 +35,14 @@ public partial class SnipWindowViewModel
 
         try
         {
-            await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
-                HideAction ?? (() => { }),
-                cts.Token);
+            await HideOverlayForCaptureUnlessFrozenAsync(cts.Token);
 
             _isLocalProcessing = true;
             ShowProcessingOverlay = true;
             IsIndeterminate = true;
             ProcessingText = LocalizationService.Instance["QuickOcrProcessing"];
 
-            using var bitmap = await _captureService.CaptureScreenAsync(
-                SelectionRect,
-                ScreenOffset,
-                VisualScaling,
-                includeCursor: false);
+            using var bitmap = await CaptureOrCropSelectionAsync(includeAnnotations: false);
 
             // The snip overlay (which hosts ShowProcessingOverlay) was just hidden to grab a clean capture, so
             // surface a standalone "recognizing…" spinner while OCR runs — otherwise the multi-second recognition
@@ -144,10 +138,100 @@ public partial class SnipWindowViewModel
         }
     }
 
+    /// <summary>
+    /// Hides the overlay before a LIVE grab — but in freeze-frame mode there is nothing to hide (the frozen still
+    /// was taken before the overlay ever existed), so this is a no-op there.
+    /// </summary>
+    private async Task HideOverlayForCaptureUnlessFrozenAsync(System.Threading.CancellationToken ct = default)
+    {
+        if (IsFrozenFrameActive && FrozenScreenSkBitmap != null) return;
+        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(HideAction ?? (() => { }), ct);
+    }
+
+    /// <summary>
+    /// Returns the selection as a bitmap: in freeze-frame mode, cropped from the pre-grabbed still (annotations
+    /// composited on top); otherwise a live grab (annotated for screenshots, plain for OCR). Call after
+    /// <see cref="HideOverlayForCaptureUnlessFrozenAsync"/>.
+    /// </summary>
+    private async Task<SkiaSharp.SKBitmap> CaptureOrCropSelectionAsync(bool includeAnnotations)
+    {
+        if (IsFrozenFrameActive && FrozenScreenSkBitmap != null)
+        {
+            return GimmeCapture.Services.Core.Rendering.FreezeFrameCompositor.CropWithAnnotations(
+                FrozenScreenSkBitmap, SelectionRect, FrozenGrabScaling, includeAnnotations ? Annotations : null);
+        }
+
+        return includeAnnotations
+            ? await _captureService.CaptureScreenWithAnnotationsAsync(
+                SelectionRect, ScreenOffset, VisualScaling, Annotations,
+                GetTranslationSelectionsForCapture(), TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false)
+            : await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, includeCursor: false);
+    }
+
+    /// <summary>
+    /// Toolbar "freeze screen" button: toggles THIS overlay's freeze state live, with immediate effect — unlike the
+    /// FreezeScreenOnScreenshot setting, which only decides the initial state of the NEXT capture. Unfreeze drops
+    /// the still and returns to the live see-through overlay; freeze grabs the whole desktop right now (the overlay
+    /// is excluded from that grab, so it isn't baked into the still and there is no flicker) and switches to the
+    /// opaque still. Screenshot family only — recording/translation/scrolling are inherently live (the toolbar
+    /// button is hidden there; these guards also make the command a no-op if invoked by hotkey in those modes).
+    /// NOTE: freezing here happens AFTER the overlay is already up, so it can't recover a shell "light dismiss"
+    /// popup (tray flyout / Start menu) the overlay already closed — that still needs the setting ON so the still
+    /// predates the overlay. This button freezes/holds whatever is currently on screen.
+    /// </summary>
+    internal async Task ToggleFreezeFrameLiveAsync()
+    {
+        if (CurrentMode == SnipMode.Recording || CurrentMode == SnipMode.Translation || _manualScrollActive)
+        {
+            return;
+        }
+
+        if (IsFrozenFrameActive)
+        {
+            // Frozen → live: drop the still (SetFrozenScreenSnapshot disposes it) and re-run the region logic, which
+            // now takes the live see-through / pass-through branch instead of the opaque freeze branch.
+            SetFrozenScreenSnapshot(null, 1.0);
+            RefreshInteractionRegion();
+            return;
+        }
+
+        // Live → frozen: grab the whole desktop now. ViewportSize / ScreenOffset / VisualScaling are the same trio
+        // the OCR full-screen grab and the factory's pre-overlay freeze grab use.
+        if (ViewportSize.Width <= 1 || ViewportSize.Height <= 1)
+        {
+            return;
+        }
+
+        double grabScaling = VisualScaling <= 0 ? 1.0 : VisualScaling;
+        var grabRegion = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
+        Func<Task<SKBitmap>> grab =
+            () => _captureService.CaptureScreenAsync(grabRegion, ScreenOffset, grabScaling, includeCursor: false);
+
+        SKBitmap? frozen;
+        try
+        {
+            // The View-wired excluded-grab wrapper hides the overlay from the screen grab via WDA_EXCLUDEFROMCAPTURE
+            // for ~50 ms so the still doesn't include the overlay's own chrome — the overlay stays visible, so the
+            // user sees no flicker. Falls back to a bare grab off-Windows / in design.
+            frozen = RunTranslationOcrGrabExcludedAsync != null
+                ? await RunTranslationOcrGrabExcludedAsync(grab)
+                : await grab();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("SnipWindowViewModel.ToggleFreezeFrameLive", ex);
+            return;
+        }
+
+        // Transfers ownership + activates freeze-frame mode (or resets to live if the display conversion failed);
+        // then re-run the region logic so the overlay becomes opaque + fully hit-testable over the still.
+        SetFrozenScreenSnapshot(frozen, grabScaling);
+        RefreshInteractionRegion();
+    }
+
     private async Task ExecuteCopyCaptureAsync()
     {
-        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
-            HideAction ?? (() => { }));
+        await HideOverlayForCaptureUnlessFrozenAsync();
 
         try
         {
@@ -155,14 +239,7 @@ public partial class SnipWindowViewModel
             ShowProcessingOverlay = true;
             IsIndeterminate = true;
             ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
-            using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
-                SelectionRect,
-                ScreenOffset,
-                VisualScaling,
-                Annotations,
-                GetTranslationSelectionsForCapture(),
-                TranslatedBlocks,
-                _mainVm?.ShowSnipCursor ?? false);
+            using var bitmap = await CaptureOrCropSelectionAsync(includeAnnotations: true);
             await _captureService.CopyToClipboardAsync(bitmap);
             _mainVm?.SetStatus("StatusCopied");
 
@@ -251,8 +328,7 @@ public partial class SnipWindowViewModel
 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
-            await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
-                HideAction ?? (() => { }));
+            await HideOverlayForCaptureUnlessFrozenAsync();
 
             try
             {
@@ -260,14 +336,7 @@ public partial class SnipWindowViewModel
                 ShowProcessingOverlay = true;
                 IsIndeterminate = true;
                 ProcessingText = LocalizationService.Instance["StatusSaving"] ?? "Saving...";
-                using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
-                    SelectionRect,
-                    ScreenOffset,
-                    VisualScaling,
-                    Annotations,
-                    GetTranslationSelectionsForCapture(),
-                    TranslatedBlocks,
-                    _mainVm?.ShowSnipCursor ?? false);
+                using var bitmap = await CaptureOrCropSelectionAsync(includeAnnotations: true);
 
                 string? savedPath = null;
 
@@ -372,19 +441,11 @@ public partial class SnipWindowViewModel
 
     private async Task ExecutePinCaptureAsync(bool runAI, bool initialInteractive)
     {
-        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
-            HideAction ?? (() => { }));
+        await HideOverlayForCaptureUnlessFrozenAsync();
 
         try
         {
-            using var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
-                SelectionRect,
-                ScreenOffset,
-                VisualScaling,
-                Annotations,
-                GetTranslationSelectionsForCapture(),
-                TranslatedBlocks,
-                _mainVm?.ShowSnipCursor ?? false);
+            using var skBitmap = await CaptureOrCropSelectionAsync(includeAnnotations: true);
 
             // Convert SKBitmap to Avalonia Bitmap without PNG stream roundtrip
             var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(

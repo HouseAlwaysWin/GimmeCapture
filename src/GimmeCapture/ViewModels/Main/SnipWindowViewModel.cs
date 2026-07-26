@@ -86,7 +86,61 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     /// annotation text editor is active. Drives ShowActivated + WS_EX_NOACTIVATE on the overlay.
     /// </summary>
     public bool ShouldAvoidStealingFocus =>
-        _mainVm?.CaptureWithoutStealingFocus == true && CurrentMode != SnipMode.Translation;
+        _mainVm?.CaptureWithoutStealingFocus == true && CurrentMode != SnipMode.Translation && !IsFrozenFrameActive;
+
+    // --- Freeze-frame capture: a still of the WHOLE desktop grabbed BEFORE the overlay was shown, so shell
+    // "light dismiss" popups (tray flyout / Start menu / left-click dropdowns) — which close the instant any
+    // full-screen overlay appears over them — are captured. The user selects/annotates on this still; commit
+    // and OCR read from it instead of the live screen. Gated by the FreezeScreenOnScreenshot setting (factory).
+    private SkiaSharp.SKBitmap? _frozenScreenSkBitmap;
+    private double _frozenGrabScaling = 1.0;
+
+    /// <summary>The frozen full-desktop still (physical pixels) used at commit/OCR time. Null when not frozen.</summary>
+    public SkiaSharp.SKBitmap? FrozenScreenSkBitmap => _frozenScreenSkBitmap;
+    /// <summary>The scaling used when the frozen still was grabbed; commit crops SelectionRect × this.</summary>
+    public double FrozenGrabScaling => _frozenGrabScaling;
+
+    private Avalonia.Media.Imaging.Bitmap? _frozenScreenSnapshot;
+    /// <summary>Display-ready copy of the frozen still, bound to the full-window Image at the bottom of the overlay.</summary>
+    public Avalonia.Media.Imaging.Bitmap? FrozenScreenSnapshot
+    {
+        get => _frozenScreenSnapshot;
+        private set => this.RaiseAndSetIfChanged(ref _frozenScreenSnapshot, value);
+    }
+
+    private bool _isFrozenFrameActive;
+    /// <summary>True when this overlay is showing a frozen desktop still (freeze-frame screenshot mode).</summary>
+    public bool IsFrozenFrameActive
+    {
+        get => _isFrozenFrameActive;
+        private set => this.RaiseAndSetIfChanged(ref _isFrozenFrameActive, value);
+    }
+
+    /// <summary>
+    /// Stores the pre-overlay full-desktop grab (called by the factory BEFORE Show). Builds a display bitmap and
+    /// activates freeze-frame mode. Ownership of <paramref name="frozen"/> transfers to this VM (disposed on close).
+    /// </summary>
+    public void SetFrozenScreenSnapshot(SkiaSharp.SKBitmap? frozen, double grabScaling)
+    {
+        _frozenScreenSkBitmap?.Dispose();
+        _frozenScreenSkBitmap = frozen;
+        _frozenGrabScaling = grabScaling > 0 ? grabScaling : 1.0;
+
+        if (frozen != null
+            && GimmeCapture.ViewModels.Floating.FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(frozen, out var display, out _)
+            && display != null)
+        {
+            FrozenScreenSnapshot = display;
+            IsFrozenFrameActive = true;
+        }
+        else
+        {
+            frozen?.Dispose();
+            _frozenScreenSkBitmap = null;
+            FrozenScreenSnapshot = null;
+            IsFrozenFrameActive = false;
+        }
+    }
 
     /// <summary>The app-wide translation-overlay layer (null in design-time when there is no MainVm).</summary>
     public ITranslationResultLayerService? TranslationResultLayer => _mainVm?.TranslationResultLayer;
@@ -876,6 +930,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _aiScanSessionService?.Dispose();
         _recordTimer?.Stop();
         DisposeDrawingModeSnapshot();
+        _frozenScreenSkBitmap?.Dispose();
+        _frozenScreenSkBitmap = null;
+        _frozenScreenSnapshot?.Dispose();
+        _frozenScreenSnapshot = null;
         
         CloseAction = null;
         SyncRecordingScreenCaptureAffinity = null;
