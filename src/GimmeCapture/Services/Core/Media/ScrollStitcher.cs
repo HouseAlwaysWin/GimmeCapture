@@ -313,10 +313,12 @@ internal static class ScrollStitcher
     /// <c>stripSig[stripFirstRowByteOffset + r * stripSampleCount * 4 ..]</c>). Passing the strip signatures
     /// in — rather than re-sampling the whole strip every frame — is what lets a long capture stay O(n).
     /// <para>
-    /// Only offsets within <paramref name="searchMargin"/> rows of either edge are scored; this is exactly
-    /// the set the naive full scan scored (every other offset was <c>double.MaxValue</c> and could never
-    /// win), so the chosen placement, ambiguity rejection and diagnostics are byte-for-byte identical — it
-    /// just avoids allocating and scanning an O(stripHeight) score array.
+    /// Offsets within <paramref name="searchMargin"/> rows of either edge are scored, and the margin is
+    /// widened when needed so those two windows always meet — the scored set is therefore a single
+    /// contiguous range and no candidate is skipped. (An earlier version left the two windows disjoint on
+    /// strips taller than ~2x the frame, so a mid-range alignment — the common case once a scrolling
+    /// capture has run for a while — scored nothing and was reported as "no match".) The saving over the
+    /// naive scan is not scoring fewer candidates but not re-sampling the strip every frame.
     /// </para>
     /// </summary>
     internal static FrameAlignment AlignCore(
@@ -364,7 +366,15 @@ internal static class ScrollStitcher
 
         int lo = -(frameH - effectiveMin); // frame overhangs the top
         int hi = stripHeight - effectiveMin; // frame overhangs the bottom
-        int margin = searchMargin <= 0 ? (hi - lo) : searchMargin;
+        // Widen the margin so the two edge windows below ALWAYS meet. With a caller-supplied margin (the
+        // manual scroll passes the frame height) a strip taller than ~2x the frame leaves a band of offsets
+        // in the MIDDLE that is never scored — those alignments silently report "no match" even when they
+        // are the best one. Half the range is the smallest widening that guarantees contiguity, so short
+        // strips keep the original bounded cost and only long ones fall back to the full scan.
+        int fullRange = hi - lo;
+        int margin = searchMargin <= 0
+            ? fullRange
+            : Math.Max(searchMargin, (fullRange + 1) / 2);
 
         // The scored offsets are the two edge windows { o - lo <= margin } ∪ { hi - o <= margin }.
         // Collected in ascending-offset order so the winner/rival selection below matches the old

@@ -473,10 +473,13 @@ public partial class RecordingService
                 ShowKeystrokes = _settingsService?.Settings.ShowKeystrokes ?? false,
                 PipelinedEncoding = _settingsService?.Settings.PipelinedEncoding ?? false,
                 PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly,
-                // Window/composite fallbacks capture a large region (a window, or the union bounding box of windows
-                // that can span both monitors); gdigrab falls behind the target fps there, so pace by wall-clock to
-                // keep the speed correct. Normal drawn-region recording (no windows) keeps the proven counter PTS.
-                UseWallClockPts = _windowHandles.Count > 0
+                // Always pace video PTS by wall-clock, not by a frame counter. The counter assumes every frame is
+                // exactly 1/fps apart, so whenever gdigrab falls behind (large region, busy scene, loaded CPU) the
+                // video timeline comes out SHORTER than real time — while the captured audio is real-time either
+                // way. That difference is precisely the audio/video desync users hit on ordinary recordings, and it
+                // grows the longer the recording runs. When capture does keep up, wall-clock and counter PTS agree,
+                // so this is strictly the safer rule rather than a trade-off.
+                UseWallClockPts = true
             };
 
             int x = (int)(_region.X * _visualScaling) + _screenOffset.X;

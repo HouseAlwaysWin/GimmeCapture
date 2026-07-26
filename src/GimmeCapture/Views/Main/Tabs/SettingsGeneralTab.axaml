@@ -12,6 +12,13 @@
             <!-- Settings Controls -->
             <StackPanel Grid.Column="0" Spacing="10">
                 <CheckBox IsChecked="{Binding RunOnStartup}" Content="{Binding [RunOnStartup], Source={x:Static services:LocalizationService.Instance}}"/>
+                <!-- The OS can switch our startup entry off (Task Manager -> Startup apps); Windows then ignores the
+                     Run entry entirely, so the box above reads "on" while the app never launches at login. -->
+                <TextBlock Text="{Binding [RunOnStartupBlockedByOs], Source={x:Static services:LocalizationService.Instance}}"
+                           IsVisible="{Binding IsStartupBlockedByOs}"
+                           Foreground="#FFC107"
+                           TextWrapping="Wrap"
+                           Margin="24,-4,0,0"/>
                 <CheckBox IsChecked="{Binding AutoCheckUpdates}" Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}"/>
                 
                 <TextBlock Text="{Binding [Language], Source={x:Static services:LocalizationService.Instance}}" Margin="0,10,0,5"/>

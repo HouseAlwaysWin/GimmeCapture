@@ -4,7 +4,7 @@ using Avalonia;
 using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
-using GimmeCapture.Services.Platforms.Windows;
+using GimmeCapture.Services.Core.Interaction;
 using GimmeCapture.ViewModels;
 using GimmeCapture.ViewModels.Main;
 
@@ -336,7 +336,6 @@ public class SnipWindowViewModelTests
     private sealed class FakeWindowDetectionService : IWindowDetectionService
     {
         private readonly IReadOnlyList<WindowCandidate> _candidates;
-        private readonly WindowDetectionService _service = new();
 
         public FakeWindowDetectionService(IReadOnlyList<WindowCandidate> candidates)
         {
@@ -346,7 +345,7 @@ public class SnipWindowViewModelTests
         public IReadOnlyList<WindowCandidate> GetVisibleWindowCandidates(IntPtr? excludeHWnd = null) => _candidates;
 
         public WindowCandidate? GetCandidateAtPoint(Point point, IReadOnlyList<WindowCandidate> candidates, WindowCandidate? previousCandidate = null)
-            => _service.GetCandidateAtPoint(point, candidates, previousCandidate);
+            => WindowCandidateHitTester.GetCandidateAtPoint(point, candidates, previousCandidate);
 
         public IReadOnlyList<RecordableWindow> GetRecordableWindows(IntPtr? excludeHWnd = null) => [];
     }

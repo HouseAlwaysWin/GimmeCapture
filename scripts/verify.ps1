@@ -31,9 +31,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "Localization parity check failed with exit code $LASTEXITCODE."
 }
 
+# No --runtime flag: it would override the projects' RuntimeIdentifiers (win-x64, plus
+# linux-x64 on the net10.0 head) and locked mode would then flag the lock file's
+# linux-x64 sections as a mismatch. Project-driven RIDs already cover win-x64.
 Invoke-DotNet restore $solution `
     --locked-mode `
-    --runtime win-x64 `
     --artifacts-path $artifacts `
     --disable-parallel `
     --disable-build-servers
@@ -47,6 +49,10 @@ Invoke-DotNet build $solution `
 
 $testArgs = @(
     "test", $testProject,
+    # The Tests project multi-targets (net10.0-windows;net10.0) for the Linux Tests CI gate. Locally we
+    # only run the Windows head — the net10.0 head is exercised by linux-tests.yml on every push, and
+    # running both here would double the test (and coverage) time for no extra signal on Windows.
+    "--framework", "net10.0-windows10.0.19041.0",
     "--configuration", "Release",
     "--no-build",
     "--no-restore",
@@ -102,6 +108,39 @@ if (-not $SkipPublish) {
     $publishedExe = Join-Path $publish "GimmeCapture.exe"
     if (-not (Test-Path -LiteralPath $publishedExe)) {
         throw "Publish smoke test did not produce GimmeCapture.exe."
+    }
+
+    # Also smoke the LINUX release artifact (net10.0 head, linux-x64 self-contained single-file). This is the
+    # exact build that blocks a release in .github/workflows/release.yml, and verify used to skip it — so a
+    # Linux-publish break (like the locked-restore NU1004 that sank the first v0.66.0 attempt) only surfaced
+    # AFTER the tag was pushed. Running it here means "one command, then release" is trustworthy again.
+    # Mirrors release.yml: --no-restore off the locked solution restore above. (Letting publish restore itself
+    # in the self-contained + RID context drags in an SDK-versioned implicit Microsoft.NET.ILLink.Tasks that
+    # locked mode rejects — that is exactly the failure we want caught locally.) Cross-RID publish from Windows
+    # is supported; the SDK uses the linux-x64 runtime pack the solution restore already fetched.
+    $publishLinux = Join-Path $artifacts "publish-smoke-linux"
+    $publishLinuxArgs = @(
+        "publish", $appProject,
+        "--framework", "net10.0",
+        "--runtime", "linux-x64",
+        "--self-contained", "true",
+        "--no-restore",
+        "--artifacts-path", $artifacts,
+        "--disable-build-servers",
+        "-p:PublishSingleFile=true",
+        "-p:IncludeNativeLibrariesForSelfExtract=true",
+        "-p:IncludeAllContentForSelfExtract=true",
+        "-p:EnableCompressionInSingleFile=true",
+        "-p:DebugType=none",
+        "-p:DebugSymbols=false",
+        "--output", $publishLinux
+    )
+    Invoke-DotNet @publishLinuxArgs
+
+    # The Linux single-file host has no extension.
+    $publishedElf = Join-Path $publishLinux "GimmeCapture"
+    if (-not (Test-Path -LiteralPath $publishedElf)) {
+        throw "Linux publish smoke test did not produce the GimmeCapture executable."
     }
 }
 

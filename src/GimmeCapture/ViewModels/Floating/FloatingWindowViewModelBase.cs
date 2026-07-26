@@ -206,15 +206,24 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
     // Switches this pin into scrolling-content mode. The window keeps its (selection-sized) DisplayWidth/Height;
     // the image's native size only sets the aspect + long axis for the scrollable content.
-    public void ConfigureScrollableContent(double imageNativeWidth, double imageNativeHeight)
+    public void ConfigureScrollableContent(
+        double imageNativeWidth, double imageNativeHeight, double viewportWidth, double viewportHeight)
     {
-        if (imageNativeWidth <= 0 || imageNativeHeight <= 0)
+        if (imageNativeWidth <= 0 || imageNativeHeight <= 0 || viewportWidth <= 0 || viewportHeight <= 0)
         {
             return;
         }
 
         _scrollContentAspect = imageNativeHeight / imageNativeWidth;
-        _scrollVertical = imageNativeHeight >= imageNativeWidth; // tall strip scrolls vertically
+        // Scroll along the axis the capture actually GREW: the one where the image exceeds the viewport by
+        // the larger factor. A vertical capture keeps the image width equal to the selection width, so any
+        // growth makes the height ratio win. Deciding by raw aspect (height >= width) instead misread every
+        // wide-region vertical capture that hadn't yet grown taller than it is wide as HORIZONTAL content —
+        // the pin then fit it to the window height with a horizontal scroller, rendering it small on the
+        // left with the rest of the window empty ("it keeps coming out horizontal"). Ratios of physical
+        // image px over logical viewport px: scaling divides both sides equally, so the comparison is
+        // scale-invariant; cross-multiplied to avoid the divisions.
+        _scrollVertical = imageNativeHeight * viewportWidth >= imageNativeWidth * viewportHeight;
         ContentScrolls = true;
         RaiseScrollContentChanged();
         this.RaisePropertyChanged(nameof(ContentVerticalScrollBarVisibility));

@@ -50,6 +50,7 @@ public class MainWindowSettingsPersistenceServiceTests
             RevealAfterSave = false,
             SaveDirectory = @"D:\captures",
             FileNameTemplate = "shot_{date}_{time}",
+            ImgurClientId = "test-client-id",
             ShowSnipCursor = true,
             ShowRecordCursor = false,
             RecordSystemAudio = false,
@@ -110,6 +111,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.ScrollingCaptureDirection, persisted.ScrollingCaptureDirection);
         Assert.Equal(snapshot.SnipToolbarPosition, persisted.SnipToolbarPosition);
         Assert.Equal(snapshot.FileNameTemplate, persisted.FileNameTemplate);
+        Assert.Equal(snapshot.ImgurClientId, persisted.ImgurClientId);
         Assert.Equal(snapshot.TextCopyHotkey, persisted.TextCopyHotkey);
         Assert.Equal(snapshot.EnableAIScan, persisted.EnableAIScan);
         Assert.Equal(snapshot.AIResourcesDirectory, persisted.AIResourcesDirectory);

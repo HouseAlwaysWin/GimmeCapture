@@ -16,11 +16,18 @@ public sealed class ScrollingCaptureHintWindow : Window
 {
     private readonly TextBlock _text;
     private readonly string _baseText;
+    private readonly string _stalledText;
     private readonly PixelRect _anchor;
+    private int _lastRows;
+    private bool _stalled;
 
-    public ScrollingCaptureHintWindow(string hintText, string finishLabel, string cancelLabel, PixelRect anchorPhysical, Action onFinish, Action onCancel)
+    private static readonly IBrush NormalForeground = Brushes.White;
+    private static readonly IBrush StalledForeground = new SolidColorBrush(Color.Parse("#FFC107"));
+
+    public ScrollingCaptureHintWindow(string hintText, string stalledText, string finishLabel, string cancelLabel, PixelRect anchorPhysical, Action onFinish, Action onCancel)
     {
         _baseText = hintText ?? string.Empty;
+        _stalledText = stalledText ?? string.Empty;
         _anchor = anchorPhysical;
 
         CanResize = false;
@@ -90,7 +97,32 @@ public sealed class ScrollingCaptureHintWindow : Window
 
     public void UpdateHint(int capturedRows)
     {
-        _text.Text = $"{_baseText}   ({capturedRows}px)";
+        _lastRows = capturedRows;
+        Render();
+    }
+
+    /// <summary>
+    /// Stitching lost track of the content (frames stopped matching the strip — typically after a
+    /// too-fast scroll jumped past the strip's edge). Shows a "scroll back a little" warning until
+    /// alignment recovers; without this the capture silently stops growing and the user only finds
+    /// out after finishing, when the pinned image is a stub.
+    /// </summary>
+    public void SetStalled(bool stalled)
+    {
+        if (_stalled == stalled)
+        {
+            return;
+        }
+
+        _stalled = stalled;
+        Render();
+    }
+
+    private void Render()
+    {
+        string rows = _lastRows > 0 ? $"   ({_lastRows}px)" : string.Empty;
+        _text.Text = _stalled ? $"⚠ {_stalledText}{rows}" : $"{_baseText}{rows}";
+        _text.Foreground = _stalled ? StalledForeground : NormalForeground;
     }
 
     // Attach the hint just outside the captured region, like a screenshot tool's action bar:

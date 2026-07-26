@@ -157,6 +157,7 @@ internal static unsafe class LibavRecordingEncoder
         encCtx->bit_rate = targetBitrate;
     }
 
+    #pragma warning disable CS0618
     private static AVPixelFormat ChooseEncoderPixelFormat(AVCodec* enc, string encoderName)
     {
         AVPixelFormat[] preferredFormats = IsHardwareOrMediaFoundationEncoder(encoderName)
@@ -181,6 +182,7 @@ internal static unsafe class LibavRecordingEncoder
 
         return enc->pix_fmts[0];
     }
+    #pragma warning restore CS0618
 
     private static bool IsHardwareOrMediaFoundationEncoder(string encoderName)
     {

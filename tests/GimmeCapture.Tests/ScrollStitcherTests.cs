@@ -439,4 +439,37 @@ public class ScrollStitcherTests
         Assert.Equal(ColorForRow(24), result.GetPixel(24, 0));  // new right edge (source col 24)
         Assert.Equal(ColorForRow(12), result.GetPixel(12, 5));  // interior column preserved
     }
+
+    // A bounded search scores offsets near each edge. Once the strip grows past ~2x the frame height
+    // those two windows stop meeting, and an alignment landing between them used to be scored by
+    // NOTHING — reported as "no match" even though it was the correct placement. A real scrolling
+    // capture hits this constantly: the strip quickly outgrows the frame, so an ordinary scroll lands
+    // mid-range and the strip silently stops growing.
+    [Fact]
+    public void AlignFrameToStrip_FindsMidRangeOffset_OnStripTallerThanTwiceTheFrame()
+    {
+        const int width = 40;
+        const int frameHeight = 60;
+        const int stripHeight = 400;   // >> 2 * frameHeight, so the edge windows cannot meet
+        const int trueOffset = 150;    // sits in the middle: far from both edges
+
+        using var strip = MakeFrame(width, stripHeight, 0);
+        using var frame = MakeFrame(width, frameHeight, trueOffset);
+
+        // searchMargin = frame height is exactly what the manual scrolling capture passes.
+        var alignment = ScrollStitcher.AlignFrameToStrip(
+            strip,
+            frame,
+            out double bestScore,
+            out _,
+            out _,
+            minOverlapRows: 8,
+            ignoreRightColumns: 0,
+            maxRowMismatchRatio: 0.0,
+            searchMargin: frameHeight);
+
+        Assert.True(alignment.Found, "a mid-range offset must still be scored, not skipped by the search window");
+        Assert.Equal(trueOffset, alignment.Offset);
+        Assert.Equal(0.0, bestScore, 6); // identical rows overlap exactly
+    }
 }

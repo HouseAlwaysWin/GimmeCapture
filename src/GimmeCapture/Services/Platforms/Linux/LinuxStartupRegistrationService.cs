@@ -56,6 +56,12 @@ public sealed class LinuxStartupRegistrationService : IStartupRegistrationServic
         }
     }
 
+    /// <summary>
+    /// XDG autostart has no separate "the desktop environment disabled it" record the way Windows' StartupApproved
+    /// does — the .desktop file existing is the whole state — so there is nothing extra to report here.
+    /// </summary>
+    public bool IsDisabledByOs() => false;
+
     private static string BuildDesktopEntry()
     {
         // Newlines only (\n) — .desktop files are LF-terminated key=value lines.

@@ -2,7 +2,13 @@
   <PropertyGroup>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreLockedMode Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</RestoreLockedMode>
+    <!-- linux-x64 included so packages.lock.json pins both shipped RIDs — the release Linux publish
+         can then restore in locked mode instead of opting out. Scoped to the net10.0 (Linux) head:
+         the Windows TFM must not list linux-x64 or the SDK demands a WindowsDesktop runtime pack
+         for linux-x64, which does not exist (NETSDK1082). TargetFramework is empty in outer builds
+         (restore aggregates the per-TFM inner evaluations, so the lock file still gets both RIDs). -->
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers Condition="'$(TargetFramework)' == 'net10.0'">win-x64;linux-x64</RuntimeIdentifiers>
 
     <!-- Ratchet: nullable-reference-type warnings are build errors so the codebase stays null-safe as it
          grows (a null-deref that today is a warning would otherwise slip in silently). Scoped to nullable

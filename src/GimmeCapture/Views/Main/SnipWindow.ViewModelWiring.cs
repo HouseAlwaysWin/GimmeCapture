@@ -218,10 +218,12 @@ public partial class SnipWindow : Window
                 if (_scrollHintWindow == null)
                 {
                     var hint = LocalizationService.Instance["ScrollingHintText"];
+                    var stalled = LocalizationService.Instance["ScrollingHintStalled"];
                     var finishLabel = LocalizationService.Instance["ScrollingFinish"];
                     var cancelLabel = LocalizationService.Instance["Cancel"];
                     _scrollHintWindow = new ScrollingCaptureHintWindow(
                         hint,
+                        stalled,
                         finishLabel,
                         cancelLabel,
                         anchor,
@@ -231,6 +233,7 @@ public partial class SnipWindow : Window
                 }
             };
             _viewModel.UpdateScrollingHintAction = rows => _scrollHintWindow?.UpdateHint(rows);
+            _viewModel.UpdateScrollingStallAction = stalled => _scrollHintWindow?.SetStalled(stalled);
             _viewModel.HideScrollingHintAction = () =>
             {
                 _scrollHintWindow?.Close();
@@ -563,7 +566,11 @@ public partial class SnipWindow : Window
                 vm.WingScale = _viewModel.WingScale;
                 if (scrolling)
                 {
-                    vm.ConfigureScrollableContent(scrollableContentSize!.Value.Width, scrollableContentSize.Value.Height);
+                    // rect = the original selection (the capture viewport): the axis the stitch grew along is
+                    // the one where the content exceeds it, which is how the reader axis is now chosen.
+                    vm.ConfigureScrollableContent(
+                        scrollableContentSize!.Value.Width, scrollableContentSize.Value.Height,
+                        rect.Width, rect.Height);
                 }
                 
                 try

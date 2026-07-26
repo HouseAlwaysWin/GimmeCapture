@@ -14,4 +14,9 @@ public sealed class WindowsStartupRegistrationService : IStartupRegistrationServ
     {
         return StartupService.IsRegistered();
     }
+
+    public bool IsDisabledByOs()
+    {
+        return StartupService.IsDisabledByWindows();
+    }
 }
