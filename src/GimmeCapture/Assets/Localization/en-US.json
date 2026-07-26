@@ -324,6 +324,8 @@
   "ImgurClientIdHint": "Register a free app at https://api.imgur.com/oauth2/addclient and paste its Client ID here. Uploads are anonymous; the share link is copied to the clipboard after upload.",
   "SaveOcrTextToFile": "Also save OCR text as a .txt file",
   "AutoPinScreenshotSelection": "Lock selected screenshot instead of click-through",
+  "CaptureWithoutStealingFocus": "Don't steal focus when capturing (keeps dropdowns / right-click menus open)",
+  "CaptureWithoutStealingFocusHint": "Lets you capture menus that close on focus loss: just select, then Ctrl+C / Ctrl+S. Note: single-key edit hotkeys and text annotation need one click on the overlay first.",
   "TipLockSelection": "Lock selection (no click-through)",
   "ShowSnipCursor": "Show Cursor in Snip",
   "UseFixedRecordPath": "Always save to same file",

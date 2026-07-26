@@ -38,6 +38,10 @@ public partial class SnipWindow : Window
 
         // Also install the LL Keyboard hook for translation global hotkeys
         InstallLLKeyboardHook();
+
+        // Apply WS_EX_NOACTIVATE up-front if this overlay is meant to not steal focus (so the very first
+        // selection click doesn't activate the window and close a target dropdown / context menu).
+        SyncOverlayNoActivateExStyle();
     }
 
     private IntPtr WndProcHook(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)

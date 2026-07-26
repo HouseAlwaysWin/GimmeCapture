@@ -118,6 +118,13 @@ public class AppSettings
     public bool HideSnipPinBorder { get; set; } = false;
     public bool HideSnipSelectionDecoration { get; set; } = false;
     public bool AutoPinScreenshotSelection { get; set; } = false;
+    /// <summary>
+    /// When true, the screenshot/record overlay opens WITHOUT stealing foreground focus (ShowActivated=false +
+    /// WS_EX_NOACTIVATE), so focus-sensitive target UI — dropdowns, right-click context menus — stays open and
+    /// can be captured directly. Trade-off: single-key edit hotkeys / text annotation require one click on the
+    /// overlay first. Translation mode is unaffected (keeps its own focus handling).
+    /// </summary>
+    public bool CaptureWithoutStealingFocus { get; set; } = true;
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public CaptureDelay CaptureDelay { get; set; } = CaptureDelay.Off;
     [JsonConverter(typeof(JsonStringEnumConverter))]

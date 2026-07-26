@@ -34,6 +34,7 @@ public class MainWindowSettingsPersistenceServiceTests
             HideSnipPinBorder = true,
             HideSnipSelectionDecoration = true,
             AutoPinScreenshotSelection = true,
+            CaptureWithoutStealingFocus = false,
             CaptureDelay = CaptureDelay.FiveSeconds,
             OcrTextLayout = OcrTextLayout.SingleLine,
             SaveOcrTextToFile = true,
@@ -102,6 +103,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.RecordFormat, persisted.RecordFormat);
         Assert.Equal(snapshot.RecordHotkey, persisted.RecordHotkey);
         Assert.Equal(snapshot.AutoPinScreenshotSelection, persisted.AutoPinScreenshotSelection);
+        Assert.Equal(snapshot.CaptureWithoutStealingFocus, persisted.CaptureWithoutStealingFocus);
         Assert.Equal(snapshot.EnableHistory, persisted.EnableHistory);
         Assert.Equal(snapshot.CaptureDelay, persisted.CaptureDelay);
         Assert.Equal(snapshot.OcrTextLayout, persisted.OcrTextLayout);
@@ -128,6 +130,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Contains($"\"ConfigVersion\": {AppSettingsService.CurrentConfigVersion}", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
         Assert.Contains("\"AutoPinScreenshotSelection\": true", savedJson);
+        Assert.Contains("\"CaptureWithoutStealingFocus\": false", savedJson);
         Assert.Contains("\"CaptureDelay\": \"FiveSeconds\"", savedJson);
         Assert.Contains("\"SnipToolbarPosition\": \"TopRight\"", savedJson);
         Assert.Contains("\"AIResourcesDirectory\": \"D:\\\\captures\\\\ai\"", savedJson);

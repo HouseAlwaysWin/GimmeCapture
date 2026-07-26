@@ -79,6 +79,15 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly MainWindowViewModel? _mainVm;
     public MainWindowViewModel? MainVm => _mainVm;
 
+    /// <summary>
+    /// True when the capture overlay should open / stay WITHOUT stealing foreground focus (the
+    /// CaptureWithoutStealingFocus setting is on, and we are not in Translation mode — translation needs real
+    /// focus for its text controls / ComboBoxes). The view combines this with a temporary override while the
+    /// annotation text editor is active. Drives ShowActivated + WS_EX_NOACTIVATE on the overlay.
+    /// </summary>
+    public bool ShouldAvoidStealingFocus =>
+        _mainVm?.CaptureWithoutStealingFocus == true && CurrentMode != SnipMode.Translation;
+
     /// <summary>The app-wide translation-overlay layer (null in design-time when there is no MainVm).</summary>
     public ITranslationResultLayerService? TranslationResultLayer => _mainVm?.TranslationResultLayer;
     private readonly IScreenCaptureService _captureService;

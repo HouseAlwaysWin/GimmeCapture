@@ -52,6 +52,7 @@ public partial class SnipWindow : Window
     private IDisposable? _toolbarBoundsSubscription;
     private IDisposable? _recordingStateSubscription;
     private IDisposable? _translationModeSubscription;
+    private IDisposable? _overlayActivationSubscription;
     private Rect _originalRect;
     
     // Services
@@ -221,8 +222,14 @@ public partial class SnipWindow : Window
                 AppLog.Information("SnipWindow.OpenedWithoutViewModel");
             }
 
-            this.Activate(); 
-            this.Focus();
+            // Skip the focus-grab when this overlay is meant not to steal focus (CaptureWithoutStealingFocus) —
+            // stealing foreground here is exactly what closes a target dropdown / context menu. Keyboard still
+            // works via the process-global LL hook. (Site B below likewise skips its focus re-grab.)
+            if (_viewModel?.ShouldAvoidStealingFocus != true)
+            {
+                this.Activate();
+                this.Focus();
+            }
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
@@ -266,10 +273,16 @@ public partial class SnipWindow : Window
                     await Task.Delay(500);
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                     {
+                        // Re-assert z-order above other top-most windows (the false→true toggle). Only re-grab
+                        // focus when this overlay is allowed to steal it — otherwise keep the target app focused
+                        // so its dropdown / context menu stays open.
                         this.Topmost = false;
                         this.Topmost = true;
-                        this.Activate();
-                        this.Focus();
+                        if (_viewModel?.ShouldAvoidStealingFocus != true)
+                        {
+                            this.Activate();
+                            this.Focus();
+                        }
                     });
                 }).Forget("SnipWindow.TopmostNudge");
             }
@@ -338,7 +351,9 @@ public partial class SnipWindow : Window
         _recordingStateSubscription = null;
         _translationModeSubscription?.Dispose();
         _translationModeSubscription = null;
-        
+        _overlayActivationSubscription?.Dispose();
+        _overlayActivationSubscription = null;
+
         // Release ViewModel resources
         _viewModel?.Dispose();
         

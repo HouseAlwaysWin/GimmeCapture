@@ -310,6 +310,8 @@
   "ImgurClientIdHint": "https://api.imgur.com/oauth2/addclient で無料のアプリを登録し、その Client ID をここに貼り付けてください。アップロードは匿名で、完了後に共有リンクがクリップボードにコピーされます。",
   "SaveOcrTextToFile": "OCR テキストを .txt としても保存",
   "AutoPinScreenshotSelection": "選択したスクリーンショットを固定して透過クリックしない",
+  "CaptureWithoutStealingFocus": "キャプチャ時にフォーカスを奪わない（ドロップダウン／右クリックメニューを閉じない）",
+  "CaptureWithoutStealingFocusHint": "フォーカスが外れると閉じるメニューをキャプチャできます：範囲を選択して Ctrl+C／Ctrl+S。注意：単一キーの編集ショートカットとテキスト注釈は、先にオーバーレイを一度クリックする必要があります。",
   "TipLockSelection": "選択を固定（透過クリックしない）",
   "ShowSnipCursor": "キャプチャ時にカーソルを表示",
   "UseFixedRecordPath": "固定録畫パスを使用",
