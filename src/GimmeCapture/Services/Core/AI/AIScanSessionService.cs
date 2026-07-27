@@ -69,15 +69,16 @@ public sealed class AIScanSessionService : IAIScanSessionService
 
         ct.ThrowIfCancellationRequested();
         // Freeze-frame: OCR the caller's pre-grabbed still instead of the live screen — required in freeze mode
-        // because the overlay is then opaque (a live grab would capture the frozen image + chrome). The caller
-        // owns the pre-captured bitmap, so only dispose one we grabbed ourselves.
+        // because the overlay is then opaque (a live grab would capture the frozen image + chrome). Either way
+        // this bitmap belongs to the scan and is disposed here: the scan can outlive the overlay that started it,
+        // so borrowing the window's own still meant reading it after the closing window had freed it.
+        bool frozen = request.PreCapturedFrame is not null;
         SkiaSharp.SKBitmap bitmap = request.PreCapturedFrame
             ?? await _captureService.CaptureScreenAsync(
                 new Rect(0, 0, request.ViewportBounds.Width, request.ViewportBounds.Height),
                 request.ScreenOffset,
                 request.VisualScaling,
                 false);
-        bool ownsBitmap = request.PreCapturedFrame is null;
 
         try
         {
@@ -89,7 +90,7 @@ public sealed class AIScanSessionService : IAIScanSessionService
             // Diagnostic (release-visible): distinguishes "capture failed" (0x0 bitmap) from "OCR found nothing"
             // (0 boxes on a real capture — e.g. a DirectML inference-correctness issue on some Win10 setups) from
             // "OCR works". Pair with OcrRuntime.SessionCreated (GPU vs CPU) to pinpoint a Win10-vs-Win11 discrepancy.
-            AppLog.Information($"OcrScan.Detected: {textBoxes.Count} text boxes from a {bitmap.Width}x{bitmap.Height} capture (lang={request.SourceLanguage}, frozen={!ownsBitmap}).");
+            AppLog.Information($"OcrScan.Detected: {textBoxes.Count} text boxes from a {bitmap.Width}x{bitmap.Height} capture (lang={request.SourceLanguage}, frozen={frozen}).");
 
             double scaleX = bitmap.Width > 0 ? request.ViewportBounds.Width / bitmap.Width : 1;
             double scaleY = bitmap.Height > 0 ? request.ViewportBounds.Height / bitmap.Height : 1;
@@ -112,7 +113,7 @@ public sealed class AIScanSessionService : IAIScanSessionService
         }
         finally
         {
-            if (ownsBitmap) bitmap.Dispose();
+            bitmap.Dispose();
         }
     }
 }
