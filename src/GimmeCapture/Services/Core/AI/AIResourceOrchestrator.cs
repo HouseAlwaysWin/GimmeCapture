@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.OCR;
 
 namespace GimmeCapture.Services.Core.AI;
 
@@ -149,6 +150,14 @@ public sealed class AIResourceOrchestrator
         return File.Exists(paths.Det) && File.Exists(paths.Rec) && File.Exists(paths.Dict);
     }
 
+    /// <summary>
+    /// Whether every installable language is present. This is what the Modules tab reports, because auto-detect can
+    /// only distinguish languages whose recognisers exist — a per-current-language check would show "installed"
+    /// while Auto was still structurally unable to read Japanese.
+    /// </summary>
+    public bool IsAllOcrReady() =>
+        OcrLanguageResolver.AllReady(OcrLanguageResolver.InstallableLanguages, IsOCRReady);
+
     public bool AreResourcesReady()
     {
         return IsAICoreReady()
@@ -180,6 +189,8 @@ public sealed class AIResourceOrchestrator
     public Task<bool> EnsureOCRAsync(CancellationToken ct = default) => EnsureOCRAsync(_settingsService.Settings.SourceLanguage, ct);
 
     public Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default) => _installer.EnsureOCRAsync(language, ct);
+
+    public Task<bool> EnsureAllOcrAsync(CancellationToken ct = default) => _installer.EnsureAllOcrAsync(ct);
 
     public Task<bool> EnsureLlamaModelAsync(string modelId, CancellationToken ct = default) => _installer.EnsureLlamaModelAsync(modelId, ct);
 

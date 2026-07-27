@@ -31,6 +31,7 @@ public partial class SnipWindow : Window
 {
     private ScrollingCaptureHintWindow? _scrollHintWindow;
     private ScrollingCaptureRegionWindow? _scrollRegionWindow;
+    private ScrollingCapturePreviewWindow? _scrollPreviewWindow;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -234,15 +235,25 @@ public partial class SnipWindow : Window
                         () => _viewModel.FinishManualScrollCapture(cancelled: true));
                     _scrollHintWindow.Show();
                 }
+
+                if (_scrollPreviewWindow == null)
+                {
+                    // Live thumbnail of the growing strip, docked beside the region (also capture-excluded).
+                    _scrollPreviewWindow = new ScrollingCapturePreviewWindow(anchor);
+                    _scrollPreviewWindow.Show();
+                }
             };
             _viewModel.UpdateScrollingHintAction = rows => _scrollHintWindow?.UpdateHint(rows);
             _viewModel.UpdateScrollingStallAction = stalled => _scrollHintWindow?.SetStalled(stalled);
+            _viewModel.UpdateScrollingPreviewAction = bmp => _scrollPreviewWindow?.UpdatePreview(bmp);
             _viewModel.HideScrollingHintAction = () =>
             {
                 _scrollHintWindow?.Close();
                 _scrollHintWindow = null;
                 _scrollRegionWindow?.Close();
                 _scrollRegionWindow = null;
+                _scrollPreviewWindow?.Close();
+                _scrollPreviewWindow = null;
             };
 
             // Own the dialog to the snip overlay so it appears above the topmost overlay and the

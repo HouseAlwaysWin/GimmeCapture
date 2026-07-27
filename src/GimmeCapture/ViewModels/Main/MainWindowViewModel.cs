@@ -8,6 +8,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -86,6 +87,7 @@ public partial class MainWindowViewModel : ViewModelBase
     internal Task InitialSettingsLoadTask => _loadTask ?? Task.CompletedTask;
 
     private string _currentStatusKey = "StatusReady";
+    private OCRLanguage? _currentStatusOcrLanguage;
 
     // Transient UI-state properties that are NOT persisted; changes to these never trigger a save.
     private static readonly HashSet<string> _nonPersistedPropertyNames = new(StringComparer.Ordinal)
@@ -98,8 +100,37 @@ public partial class MainWindowViewModel : ViewModelBase
     public void SetStatus(string key)
     {
         _currentStatusKey = key;
+        _currentStatusOcrLanguage = null;
         StatusText = LocalizationService.Instance[key];
         MaybeShowToast(key, StatusText);
+    }
+
+    /// <summary>
+    /// Status for an OCR outcome, naming the recognised language only when the user asked for auto-detect — when
+    /// they picked the language themselves, echoing it back tells them nothing. The language is kept as the enum
+    /// rather than a rendered name so a UI-language switch re-renders it too.
+    /// </summary>
+    public void SetOcrStatus(string key, OCRLanguage? recognizedLanguage)
+    {
+        _currentStatusKey = key;
+        _currentStatusOcrLanguage = SourceLanguage == OCRLanguage.Auto ? recognizedLanguage : null;
+        StatusText = ComposeStatusText(_currentStatusKey, _currentStatusOcrLanguage);
+        MaybeShowToast(key, StatusText);
+    }
+
+    private static string ComposeStatusText(string key, OCRLanguage? detectedLanguage)
+    {
+        string text = LocalizationService.Instance[key];
+        if (detectedLanguage is not { } language)
+        {
+            return text;
+        }
+
+        string languageName = LocalizationService.Instance[$"OCRLang{language}"];
+        return text + string.Format(
+            CultureInfo.CurrentCulture,
+            LocalizationService.Instance["QuickOcrDetectedLanguage"],
+            languageName);
     }
 
     /// <summary>Severity of a toast notification, used for the accent colour.</summary>
@@ -331,7 +362,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 this.RaisePropertyChanged(nameof(AvailableCaptureDelays));
                 this.RaisePropertyChanged(nameof(AvailableOcrTextLayouts));
                 this.RaisePropertyChanged(nameof(GifUnavailableReason));
-                StatusText = LocalizationService.Instance[_currentStatusKey];
+                StatusText = ComposeStatusText(_currentStatusKey, _currentStatusOcrLanguage);
             });
 
         SetStatus("StatusReady");

@@ -75,14 +75,14 @@ public partial class SnipWindowViewModel
                             result.Text, exportDir, _mainVm.FileNameTemplate);
                         statusKey = exportedPath != null ? "QuickOcrSavedToFile" : "QuickOcrSaveFailed";
                     }
-                    _mainVm.SetStatus(statusKey);
+                    _mainVm.SetOcrStatus(statusKey, result.Language);
                     break;
                 case QuickOcrStatus.ModuleMissing:
                     _mainVm.SetStatus("QuickOcrModuleMissing");
                     _mainVm.RequestOpenModulesAction?.Invoke();
                     break;
                 case QuickOcrStatus.NoText:
-                    _mainVm.SetStatus("QuickOcrNoText");
+                    _mainVm.SetOcrStatus("QuickOcrNoText", result.Language);
                     break;
                 default:
                     _mainVm.SetStatus("QuickOcrFailed");
@@ -111,6 +111,7 @@ public partial class SnipWindowViewModel
     // Test hook: drives the private Quick-OCR text-copy flow directly (the production trigger posts it to the
     // dispatcher), so the processing-spinner ordering/teardown invariants can be unit-tested without a UI thread.
     internal Task RunQuickOcrTextCopyForTestAsync() => ExecuteTextCopyAsync();
+
 
     private async Task ExecuteCopyAsync()
     {

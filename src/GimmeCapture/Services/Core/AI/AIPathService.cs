@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using GimmeCapture.Models;
+using GimmeCapture.Services.OCR;
 
 namespace GimmeCapture.Services.Core.AI;
 
@@ -43,14 +44,16 @@ public class AIPathService
         var baseDir = GetAIResourcesPath();
         var ocrDir = Path.Combine(baseDir, "ocr");
         
-        string langSuffix = language switch
+        // Auto is resolved here rather than falling through to the default arm: it used to land on "ch", so an Auto
+        // capture silently ran the simplified-Chinese recogniser and could never read Japanese or Korean at all.
+        string langSuffix = OcrLanguageResolver.Resolve(language) switch
         {
             OCRLanguage.Japanese => "jp",
             OCRLanguage.Korean => "ko",
             OCRLanguage.English => "en",
             OCRLanguage.TraditionalChinese => "cht",
             OCRLanguage.SimplifiedChinese => "ch",
-            _ => "ch" 
+            _ => "ch"
         };
 
         return (

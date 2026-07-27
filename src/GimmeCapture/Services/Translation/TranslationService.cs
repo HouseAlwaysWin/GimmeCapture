@@ -23,6 +23,7 @@ public partial class TranslationService : IDisposable
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
     private readonly TranslationEngineRunner _translationEngineRunner;
     private readonly AIResourceService _aiResourceService;
+    private readonly IOcrScriptDetector _scriptDetector;
     private readonly TranslationPipeline _translationPipeline = new();
     private IOCREngine? _ocrEngine;
     private bool _keepOcrWarm;
@@ -32,12 +33,14 @@ public partial class TranslationService : IDisposable
     public TranslationService(
         AIResourceService aiResourceService,
         IAppSettingsService settingsService,
-        OcrRuntimeService ocrRuntimeService)
+        OcrRuntimeService ocrRuntimeService,
+        IOcrScriptDetector scriptDetector)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _ocrRuntimeService = ocrRuntimeService ?? throw new ArgumentNullException(nameof(ocrRuntimeService));
-        
+        _scriptDetector = scriptDetector ?? throw new ArgumentNullException(nameof(scriptDetector));
+
         // Manual DI for now as the app doesn't use a container in constructor injection here
         var translationCache = new InMemoryTranslationCache();
 
@@ -54,9 +57,9 @@ public partial class TranslationService : IDisposable
 
     public async Task WarmUpAsync(CancellationToken ct = default)
     {
-        var warmupSourceLanguage = _settings.SourceLanguage == OCRLanguage.Auto
-            ? OCRLanguage.TraditionalChinese
-            : _settings.SourceLanguage;
+        // Auto's real language is only known once a capture exists to probe, so the warm-up loads the fallback the
+        // probe would settle on with no evidence.
+        var warmupSourceLanguage = OcrLanguageResolver.Resolve(_settings.SourceLanguage);
 
         TranslationMemoryDiagnostics.Log(
             "translation-warmup-before",
@@ -114,15 +117,18 @@ public partial class TranslationService : IDisposable
                 llamaLoaded: IsLlamaLoaded,
                 bitmap: bitmap);
 
+            var ocrEngine = GetOrCreateOcrEngine();
             var ocrLang = _settings.SourceLanguage;
-            ScriptProbeResult? probe = null;
+            OcrScriptDetectionResult? probe = null;
             if (ocrLang == OCRLanguage.Auto)
             {
-                probe = await DetectScriptLanguageAsync(bitmap, ct);
+                // The probe leaves the engine loaded with whatever it picked, and hands back the detection boxes
+                // (the DB detection model is shared across every language, so they are valid for the winner too)
+                // plus that winner's raw recognitions for the sampled boxes.
+                probe = await _scriptDetector.DetectAsync(bitmap, ocrEngine, ct);
                 ocrLang = probe.Language;
             }
 
-            var ocrEngine = GetOrCreateOcrEngine();
             await ocrEngine.EnsureLoadedAsync(ocrLang, ct);
             TranslationMemoryDiagnostics.Log(
                 "translation-ocr-ready",
@@ -130,9 +136,6 @@ public partial class TranslationService : IDisposable
                 ocrLanguage: LoadedOcrLanguage?.ToString(),
                 llamaLoaded: IsLlamaLoaded,
                 bitmap: bitmap);
-            // The DB detection model is shared across every OCR language (only the recogniser + dictionary
-            // differ), so when the auto-language probe already ran detection on this exact bitmap its boxes are
-            // identical — reuse them instead of running the detector a second time.
             var boxes = probe?.Boxes ?? ocrEngine.DetectText(bitmap);
             TranslationMemoryDiagnostics.Log(
                 "translation-ocr-detect-complete",
@@ -142,17 +145,17 @@ public partial class TranslationService : IDisposable
                 selectionCount: boxes.Count,
                 bitmap: bitmap);
 
-            // When the resolved language is the probe's own model (Traditional Chinese), the probe already
-            // recognised the first sampled boxes with the identical recogniser — reuse those results by index.
-            bool reuseSampledRecognition = probe != null && ocrLang == OCRLanguage.TraditionalChinese;
+            // The probe's samples came from the winning recogniser on these very boxes, so re-running it over
+            // Boxes[0..N) would produce the same strings at the same cost. Empty when no probe ran.
+            var sampled = probe?.SampledRecognitions ?? Array.Empty<(string Text, float Confidence)>();
 
             var recognizedBlocks = new List<(SKRectI Box, string Text, float Confidence)>();
             for (int i = 0; i < boxes.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
                 var box = boxes[i];
-                (string text, float confidence) = reuseSampledRecognition && i < probe!.SampledRecognitions.Count
-                    ? probe.SampledRecognitions[i]
+                (string text, float confidence) = i < sampled.Count
+                    ? sampled[i]
                     : ocrEngine.RecognizeText(bitmap, box, ct);
                 string cleanedText = OcrTextSanitizer.Sanitize(text);
                 if (OcrTextQualityPolicy.IsUseful(cleanedText, confidence))
@@ -425,58 +428,6 @@ public partial class TranslationService : IDisposable
         }
 
         return results;
-    }
-
-    // Result of the auto-language probe: the resolved OCR language plus the detection boxes and sampled
-    // recognitions it produced, so AnalyzeAndTranslateAsync can reuse them instead of re-detecting /
-    // re-recognising the identical bitmap. SampledRecognitions is aligned to Boxes[0..N) and holds the RAW
-    // (unsanitised) recogniser output, exactly what RecognizeText returns.
-    private sealed record ScriptProbeResult(
-        OCRLanguage Language,
-        List<SKRectI> Boxes,
-        IReadOnlyList<(string Text, float Confidence)> SampledRecognitions);
-
-    private async Task<ScriptProbeResult> DetectScriptLanguageAsync(SKBitmap bitmap, CancellationToken ct)
-    {
-        var ocrEngine = GetOrCreateOcrEngine();
-        await ocrEngine.EnsureLoadedAsync(OCRLanguage.TraditionalChinese, ct);
-        var boxes = ocrEngine.DetectText(bitmap);
-        int sampleCount = Math.Min(8, boxes.Count);
-        int kanaCount = 0;
-        int meaningfulCount = 0;
-        var sampled = new List<(string Text, float Confidence)>(sampleCount);
-
-        for (int i = 0; i < sampleCount; i++)
-        {
-            var box = boxes[i];
-            var (rawText, confidence) = ocrEngine.RecognizeText(bitmap, box, ct);
-            sampled.Add((rawText, confidence)); // RAW; the caller sanitises, matching the main recognition path
-            string text = OcrTextSanitizer.Sanitize(rawText);
-            kanaCount += CountJapaneseKana(text);
-            meaningfulCount += CountMeaningfulChars(text);
-        }
-
-        // The Chinese recognizer can occasionally emit one stray kana for small
-        // Traditional Chinese glyphs. Require strong aggregate evidence before
-        // swapping to the Japanese model, otherwise the second OCR pass degrades.
-        var language = kanaCount >= 3 && meaningfulCount > 0 && (kanaCount * 5) >= meaningfulCount
-            ? OCRLanguage.Japanese
-            : OCRLanguage.TraditionalChinese;
-        return new ScriptProbeResult(language, boxes, sampled);
-    }
-
-    private static int CountJapaneseKana(string text)
-    {
-        int count = 0;
-        foreach (char ch in text)
-        {
-            if (ch >= '\u3040' && ch <= '\u30FF')
-            {
-                count++;
-            }
-        }
-
-        return count;
     }
 
     public void ReleaseOcrResources()

@@ -7,6 +7,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.OCR;
 using SkiaSharp;
 
 namespace GimmeCapture.Services.Translation;
@@ -23,11 +24,12 @@ public sealed class TranslationSessionService : ITranslationSessionService
     public TranslationSessionService(
         AIResourceService aiResourceService,
         IAppSettingsService settingsService,
-        OcrRuntimeService ocrRuntimeService)
+        OcrRuntimeService ocrRuntimeService,
+        IOcrScriptDetector scriptDetector)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        _translationService = new TranslationService(aiResourceService, settingsService, ocrRuntimeService);
+        _translationService = new TranslationService(aiResourceService, settingsService, ocrRuntimeService, scriptDetector);
     }
 
     internal bool IsOcrLoaded => _translationService.IsOcrLoaded;
@@ -116,11 +118,11 @@ public sealed class TranslationSessionService : ITranslationSessionService
         OCRLanguage sourceLanguage,
         CancellationToken ct = default)
     {
-        var effectiveSourceLanguage = sourceLanguage == OCRLanguage.Auto
-            ? OCRLanguage.TraditionalChinese
-            : sourceLanguage;
-
-        return _aiResourceService.EnsureOCRAsync(effectiveSourceLanguage, ct);
+        // Auto needs the whole probe candidate set on disk, not just one language — that is what lets it answer
+        // anything other than Chinese. Explicit languages still install only what they need.
+        return sourceLanguage == OCRLanguage.Auto
+            ? _aiResourceService.EnsureAllOcrAsync(ct)
+            : _aiResourceService.EnsureOCRAsync(sourceLanguage, ct);
     }
 
     public Task<(List<TranslatedBlock> Blocks, string ErrorKey)> AnalyzeAndTranslateAsync(

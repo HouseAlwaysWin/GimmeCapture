@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -98,8 +99,64 @@ public partial class SnipWindowViewModel
     private int _manualMotionVetoStreak;
     private int _manualLastStripOffset;
 
+    /// <summary>
+    /// Publishes the latest downscaled thumbnail of the growing strip to the live preview window. Posted
+    /// from the consumer thread (throttled) so the user can watch stitching progress and catch a
+    /// misplacement/stall the moment it happens, instead of only in the finished pin.
+    /// </summary>
+    public Action<Avalonia.Media.Imaging.Bitmap>? UpdateScrollingPreviewAction { get; set; }
+
+    // Live-preview repaint budget: ~6 thumbnails/second. Frequent enough to look live, rare enough that the
+    // full-strip downscale + BGRA copy never competes with stitching for the consumer thread.
+    private static readonly TimeSpan ManualPreviewInterval = TimeSpan.FromMilliseconds(160);
+    private readonly Stopwatch _manualPreviewThrottle = new();
+    // Physical-pixel budget for each rendered thumbnail. Width ≈ the preview window's narrow display width at
+    // 2× DPI (kept crisp); height generous so the whole strip stays in one image until it is very long.
+    private const int ManualPreviewMaxWidthPx = 420;
+    private const int ManualPreviewMaxHeightPx = 2000;
+
     /// <summary>Hide/close the hint window.</summary>
     public Action? HideScrollingHintAction { get; set; }
+
+    // Renders a throttled, downscaled thumbnail of the current strip and posts it to the preview window.
+    // Runs on the consumer thread (the strip's sole owner); the SKBitmap->Bitmap conversion is a plain pixel
+    // copy with no UI-thread affinity, so only the final assignment is marshalled onto the UI thread.
+    private void PublishManualScrollPreview()
+    {
+        ManualScrollStrip? strip = _manualStrip;
+        if (strip == null || UpdateScrollingPreviewAction == null)
+        {
+            return;
+        }
+
+        // Throttle to the repaint budget. Reset() (not Restart()) at session start leaves the watch stopped,
+        // so the first grow publishes immediately; afterwards it fires at most once per interval.
+        if (_manualPreviewThrottle.IsRunning && _manualPreviewThrottle.Elapsed < ManualPreviewInterval)
+        {
+            return;
+        }
+        _manualPreviewThrottle.Restart();
+
+        SKBitmap? scaled = null;
+        try
+        {
+            scaled = strip.RenderScaledPreview(ManualPreviewMaxWidthPx, ManualPreviewMaxHeightPx);
+            if (GimmeCapture.ViewModels.Floating.FloatingBitmapConversionHelper
+                    .TryCreateDetachedBitmapFromSkBitmap(scaled, out var bitmap, out _)
+                && bitmap != null)
+            {
+                Dispatcher.UIThread.Post(() => UpdateScrollingPreviewAction?.Invoke(bitmap));
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("ManualScroll.Preview", ex);
+        }
+        finally
+        {
+            scaled?.Dispose();
+        }
+    }
 
     private async Task StartManualScrollCaptureAsync()
     {
@@ -200,6 +257,7 @@ public partial class SnipWindowViewModel
         _manualMotionValid = true;
         _manualMotionVetoStreak = 0;
         _manualLastStripOffset = 0; // the seed frame sits at strip offset 0
+        _manualPreviewThrottle.Reset(); // not started => the first grow publishes a thumbnail immediately
 
         // DIAGNOSTIC (temporary): records the resolved direction, region/strip dims and the active
         // match params so a captured log can show whether forcing is applied and how alignment behaves.
@@ -310,6 +368,7 @@ public partial class SnipWindowViewModel
                     {
                         int newHeight = _manualStrip!.Height; // grew => the strip has been promoted
                         Dispatcher.UIThread.Post(() => UpdateScrollingHintAction?.Invoke(newHeight));
+                        PublishManualScrollPreview();
 
                         if (newHeight >= _manualMaxHeight)
                         {

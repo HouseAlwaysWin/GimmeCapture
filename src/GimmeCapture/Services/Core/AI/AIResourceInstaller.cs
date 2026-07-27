@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.OCR;
 
 namespace GimmeCapture.Services.Core.AI;
 
@@ -277,14 +279,26 @@ internal sealed class AIResourceInstaller
         }
     }
 
-    public async Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default)
+    public Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default) =>
+        EnsureOCRAsync(new[] { OcrLanguageResolver.Resolve(language) }, ct);
+
+    /// <summary>
+    /// Installs every language the auto-detect probe may need. Auto compares recognisers against each other, so a
+    /// language whose model is absent simply cannot be detected — installing the full set is what makes Auto able
+    /// to answer anything other than "Chinese".
+    /// </summary>
+    public Task<bool> EnsureAllOcrAsync(CancellationToken ct = default) =>
+        EnsureOCRAsync(OcrLanguageResolver.InstallableLanguages, ct);
+
+    public async Task<bool> EnsureOCRAsync(IReadOnlyList<OCRLanguage> languages, CancellationToken ct = default)
     {
-        if (_callbacks.IsOCRReady(language)) return true;
+        ArgumentNullException.ThrowIfNull(languages);
+        if (languages.Count == 0 || AreAllReady(languages)) return true;
 
         await _downloadLock.WaitAsync(ct);
         try
         {
-            if (_callbacks.IsOCRReady(language)) return true;
+            if (AreAllReady(languages)) return true;
 
             _downloader.IsDownloading = true;
             _downloader.CurrentDownloadName = "OCR Models (PaddleOCR v5)";
@@ -293,25 +307,36 @@ internal sealed class AIResourceInstaller
             var ocrDir = Path.Combine(_pathService.GetAIResourcesPath(), "ocr");
             Directory.CreateDirectory(ocrDir);
 
-            var paths = _pathService.GetOCRPaths(language);
-            var package = _modelCatalog.GetOcrPackage(language);
+            // The detection model is language-independent and shared by every recogniser, so it is fetched once
+            // and given a fixed slice of the progress bar; the rest is split evenly across the languages.
+            const double DetectionShare = 10d;
+            double languageShare = (100d - DetectionShare) / languages.Count;
 
-            if (!File.Exists(paths.Det))
-                await _downloader.DownloadFileAsync(package.Detection, paths.Det, 0, 40, ct);
-            else
-                _downloader.DownloadProgress = 40;
+            var detectionPaths = _pathService.GetOCRPaths(languages[0]);
+            if (!File.Exists(detectionPaths.Det))
+                await _downloader.DownloadFileAsync(_modelCatalog.GetOcrPackage(languages[0]).Detection, detectionPaths.Det, 0, DetectionShare, ct);
+            _downloader.DownloadProgress = DetectionShare;
 
-            if (!File.Exists(paths.Rec))
-                await _downloader.DownloadFileAsync(package.Recognition, paths.Rec, 40, 50, ct);
-            else
-                _downloader.DownloadProgress = 90;
+            for (int i = 0; i < languages.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var language = languages[i];
+                var paths = _pathService.GetOCRPaths(language);
+                var package = _modelCatalog.GetOcrPackage(language);
 
-            if (!File.Exists(paths.Dict))
-                await _downloader.DownloadFileAsync(package.Dictionary, paths.Dict, 90, 10, ct);
-            else
-                _downloader.DownloadProgress = 100;
+                double start = DetectionShare + (i * languageShare);
+                double recognitionShare = languageShare * 0.85d;
 
-            return _callbacks.IsOCRReady(language);
+                if (!File.Exists(paths.Rec))
+                    await _downloader.DownloadFileAsync(package.Recognition, paths.Rec, start, recognitionShare, ct);
+
+                if (!File.Exists(paths.Dict))
+                    await _downloader.DownloadFileAsync(package.Dictionary, paths.Dict, start + recognitionShare, languageShare - recognitionShare, ct);
+
+                _downloader.DownloadProgress = start + languageShare;
+            }
+
+            return AreAllReady(languages);
         }
         catch (OperationCanceledException)
         {
@@ -328,6 +353,9 @@ internal sealed class AIResourceInstaller
             _downloadLock.Release();
         }
     }
+
+    private bool AreAllReady(IReadOnlyList<OCRLanguage> languages) =>
+        OcrLanguageResolver.AllReady(languages, _callbacks.IsOCRReady);
 
     private void RaiseReadinessProperties(params string[] propertyNames)
     {

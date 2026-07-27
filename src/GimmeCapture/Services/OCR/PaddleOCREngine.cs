@@ -55,7 +55,10 @@ public class PaddleOCREngine : IOCREngine
 
     public List<SKRectI> DetectText(SKBitmap bitmap)
     {
-        var detSession = _ocrRuntimeService.DetectionSession;
+        // Held across the whole method, not just the Run: the tensor prep below takes tens of milliseconds, and a
+        // language switch landing in that window used to dispose the session this call had already captured.
+        using var use = _ocrRuntimeService.BeginSessionUse();
+        var detSession = use.Detection;
         if (detSession == null) return new List<SKRectI>();
 
         int limitSideLen = 1280;
@@ -87,7 +90,12 @@ public class PaddleOCREngine : IOCREngine
 
     public (string text, float confidence) RecognizeText(SKBitmap bitmap, SKRectI box, CancellationToken ct = default)
     {
-        if (_ocrRuntimeService.RecognitionSession == null || box.Width <= 0 || box.Height <= 0) return ("", 0f);
+        if (box.Width <= 0 || box.Height <= 0) return ("", 0f);
+
+        // One scope for every candidate pass of this box, so they are all recognised by the same model and decoded
+        // against the same dictionary — comparing candidates produced by different languages would be meaningless.
+        using var use = _ocrRuntimeService.BeginSessionUse();
+        if (use.Recognition == null) return ("", 0f);
 
         var expandedBox = ExpandRecognitionBox(box, bitmap.Width, bitmap.Height);
         using var cropped = new SKBitmap(expandedBox.Width, expandedBox.Height);
@@ -107,26 +115,26 @@ public class PaddleOCREngine : IOCREngine
         textWidth = Math.Clamp(textWidth, 16, 1536);
         int paddedWidth = (textWidth + 31) / 32 * 32;
 
-        var bestResult = EvaluateRecognitionCandidate(cropped, textWidth, paddedWidth, targetHeight, invert: false, enhanceContrast: false);
+        var bestResult = EvaluateRecognitionCandidate(use, cropped, textWidth, paddedWidth, targetHeight, invert: false, enhanceContrast: false);
 
         if (shouldInvert)
         {
             bestResult = SelectBetterRecognitionResult(
                 bestResult,
-                EvaluateRecognitionCandidate(cropped, textWidth, paddedWidth, targetHeight, invert: true, enhanceContrast: false));
+                EvaluateRecognitionCandidate(use, cropped, textWidth, paddedWidth, targetHeight, invert: true, enhanceContrast: false));
         }
 
         if (shouldEnhance || bestResult.confidence < RecognitionRetryConfidenceThreshold)
         {
             bestResult = SelectBetterRecognitionResult(
                 bestResult,
-                EvaluateRecognitionCandidate(cropped, textWidth, paddedWidth, targetHeight, invert: false, enhanceContrast: true));
+                EvaluateRecognitionCandidate(use, cropped, textWidth, paddedWidth, targetHeight, invert: false, enhanceContrast: true));
 
             if (shouldInvert)
             {
                 bestResult = SelectBetterRecognitionResult(
                     bestResult,
-                    EvaluateRecognitionCandidate(cropped, textWidth, paddedWidth, targetHeight, invert: true, enhanceContrast: true));
+                    EvaluateRecognitionCandidate(use, cropped, textWidth, paddedWidth, targetHeight, invert: true, enhanceContrast: true));
             }
         }
 
@@ -197,6 +205,7 @@ public class PaddleOCREngine : IOCREngine
     }
 
     private (string text, float confidence) EvaluateRecognitionCandidate(
+        OcrSessionUse use,
         SKBitmap cropped,
         int textWidth,
         int paddedWidth,
@@ -210,7 +219,7 @@ public class PaddleOCREngine : IOCREngine
             SaveDebugImage(prepared);
         }
 
-        return RunRecognition(prepared);
+        return RunRecognition(use, prepared);
     }
 
     private (string text, float confidence) SelectBetterRecognitionResult(
@@ -336,9 +345,9 @@ public class PaddleOCREngine : IOCREngine
             Math.Min(bitmapHeight, box.Bottom + padY));
     }
 
-    private (string text, float confidence) RunRecognition(SKBitmap tensorBitmap)
+    private (string text, float confidence) RunRecognition(OcrSessionUse use, SKBitmap tensorBitmap)
     {
-        var recSession = _ocrRuntimeService.RecognitionSession;
+        var recSession = use.Recognition;
         if (recSession == null) return ("", 0f);
 
         int h = tensorBitmap.Height;
@@ -351,7 +360,7 @@ public class PaddleOCREngine : IOCREngine
         using var outputs = recSession.Run(inputs);
         var outputTensor = outputs.AsValueEnumerable().First().AsTensor<float>();
 
-        return DecodeCTCAuto(outputTensor);
+        return DecodeCTCAuto(use.Dictionary, outputTensor);
     }
 
     private List<SKRectI> FindBoxesFromMask(Tensor<float> mask, int targetW, int targetH, int origW, int origH)
@@ -550,29 +559,33 @@ public class PaddleOCREngine : IOCREngine
 
     private static float ToProbability(float value) => (value >= 0f && value <= 1f) ? value : 1f / (1f + MathF.Exp(-value));
 
-    private (string text, float confidence) DecodeCTCAuto(Tensor<float> tensor)
+    private (string text, float confidence) DecodeCTCAuto(IReadOnlyList<string> dict, Tensor<float> tensor)
     {
         int d1 = tensor.Dimensions[1], d2 = tensor.Dimensions[2];
-        var dictCount = _ocrRuntimeService.Dictionary.Count;
+        var dictCount = dict.Count;
 
         // Which axis is the class dimension is fixed per model, so decode only the plausible orientation
         // instead of always decoding both (a seqLen×classCount scan over a ~6000-entry dictionary per box).
         bool ntcP = Math.Abs(dictCount - d2) <= 8;
         bool nctP = Math.Abs(dictCount - d1) <= 8;
 
-        if (ntcP && !nctP) return DecodeCTC(tensor, d1, d2, true);
-        if (!ntcP && nctP) return DecodeCTC(tensor, d2, d1, false);
+        if (ntcP && !nctP) return DecodeCTC(dict, tensor, d1, d2, true);
+        if (!ntcP && nctP) return DecodeCTC(dict, tensor, d2, d1, false);
 
         // Ambiguous (both or neither plausible): fall back to decoding both and taking the higher confidence.
-        var ntc = DecodeCTC(tensor, d1, d2, true);
-        var nct = DecodeCTC(tensor, d2, d1, false);
+        var ntc = DecodeCTC(dict, tensor, d1, d2, true);
+        var nct = DecodeCTC(dict, tensor, d2, d1, false);
         return nct.confidence > ntc.confidence ? nct : ntc;
     }
 
-    private (string text, float confidence) DecodeCTC(Tensor<float> tensor, int seqLen, int classCount, bool isNTC)
+    private (string text, float confidence) DecodeCTC(
+        IReadOnlyList<string> dict,
+        Tensor<float> tensor,
+        int seqLen,
+        int classCount,
+        bool isNTC)
     {
         var sb = new StringBuilder();
-        var dict = _ocrRuntimeService.Dictionary;
         int prevIdx = -1;
         float totalConf = 0f;
         int count = 0;
