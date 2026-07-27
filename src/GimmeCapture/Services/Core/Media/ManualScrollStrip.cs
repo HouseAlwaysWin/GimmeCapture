@@ -137,6 +137,51 @@ internal sealed class ManualScrollStrip : IDisposable
         return output;
     }
 
+    /// <summary>
+    /// Renders the whole logical strip into a fresh, aspect-preserved BGRA bitmap no larger than
+    /// <paramref name="maxWidth"/> × <paramref name="maxHeight"/> (never upscaled). Used to drive the live
+    /// scrolling-capture preview cheaply — the caller owns and disposes the result. Safe on the consumer
+    /// thread (the strip's single owner); does not mutate the strip.
+    /// </summary>
+    public SKBitmap RenderScaledPreview(int maxWidth, int maxHeight)
+    {
+        int sw = Math.Max(1, _width);
+        int sh = Math.Max(1, _height);
+        int capW = Math.Max(1, maxWidth);
+        int capH = Math.Max(1, maxHeight);
+
+        // Fit within the cap on both axes, preserving aspect; clamp to 1 so a small strip stays crisp
+        // rather than being blown up (the preview window upscales for display if it wants to).
+        double scale = Math.Min(Math.Min((double)capW / sw, (double)capH / sh), 1.0);
+        int dw = Math.Clamp((int)Math.Round(sw * scale), 1, capW);
+        int dh = Math.Clamp((int)Math.Round(sh * scale), 1, capH);
+
+        var info = new SKImageInfo(dw, dh, SKColorType.Bgra8888, SKAlphaType.Premul);
+        if (_height <= 0 || _width <= 0)
+        {
+            return new SKBitmap(info);
+        }
+
+        // Crop the logical region (a zero-copy view over the buffer) then downscale with linear sampling —
+        // matches the Resize(..., SKFilterMode.Linear) idiom used elsewhere and keeps the thumbnail smooth.
+        using var region = new SKBitmap();
+        if (_buffer.ExtractSubset(region, new SKRectI(0, _top, _width, _top + _height)))
+        {
+            SKBitmap? resized = region.Resize(info, new SKSamplingOptions(SKFilterMode.Linear));
+            if (resized != null)
+            {
+                return resized;
+            }
+        }
+
+        // Fallback (subset/resize unavailable): a direct scaled blit with the canvas default sampling.
+        var output = new SKBitmap(info);
+        using var canvas = new SKCanvas(output);
+        canvas.Clear(SKColors.Black);
+        canvas.DrawBitmap(_buffer, new SKRect(0, _top, _width, _top + _height), new SKRect(0, 0, dw, dh));
+        return output;
+    }
+
     // Guarantees `topRoom` rows above and `bottomRoom` rows below the logical window. When either side is
     // exhausted, reallocates with at least a strip-height of slack on each side (amortised O(1) per row).
     private void EnsureRoom(int topRoom, int bottomRoom)
