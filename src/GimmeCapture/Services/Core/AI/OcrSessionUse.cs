@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Microsoft.ML.OnnxRuntime;
 
 namespace GimmeCapture.Services.Core.AI;
@@ -16,15 +17,15 @@ namespace GimmeCapture.Services.Core.AI;
 /// </summary>
 public sealed class OcrSessionUse : IDisposable
 {
-    private readonly IDisposable? _useScope;
+    private Action? _release;
 
     internal OcrSessionUse(
-        IDisposable? useScope,
+        Action? release,
         InferenceSession? detection,
         InferenceSession? recognition,
         IReadOnlyList<string> dictionary)
     {
-        _useScope = useScope;
+        _release = release;
         Detection = detection;
         Recognition = recognition;
         Dictionary = dictionary;
@@ -34,5 +35,6 @@ public sealed class OcrSessionUse : IDisposable
     public InferenceSession? Recognition { get; }
     public IReadOnlyList<string> Dictionary { get; }
 
-    public void Dispose() => _useScope?.Dispose();
+    /// <summary>Idempotent: releasing twice would hand a second caller into inference alongside the first.</summary>
+    public void Dispose() => Interlocked.Exchange(ref _release, null)?.Invoke();
 }

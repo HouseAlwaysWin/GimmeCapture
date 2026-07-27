@@ -38,6 +38,9 @@ public sealed class OcrRuntimeService : IDisposable
     // Guards the sessions against being disposed mid-inference. Coarser than _loadLock, which only serialises
     // loads against each other and never knew anything about inference already running on the old sessions.
     private readonly ResourceUseGate _useGate = new();
+    // Serialises inference. The use gate deliberately allows concurrent users (it only separates use from
+    // teardown), which is not enough: concurrent Run calls on one session are themselves fatal.
+    private readonly SemaphoreSlim _inferenceLock = new(1, 1);
     private readonly IdleReleaseScheduler _idleUnload;
     private InferenceSession? _detSession;
     private InferenceSession? _recSession;
@@ -68,13 +71,35 @@ public sealed class OcrRuntimeService : IDisposable
     /// Takes the sessions for one inference and keeps them alive for its duration. ALWAYS use the returned scope's
     /// sessions rather than caching them: outside the scope they may already be disposed, and calling
     /// <c>Run</c> on a disposed session faults the process with an access violation rather than throwing.
+    ///
+    /// Inference is SERIALISED: only one caller runs at a time. Two threads calling <c>Run</c> on the same session
+    /// crashed the process with an access violation, and the app produces overlapping callers routinely —
+    /// <c>DetectText</c> cannot be cancelled mid-run, so cancelling a scan (Esc) leaves its inference finishing on
+    /// the thread pool while the replacement scan starts.
     /// </summary>
     public OcrSessionUse BeginSessionUse()
     {
         var scope = _useGate.BeginUse();
+        try
+        {
+            _inferenceLock.Wait();
+        }
+        catch
+        {
+            scope.Dispose();
+            throw;
+        }
 
-        // Read under the use: a swap can only run when no use is open, so these cannot change while we hold it.
-        return new OcrSessionUse(scope, _detSession, _recSession, _dictionary);
+        // Read once both gates are held: a swap can only run when no use is open, so these cannot change under us.
+        return new OcrSessionUse(
+            () =>
+            {
+                _inferenceLock.Release();
+                scope.Dispose();
+            },
+            _detSession,
+            _recSession,
+            _dictionary);
     }
 
     public string AcquireLease()
@@ -234,6 +259,9 @@ public sealed class OcrRuntimeService : IDisposable
         _idleUnload.Cancel();
         ForceUnload(ShutdownUnloadTimeout);
         _loadLock.Dispose();
+        // _inferenceLock is deliberately not disposed: if the unload above timed out, a thread may still be waiting
+        // on it, and disposing it under a waiter throws. SemaphoreSlim needs no disposal unless its wait handle was
+        // materialised, which this one's never is.
     }
 
     /// <summary>
