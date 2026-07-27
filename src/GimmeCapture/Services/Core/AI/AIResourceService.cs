@@ -158,6 +158,8 @@ public class AIResourceService : ReactiveObject
 
     public virtual async Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default) => await _orchestrator.EnsureOCRAsync(language, ct);
 
+    public virtual Task<bool> EnsureAllOcrAsync(CancellationToken ct = default) => _orchestrator.EnsureAllOcrAsync(ct);
+
     public void SetupNativeResolvers()
     {
         _orchestrator.SetupNativeResolvers();

@@ -7,16 +7,41 @@ using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.OCR;
 using Microsoft.ML.OnnxRuntime;
 
 namespace GimmeCapture.Services.Core.AI;
 
 public sealed class OcrRuntimeService : IDisposable
 {
+    /// <summary>
+    /// How long a model swap waits for in-flight inference before giving up. Generous: a detection pass on a
+    /// full-screen capture takes a few hundred ms, and skipping a swap is a far better outcome than either
+    /// blocking forever or freeing a session out from under a running inference.
+    /// </summary>
+    private static readonly TimeSpan SwapTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>Shorter budget at shutdown: past this, leaking the sessions beats stalling process exit.</summary>
+    private static readonly TimeSpan ShutdownUnloadTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long the sessions survive after the last consumer lets go. Deliberately NOT immediate: tearing a
+    /// DirectML session down and building a new one seconds later is what precedes every observed crash, and
+    /// back-to-back scans used to do exactly that. Matches the memory-trim debounce that follows the unload.
+    /// </summary>
+    private static readonly TimeSpan UnloadIdleDelay = TimeSpan.FromSeconds(5);
+
     private readonly AIResourceService _aiResourceService;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly object _leaseLock = new();
     private readonly HashSet<string> _activeLeases = new();
+    // Guards the sessions against being disposed mid-inference. Coarser than _loadLock, which only serialises
+    // loads against each other and never knew anything about inference already running on the old sessions.
+    private readonly ResourceUseGate _useGate = new();
+    // Serialises inference. The use gate deliberately allows concurrent users (it only separates use from
+    // teardown), which is not enough: concurrent Run calls on one session are themselves fatal.
+    private readonly SemaphoreSlim _inferenceLock = new(1, 1);
+    private readonly IdleReleaseScheduler _idleUnload;
     private InferenceSession? _detSession;
     private InferenceSession? _recSession;
     private OCRLanguage? _loadedLanguage;
@@ -25,6 +50,7 @@ public sealed class OcrRuntimeService : IDisposable
     public OcrRuntimeService(AIResourceService aiResourceService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
+        _idleUnload = new IdleReleaseScheduler(UnloadIdleDelay, Unload);
         AIResourceService.RequestGlobalUnload += HandleGlobalUnload;
     }
 
@@ -41,13 +67,47 @@ public sealed class OcrRuntimeService : IDisposable
         }
     }
 
-    public InferenceSession? DetectionSession => _detSession;
-    public InferenceSession? RecognitionSession => _recSession;
-    public IReadOnlyList<string> Dictionary => _dictionary;
+    /// <summary>
+    /// Takes the sessions for one inference and keeps them alive for its duration. ALWAYS use the returned scope's
+    /// sessions rather than caching them: outside the scope they may already be disposed, and calling
+    /// <c>Run</c> on a disposed session faults the process with an access violation rather than throwing.
+    ///
+    /// Inference is SERIALISED: only one caller runs at a time. Two threads calling <c>Run</c> on the same session
+    /// crashed the process with an access violation, and the app produces overlapping callers routinely —
+    /// <c>DetectText</c> cannot be cancelled mid-run, so cancelling a scan (Esc) leaves its inference finishing on
+    /// the thread pool while the replacement scan starts.
+    /// </summary>
+    public OcrSessionUse BeginSessionUse()
+    {
+        var scope = _useGate.BeginUse();
+        try
+        {
+            _inferenceLock.Wait();
+        }
+        catch
+        {
+            scope.Dispose();
+            throw;
+        }
+
+        // Read once both gates are held: a swap can only run when no use is open, so these cannot change under us.
+        return new OcrSessionUse(
+            () =>
+            {
+                _inferenceLock.Release();
+                scope.Dispose();
+            },
+            _detSession,
+            _recSession,
+            _dictionary);
+    }
 
     public string AcquireLease()
     {
         ProcessMemoryTrimService.NotifyActivity("ocr");
+        // In use again — drop any pending unload so a follow-up capture reuses the live sessions rather than
+        // triggering a teardown-and-rebuild.
+        _idleUnload.Cancel();
         var leaseId = Guid.NewGuid().ToString("N");
         lock (_leaseLock)
         {
@@ -73,12 +133,19 @@ public sealed class OcrRuntimeService : IDisposable
 
         if (shouldUnload)
         {
-            Unload();
+            // Scheduled, not immediate: an unload here followed by the next capture's reload seconds later is the
+            // teardown-then-rebuild sequence that precedes the crashes. A capture within the idle window cancels
+            // this and reuses the sessions; a genuinely idle app still gets the memory back.
+            _idleUnload.NotifyUse();
         }
     }
 
     public async Task EnsureLoadedAsync(OCRLanguage language, CancellationToken ct = default)
     {
+        // Resolved up front so LoadedLanguage always names the model actually in memory. Loading "Auto" would
+        // record a language nobody can load, and every later comparison against a concrete language would miss.
+        language = OcrLanguageResolver.Resolve(language);
+
         if (IsLoaded && _loadedLanguage == language)
             return;
 
@@ -94,12 +161,28 @@ public sealed class OcrRuntimeService : IDisposable
 
             var paths = _aiResourceService.GetOCRPaths(language);
 
-            ForceUnload();
-            (_detSession, _recSession) = CreateOcrSessionsWithCpuFallback(paths.Det, paths.Rec);
-            _loadedLanguage = language;
-            _dictionary = LoadDictionaryWithEncodingFallback(paths.Dict);
-            _dictionary.Insert(0, string.Empty);
-            Debug.WriteLine($"[OcrRuntime] Loaded OCR runtime for {language}.");
+            // Exclusivity is taken only now — after the (possibly long) download above — and held across the whole
+            // teardown+rebuild, so a concurrent inference waits for the new sessions instead of seeing none.
+            if (!_useGate.TryBeginExclusive(SwapTimeout, out var swap))
+            {
+                // Deliberately keep the currently loaded language rather than free sessions someone is running on.
+                // Wrong-language output is recoverable; an access violation is not.
+                AppLog.Warning(
+                    "OcrRuntime.LanguageSwapTimedOut",
+                    $"OCR still busy after {SwapTimeout.TotalSeconds:0}s; staying on {_loadedLanguage?.ToString() ?? "none"} instead of loading {language}.");
+                return;
+            }
+
+            using (swap)
+            {
+                DisposeSessions();
+                (_detSession, _recSession) = CreateOcrSessionsWithCpuFallback(paths.Det, paths.Rec);
+                _loadedLanguage = language;
+                _dictionary = LoadDictionaryWithEncodingFallback(paths.Dict);
+                _dictionary.Insert(0, string.Empty);
+            }
+
+            AppLog.Information($"OcrRuntime.Loaded: {language}");
         }
         finally
         {
@@ -160,21 +243,50 @@ public sealed class OcrRuntimeService : IDisposable
         }
 
         ForceUnload();
+        // Logged to the file sink because the unload is the interesting half of the load/unload cycle: without it
+        // the log showed sessions being created with nothing explaining why, which is exactly what made the crash
+        // pattern hard to read.
+        AppLog.Information("OcrRuntime.Unloaded");
         // OCR is a one-shot scan, so reclaim promptly after it finishes. Debounced (5s): a re-scan within the
         // window cancels this rather than trimming then immediately reloading.
         ProcessMemoryTrimService.RequestIdleTrimAsync("ocr-unloaded", TimeSpan.FromSeconds(5))
             .Forget("MemoryTrim.OcrUnloaded");
-        Debug.WriteLine("[OcrRuntime] Unloaded OCR runtime.");
     }
 
     public void Dispose()
     {
         AIResourceService.RequestGlobalUnload -= HandleGlobalUnload;
-        ForceUnload();
+        _idleUnload.Cancel();
+        ForceUnload(ShutdownUnloadTimeout);
         _loadLock.Dispose();
+        // _inferenceLock is deliberately not disposed: if the unload above timed out, a thread may still be waiting
+        // on it, and disposing it under a waiter throws. SemaphoreSlim needs no disposal unless its wait handle was
+        // materialised, which this one's never is.
     }
 
-    private void ForceUnload()
+    /// <summary>
+    /// Disposes the sessions once nothing is running on them. If inference is still in flight after
+    /// <paramref name="timeout"/> the sessions are deliberately LEAKED — the process reclaims them at exit, whereas
+    /// disposing them under a running inference faults it with an access violation.
+    /// </summary>
+    private void ForceUnload(TimeSpan? timeout = null)
+    {
+        if (!_useGate.TryBeginExclusive(timeout ?? SwapTimeout, out var swap))
+        {
+            AppLog.Warning(
+                "OcrRuntime.UnloadTimedOut",
+                "OCR sessions still in use; skipping unload rather than disposing them mid-inference.");
+            return;
+        }
+
+        using (swap)
+        {
+            DisposeSessions();
+        }
+    }
+
+    /// <summary>Caller MUST hold exclusive access via <see cref="_useGate"/>.</summary>
+    private void DisposeSessions()
     {
         _detSession?.Dispose();
         _detSession = null;
