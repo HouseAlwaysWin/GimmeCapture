@@ -24,6 +24,13 @@ public sealed class OcrRuntimeService : IDisposable
     /// <summary>Shorter budget at shutdown: past this, leaking the sessions beats stalling process exit.</summary>
     private static readonly TimeSpan ShutdownUnloadTimeout = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// How long the sessions survive after the last consumer lets go. Deliberately NOT immediate: tearing a
+    /// DirectML session down and building a new one seconds later is what precedes every observed crash, and
+    /// back-to-back scans used to do exactly that. Matches the memory-trim debounce that follows the unload.
+    /// </summary>
+    private static readonly TimeSpan UnloadIdleDelay = TimeSpan.FromSeconds(5);
+
     private readonly AIResourceService _aiResourceService;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly object _leaseLock = new();
@@ -31,6 +38,7 @@ public sealed class OcrRuntimeService : IDisposable
     // Guards the sessions against being disposed mid-inference. Coarser than _loadLock, which only serialises
     // loads against each other and never knew anything about inference already running on the old sessions.
     private readonly ResourceUseGate _useGate = new();
+    private readonly IdleReleaseScheduler _idleUnload;
     private InferenceSession? _detSession;
     private InferenceSession? _recSession;
     private OCRLanguage? _loadedLanguage;
@@ -39,6 +47,7 @@ public sealed class OcrRuntimeService : IDisposable
     public OcrRuntimeService(AIResourceService aiResourceService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
+        _idleUnload = new IdleReleaseScheduler(UnloadIdleDelay, Unload);
         AIResourceService.RequestGlobalUnload += HandleGlobalUnload;
     }
 
@@ -71,6 +80,9 @@ public sealed class OcrRuntimeService : IDisposable
     public string AcquireLease()
     {
         ProcessMemoryTrimService.NotifyActivity("ocr");
+        // In use again — drop any pending unload so a follow-up capture reuses the live sessions rather than
+        // triggering a teardown-and-rebuild.
+        _idleUnload.Cancel();
         var leaseId = Guid.NewGuid().ToString("N");
         lock (_leaseLock)
         {
@@ -96,7 +108,10 @@ public sealed class OcrRuntimeService : IDisposable
 
         if (shouldUnload)
         {
-            Unload();
+            // Scheduled, not immediate: an unload here followed by the next capture's reload seconds later is the
+            // teardown-then-rebuild sequence that precedes the crashes. A capture within the idle window cancels
+            // this and reuses the sessions; a genuinely idle app still gets the memory back.
+            _idleUnload.NotifyUse();
         }
     }
 
@@ -142,7 +157,7 @@ public sealed class OcrRuntimeService : IDisposable
                 _dictionary.Insert(0, string.Empty);
             }
 
-            Debug.WriteLine($"[OcrRuntime] Loaded OCR runtime for {language}.");
+            AppLog.Information($"OcrRuntime.Loaded: {language}");
         }
         finally
         {
@@ -203,16 +218,20 @@ public sealed class OcrRuntimeService : IDisposable
         }
 
         ForceUnload();
+        // Logged to the file sink because the unload is the interesting half of the load/unload cycle: without it
+        // the log showed sessions being created with nothing explaining why, which is exactly what made the crash
+        // pattern hard to read.
+        AppLog.Information("OcrRuntime.Unloaded");
         // OCR is a one-shot scan, so reclaim promptly after it finishes. Debounced (5s): a re-scan within the
         // window cancels this rather than trimming then immediately reloading.
         ProcessMemoryTrimService.RequestIdleTrimAsync("ocr-unloaded", TimeSpan.FromSeconds(5))
             .Forget("MemoryTrim.OcrUnloaded");
-        Debug.WriteLine("[OcrRuntime] Unloaded OCR runtime.");
     }
 
     public void Dispose()
     {
         AIResourceService.RequestGlobalUnload -= HandleGlobalUnload;
+        _idleUnload.Cancel();
         ForceUnload(ShutdownUnloadTimeout);
         _loadLock.Dispose();
     }
