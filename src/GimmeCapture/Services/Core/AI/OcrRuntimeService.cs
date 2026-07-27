@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.OCR;
 using Microsoft.ML.OnnxRuntime;
 
 namespace GimmeCapture.Services.Core.AI;
@@ -79,6 +80,10 @@ public sealed class OcrRuntimeService : IDisposable
 
     public async Task EnsureLoadedAsync(OCRLanguage language, CancellationToken ct = default)
     {
+        // Resolved up front so LoadedLanguage always names the model actually in memory. Loading "Auto" would
+        // record a language nobody can load, and every later comparison against a concrete language would miss.
+        language = OcrLanguageResolver.Resolve(language);
+
         if (IsLoaded && _loadedLanguage == language)
             return;
 

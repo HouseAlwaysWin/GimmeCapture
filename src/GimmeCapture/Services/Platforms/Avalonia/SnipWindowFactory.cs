@@ -56,10 +56,14 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
 
         var snip = new SnipWindow(_screenLayoutService, _windowLayerService);
         ConfigureWindowBounds(snip);
+        // One detector for the whole snip session, shared by translate mode and quick OCR: the auto-language probe
+        // rebuilds ONNX sessions to compare recognisers, so it is cached per session rather than per capture.
+        var scriptDetector = new OcrScriptDetector(vm.AIResourceService);
         var translationSession = _translationSessionServiceFactory.Create(
             vm.AppSettingsService,
             vm.AIResourceService,
-            vm.OcrRuntimeService);
+            vm.OcrRuntimeService,
+            scriptDetector);
         var translationSelectionMonitor = new TranslationSelectionMonitor(
             _screenCaptureService,
             translationSession);
@@ -76,7 +80,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
                 vm.AIResourceService,
                 vm.AppSettingsService,
                 vm.OcrRuntimeService,
-                ocrEngineFactory));
+                ocrEngineFactory),
+            scriptDetector);
 
         var snipVm = new SnipWindowViewModel(
             vm.BorderColor,

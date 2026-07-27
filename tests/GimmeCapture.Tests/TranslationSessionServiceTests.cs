@@ -2,6 +2,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interfaces;
+using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Translation;
 using SkiaSharp;
 using System.Reflection;
@@ -28,7 +29,11 @@ public sealed class TranslationSessionServiceTests : IDisposable
         var aiResourceService = new AIResourceService(_settingsService, pathService, resolver, downloader);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
 
-        _sut = new TranslationSessionService(aiResourceService, _settingsService, ocrRuntimeService);
+        _sut = new TranslationSessionService(
+            aiResourceService,
+            _settingsService,
+            ocrRuntimeService,
+            new OcrScriptDetector(aiResourceService));
     }
 
     [Fact]

@@ -55,7 +55,10 @@ public sealed class ModuleInstallCoordinator
 
     public bool IsSam2Installed(SAM2Variant variant) => Orchestrator.IsSAM2Ready(variant);
 
-    public bool IsOcrInstalled() => Orchestrator.IsOCRReady();
+    // Reports the whole language set, not just the current source language: auto-detect compares recognisers
+    // against each other, so a green tick earned by having only Chinese installed would be a lie about what
+    // OCR can read.
+    public bool IsOcrInstalled() => Orchestrator.IsAllOcrReady();
 
     public bool IsLlamaInstalled(string modelId) => Orchestrator.IsLlamaPresetInstalled(modelId);
 
@@ -93,7 +96,7 @@ public sealed class ModuleInstallCoordinator
                     progress)),
             "OCR" => _resourceQueue.EnqueueAsync(
                 "OCR",
-                (ct, progress) => ExecuteWithProgressAsync(token => Orchestrator.EnsureOCRAsync(token), ct, progress)),
+                (ct, progress) => ExecuteWithProgressAsync(token => Orchestrator.EnsureAllOcrAsync(token), ct, progress)),
             "LlamaModels" => _resourceQueue.EnqueueAsync(
                 "LlamaModels",
                 (ct, progress) => ExecuteWithProgressAsync(
