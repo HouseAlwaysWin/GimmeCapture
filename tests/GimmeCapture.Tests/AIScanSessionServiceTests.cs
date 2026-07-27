@@ -65,6 +65,56 @@ public sealed class AIScanSessionServiceTests : IDisposable
         Assert.Contains(result.Candidates, candidate => candidate.Kind == OcrCandidateKind.Paragraph);
     }
 
+    [Fact]
+    public async Task RunScanAsync_TakesOwnershipOfThePreCapturedFrame()
+    {
+        // A scan outlives the overlay that started it — Esc closes the snip window while inference is still
+        // running — so the frame it scans must be one nobody else can free. Sharing the window's own frozen still
+        // meant the scan's continuation read an SKBitmap the closing window had already disposed, faulting the
+        // process. The service owning (and releasing) the frame is what makes that impossible.
+        var captureService = new Mock<IScreenCaptureService>();
+        var settingsService = new AppSettingsService(_baseDir);
+        var pathService = new AIPathService(settingsService);
+        var resolver = new NativeResolverService(pathService);
+        var downloader = new Mock<AIModelDownloader>();
+        var aiResourceService = new Mock<AIResourceService>(settingsService, pathService, resolver, downloader.Object);
+        var sam2RuntimeService = new SAM2RuntimeService(pathService, resolver);
+        var ocrRuntimeService = new OcrRuntimeService(aiResourceService.Object);
+        var ocrEngineFactory = new Mock<IOcrEngineFactory>();
+        var ocrEngine = new FakeOcrEngine(new List<SKRectI> { new(10, 12, 40, 36) });
+        var frozenFrame = CreateBitmap(100, 50, SKColors.Black);
+
+        aiResourceService
+            .Setup(service => service.EnsureOCRAsync(OCRLanguage.Japanese, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        ocrEngineFactory
+            .Setup(factory => factory.Create(aiResourceService.Object, settingsService, ocrRuntimeService))
+            .Returns(ocrEngine);
+
+        using var sut = new AIScanSessionService(
+            captureService.Object,
+            aiResourceService.Object,
+            sam2RuntimeService,
+            ocrRuntimeService,
+            settingsService,
+            ocrEngineFactory.Object);
+
+        var result = await sut.RunScanAsync(new AIScanSessionRequest(
+            new Rect(0, 0, 100, 50),
+            new PixelPoint(0, 0),
+            1.0,
+            OCRLanguage.Japanese,
+            PreCapturedFrame: frozenFrame));
+
+        Assert.True(result.IsReady);
+        Assert.Equal(IntPtr.Zero, frozenFrame.Handle);
+        // The supplied frame is scanned as-is; no live grab, which in freeze mode would capture the overlay itself.
+        captureService.Verify(
+            service => service.CaptureScreenAsync(It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(), It.IsAny<bool>()),
+            Times.Never);
+    }
+
     public void Dispose()
     {
         try

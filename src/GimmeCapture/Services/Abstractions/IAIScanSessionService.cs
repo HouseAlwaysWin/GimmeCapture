@@ -20,7 +20,11 @@ public sealed record AIScanSessionRequest(
     OCRLanguage SourceLanguage,
     // Freeze-frame: OCR this pre-grabbed full-desktop still instead of grabbing the live screen. Required in
     // freeze mode because the overlay is then opaque (a live grab would capture the frozen image + chrome).
-    // The service does NOT dispose it (the caller owns it).
+    //
+    // OWNERSHIP TRANSFERS to the service, which disposes it. It must be a bitmap nobody else can free: a scan
+    // outlives the overlay that started it (Esc closes the window while inference is still running), and passing
+    // the snip window's own frozen still meant the scan's continuation read an SKBitmap the closing window had
+    // already disposed — a native access violation, not a catchable exception.
     SkiaSharp.SKBitmap? PreCapturedFrame = null);
 
 public sealed record AIScanSessionResult(

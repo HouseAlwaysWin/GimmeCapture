@@ -783,7 +783,29 @@ public partial class SnipWindowViewModel
             _mainVm?.AppSettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese,
             // Freeze-frame: OCR the frozen still (the overlay is opaque, so a live grab would capture our own
             // frozen image + chrome). Null in the normal live path.
-            PreCapturedFrame: IsFrozenFrameActive ? FrozenScreenSkBitmap : null);
+            PreCapturedFrame: CopyFrozenFrameForScan());
+    }
+
+    /// <summary>
+    /// A private copy of the frozen still for the scan to own. Taken here, synchronously, while we still hold the
+    /// bitmap: a scan outlives the overlay that started it (Esc closes the window while inference is running), and
+    /// this VM disposes _frozenScreenSkBitmap on close — handing the scan the original meant its continuation read
+    /// a freed SKBitmap and faulted the process. Null falls the service back to a live grab.
+    /// </summary>
+    private SkiaSharp.SKBitmap? CopyFrozenFrameForScan()
+    {
+        if (!IsFrozenFrameActive || FrozenScreenSkBitmap is not { } frozen)
+        {
+            return null;
+        }
+
+        var copy = frozen.Copy();
+        if (copy == null)
+        {
+            AppLog.Warning("Snip.OCRAutoScan", "Could not copy the frozen frame for the scan; falling back to a live grab.");
+        }
+
+        return copy;
     }
 
     private void ApplyOcrScanResult(AIScanSessionResult result, System.Threading.CancellationToken token)
