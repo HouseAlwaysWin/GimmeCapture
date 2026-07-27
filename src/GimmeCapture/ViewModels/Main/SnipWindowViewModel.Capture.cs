@@ -35,14 +35,12 @@ public partial class SnipWindowViewModel
 
         try
         {
-            await HideOverlayForCaptureUnlessFrozenAsync(cts.Token);
-
             _isLocalProcessing = true;
             ShowProcessingOverlay = true;
             IsIndeterminate = true;
             ProcessingText = LocalizationService.Instance["QuickOcrProcessing"];
 
-            using var bitmap = await CaptureOrCropSelectionAsync(includeAnnotations: false);
+            using var bitmap = await Surface.CommitPlainAsync(cts.Token);
 
             // The snip overlay (which hosts ShowProcessingOverlay) was just hidden to grab a clean capture, so
             // surface a standalone "recognizing…" spinner while OCR runs — otherwise the multi-second recognition
@@ -139,131 +137,88 @@ public partial class SnipWindowViewModel
     }
 
     /// <summary>
-    /// Hides the overlay before a LIVE grab — but in freeze-frame mode there is nothing to hide (the frozen still
-    /// was taken before the overlay ever existed), so this is a no-op there.
-    /// </summary>
-    private async Task HideOverlayForCaptureUnlessFrozenAsync(System.Threading.CancellationToken ct = default)
-    {
-        if (IsFrozenFrameActive && FrozenScreenSkBitmap != null) return;
-        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(HideAction ?? (() => { }), ct);
-    }
-
-    /// <summary>
-    /// Returns the selection as a bitmap: in freeze-frame mode, cropped from the pre-grabbed still (annotations
-    /// composited on top); otherwise a live grab (annotated for screenshots, plain for OCR). Call after
-    /// <see cref="HideOverlayForCaptureUnlessFrozenAsync"/>.
-    /// </summary>
-    private async Task<SkiaSharp.SKBitmap> CaptureOrCropSelectionAsync(bool includeAnnotations)
-    {
-        if (IsFrozenFrameActive && FrozenScreenSkBitmap != null)
-        {
-            return GimmeCapture.Services.Core.Rendering.FreezeFrameCompositor.CropWithAnnotations(
-                FrozenScreenSkBitmap, SelectionRect, FrozenGrabScaling, includeAnnotations ? Annotations : null);
-        }
-
-        return includeAnnotations
-            ? await _captureService.CaptureScreenWithAnnotationsAsync(
-                SelectionRect, ScreenOffset, VisualScaling, Annotations,
-                GetTranslationSelectionsForCapture(), TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false)
-            : await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, includeCursor: false);
-    }
-
-    /// <summary>
     /// Toolbar "freeze screen" button: toggles THIS overlay's freeze state live, with immediate effect — unlike the
-    /// FreezeScreenOnScreenshot setting, which only decides the initial state of the NEXT capture. Unfreeze drops
-    /// the still and returns to the live see-through overlay; freeze grabs the whole desktop right now (the overlay
-    /// is excluded from that grab, so it isn't baked into the still and there is no flicker) and switches to the
-    /// opaque still. Screenshot family only — recording/translation/scrolling are inherently live (the toolbar
-    /// button is hidden there; these guards also make the command a no-op if invoked by hotkey in those modes).
+    /// FreezeScreenOnScreenshot setting, which only decides the initial state of the NEXT capture. The surface owns
+    /// the mode gate, the grab, the ownership transfer and the fall-back-to-live when the still can't be shown;
+    /// all that is left here is re-running the Win32 region logic so the overlay becomes opaque (or see-through).
     /// NOTE: freezing here happens AFTER the overlay is already up, so it can't recover a shell "light dismiss"
     /// popup (tray flyout / Start menu) the overlay already closed — that still needs the setting ON so the still
     /// predates the overlay. This button freezes/holds whatever is currently on screen.
     /// </summary>
     internal async Task ToggleFreezeFrameLiveAsync()
     {
-        if (CurrentMode == SnipMode.Recording || CurrentMode == SnipMode.Translation || _manualScrollActive)
+        if (Surface.IsFrozen)
         {
-            return;
+            Surface.ReturnToLive();
+        }
+        else
+        {
+            await Surface.FreezeAsync(Geometry);
         }
 
-        if (IsFrozenFrameActive)
-        {
-            // Frozen → live: drop the still (SetFrozenScreenSnapshot disposes it) and re-run the region logic, which
-            // now takes the live see-through / pass-through branch instead of the opaque freeze branch.
-            SetFrozenScreenSnapshot(null, 1.0);
-            RefreshInteractionRegion();
-            return;
-        }
-
-        // Live → frozen: grab the whole desktop now. ViewportSize / ScreenOffset / VisualScaling are the same trio
-        // the OCR full-screen grab and the factory's pre-overlay freeze grab use.
-        if (ViewportSize.Width <= 1 || ViewportSize.Height <= 1)
-        {
-            return;
-        }
-
-        double grabScaling = VisualScaling <= 0 ? 1.0 : VisualScaling;
-        var grabRegion = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
-        Func<Task<SKBitmap>> grab =
-            () => _captureService.CaptureScreenAsync(grabRegion, ScreenOffset, grabScaling, includeCursor: false);
-
-        SKBitmap? frozen;
-        try
-        {
-            // The View-wired excluded-grab wrapper hides the overlay from the screen grab via WDA_EXCLUDEFROMCAPTURE
-            // for ~50 ms so the still doesn't include the overlay's own chrome — the overlay stays visible, so the
-            // user sees no flicker. Falls back to a bare grab off-Windows / in design.
-            frozen = RunTranslationOcrGrabExcludedAsync != null
-                ? await RunTranslationOcrGrabExcludedAsync(grab)
-                : await grab();
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warning("SnipWindowViewModel.ToggleFreezeFrameLive", ex);
-            return;
-        }
-
-        // Transfers ownership + activates freeze-frame mode (or resets to live if the display conversion failed);
-        // then re-run the region logic so the overlay becomes opaque + fully hit-testable over the still.
-        SetFrozenScreenSnapshot(frozen, grabScaling);
         RefreshInteractionRegion();
     }
 
-    private async Task ExecuteCopyCaptureAsync()
+    /// <summary>
+    /// The shared capture ritual: spinner up, commit the selection, hand the bitmap to <paramref name="consume"/>,
+    /// then tear down and close. Copy / Save / Pin / Upload used to each re-implement these five beats, and the
+    /// one that drifted (Upload) silently bypassed freeze-frame — so the ritual being a single entry point is the
+    /// point, not a line-count saving.
+    /// </summary>
+    /// <param name="statusKey">Localization key for the processing spinner, or null for no spinner (Pin).</param>
+    private async Task RunCaptureCommitAsync(string? statusKey, Func<SKBitmap, Task> consume)
     {
-        await HideOverlayForCaptureUnlessFrozenAsync();
-
+        bool showsSpinner = statusKey != null;
         try
         {
-            _isLocalProcessing = true;
-            ShowProcessingOverlay = true;
-            IsIndeterminate = true;
-            ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
-            using var bitmap = await CaptureOrCropSelectionAsync(includeAnnotations: true);
-            await _captureService.CopyToClipboardAsync(bitmap);
-            _mainVm?.SetStatus("StatusCopied");
-
-            // Copies are clipboard-only by default; when history is on, persist a managed copy so it
-            // shows up in the history panel (and is cleaned up on remove/prune).
-            if (_mainVm != null && _mainVm.EnableHistory)
+            if (showsSpinner)
             {
-                var copyPath = _mainVm.CaptureHistory.CreateManagedCapturePath("png");
-                await _captureService.SaveToFileAsync(bitmap, copyPath);
-                _mainVm.CaptureHistory.AddImageAsync(copyPath, GimmeCapture.Models.CaptureHistorySource.PlainCopy).Forget("CaptureHistory.AddCopy");
+                _isLocalProcessing = true;
+                ShowProcessingOverlay = true;
+                IsIndeterminate = true;
+                ProcessingText = LocalizationService.Instance[statusKey!] ?? "Processing...";
             }
+
+            // The spinner is safe to raise BEFORE the commit: on the live path the surface hides the overlay
+            // before grabbing, and on the frozen path the pixels come from a still, so it can't be captured either.
+            using var bitmap = await Surface.CommitAsync();
+            await consume(bitmap);
         }
         finally
         {
             PersistTranslatedSelectionsAfterCaptureIfNeeded();
-            _isLocalProcessing = false;
-            ShowProcessingOverlay = false;
+            if (showsSpinner)
+            {
+                _isLocalProcessing = false;
+                ShowProcessingOverlay = false;
+            }
             CloseAction?.Invoke();
         }
     }
 
+    private Task ExecuteCopyCaptureAsync() => RunCaptureCommitAsync("StatusProcessing", async bitmap =>
+    {
+        await _captureService.CopyToClipboardAsync(bitmap);
+        _mainVm?.SetStatus("StatusCopied");
+
+        // Copies are clipboard-only by default; when history is on, persist a managed copy so it
+        // shows up in the history panel (and is cleaned up on remove/prune).
+        if (_mainVm != null && _mainVm.EnableHistory)
+        {
+            var copyPath = _mainVm.CaptureHistory.CreateManagedCapturePath("png");
+            await _captureService.SaveToFileAsync(bitmap, copyPath);
+            _mainVm.CaptureHistory.AddImageAsync(copyPath, GimmeCapture.Models.CaptureHistorySource.PlainCopy).Forget("CaptureHistory.AddCopy");
+        }
+    });
+
+    // Test hook: drives the private upload flow directly (the production trigger is a ReactiveCommand),
+    // so the freeze-frame branch can be unit-tested without a UI thread.
+    internal Task RunUploadForTestAsync() => ExecuteUploadAsync();
+
     /// <summary>Renders the selection, closes the snip overlay, and hands the PNG off to the
     /// app-lifetime MainWindowViewModel for a fire-and-forget Imgur upload — the fullscreen overlay
-    /// must never stay open blocking on a network call.</summary>
+    /// must never stay open blocking on a network call. Commits through the surface like Copy/Save/Pin, so
+    /// freeze-frame applies here too — it used to grab the live screen from a frozen overlay.</summary>
     private async Task ExecuteUploadAsync()
     {
         if (_isProcessingRecording) return;
@@ -279,24 +234,8 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
-            HideAction ?? (() => { }));
-
-        try
+        await RunCaptureCommitAsync("StatusUploading", bitmap =>
         {
-            _isLocalProcessing = true;
-            ShowProcessingOverlay = true;
-            IsIndeterminate = true;
-            ProcessingText = LocalizationService.Instance["StatusUploading"] ?? "Uploading...";
-            using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
-                SelectionRect,
-                ScreenOffset,
-                VisualScaling,
-                Annotations,
-                GetTranslationSelectionsForCapture(),
-                TranslatedBlocks,
-                _mainVm.ShowSnipCursor);
-
             byte[] png;
             using (var image = SkiaSharp.SKImage.FromBitmap(bitmap))
             using (var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
@@ -307,14 +246,8 @@ public partial class SnipWindowViewModel
             // The capture service is app-lifetime (owned by the factory), so its text-clipboard
             // delegate stays valid after this window closes.
             _mainVm.RunImgurUploadAsync(png, _captureService.CopyToClipboardAsync).Forget("Upload.Imgur");
-        }
-        finally
-        {
-            PersistTranslatedSelectionsAfterCaptureIfNeeded();
-            _isLocalProcessing = false;
-            ShowProcessingOverlay = false;
-            CloseAction?.Invoke();
-        }
+            return Task.CompletedTask;
+        });
     }
 
     private async Task ExecuteSaveAsync()
@@ -328,16 +261,8 @@ public partial class SnipWindowViewModel
 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
-            await HideOverlayForCaptureUnlessFrozenAsync();
-
-            try
+            await RunCaptureCommitAsync("StatusSaving", async bitmap =>
             {
-                _isLocalProcessing = true;
-                ShowProcessingOverlay = true;
-                IsIndeterminate = true;
-                ProcessingText = LocalizationService.Instance["StatusSaving"] ?? "Saving...";
-                using var bitmap = await CaptureOrCropSelectionAsync(includeAnnotations: true);
-
                 string? savedPath = null;
 
                 if (_mainVm != null && _mainVm.AutoSave)
@@ -384,14 +309,7 @@ public partial class SnipWindowViewModel
                         FileLocationService.RevealInFileExplorer(savedPath);
                     }
                 }
-            }
-            finally
-            {
-                PersistTranslatedSelectionsAfterCaptureIfNeeded();
-                _isLocalProcessing = false;
-                ShowProcessingOverlay = false;
-                CloseAction?.Invoke();
-            }
+            });
         }
     }
 
@@ -439,22 +357,27 @@ public partial class SnipWindowViewModel
         }
     }
 
-    private async Task ExecutePinCaptureAsync(bool runAI, bool initialInteractive)
-    {
-        await HideOverlayForCaptureUnlessFrozenAsync();
-
-        try
+    // Pin passes no status key: it opens a floating window immediately and never showed a processing spinner.
+    private Task ExecutePinCaptureAsync(bool runAI, bool initialInteractive) =>
+        RunCaptureCommitAsync(null, skBitmap =>
         {
-            using var skBitmap = await CaptureOrCropSelectionAsync(includeAnnotations: true);
+            var avaloniaBitmap = ToAvaloniaBitmap(skBitmap);
+            OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0, null);
+            return Task.CompletedTask;
+        });
 
-            // Convert SKBitmap to Avalonia Bitmap without PNG stream roundtrip
-            var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
-                new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),
-                new Avalonia.Vector(96, 96),
-                Avalonia.Platform.PixelFormat.Bgra8888,
-                Avalonia.Platform.AlphaFormat.Premul);
+    /// <summary>Copies a physical-pixel SKBitmap into an Avalonia bitmap without a PNG stream roundtrip.
+    /// The caller keeps ownership of <paramref name="skBitmap"/>.</summary>
+    private static Avalonia.Media.Imaging.WriteableBitmap ToAvaloniaBitmap(SKBitmap skBitmap)
+    {
+        var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+            new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),
+            new Avalonia.Vector(96, 96),
+            Avalonia.Platform.PixelFormat.Bgra8888,
+            Avalonia.Platform.AlphaFormat.Premul);
 
-            using var lockedOut = avaloniaBitmap.Lock();
+        using (var lockedOut = avaloniaBitmap.Lock())
+        {
             unsafe
             {
                 Buffer.MemoryCopy(
@@ -463,15 +386,9 @@ public partial class SnipWindowViewModel
                     lockedOut.RowBytes * lockedOut.Size.Height,
                     skBitmap.RowBytes * skBitmap.Height);
             }
+        }
 
-            // Open Floating Window
-            OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0, null);
-        }
-        finally
-        {
-            PersistTranslatedSelectionsAfterCaptureIfNeeded();
-            CloseAction?.Invoke();
-        }
+        return avaloniaBitmap;
     }
 
     private Task ExecuteScrollingCapture()
@@ -500,23 +417,7 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
-            new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),
-            new Avalonia.Vector(96, 96),
-            Avalonia.Platform.PixelFormat.Bgra8888,
-            Avalonia.Platform.AlphaFormat.Premul);
-
-        using (var lockedOut = avaloniaBitmap.Lock())
-        {
-            unsafe
-            {
-                Buffer.MemoryCopy(
-                    (void*)skBitmap.GetPixels(),
-                    (void*)lockedOut.Address,
-                    lockedOut.RowBytes * lockedOut.Size.Height,
-                    skBitmap.RowBytes * skBitmap.Height);
-            }
-        }
+        var avaloniaBitmap = ToAvaloniaBitmap(skBitmap);
 
         // The stitched bitmap is in physical pixels; present it at logical size so DPI matches. The pin
         // window (viewport) matches the original selection, and the full-height stitch scrolls inside it —

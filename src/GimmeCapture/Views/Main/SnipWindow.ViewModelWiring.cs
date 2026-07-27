@@ -64,11 +64,14 @@ public partial class SnipWindow : Window
                 });
 
             // Re-apply WS_EX_NOACTIVATE when the situation changes: a mode switch flips ShouldAvoidStealingFocus
-            // (translation needs real focus), and entering/leaving the annotation text editor toggles the
-            // temporary override so the textbox can take keyboard focus for typing.
+            // (translation needs real focus), entering/leaving the annotation text editor toggles the temporary
+            // override so the textbox can take keyboard focus for typing, and a freeze transition flips it too
+            // (a frozen overlay has its still already, so keeping focus away no longer buys anything). The freeze
+            // input was missing, so a mid-session freeze changed the value and never re-applied the style.
             _overlayActivationSubscription = Observable.Merge(
                     vm.WhenAnyValue(x => x.IsTranslationMode).Select(_ => 0),
-                    vm.WhenAnyValue(x => x.IsEnteringText).Select(_ => 0))
+                    vm.WhenAnyValue(x => x.IsEnteringText).Select(_ => 0),
+                    vm.Surface.WhenAnyValue(x => x.IsFrozen).Select(_ => 0))
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ => SyncOverlayNoActivateExStyle());
 

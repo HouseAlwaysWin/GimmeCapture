@@ -14,6 +14,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
+using GimmeCapture.Services.Core.Rendering;
 using GimmeCapture.Services.OCR;
 using GimmeCapture.ViewModels.Shared;
 using System.Reactive.Disposables;
@@ -86,61 +87,50 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     /// annotation text editor is active. Drives ShowActivated + WS_EX_NOACTIVATE on the overlay.
     /// </summary>
     public bool ShouldAvoidStealingFocus =>
-        _mainVm?.CaptureWithoutStealingFocus == true && CurrentMode != SnipMode.Translation && !IsFrozenFrameActive;
+        _mainVm?.CaptureWithoutStealingFocus == true && CurrentMode != SnipMode.Translation
+        && Surface.AllowsNoActivateOverlay;
 
     // --- Freeze-frame capture: a still of the WHOLE desktop grabbed BEFORE the overlay was shown, so shell
     // "light dismiss" popups (tray flyout / Start menu / left-click dropdowns) — which close the instant any
     // full-screen overlay appears over them — are captured. The user selects/annotates on this still; commit
     // and OCR read from it instead of the live screen. Gated by the FreezeScreenOnScreenshot setting (factory).
-    private SkiaSharp.SKBitmap? _frozenScreenSkBitmap;
-    private double _frozenGrabScaling = 1.0;
+    //
+    // The live-vs-frozen state and everything derived from it (which pixels a commit reads, whether hiding the
+    // overlay is a no-op, the Win32 pass-through region, the backdrop, the focus policy) belong to OverlaySurface.
+    // They used to be a boolean each consumer re-interpreted, which is how they drifted apart.
+    private readonly OverlaySurface _surface;
 
-    /// <summary>The frozen full-desktop still (physical pixels) used at commit/OCR time. Null when not frozen.</summary>
-    public SkiaSharp.SKBitmap? FrozenScreenSkBitmap => _frozenScreenSkBitmap;
-    /// <summary>The scaling used when the frozen still was grabbed; commit crops SelectionRect × this.</summary>
-    public double FrozenGrabScaling => _frozenGrabScaling;
+    /// <summary>This overlay's pixel surface: the Live/Frozen state machine and the only way to commit a selection.</summary>
+    public OverlaySurface Surface => _surface;
 
-    private Avalonia.Media.Imaging.Bitmap? _frozenScreenSnapshot;
-    /// <summary>Display-ready copy of the frozen still, bound to the full-window Image at the bottom of the overlay.</summary>
-    public Avalonia.Media.Imaging.Bitmap? FrozenScreenSnapshot
-    {
-        get => _frozenScreenSnapshot;
-        private set => this.RaiseAndSetIfChanged(ref _frozenScreenSnapshot, value);
-    }
-
-    private bool _isFrozenFrameActive;
-    /// <summary>True when this overlay is showing a frozen desktop still (freeze-frame screenshot mode).</summary>
-    public bool IsFrozenFrameActive
-    {
-        get => _isFrozenFrameActive;
-        private set => this.RaiseAndSetIfChanged(ref _isFrozenFrameActive, value);
-    }
+    /// <summary>The overlay geometry trio, sampled together because a grab is only correct if all three agree.</summary>
+    internal OverlayGeometry Geometry => new(ViewportSize, ScreenOffset, VisualScaling);
 
     /// <summary>
-    /// Stores the pre-overlay full-desktop grab (called by the factory BEFORE Show). Builds a display bitmap and
-    /// activates freeze-frame mode. Ownership of <paramref name="frozen"/> transfers to this VM (disposed on close).
+    /// Everything a commit needs from this overlay, sampled fresh per call. Supplying it through the surface is
+    /// what keeps <c>Surface.CommitAsync()</c> argument-free at the five call sites.
     /// </summary>
-    public void SetFrozenScreenSnapshot(SkiaSharp.SKBitmap? frozen, double grabScaling)
-    {
-        _frozenScreenSkBitmap?.Dispose();
-        _frozenScreenSkBitmap = frozen;
-        _frozenGrabScaling = grabScaling > 0 ? grabScaling : 1.0;
+    private SelectionCommit BuildSelectionCommit() => SelectionCommit.Annotated(
+        SelectionRect,
+        Geometry,
+        Annotations,
+        GetTranslationSelectionsForCapture(),
+        TranslatedBlocks,
+        _mainVm?.ShowSnipCursor ?? false);
 
-        if (frozen != null
-            && GimmeCapture.ViewModels.Floating.FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(frozen, out var display, out _)
-            && display != null)
+    /// <summary>Maps the overlay's mode plus the manual-scroll flag onto the surface's activity gate.</summary>
+    private OverlayActivity CurrentOverlayActivity => _manualScrollActive
+        ? OverlayActivity.ManualScrolling
+        : CurrentMode switch
         {
-            FrozenScreenSnapshot = display;
-            IsFrozenFrameActive = true;
-        }
-        else
-        {
-            frozen?.Dispose();
-            _frozenScreenSkBitmap = null;
-            FrozenScreenSnapshot = null;
-            IsFrozenFrameActive = false;
-        }
-    }
+            SnipMode.Recording => OverlayActivity.Recording,
+            SnipMode.Translation => OverlayActivity.Translation,
+            _ => OverlayActivity.Screenshot
+        };
+
+    /// <summary>Re-applies the activity gate after a mode or manual-scroll transition, so a frozen still can
+    /// never survive into an overlay whose mode is inherently live.</summary>
+    internal void SyncSurfaceActivity() => _surface.ConstrainTo(CurrentOverlayActivity);
 
     /// <summary>The app-wide translation-overlay layer (null in design-time when there is no MainVm).</summary>
     public ITranslationResultLayerService? TranslationResultLayer => _mainVm?.TranslationResultLayer;
@@ -353,7 +343,18 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     /// Assigned by SnipWindow: applies <see cref="GimmeCapture.Services.Interop.Win32Helpers.SetWindowDisplayAffinity"/> so FFmpeg/gdigrab can exclude chrome while keeping full SelectionRect size (Windows 10 2004+).
     /// </summary>
     public Action? SyncRecordingScreenCaptureAffinity { get; set; }
-    public Action? HideAction { get; set; }
+    private Action? _hideAction;
+    /// <summary>Hides the overlay window (View-wired). Forwarded to the surface, which owns the decision of
+    /// whether hiding is needed at all — it is a no-op when frozen.</summary>
+    public Action? HideAction
+    {
+        get => _hideAction;
+        set
+        {
+            _hideAction = value;
+            _surface.HideOverlay = value;
+        }
+    }
     public Action? ShowAction { get; set; }
     public Action? OpenRecordingProgressWindowAction { get; set; }
     public Action? CloseRecordingProgressWindowAction { get; set; }
@@ -379,7 +380,16 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     // restored to WDA_NONE, so a full-screen OCR grab doesn't pick up the overlay's own chrome while the overlay
     // is NOT excluded continuously (which grays a Chromium window underneath — see ApplyRecordingScreenCaptureAffinity).
     // Wired by the View (needs the hwnd); null on non-Windows / design → callers fall back to the bare grab.
-    public Func<Func<Task<SkiaSharp.SKBitmap>>, Task<SkiaSharp.SKBitmap>>? RunTranslationOcrGrabExcludedAsync { get; set; }
+    private Func<Func<Task<SkiaSharp.SKBitmap>>, Task<SkiaSharp.SKBitmap>>? _runTranslationOcrGrabExcludedAsync;
+    public Func<Func<Task<SkiaSharp.SKBitmap>>, Task<SkiaSharp.SKBitmap>>? RunTranslationOcrGrabExcludedAsync
+    {
+        get => _runTranslationOcrGrabExcludedAsync;
+        set
+        {
+            _runTranslationOcrGrabExcludedAsync = value;
+            _surface.RunGrabExcludingOverlay = value;
+        }
+    }
     // Last param: the scrollable content size (logical px) — non-null only for a long scrolling-capture pin,
     // where `rect` is the fixed viewport (original selection) and the full stitch scrolls inside it.
     public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool, bool, string?, double, Avalonia.Size?>? OpenPinWindowAction { get; set; }
@@ -441,6 +451,13 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _selectionBorderThickness = borderThickness;
         _recordingService = recService;
         _mainVm = mainVm;
+        _surface = new OverlaySurface(_captureService, _captureVisibilityCoordinator, BuildSelectionCommit);
+        // ShouldAvoidStealingFocus derives from the surface, so the View's WS_EX_NOACTIVATE re-apply stream has to
+        // see freeze transitions too — before, a mid-session freeze flipped the value and never re-applied the style.
+        _surface.WhenAnyValue(x => x.IsFrozen)
+            .Skip(1)
+            .Subscribe(_ => this.RaisePropertyChanged(nameof(ShouldAvoidStealingFocus)))
+            .DisposeWith(_disposables);
         _selectionStateController = new SnipSelectionStateController(
             shouldTriggerAutoScan: ShouldTriggerAutoScan,
             triggerAutoScan: () => RunOCRScanAsync().Forget("Snip.AutoScan"),
@@ -930,11 +947,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _aiScanSessionService?.Dispose();
         _recordTimer?.Stop();
         DisposeDrawingModeSnapshot();
-        _frozenScreenSkBitmap?.Dispose();
-        _frozenScreenSkBitmap = null;
-        _frozenScreenSnapshot?.Dispose();
-        _frozenScreenSnapshot = null;
-        
+        _surface.Dispose();
+
         CloseAction = null;
         SyncRecordingScreenCaptureAffinity = null;
         HideAction = null;

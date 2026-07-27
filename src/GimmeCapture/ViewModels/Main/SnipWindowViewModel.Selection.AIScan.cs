@@ -13,6 +13,7 @@ using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interaction;
+using GimmeCapture.Services.Core.Rendering;
 using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Platforms.Avalonia;
 
@@ -745,7 +746,8 @@ public partial class SnipWindowViewModel
                 }
             });
 
-            var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(), progress, token);
+            using var frozenLease = Surface.LeaseFrozenStill();
+            var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(frozenLease), progress, token);
             if (!result.IsReady)
             {
                 System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] OCR resources are not ready");
@@ -774,7 +776,7 @@ public partial class SnipWindowViewModel
         }
     }
 
-    private AIScanSessionRequest CreateAIScanSessionRequest()
+    private AIScanSessionRequest CreateAIScanSessionRequest(FrozenFrameLease? lease)
     {
         return new AIScanSessionRequest(
             new Rect(0, 0, ViewportSize.Width, ViewportSize.Height),
@@ -782,8 +784,9 @@ public partial class SnipWindowViewModel
             VisualScaling,
             _mainVm?.AppSettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese,
             // Freeze-frame: OCR the frozen still (the overlay is opaque, so a live grab would capture our own
-            // frozen image + chrome). Null in the normal live path.
-            PreCapturedFrame: IsFrozenFrameActive ? FrozenScreenSkBitmap : null);
+            // frozen image + chrome). Null in the normal live path. Borrowed via a lease so a toolbar unfreeze
+            // mid-scan can't dispose the bitmap under the background OCR thread.
+            PreCapturedFrame: lease?.Still);
     }
 
     private void ApplyOcrScanResult(AIScanSessionResult result, System.Threading.CancellationToken token)

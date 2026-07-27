@@ -114,8 +114,8 @@
             <!-- Freeze-frame backdrop: the frozen desktop still (grabbed before the overlay was shown), filling the
                  whole window so the user selects/annotates ON it. Bottom-most layer; only shown in freeze-frame
                  screenshot mode (FreezeScreenOnScreenshot). Not hit-testable — selection is handled by the layers above. -->
-            <Image Source="{Binding FrozenScreenSnapshot}"
-                   IsVisible="{Binding IsFrozenFrameActive}"
+            <Image Source="{Binding Surface.Backdrop}"
+                   IsVisible="{Binding Surface.IsFrozen}"
                    IsHitTestVisible="False"
                    Stretch="Fill"/>
 

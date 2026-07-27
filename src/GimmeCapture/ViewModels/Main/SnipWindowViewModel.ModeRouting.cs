@@ -117,6 +117,9 @@ public partial class SnipWindowViewModel
 
         DeactivateDrawingInteraction();
         this.RaiseAndSetIfChanged(ref _currentMode, value, nameof(CurrentMode));
+        // Freeze-frame is screenshot-only. Without this the still survived a mode switch: the recording overlay
+        // kept painting a stale desktop picture and stayed opaque with no pass-through hole.
+        SyncSurfaceActivity();
         if (CurrentState == SnipState.Selected)
         {
             ApplyDefaultToolbarVisibilityForMode(value);

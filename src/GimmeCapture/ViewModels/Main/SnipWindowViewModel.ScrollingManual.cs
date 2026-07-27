@@ -192,6 +192,8 @@ public partial class SnipWindowViewModel
         _manualPrevFrame = _manualAccumulated.Copy();
         _manualFinishing = false;
         _manualScrollActive = true;
+        // Scrolling capture is inherently live — every strip is a fresh grab of the scrolled target.
+        SyncSurfaceActivity();
         _manualAlignFailStreak = 0;
         _manualStallSignaled = false;
         _manualMotionAccum = 0;
@@ -565,6 +567,7 @@ public partial class SnipWindowViewModel
 
         _manualFinishing = true;
         _manualScrollActive = false;
+        SyncSurfaceActivity();
         _manualCts?.Cancel();
 
         // Fire the async core; it awaits the pipeline (the barrier) before touching the bitmaps.

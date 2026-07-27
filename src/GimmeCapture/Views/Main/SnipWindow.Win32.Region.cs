@@ -507,7 +507,7 @@ public partial class SnipWindow : Window
         // is meaningless on a still. Keep the whole window opaque + fully hit-testable (with _useHitTestRegions
         // false, WM_NCHITTEST never returns HTTRANSPARENT); only a 1×1 stub is punched so DWM doesn't flag it a
         // full-screen occluder. The selection border / handles / toolbar paint on top of the still as normal.
-        if (_viewModel?.IsFrozenFrameActive == true)
+        if (_viewModel?.Surface.WantsOpaqueFullHitTest == true)
         {
             double fScaling = this.RenderScaling;
             int fWidth = (int)(this.Bounds.Width * fScaling);
