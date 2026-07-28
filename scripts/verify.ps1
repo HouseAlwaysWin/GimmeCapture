@@ -1,8 +1,17 @@
 [CmdletBinding()]
 param(
     [int]$CoverageThreshold = 25,
-    [switch]$SkipPublish
+    [switch]$SkipPublish,
+    # Keep this run's artifacts even when it passes. A run costs several GB (a full build tree plus two
+    # self-contained single-file publishes), so passing runs are deleted by default; use this when you want to
+    # inspect the build output or the coverage report of a run that succeeded.
+    [switch]$KeepArtifacts
 )
+
+# Previous runs left behind are FAILED or interrupted ones (a passing run removes itself at the end), kept for
+# post-mortem. Keep only the most recent few: thirteen accumulated runs had reached 79 GB before any of this
+# existed, because nothing ever deleted them.
+$KeepFailedRunCount = 2
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -21,6 +30,17 @@ function Invoke-DotNet {
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
     }
+}
+
+# Pruned BEFORE this run's directory is created, so the count is purely about previous runs.
+if (Test-Path $artifactsRoot) {
+    Get-ChildItem $artifactsRoot -Directory -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -Skip $KeepFailedRunCount |
+        ForEach-Object {
+            Write-Host "Pruning artifacts from an earlier run: $($_.Name)"
+            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
 }
 
 New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
@@ -145,3 +165,19 @@ if (-not $SkipPublish) {
 }
 
 Write-Host "Verification completed successfully."
+
+# Reached only when everything above passed: $ErrorActionPreference = "Stop" plus the throws in Invoke-DotNet
+# abort the script otherwise. That asymmetry is deliberate — a FAILED run keeps its directory so the build log,
+# the coverage report and the publish output are still there to look at, while a passing run has nothing worth
+# several GB of disk.
+if ($KeepArtifacts) {
+    Write-Host "Artifacts kept at: $artifacts"
+}
+else {
+    Remove-Item $artifacts -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $artifacts) {
+        # Never fail the run over cleanup, but do not let it fail silently either — silent failure here is how
+        # the pile grew in the first place.
+        Write-Warning "Could not fully remove $artifacts. Delete it manually."
+    }
+}
