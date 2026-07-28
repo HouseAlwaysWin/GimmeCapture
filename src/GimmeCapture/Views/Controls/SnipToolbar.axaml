@@ -211,7 +211,7 @@
                  initial state per capture; this button flips it live. Catching shell popups (tray flyout / Start
                  menu) still needs the setting ON, so the still predates the overlay. -->
             <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
-                    Classes.active="{Binding IsFrozenFrameActive}"
+                    Classes.active="{Binding Surface.IsFrozen}"
                     Command="{Binding ToggleFreezeScreenCommand}"
                     IsVisible="{Binding IsScreenshotMode}"
                     ToolTip.Tip="{Binding [TipFreezeScreen], Source={x:Static infra:LocalizationService.Instance}}">

@@ -136,7 +136,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
                 var frozen = System.Threading.Tasks.Task.Run(() =>
                     _screenCaptureService.CaptureScreenAsync(grabRegion, grabOffset, grabScaling, includeCursor: false)
                 ).GetAwaiter().GetResult();
-                snipVm.SetFrozenScreenSnapshot(frozen, grabScaling);
+                // Takes ownership; falls back to live (disposing the still) if it can't be shown as a backdrop.
+                snipVm.Surface.FreezeFromPreOverlayGrab(frozen, grabScaling);
             }
             catch (Exception ex)
             {

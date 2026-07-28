@@ -13,6 +13,7 @@ using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interaction;
+using GimmeCapture.Services.Core.Rendering;
 using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Platforms.Avalonia;
 
@@ -745,7 +746,8 @@ public partial class SnipWindowViewModel
                 }
             });
 
-            var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(), progress, token);
+            using var frozenLease = Surface.LeaseFrozenStill();
+            var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(frozenLease), progress, token);
             if (!result.IsReady)
             {
                 System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] OCR resources are not ready");
@@ -774,7 +776,7 @@ public partial class SnipWindowViewModel
         }
     }
 
-    private AIScanSessionRequest CreateAIScanSessionRequest()
+    private AIScanSessionRequest CreateAIScanSessionRequest(FrozenFrameLease? lease)
     {
         return new AIScanSessionRequest(
             new Rect(0, 0, ViewportSize.Width, ViewportSize.Height),
@@ -783,23 +785,27 @@ public partial class SnipWindowViewModel
             _mainVm?.AppSettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese,
             // Freeze-frame: OCR the frozen still (the overlay is opaque, so a live grab would capture our own
             // frozen image + chrome). Null in the normal live path.
-            PreCapturedFrame: CopyFrozenFrameForScan());
+            PreCapturedFrame: CopyFrozenFrameForScan(lease));
     }
 
     /// <summary>
-    /// A private copy of the frozen still for the scan to own. Taken here, synchronously, while we still hold the
-    /// bitmap: a scan outlives the overlay that started it (Esc closes the window while inference is running), and
-    /// this VM disposes _frozenScreenSkBitmap on close — handing the scan the original meant its continuation read
-    /// a freed SKBitmap and faulted the process. Null falls the service back to a live grab.
+    /// A private copy of the frozen still for the scan to OWN — <c>PreCapturedFrame</c> transfers ownership and
+    /// the service disposes it on every path.
+    ///
+    /// Two different lifetimes are at stake and the lease and the copy each cover one. The lease keeps the
+    /// surface's still alive while <c>Copy()</c> reads it, so returning to live cannot free the source mid-copy.
+    /// The copy then outlives the overlay itself: a scan keeps running after Esc closes the window and the surface
+    /// disposes its backdrop, so handing the scan the original meant its continuation read a freed SKBitmap and
+    /// faulted the process. A null lease (live overlay) or a failed copy falls the service back to a live grab.
     /// </summary>
-    private SkiaSharp.SKBitmap? CopyFrozenFrameForScan()
+    private static SkiaSharp.SKBitmap? CopyFrozenFrameForScan(FrozenFrameLease? lease)
     {
-        if (!IsFrozenFrameActive || FrozenScreenSkBitmap is not { } frozen)
+        if (lease == null)
         {
             return null;
         }
 
-        var copy = frozen.Copy();
+        var copy = lease.Still.Copy();
         if (copy == null)
         {
             AppLog.Warning("Snip.OCRAutoScan", "Could not copy the frozen frame for the scan; falling back to a live grab.");

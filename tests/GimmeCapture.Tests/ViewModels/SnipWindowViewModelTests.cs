@@ -322,7 +322,7 @@ public class SnipWindowViewModelTests
 
             await vm.ToggleFreezeFrameLiveAsync();
 
-            Assert.False(vm.IsFrozenFrameActive);
+            Assert.False(vm.Surface.IsFrozen);
             capture.Verify(
                 c => c.CaptureScreenAsync(It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(), It.IsAny<bool>()),
                 Times.Never);
@@ -331,6 +331,110 @@ public class SnipWindowViewModelTests
         {
             vm.Dispose();
         }
+    }
+
+    [Fact]
+    public async Task Upload_WhenFrozen_ReadsTheStillAndNeitherHidesNorGrabsLive()
+    {
+        // Upload used to call the visibility coordinator and the live grab directly, bypassing the
+        // frozen-aware path its four siblings go through; in freeze-frame mode that dropped the frozen
+        // overlay and uploaded whatever was on screen right then — the tray flyout / dropdown the still was
+        // taken for had long since closed. All five now commit through the surface, so there is no longer a
+        // shorter way to get selection pixels than the correct one.
+        var capture = new Mock<IScreenCaptureService>();
+        var coordinator = new Mock<ICaptureVisibilityCoordinator>();
+        coordinator
+            .Setup(c => c.HideAndWaitForCaptureAsync(It.IsAny<Action>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        mainVm.ImgurClientId = "test-client-id";
+        var upload = new Mock<IImgurUploadService>();
+        upload
+            .Setup(u => u.UploadPngAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ImageUploadResult(true, "https://imgur.test/abc", null, null));
+        mainVm.SetImgurUploadServiceForTest(upload.Object);
+
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object);
+        vm.Surface.UseHeadlessBackdropForTest();
+        vm.Surface.FreezeFromPreOverlayGrab(new SkiaSharp.SKBitmap(800, 600), 1.0);
+        vm.SelectionRect = new Rect(10, 10, 40, 30);
+
+        await vm.RunUploadForTestAsync();
+
+        Assert.True(vm.Surface.IsFrozen);
+        coordinator.Verify(
+            c => c.HideAndWaitForCaptureAsync(It.IsAny<Action>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        capture.Verify(
+            c => c.CaptureScreenWithAnnotationsAsync(
+                It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(),
+                It.IsAny<IEnumerable<Annotation>>(), It.IsAny<IEnumerable<UserSelectionRect>>(),
+                It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public void SwitchingMode_DropsTheFrozenStill()
+    {
+        // Freeze is screenshot-only, but the gate used to be enforced only at the freeze entrances — so a
+        // frozen overlay switched to Recording kept painting a stale still and stayed opaque with no
+        // pass-through hole.
+        var capture = new Mock<IScreenCaptureService>();
+        using var vm = new SnipWindowViewModel(Colors.Red, 2.0, capture.Object);
+        vm.Surface.UseHeadlessBackdropForTest();
+        vm.Surface.FreezeFromPreOverlayGrab(new SkiaSharp.SKBitmap(800, 600), 1.0);
+        Assert.True(vm.Surface.IsFrozen);
+
+        vm.CurrentMode = SnipMode.Recording;
+
+        Assert.False(vm.Surface.IsFrozen);
+        Assert.False(vm.Surface.WantsOpaqueFullHitTest);
+    }
+
+    [Fact]
+    public async Task Upload_WhenLive_HidesTheOverlayAndGrabsLive()
+    {
+        // The live path is unchanged: hide the overlay, wait for it to be off-screen, then grab.
+        var capture = new Mock<IScreenCaptureService>();
+        capture
+            .Setup(c => c.CaptureScreenWithAnnotationsAsync(
+                It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(),
+                It.IsAny<IEnumerable<Annotation>>(), It.IsAny<IEnumerable<UserSelectionRect>>(),
+                It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
+            .ReturnsAsync(new SkiaSharp.SKBitmap(40, 30));
+        var coordinator = new Mock<ICaptureVisibilityCoordinator>();
+        coordinator
+            .Setup(c => c.HideAndWaitForCaptureAsync(It.IsAny<Action>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        mainVm.ImgurClientId = "test-client-id";
+        var upload = new Mock<IImgurUploadService>();
+        upload
+            .Setup(u => u.UploadPngAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ImageUploadResult(true, "https://imgur.test/abc", null, null));
+        mainVm.SetImgurUploadServiceForTest(upload.Object);
+
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object);
+        vm.SelectionRect = new Rect(10, 10, 40, 30);
+
+        await vm.RunUploadForTestAsync();
+
+        Assert.False(vm.Surface.IsFrozen);
+        coordinator.Verify(
+            c => c.HideAndWaitForCaptureAsync(It.IsAny<Action>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        capture.Verify(
+            c => c.CaptureScreenWithAnnotationsAsync(
+                It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(),
+                It.IsAny<IEnumerable<Annotation>>(), It.IsAny<IEnumerable<UserSelectionRect>>(),
+                It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()),
+            Times.Once);
     }
 
     private sealed class FakeWindowDetectionService : IWindowDetectionService

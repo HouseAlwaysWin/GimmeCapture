@@ -103,6 +103,35 @@ public sealed class QuickOcrProcessingIndicatorTests
     }
 
     [Fact]
+    public async Task QuickOcr_WhenFrozen_DoesNotShowASecondSpinner()
+    {
+        // A frozen commit crops the still in place and leaves the overlay up, so its in-overlay spinner is still
+        // on screen. The standalone window only stands in for that spinner while the overlay is hidden — showing
+        // it here put two spinners on screen at once.
+        var capture = CreateCaptureMock();
+
+        var ocr = new Mock<IQuickOcrService>();
+        ocr
+            .Setup(o => o.RecognizeAsync(It.IsAny<SKBitmap>(), It.IsAny<OCRLanguage>(), It.IsAny<OcrTextLayout>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QuickOcrResult(QuickOcrStatus.Success, "hello"));
+
+        using var vm = await CreateViewModelAsync(capture.Object, ocr.Object);
+        vm.Surface.UseHeadlessBackdropForTest();
+        vm.Surface.FreezeFromPreOverlayGrab(new SKBitmap(100, 100), 1.0);
+        Assert.True(vm.Surface.IsFrozen, "the surface must be frozen for this test to mean anything");
+
+        bool standaloneShown = false;
+        vm.ShowProcessingWindowAction = () => standaloneShown = true;
+        vm.HideProcessingWindowAction = () => { };
+
+        await vm.RunQuickOcrTextCopyForTestAsync();
+
+        Assert.False(standaloneShown, "While frozen the overlay keeps its own spinner; a standalone one duplicates it.");
+        // The overlay's own spinner is still the one doing the work, and it is torn down as usual.
+        Assert.False(vm.ShowProcessingOverlay, "The in-overlay spinner must be cleared once recognition finishes.");
+    }
+
+    [Fact]
     public async Task QuickOcr_HidesSpinnerWhenRecognitionThrows()
     {
         var capture = CreateCaptureMock();
