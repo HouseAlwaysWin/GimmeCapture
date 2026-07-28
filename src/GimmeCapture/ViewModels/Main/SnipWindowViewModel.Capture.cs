@@ -40,13 +40,22 @@ public partial class SnipWindowViewModel
             IsIndeterminate = true;
             ProcessingText = LocalizationService.Instance["QuickOcrProcessing"];
 
+            // Only a LIVE commit hides the overlay to grab clean pixels; a frozen one crops the still in place and
+            // leaves the overlay up (see OverlaySurface.CommitCoreAsync). Read before the commit, because that is
+            // the state the commit will act on.
+            bool overlayWillBeHidden = !Surface.IsFrozen;
+
             using var bitmap = await Surface.CommitPlainAsync(cts.Token);
 
-            // The snip overlay (which hosts ShowProcessingOverlay) was just hidden to grab a clean capture, so
-            // surface a standalone "recognizing…" spinner while OCR runs — otherwise the multi-second recognition
-            // looks like the app froze. Shown AFTER the capture so it isn't grabbed into the OCR image; OCR itself
-            // runs on a background thread (RecognizeAsync uses Task.Run), so the spinner stays animated.
-            ShowProcessingWindowAction?.Invoke();
+            // The standalone "recognizing…" spinner stands in for the in-overlay one ONLY while the overlay is
+            // hidden — it hosts ShowProcessingOverlay, so hiding it takes that spinner away and the multi-second
+            // recognition would look like a freeze. While frozen the overlay is still up and already showing its
+            // own spinner, so this would be a second one on screen. Shown AFTER the capture either way, so it is
+            // never grabbed into the OCR image; OCR runs on a background thread so the spinner stays animated.
+            if (overlayWillBeHidden)
+            {
+                ShowProcessingWindowAction?.Invoke();
+            }
 
             var result = await _quickOcrService.RecognizeAsync(
                 bitmap,
