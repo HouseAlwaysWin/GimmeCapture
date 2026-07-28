@@ -49,6 +49,13 @@
         <Border Background="Transparent" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="12" Height="12" ZIndex="10000"
                 chrome:WindowDecorationProperties.ElementRole="ResizeSE"/>
 
+        <!-- Window outline. The window is borderless (WindowDecorations="None") and its background is near-black,
+             so against a dark desktop its edges were invisible. Painted OVER the content — behind it the opaque
+             window background would hide it — and hit-test invisible, so the resize strips above still get every
+             edge click. Follows the theme accent, so it tracks the user's colour choice. -->
+        <Border BorderBrush="{DynamicResource ThemeAccentBrush}" BorderThickness="1"
+                IsHitTestVisible="False" ZIndex="9999"/>
+
     <Grid RowDefinitions="Auto,*,Auto" Margin="0" ZIndex="0">
         <!-- Title drag area only (caption buttons are a sibling overlay so resize strips never steal clicks) -->
         <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Background="Transparent" Height="36"
