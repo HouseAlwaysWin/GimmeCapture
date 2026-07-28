@@ -1,4 +1,5 @@
 using System;
+using GimmeCapture.Models;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Threading;
@@ -66,11 +67,11 @@ internal sealed class LibavWgcMkvSession : IDisposable
     /// <summary>Hardware-encoder target bitrate in bits/sec; 0 uses the automatic clamp.</summary>
     public long VideoBitrate { get; set; }
 
-    public Task<bool> StartAsync(string outputPath, IntPtr hwnd, int fps, bool drawMouse, bool useH265)
+    public Task<bool> StartAsync(string outputPath, IntPtr hwnd, int fps, bool drawMouse, VideoCodec codec)
     {
         FFmpegRuntime.EnsureInitialized();
         AppLog.Information($"Wgc.Build sessionType=window bringupTimeoutMs={BringupTimeoutMs} firstFrameTimeoutMs={FirstFrameTimeoutMs}");
-        LogNative($"StartAsync requested: out={outputPath}, hwnd={hwnd}, fps={fps}, drawMouse={drawMouse}, useH265={useH265}");
+        LogNative($"StartAsync requested: out={outputPath}, hwnd={hwnd}, fps={fps}, drawMouse={drawMouse}, codec={codec}");
         LastErrorMessage = null;
         LastWarningMessage = null;
         SelectedEncoderName = null;
@@ -99,7 +100,7 @@ internal sealed class LibavWgcMkvSession : IDisposable
         {
             try
             {
-                RunTranscode(outputPath, hwnd, fps, drawMouse, useH265, ct, firstFrameTcs);
+                RunTranscode(outputPath, hwnd, fps, drawMouse, codec, ct, firstFrameTcs);
                 LogNative("Worker completed successfully.");
                 return true;
             }
@@ -185,7 +186,7 @@ internal sealed class LibavWgcMkvSession : IDisposable
         IntPtr hwnd,
         int fps,
         bool drawMouse,
-        bool useH265,
+        VideoCodec codec,
         CancellationToken ct,
         TaskCompletionSource<bool> firstFrameTcs)
     {
@@ -260,7 +261,7 @@ internal sealed class LibavWgcMkvSession : IDisposable
         try
         {
             encCtx = LibavRecordingEncoder.OpenRecordingEncoderContext(
-                useH265, PreferHardwareEncoder, encWidth, encHeight, fps, VideoCrf, VideoBitrate, &encOpts,
+                codec, PreferHardwareEncoder, encWidth, encHeight, fps, VideoCrf, VideoBitrate, &encOpts,
                 out string encName, out string? warningMessage);
             if (encCtx == null)
             {

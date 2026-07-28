@@ -1,5 +1,6 @@
 using System;
 using FFmpeg.AutoGen;
+using GimmeCapture.Models;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
@@ -11,6 +12,141 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// </summary>
 internal static unsafe class LibavRecordingEncoder
 {
+    // Realtime-capable AV1 encoders only. libsvtav1/libaom-av1 are deliberately absent — see the ladder below.
+    private static readonly string[] HardwareAv1Encoders = ["av1_nvenc", "av1_qsv", "av1_amf"];
+    private static readonly string[] HardwareH265Encoders = ["hevc_nvenc", "hevc_qsv", "hevc_amf", "hevc_mf"];
+    private static readonly string[] HardwareH264Encoders = ["h264_nvenc", "h264_qsv", "h264_amf", "h264_mf"];
+    private static readonly string[] SoftwareH265Encoders = ["libx265", "libx264", "libopenh264", "mpeg4"];
+    private static readonly string[] SoftwareH264Encoders = ["libx264", "libopenh264", "mpeg4"];
+
+    // 0 = not probed yet, 1 = usable, 2 = not usable. Only ever set from a probe that actually ran, so a probe
+    // attempted before the native libraries were loaded does not poison the answer for the rest of the session.
+    private static int _hardwareAv1State;
+
+    /// <summary>
+    /// Whether this machine can really encode AV1 in hardware.
+    ///
+    /// This has to TEST-OPEN an encoder. <c>avcodec_find_encoder_by_name("av1_nvenc")</c> only proves the encoder
+    /// was compiled into the build — it says nothing about the GPU, and every vendor ships an AV1 encoder that
+    /// exists but fails at open time on hardware that cannot do it (NVIDIA before Ada / RTX 40, AMD before RDNA3,
+    /// Intel before Arc). Offering AV1 on the strength of the lookup alone would put an option in the UI that
+    /// silently degrades to H.265 on most machines.
+    ///
+    /// Cached for the process: opening an NVENC context is not free.
+    /// </summary>
+    public static bool HasUsableHardwareAv1Encoder()
+    {
+        int cached = System.Threading.Volatile.Read(ref _hardwareAv1State);
+        if (cached != 0)
+        {
+            return cached == 1;
+        }
+
+        bool usable;
+        try
+        {
+            if (!FFmpegRuntime.TryInitialize(out _))
+            {
+                // Cannot answer yet, and must not remember this as "no".
+                return false;
+            }
+
+            usable = ProbeHardwareAv1();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Recording.Av1Probe", ex);
+            return false;
+        }
+
+        System.Threading.Volatile.Write(ref _hardwareAv1State, usable ? 1 : 2);
+        AppLog.Information($"Recording.HardwareAv1Probe: {(usable ? "available" : "unavailable")}");
+        return usable;
+    }
+
+    private static bool ProbeHardwareAv1()
+    {
+        // Small but real: some encoders reject tiny or odd dimensions, so probe at a size a recording could use.
+        const int ProbeWidth = 640;
+        const int ProbeHeight = 480;
+        const int ProbeFps = 30;
+        const int ProbeCrf = 23;
+
+        foreach (string candidateName in HardwareAv1Encoders)
+        {
+            AVCodec* candidate = ffmpeg.avcodec_find_encoder_by_name(candidateName);
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            AVCodecContext* ctx = ffmpeg.avcodec_alloc_context3(candidate);
+            if (ctx == null)
+            {
+                continue;
+            }
+
+            AVDictionary* opts = null;
+            try
+            {
+                ConfigureEncoderContext(ctx, candidate, candidateName, ProbeWidth, ProbeHeight, ProbeFps, ProbeCrf, 0, &opts);
+                if (ffmpeg.avcodec_open2(ctx, candidate, &opts) >= 0)
+                {
+                    LogNative($"Hardware AV1 encoder usable: {candidateName}");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warning("Recording.Av1Probe", ex);
+            }
+            finally
+            {
+                if (opts != null) ffmpeg.av_dict_free(&opts);
+                if (ctx != null) ffmpeg.avcodec_free_context(&ctx);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The ordered encoder candidates for a codec, each test-opened in turn until one works.
+    ///
+    /// AV1 is HARDWARE ONLY, then straight into the H.265 ladder. The software AV1 encoders (libsvtav1 /
+    /// libaom-av1) ARE in the bundled build and the Compress pipeline uses them deliberately — but they are
+    /// offline encoders, and falling back to them during a realtime capture would trade "smaller files" for
+    /// dropped frames. A working H.265 recording plus a warning is the better failure.
+    ///
+    /// Pure, so the ladder can be asserted without libav.
+    /// </summary>
+    internal static string[] BuildEncoderLadder(VideoCodec codec, bool preferHardware) => (codec, preferHardware) switch
+    {
+        (VideoCodec.Av1, true) => [.. HardwareAv1Encoders, .. HardwareH265Encoders, .. SoftwareH265Encoders],
+        (VideoCodec.Av1, false) => SoftwareH265Encoders,
+        (VideoCodec.H265, true) => [.. HardwareH265Encoders, .. SoftwareH265Encoders],
+        (VideoCodec.H265, false) => SoftwareH265Encoders,
+        (_, true) => [.. HardwareH264Encoders, .. SoftwareH264Encoders],
+        (_, false) => SoftwareH264Encoders,
+    };
+
+    /// <summary>Whether <paramref name="encoderName"/> actually emits the codec that was asked for.</summary>
+    internal static bool ProducesRequestedCodec(VideoCodec codec, string encoderName) => codec switch
+    {
+        VideoCodec.Av1 => encoderName.StartsWith("av1_", StringComparison.Ordinal),
+        VideoCodec.H265 => encoderName.StartsWith("hevc_", StringComparison.Ordinal) || encoderName == "libx265",
+        // H.264 is the floor: everything in its ladder but the last-ditch mpeg4 emits H.264, and mpeg4 never
+        // warned before. Left alone so this change cannot alter existing H.264 recordings' messaging.
+        _ => true,
+    };
+
+    private static string CodecLabel(VideoCodec codec) => codec switch
+    {
+        VideoCodec.Av1 => "AV1",
+        VideoCodec.H265 => "H.265",
+        _ => "H.264",
+    };
+
     /// <summary>
     /// Opens the best available video encoder for recording. Hardware / Media-Foundation encoders are
     /// tried first (when <paramref name="preferHardware"/> is set) so the recording is GPU-accelerated
@@ -18,7 +154,7 @@ internal static unsafe class LibavRecordingEncoder
     /// software libx264/265. Returns the opened context, or throws if nothing works.
     /// </summary>
     public static AVCodecContext* OpenRecordingEncoderContext(
-        bool preferH265,
+        VideoCodec codec,
         bool preferHardware,
         int width,
         int height,
@@ -29,20 +165,11 @@ internal static unsafe class LibavRecordingEncoder
         out string selectedEncoderName,
         out string? warningMessage)
     {
-        string[] hwH265 = ["hevc_nvenc", "hevc_qsv", "hevc_amf", "hevc_mf"];
-        string[] hwH264 = ["h264_nvenc", "h264_qsv", "h264_amf", "h264_mf"];
-        string[] swH265 = ["libx265", "libx264", "libopenh264", "mpeg4"];
-        string[] swH264 = ["libx264", "libopenh264", "mpeg4"];
+        string[] preferredNames = BuildEncoderLadder(codec, preferHardware);
 
-        string[] preferredNames = (preferH265, preferHardware) switch
-        {
-            (true, true) => [.. hwH265, .. swH265],
-            (true, false) => swH265,
-            (false, true) => [.. hwH264, .. swH264],
-            (false, false) => swH264,
-        };
-
-        selectedEncoderName = preferH265 ? "libx265" : "libx264";
+        // The software anchor of whichever ladder we are on: always present in the bundled build, so failing to
+        // find it means the build itself is wrong rather than the machine being incapable.
+        selectedEncoderName = codec == VideoCodec.H264 ? "libx264" : "libx265";
         warningMessage = null;
         string requestedEncoderName = selectedEncoderName;
         string? lastOpenError = null;
@@ -85,9 +212,9 @@ internal static unsafe class LibavRecordingEncoder
                     candidateOpts = null;
 
                     selectedEncoderName = candidateName;
-                    if (preferH265 && candidateName != requestedEncoderName)
+                    if (!ProducesRequestedCodec(codec, candidateName))
                     {
-                        warningMessage = $"Encoder '{requestedEncoderName}' unavailable. Falling back to '{candidateName}'.";
+                        warningMessage = $"No {CodecLabel(codec)} encoder available. Falling back to '{candidateName}'.";
                     }
 
                     return openedCtx;

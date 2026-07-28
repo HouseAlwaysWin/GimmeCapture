@@ -1,4 +1,5 @@
 using System;
+using GimmeCapture.Models;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -58,11 +59,11 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
     /// <see cref="LibavWgcMkvSession.TimedOutWaitingForFrame"/>.</summary>
     public bool TimedOutWaitingForFrame { get; private set; }
 
-    public Task<bool> StartAsync(string outputPath, IReadOnlyList<IntPtr> hwnds, int fps, bool drawMouse, bool useH265)
+    public Task<bool> StartAsync(string outputPath, IReadOnlyList<IntPtr> hwnds, int fps, bool drawMouse, VideoCodec codec)
     {
         FFmpegRuntime.EnsureInitialized();
         AppLog.Information($"Wgc.Build sessionType=composite windows={hwnds.Count} bringupTimeoutMs={BringupTimeoutMs} firstFrameTimeoutMs={FirstFrameTimeoutMs}");
-        LogNative($"StartAsync requested: out={outputPath}, windows={hwnds.Count}, fps={fps}, drawMouse={drawMouse}, useH265={useH265}");
+        LogNative($"StartAsync requested: out={outputPath}, windows={hwnds.Count}, fps={fps}, drawMouse={drawMouse}, codec={codec}");
         LastErrorMessage = null;
         LastWarningMessage = null;
         SelectedEncoderName = null;
@@ -92,7 +93,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
         {
             try
             {
-                RunTranscode(outputPath, hwndList, fps, drawMouse, useH265, ct, firstFrameTcs);
+                RunTranscode(outputPath, hwndList, fps, drawMouse, codec, ct, firstFrameTcs);
                 LogNative("Worker completed successfully.");
                 return true;
             }
@@ -170,7 +171,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
         List<IntPtr> hwnds,
         int fps,
         bool drawMouse,
-        bool useH265,
+        VideoCodec codec,
         CancellationToken ct,
         TaskCompletionSource<bool> firstFrameTcs)
     {
@@ -256,7 +257,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
             encFrame = ffmpeg.av_frame_alloc();
 
             encCtx = LibavRecordingEncoder.OpenRecordingEncoderContext(
-                useH265, PreferHardwareEncoder, canvasW, canvasH, fps, VideoCrf, VideoBitrate, &encOpts,
+                codec, PreferHardwareEncoder, canvasW, canvasH, fps, VideoCrf, VideoBitrate, &encOpts,
                 out string encName, out string? warningMessage);
             if (encCtx == null)
             {

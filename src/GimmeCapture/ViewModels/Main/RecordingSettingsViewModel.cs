@@ -5,6 +5,7 @@ using System.Reactive;
 using ReactiveUI;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -82,10 +83,33 @@ public class RecordingSettingsViewModel : ViewModelBase
         public string Name => LocalizationService.Instance[$"VideoEncoderHint{Value}"];
     }
 
-    public VideoCodecOption[] VideoCodecOptions { get; } = {
-        new VideoCodecOption { Value = VideoCodec.H264 },
-        new VideoCodecOption { Value = VideoCodec.H265 }
-    };
+    /// <summary>
+    /// AV1 appears only on machines that can actually encode it in hardware. The software AV1 encoders exist in
+    /// the bundled build — the Compress pipeline uses them — but they are offline encoders and cannot keep up
+    /// with a realtime capture, so offering AV1 without hardware would be offering dropped frames.
+    ///
+    /// Built lazily: the probe test-opens an encoder, which needs the native libraries loaded, and this view
+    /// model is constructed before that is guaranteed.
+    /// </summary>
+    public VideoCodecOption[] VideoCodecOptions => _videoCodecOptions ??= BuildVideoCodecOptions();
+
+    private VideoCodecOption[]? _videoCodecOptions;
+
+    private static VideoCodecOption[] BuildVideoCodecOptions()
+    {
+        var options = new List<VideoCodecOption>(3)
+        {
+            new() { Value = VideoCodec.H264 },
+            new() { Value = VideoCodec.H265 },
+        };
+
+        if (LibavRecordingEncoder.HasUsableHardwareAv1Encoder())
+        {
+            options.Add(new VideoCodecOption { Value = VideoCodec.Av1 });
+        }
+
+        return [.. options];
+    }
 
     public VideoQualityOption[] VideoQualityOptions { get; } = {
         new VideoQualityOption { Value = VideoQuality.Low },

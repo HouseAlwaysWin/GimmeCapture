@@ -1,4 +1,5 @@
 using System;
+using GimmeCapture.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -24,7 +25,7 @@ internal sealed class LibavWgcMkvSession : IDisposable
     public string? LastWarningMessage { get; private set; }
     public string? SelectedEncoderName { get; private set; }
 
-    public Task<bool> StartAsync(string outputPath, IntPtr hwnd, int fps, bool drawMouse, bool useH265)
+    public Task<bool> StartAsync(string outputPath, IntPtr hwnd, int fps, bool drawMouse, VideoCodec codec)
         => Task.FromResult(false);
 
     public Task StopAsync() => Task.CompletedTask;
@@ -42,7 +43,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
     public string? LastWarningMessage { get; private set; }
     public string? SelectedEncoderName { get; private set; }
 
-    public Task<bool> StartAsync(string outputPath, IReadOnlyList<IntPtr> hwnds, int fps, bool drawMouse, bool useH265)
+    public Task<bool> StartAsync(string outputPath, IReadOnlyList<IntPtr> hwnds, int fps, bool drawMouse, VideoCodec codec)
         => Task.FromResult(false);
 
     public Task StopAsync() => Task.CompletedTask;
