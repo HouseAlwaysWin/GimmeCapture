@@ -324,12 +324,6 @@ public partial class MainWindowViewModel
         set => Snip.FileNameTemplate = value;
     }
 
-    public string ImgurClientId
-    {
-        get => Snip.ImgurClientId;
-        set => Snip.ImgurClientId = value;
-    }
-    
     // Control Settings
     private string _snipHotkey = "Shift+F1";
     public string SnipHotkey
