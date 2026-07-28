@@ -274,7 +274,6 @@ public class AppSettingsService : IAppSettingsService
         dest.RevealAfterSave = source.RevealAfterSave;
         dest.SaveDirectory = source.SaveDirectory;
         dest.FileNameTemplate = source.FileNameTemplate;
-        dest.ImgurClientId = source.ImgurClientId;
         dest.ShowSnipCursor = source.ShowSnipCursor;
         dest.ShowRecordCursor = source.ShowRecordCursor;
         dest.RecordSystemAudio = source.RecordSystemAudio;

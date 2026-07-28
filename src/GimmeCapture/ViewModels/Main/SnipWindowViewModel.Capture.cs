@@ -171,9 +171,9 @@ public partial class SnipWindowViewModel
 
     /// <summary>
     /// The shared capture ritual: spinner up, commit the selection, hand the bitmap to <paramref name="consume"/>,
-    /// then tear down and close. Copy / Save / Pin / Upload used to each re-implement these five beats, and the
-    /// one that drifted (Upload) silently bypassed freeze-frame — so the ritual being a single entry point is the
-    /// point, not a line-count saving.
+    /// then tear down and close. Copy / Save / Pin used to each re-implement these five beats, and whichever one
+    /// drifted silently bypassed freeze-frame — so the ritual being a single entry point is the point, not a
+    /// line-count saving.
     /// </summary>
     /// <param name="statusKey">Localization key for the processing spinner, or null for no spinner (Pin).</param>
     private async Task RunCaptureCommitAsync(string? statusKey, Func<SKBitmap, Task> consume)
@@ -221,44 +221,10 @@ public partial class SnipWindowViewModel
         }
     });
 
-    // Test hook: drives the private upload flow directly (the production trigger is a ReactiveCommand),
-    // so the freeze-frame branch can be unit-tested without a UI thread.
-    internal Task RunUploadForTestAsync() => ExecuteUploadAsync();
-
-    /// <summary>Renders the selection, closes the snip overlay, and hands the PNG off to the
-    /// app-lifetime MainWindowViewModel for a fire-and-forget Imgur upload — the fullscreen overlay
-    /// must never stay open blocking on a network call. Commits through the surface like Copy/Save/Pin, so
-    /// freeze-frame applies here too — it used to grab the live screen from a frozen overlay.</summary>
-    private async Task ExecuteUploadAsync()
-    {
-        if (_isProcessingRecording) return;
-        if (CurrentMode != SnipMode.Screenshot) return;
-        if (SelectionRect.Width <= 0 || SelectionRect.Height <= 0) return;
-        if (_mainVm == null) return;
-
-        // No Client-ID: tell the user before touching the window, so the snip stays open and
-        // Copy/Save remain usable.
-        if (string.IsNullOrWhiteSpace(_mainVm.ImgurClientId))
-        {
-            _mainVm.SetStatus("StatusImgurClientIdMissing");
-            return;
-        }
-
-        await RunCaptureCommitAsync("StatusUploading", bitmap =>
-        {
-            byte[] png;
-            using (var image = SkiaSharp.SKImage.FromBitmap(bitmap))
-            using (var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
-            {
-                png = data.ToArray();
-            }
-
-            // The capture service is app-lifetime (owned by the factory), so its text-clipboard
-            // delegate stays valid after this window closes.
-            _mainVm.RunImgurUploadAsync(png, _captureService.CopyToClipboardAsync).Forget("Upload.Imgur");
-            return Task.CompletedTask;
-        });
-    }
+    // Test hook: drives the private copy-capture flow directly (the production trigger is a ReactiveCommand), so
+    // the shared commit ritual can be unit-tested without a UI thread — specifically that a frozen commit reads
+    // the still instead of hiding the overlay and grabbing live.
+    internal Task RunCopyCaptureForTestAsync() => ExecuteCopyCaptureAsync();
 
     private async Task ExecuteSaveAsync()
     {

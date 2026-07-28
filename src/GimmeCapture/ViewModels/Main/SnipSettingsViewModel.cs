@@ -48,13 +48,6 @@ public class SnipSettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _fileNameTemplate, value);
     }
 
-    private string _imgurClientId = string.Empty;
-    public string ImgurClientId
-    {
-        get => _imgurClientId;
-        set => this.RaiseAndSetIfChanged(ref _imgurClientId, value);
-    }
-
     // Pin & selection windows
     private bool _hideSnipPinDecoration;
     public bool HideSnipPinDecoration

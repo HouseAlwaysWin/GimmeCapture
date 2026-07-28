@@ -33,17 +33,6 @@
                     </StackPanel>
                 </Expander>
 
-                <!-- Sharing -->
-                <Expander Theme="{StaticResource GothicExpander}"
-                          Header="{Binding [SettingsShare], Source={x:Static services:LocalizationService.Instance}}">
-                    <StackPanel Spacing="5">
-                        <TextBlock Text="{Binding [ImgurClientId], Source={x:Static services:LocalizationService.Instance}}"/>
-                        <TextBox Text="{Binding ImgurClientId}" Margin="24,0,10,0"/>
-                        <TextBlock Text="{Binding [ImgurClientIdHint], Source={x:Static services:LocalizationService.Instance}}"
-                                   FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="24,0,10,5"/>
-                    </StackPanel>
-                </Expander>
-
                 <!-- Pin & selection windows -->
                 <Expander Theme="{StaticResource GothicExpander}"
                           Header="{Binding [SnipPinSettings], Source={x:Static services:LocalizationService.Instance}}">

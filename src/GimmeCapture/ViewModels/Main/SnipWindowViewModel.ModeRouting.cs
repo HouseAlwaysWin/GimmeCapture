@@ -340,7 +340,6 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> CopyCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> SaveCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> PinCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> UploadCommand { get; set; } = null!;
     // Toolbar "freeze screen" toggle: freezes/unfreezes the CURRENT overlay live, with immediate effect. Distinct
     // from the FreezeScreenOnScreenshot setting, which only decides the initial state of the NEXT capture. See
     // ToggleFreezeFrameLiveAsync. (Replaces the old lock-selection toggle, consolidated into freeze-frame.)
@@ -552,7 +551,6 @@ public partial class SnipWindowViewModel
 
         SaveCommand = CreateAsyncCommand(Save, nameof(SaveCommand), canExecuteHotkeys);
 
-        UploadCommand = CreateAsyncCommand(ExecuteUploadAsync, nameof(UploadCommand), canExecuteHotkeys);
 
         ScrollingCaptureCommand = CreateAsyncCommand(ExecuteScrollingCapture, nameof(ScrollingCaptureCommand), canExecuteHotkeys);
 

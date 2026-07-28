@@ -334,13 +334,12 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
-    public async Task Upload_WhenFrozen_ReadsTheStillAndNeitherHidesNorGrabsLive()
+    public async Task CaptureCommit_WhenFrozen_ReadsTheStillAndNeitherHidesNorGrabsLive()
     {
-        // Upload used to call the visibility coordinator and the live grab directly, bypassing the
-        // frozen-aware path its four siblings go through; in freeze-frame mode that dropped the frozen
-        // overlay and uploaded whatever was on screen right then — the tray flyout / dropdown the still was
-        // taken for had long since closed. All five now commit through the surface, so there is no longer a
-        // shorter way to get selection pixels than the correct one.
+        // Every capture action commits through the surface; none may reach for the visibility coordinator or a
+        // live grab itself. A path that did (Upload, since removed) dropped the frozen overlay in freeze-frame
+        // mode and captured whatever was on screen right then — the tray flyout or dropdown the still had been
+        // taken for was long gone. Copy stands in for the shared ritual here.
         var capture = new Mock<IScreenCaptureService>();
         var coordinator = new Mock<ICaptureVisibilityCoordinator>();
         coordinator
@@ -349,12 +348,7 @@ public class SnipWindowViewModelTests
 
         var mainVm = new MainWindowViewModel();
         await mainVm.InitialSettingsLoadTask;
-        mainVm.ImgurClientId = "test-client-id";
-        var upload = new Mock<IImgurUploadService>();
-        upload
-            .Setup(u => u.UploadPngAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ImageUploadResult(true, "https://imgur.test/abc", null, null));
-        mainVm.SetImgurUploadServiceForTest(upload.Object);
+        mainVm.EnableHistory = false; // keep the commit clipboard-only; history would write a file
 
         using var vm = new SnipWindowViewModel(
             Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object);
@@ -362,7 +356,7 @@ public class SnipWindowViewModelTests
         vm.Surface.FreezeFromPreOverlayGrab(new SkiaSharp.SKBitmap(800, 600), 1.0);
         vm.SelectionRect = new Rect(10, 10, 40, 30);
 
-        await vm.RunUploadForTestAsync();
+        await vm.RunCopyCaptureForTestAsync();
 
         Assert.True(vm.Surface.IsFrozen);
         coordinator.Verify(
@@ -395,9 +389,9 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
-    public async Task Upload_WhenLive_HidesTheOverlayAndGrabsLive()
+    public async Task CaptureCommit_WhenLive_HidesTheOverlayAndGrabsLive()
     {
-        // The live path is unchanged: hide the overlay, wait for it to be off-screen, then grab.
+        // The live path: hide the overlay, wait for it to be off-screen, then grab.
         var capture = new Mock<IScreenCaptureService>();
         capture
             .Setup(c => c.CaptureScreenWithAnnotationsAsync(
@@ -412,18 +406,13 @@ public class SnipWindowViewModelTests
 
         var mainVm = new MainWindowViewModel();
         await mainVm.InitialSettingsLoadTask;
-        mainVm.ImgurClientId = "test-client-id";
-        var upload = new Mock<IImgurUploadService>();
-        upload
-            .Setup(u => u.UploadPngAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ImageUploadResult(true, "https://imgur.test/abc", null, null));
-        mainVm.SetImgurUploadServiceForTest(upload.Object);
+        mainVm.EnableHistory = false; // keep the commit clipboard-only; history would write a file
 
         using var vm = new SnipWindowViewModel(
             Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object);
         vm.SelectionRect = new Rect(10, 10, 40, 30);
 
-        await vm.RunUploadForTestAsync();
+        await vm.RunCopyCaptureForTestAsync();
 
         Assert.False(vm.Surface.IsFrozen);
         coordinator.Verify(
