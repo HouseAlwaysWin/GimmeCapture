@@ -21,6 +21,26 @@ public partial class RecordingService
     /// </summary>
     private const int WgcStopTimeoutMs = 6000;
 
+    /// <summary>
+    /// The codec this recording will actually use.
+    ///
+    /// AV1 is only offered in the UI on machines with a usable hardware encoder, but the setting is persisted, so
+    /// a config copied from such a machine (or a GPU/driver change) can still ask for AV1 here. Resolving it in
+    /// one place means the encoder ladder never has to quietly emit H.265 under an "AV1" label, and the reason is
+    /// in the log. Software AV1 is deliberately not a fallback — it cannot keep up with realtime capture.
+    /// </summary>
+    private VideoCodec ResolveRecordingCodec()
+    {
+        var codec = _settingsService?.Settings.VideoCodec ?? VideoCodec.H264;
+        if (codec != VideoCodec.Av1 || LibavRecordingEncoder.HasUsableHardwareAv1Encoder())
+        {
+            return codec;
+        }
+
+        AppLog.Information("Recording.Av1Unavailable: no usable hardware AV1 encoder; recording H.265 instead.");
+        return VideoCodec.H265;
+    }
+
     private LibavGdigrabMkvSession? _nativeRecorder;
     private LibavWgcMkvSession? _nativeWgcRecorder;
     private LibavWgcCompositeMkvSession? _nativeWgcCompositeRecorder;
@@ -145,9 +165,9 @@ public partial class RecordingService
                 VideoBitrate = CustomVideoBitrateBps
             };
 
-            bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
+            var codec = ResolveRecordingCodec();
 
-            var ok = await _nativeWgcCompositeRecorder.StartAsync(segmentFile, _windowHandles, _fps, _includeCursor, useH265)
+            var ok = await _nativeWgcCompositeRecorder.StartAsync(segmentFile, _windowHandles, _fps, _includeCursor, codec)
                 .ConfigureAwait(false);
             if (!ok)
             {
@@ -196,9 +216,9 @@ public partial class RecordingService
                 VideoBitrate = CustomVideoBitrateBps
             };
 
-            bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
+            var codec = ResolveRecordingCodec();
 
-            var ok = await _nativeWgcRecorder.StartAsync(segmentFile, _windowHandle, _fps, _includeCursor, useH265)
+            var ok = await _nativeWgcRecorder.StartAsync(segmentFile, _windowHandle, _fps, _includeCursor, codec)
                 .ConfigureAwait(false);
             if (!ok)
             {
@@ -237,7 +257,7 @@ public partial class RecordingService
 
     private async Task<bool> StartSeparateSegmentsAsync()
     {
-        bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
+        var codec = ResolveRecordingCodec();
         bool preferHw = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly;
         int segIndex = Math.Max(0, _segments.Count - 1);
 
@@ -257,7 +277,7 @@ public partial class RecordingService
                 VideoCrf = CustomVideoCrf,
                 VideoBitrate = CustomVideoBitrateBps
             };
-            pending.Add((i, track, segPath, session, session.StartAsync(segPath, track.Hwnd, _fps, _includeCursor, useH265)));
+            pending.Add((i, track, segPath, session, session.StartAsync(segPath, track.Hwnd, _fps, _includeCursor, codec)));
         }
 
         int started = 0;
@@ -316,7 +336,7 @@ public partial class RecordingService
     /// </summary>
     private async Task<bool> StartSeparateGdigrabSegmentsAsync()
     {
-        bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
+        var codec = ResolveRecordingCodec();
         bool preferHw = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly;
         int segIndex = Math.Max(0, _segments.Count - 1);
 
@@ -350,7 +370,7 @@ public partial class RecordingService
                 // into every window file is undesirable.
             };
             AppLog.Information($"Wgc.SeparateFallback.Region track={i} hwnd=0x{track.Hwnd.ToInt64():X} rect={w}x{h}@({x},{y})");
-            pending.Add((i, track, segPath, session, session.StartAsync(segPath, x, y, w, h, _fps, _includeCursor, useH265)));
+            pending.Add((i, track, segPath, session, session.StartAsync(segPath, x, y, w, h, _fps, _includeCursor, codec)));
         }
 
         int started = 0;
@@ -487,9 +507,9 @@ public partial class RecordingService
             int w = ((int)(_region.Width * _visualScaling) / 2) * 2;
             int h = ((int)(_region.Height * _visualScaling) / 2) * 2;
 
-            bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
+            var codec = ResolveRecordingCodec();
 
-            var ok = await _nativeRecorder.StartAsync(segmentFile, x, y, w, h, _fps, _includeCursor, useH265)
+            var ok = await _nativeRecorder.StartAsync(segmentFile, x, y, w, h, _fps, _includeCursor, codec)
                 .ConfigureAwait(false);
             LastStartWarning = string.IsNullOrEmpty(LastStartWarning)
                 ? _nativeRecorder.LastWarningMessage ?? string.Empty

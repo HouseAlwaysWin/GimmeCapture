@@ -1,4 +1,5 @@
 using System;
+using GimmeCapture.Models;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -78,10 +79,10 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// <summary>Hardware-encoder target bitrate in bits/sec; 0 uses the automatic clamp.</summary>
     public long VideoBitrate { get; set; }
 
-    public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, bool useH265)
+    public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, VideoCodec codec)
     {
         FFmpegRuntime.EnsureInitialized();
-        LogNative($"StartAsync requested: out={outputPath}, x={offsetX}, y={offsetY}, w={width}, h={height}, fps={fps}, drawMouse={drawMouse}, useH265={useH265}");
+        LogNative($"StartAsync requested: out={outputPath}, x={offsetX}, y={offsetY}, w={width}, h={height}, fps={fps}, drawMouse={drawMouse}, codec={codec}");
         LastErrorMessage = null;
         LastWarningMessage = null;
         SelectedEncoderName = null;
@@ -108,7 +109,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         {
             try
             {
-                RunTranscode(outputPath, offsetX, offsetY, width, height, fps, drawMouse, useH265, ct, firstFrameTcs);
+                RunTranscode(outputPath, offsetX, offsetY, width, height, fps, drawMouse, codec, ct, firstFrameTcs);
                 LogNative("Worker completed successfully.");
                 return true;
             }
@@ -182,7 +183,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         int height,
         int fps,
         bool drawMouse,
-        bool useH265,
+        VideoCodec codec,
         CancellationToken ct,
         TaskCompletionSource<bool> firstFrameTcs)
     {
@@ -295,7 +296,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "avcodec_open2(dec)");
 
             encCtx = LibavRecordingEncoder.OpenRecordingEncoderContext(
-                useH265,
+                codec,
                 PreferHardwareEncoder,
                 width,
                 height,
