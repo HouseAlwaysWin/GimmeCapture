@@ -24,6 +24,8 @@ public partial class SnipWindowViewModel
     private bool _recordStartInFlight;
     // Set once when the disk-space guard auto-stops a recording, so the 200ms poll doesn't re-trigger.
     private bool _lowDiskStopTriggered;
+    // Set once when the configured max recording length auto-stops a recording (same latch pattern).
+    private bool _autoStopLengthTriggered;
     // Stop the recording if free space on the temp drive drops below this (leaves headroom for finalize).
     private const long MinFreeDiskBytes = 500L * 1024 * 1024;
     private DateTime _lastRecordStartAttemptUtc = DateTime.MinValue;
@@ -72,6 +74,7 @@ public partial class SnipWindowViewModel
         _recordingActiveStartUtc = DateTime.UtcNow;
         _lastRecordingState = RecordingState.Idle;
         _lowDiskStopTriggered = false;
+        _autoStopLengthTriggered = false;
         RecordingDuration = TimeSpan.Zero;
     }
 
@@ -162,6 +165,19 @@ public partial class SnipWindowViewModel
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                             ExecutePinRecordingAsync().Forget("Recording.ExecutePin"));
                     }
+                }
+
+                // Auto-stop at the configured max recorded length (pause time excluded — `duration`
+                // accumulates only Recording segments). Latched like the disk guard below.
+                int maxSeconds = _mainVm.RecordingSettings.MaxRecordingSeconds;
+                if (maxSeconds > 0 && !_autoStopLengthTriggered && duration >= TimeSpan.FromSeconds(maxSeconds))
+                {
+                    _autoStopLengthTriggered = true;
+                    bool pin = _mainVm.RecordingSettings.AutoStopAction == RecordingAutoStopAction.Pin;
+                    _mainVm.SetStatus("RecordAutoStopReached");
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        (pin ? ExecutePinRecordingAsync() : ExecuteStopRecordingAsync(suppressSaveDialog: true))
+                            .Forget("Recording.AutoStopLength"));
                 }
 
                 // Disk-space guard: stop and keep what's captured before the drive fills up mid-write.
@@ -422,7 +438,10 @@ public partial class SnipWindowViewModel
         }).Forget("Recording.WinDiag");
     }
 
-    private async Task ExecuteStopRecordingAsync()
+    /// <param name="suppressSaveDialog">Unattended stops (length auto-stop) must never pop the save
+    /// dialog — a later cancel would delete the capture. The temp file is moved straight into the
+    /// video save folder instead.</param>
+    private async Task ExecuteStopRecordingAsync(bool suppressSaveDialog = false)
     {
         if (_recordingService == null || _mainVm == null) return;
 
@@ -444,7 +463,35 @@ public partial class SnipWindowViewModel
         string? revealPath = null;
 
         // Check if we need to prompt
-        if (!_mainVm.RecordingSettings.UseFixedRecordPath && PickSaveFileAction != null)
+        if (suppressSaveDialog && !_mainVm.RecordingSettings.UseFixedRecordPath
+            && !string.IsNullOrEmpty(actualOutputPath) && System.IO.File.Exists(actualOutputPath))
+        {
+            // Unattended finish: move the temp file into the configured video folder (or MyVideos)
+            // with a template-generated name — mirrors the dialog branch's move, minus the dialog.
+            try
+            {
+                string dir = _mainVm.RecordingSettings.VideoSaveDirectory;
+                if (string.IsNullOrEmpty(dir))
+                {
+                    dir = System.IO.Path.Combine(
+                        System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyVideos),
+                        "GimmeCapture");
+                }
+                FileLocationService.EnsureDirectory(dir, "SnipRecording.EnsureAutoStopDirectory");
+                string ext = System.IO.Path.GetExtension(actualOutputPath).TrimStart('.');
+                string fileName = CaptureFileNameService.BuildFileName(ext, _mainVm.FileNameTemplate);
+                string targetPath = System.IO.Path.Combine(dir, fileName);
+                if (System.IO.File.Exists(targetPath)) System.IO.File.Delete(targetPath);
+                System.IO.File.Move(actualOutputPath, targetPath);
+                revealPath = targetPath;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Recording.AutoStopMoveOutput", ex);
+                revealPath = actualOutputPath; // keep the capture reachable even if the move failed
+            }
+        }
+        else if (!_mainVm.RecordingSettings.UseFixedRecordPath && PickSaveFileAction != null)
         {
             var targetPath = await PickSaveFileAction();
             if (!string.IsNullOrEmpty(targetPath))

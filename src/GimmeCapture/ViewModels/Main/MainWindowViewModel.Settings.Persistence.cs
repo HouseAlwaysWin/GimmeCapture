@@ -82,6 +82,8 @@ public partial class MainWindowViewModel
             CustomVideoBitrateKbps = CustomVideoBitrateKbps,
             RecordFps = RecordingSettings.RecordFPS,
             MaxRecordingSizeMb = RecordingSettings.MaxRecordingSizeMB,
+            MaxRecordingSeconds = RecordingSettings.MaxRecordingSeconds,
+            RecordingAutoStopAction = RecordingSettings.AutoStopAction,
             PlaybackUiFps = PlaybackUiFps,
             PlaybackTimelineFps = PlaybackTimelineFps,
             HardwareDecodeEnabled = HardwareDecodeEnabled,
@@ -168,6 +170,8 @@ public partial class MainWindowViewModel
         WingScale = snapshot.WingScale;
         RecordingSettings.RecordFPS = snapshot.RecordFps;
         RecordingSettings.MaxRecordingSizeMB = snapshot.MaxRecordingSizeMb;
+        RecordingSettings.MaxRecordingSeconds = snapshot.MaxRecordingSeconds;
+        RecordingSettings.AutoStopAction = snapshot.RecordingAutoStopAction;
         CustomVideoCrf = snapshot.CustomVideoCrf;
         CustomVideoBitrateKbps = snapshot.CustomVideoBitrateKbps;
         EnableAIScan = snapshot.EnableAIScan;
@@ -206,6 +210,7 @@ public partial class MainWindowViewModel
         this.RaisePropertyChanged(nameof(EnableOcrSelectionDetection));
         this.RaisePropertyChanged(nameof(AvailableCaptureDelays));
         this.RaisePropertyChanged(nameof(AvailableOcrTextLayouts));
+        this.RaisePropertyChanged(nameof(AvailableRecordingAutoStopActions));
         this.RaisePropertyChanged(nameof(AvailableScrollDirections));
         this.RaisePropertyChanged(nameof(ScrollingCaptureDirection));
         this.RaisePropertyChanged(nameof(AvailableSnipToolbarPositions));

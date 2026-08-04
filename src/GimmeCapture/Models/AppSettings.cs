@@ -18,6 +18,8 @@ public enum OcrTextLayout { PreserveLines, SingleLine }
 public enum ScrollingCaptureDirection { Auto, Vertical, Horizontal }
 // Where the snip region-selection toolbar is pinned along the top of the active screen.
 public enum SnipToolbarPosition { TopLeft, TopCenter, TopRight }
+// What to do with the clip when the auto-stop recording length is reached.
+public enum RecordingAutoStopAction { Pin, Save }
 
 public class TranslatedBlock
 {
@@ -193,6 +195,10 @@ public class AppSettings
     public int CustomVideoBitrateKbps { get; set; } = 0;
     public int RecordFPS { get; set; } = 30;
     public double MaxRecordingSizeMB { get; set; } = 0;
+    /// <summary>Auto-stop: maximum recorded length in seconds (pause time excluded); 0 = no limit.</summary>
+    public int MaxRecordingSeconds { get; set; } = 0;
+    /// <summary>What happens to the clip when <see cref="MaxRecordingSeconds"/> is reached.</summary>
+    public RecordingAutoStopAction RecordingAutoStopAction { get; set; } = RecordingAutoStopAction.Pin;
     // Pinned video playback UI throttling (higher FPS = smoother, more UI load)
     public int PlaybackUiFps { get; set; } = 30;
     public int PlaybackTimelineFps { get; set; } = 15;

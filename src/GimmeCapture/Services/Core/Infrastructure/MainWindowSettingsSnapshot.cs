@@ -57,6 +57,8 @@ public sealed class MainWindowSettingsSnapshot
     public int CustomVideoBitrateKbps { get; init; }
     public required int RecordFps { get; init; }
     public required double MaxRecordingSizeMb { get; init; }
+    public required int MaxRecordingSeconds { get; init; }
+    public required RecordingAutoStopAction RecordingAutoStopAction { get; init; }
     public required int PlaybackUiFps { get; init; }
     public required int PlaybackTimelineFps { get; init; }
     public bool HardwareDecodeEnabled { get; init; } = true;
@@ -136,6 +138,8 @@ public sealed class MainWindowSettingsSnapshot
             CustomVideoBitrateKbps = settings.CustomVideoBitrateKbps,
             RecordFps = settings.RecordFPS,
             MaxRecordingSizeMb = settings.MaxRecordingSizeMB,
+            MaxRecordingSeconds = settings.MaxRecordingSeconds,
+            RecordingAutoStopAction = settings.RecordingAutoStopAction,
             PlaybackUiFps = settings.PlaybackUiFps,
             PlaybackTimelineFps = settings.PlaybackTimelineFps,
             HardwareDecodeEnabled = settings.HardwareDecodeEnabled,
@@ -215,6 +219,8 @@ public sealed class MainWindowSettingsSnapshot
         settings.CustomVideoBitrateKbps = CustomVideoBitrateKbps;
         settings.RecordFPS = RecordFps;
         settings.MaxRecordingSizeMB = MaxRecordingSizeMb;
+        settings.MaxRecordingSeconds = MaxRecordingSeconds;
+        settings.RecordingAutoStopAction = RecordingAutoStopAction;
         settings.PlaybackUiFps = PlaybackUiFps;
         settings.PlaybackTimelineFps = PlaybackTimelineFps;
         settings.HardwareDecodeEnabled = HardwareDecodeEnabled;
