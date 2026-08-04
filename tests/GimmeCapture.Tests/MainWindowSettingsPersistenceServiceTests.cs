@@ -68,6 +68,8 @@ public class MainWindowSettingsPersistenceServiceTests
             VideoQuality = VideoQuality.High,
             RecordFps = 48,
             MaxRecordingSizeMb = 128.5,
+            MaxRecordingSeconds = 90,
+            RecordingAutoStopAction = RecordingAutoStopAction.Save,
             VideoEncoderHint = VideoEncoderHint.SoftwareOnly,
             PlaybackUiFps = 45,
             PlaybackTimelineFps = 18,
@@ -118,6 +120,8 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.LlamaModelId, persisted.LlamaModelId);
         Assert.Equal(snapshot.LlamaGpuLayers, persisted.LlamaGpuLayers);
         Assert.Equal(snapshot.VideoEncoderHint, persisted.VideoEncoderHint);
+        Assert.Equal(snapshot.MaxRecordingSeconds, persisted.MaxRecordingSeconds);
+        Assert.Equal(snapshot.RecordingAutoStopAction, persisted.RecordingAutoStopAction);
         Assert.Equal(snapshot.HighlightCursor, persisted.HighlightCursor);
         Assert.Equal(snapshot.HighlightClicks, persisted.HighlightClicks);
         Assert.Equal(snapshot.RecordMicrophone, persisted.RecordMicrophone);

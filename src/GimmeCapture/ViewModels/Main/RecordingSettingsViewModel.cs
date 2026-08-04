@@ -43,6 +43,20 @@ public class RecordingSettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _maxRecordingSizeMB, value);
     }
 
+    private int _maxRecordingSeconds = 0;
+    public int MaxRecordingSeconds
+    {
+        get => _maxRecordingSeconds;
+        set => this.RaiseAndSetIfChanged(ref _maxRecordingSeconds, value);
+    }
+
+    private RecordingAutoStopAction _autoStopAction = RecordingAutoStopAction.Pin;
+    public RecordingAutoStopAction AutoStopAction
+    {
+        get => _autoStopAction;
+        set => this.RaiseAndSetIfChanged(ref _autoStopAction, value);
+    }
+
     private VideoCodec _videoCodec = VideoCodec.H264;
     public VideoCodec VideoCodec
     {

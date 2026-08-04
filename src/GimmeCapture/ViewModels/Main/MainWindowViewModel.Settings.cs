@@ -31,6 +31,7 @@ public partial class MainWindowViewModel
     public sealed record OcrTextLayoutOption(OcrTextLayout Value, string DisplayName);
     public sealed record ScrollDirectionOption(ScrollingCaptureDirection Value, string DisplayName);
     public sealed record SnipToolbarPositionOption(SnipToolbarPosition Value, string DisplayName);
+    public sealed record RecordingAutoStopActionOption(RecordingAutoStopAction Value, string DisplayName);
 
     public IReadOnlyList<CaptureDelayOption> AvailableCaptureDelays =>
     [
@@ -39,6 +40,12 @@ public partial class MainWindowViewModel
         new(CaptureDelay.ThreeSeconds, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 3)),
         new(CaptureDelay.FiveSeconds, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 5)),
         new(CaptureDelay.TenSeconds, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 10))
+    ];
+
+    public IReadOnlyList<RecordingAutoStopActionOption> AvailableRecordingAutoStopActions =>
+    [
+        new(RecordingAutoStopAction.Pin, LocalizationService.Instance["RecordAutoStopPin"]),
+        new(RecordingAutoStopAction.Save, LocalizationService.Instance["RecordAutoStopSave"])
     ];
 
     public IReadOnlyList<OcrTextLayoutOption> AvailableOcrTextLayouts =>

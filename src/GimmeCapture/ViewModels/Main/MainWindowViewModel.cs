@@ -253,6 +253,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> DecreaseRecordFPSCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseMaxRecordingSizeMBCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseMaxRecordingSizeMBCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> IncreaseMaxRecordingSecondsCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> DecreaseMaxRecordingSecondsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> IncreasePlaybackUiFpsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreasePlaybackUiFpsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> IncreasePlaybackTimelineFpsCommand { get; set; } = null!;
@@ -330,6 +332,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 this.RaisePropertyChanged(nameof(UpdateDownloadStageText));
                 this.RaisePropertyChanged(nameof(AvailableCaptureDelays));
                 this.RaisePropertyChanged(nameof(AvailableOcrTextLayouts));
+                this.RaisePropertyChanged(nameof(AvailableRecordingAutoStopActions));
                 this.RaisePropertyChanged(nameof(GifUnavailableReason));
                 StatusText = LocalizationService.Instance[_currentStatusKey];
             });
@@ -375,6 +378,8 @@ public partial class MainWindowViewModel : ViewModelBase
         DecreaseRecordFPSCommand = ReactiveCommand.Create(() => { if (RecordingSettings.RecordFPS > 5) RecordingSettings.RecordFPS = Math.Max(5, RecordingSettings.RecordFPS - 5); });
         IncreaseMaxRecordingSizeMBCommand = ReactiveCommand.Create(() => { if (RecordingSettings.MaxRecordingSizeMB < 5000) RecordingSettings.MaxRecordingSizeMB = Math.Min(5000, Math.Round(RecordingSettings.MaxRecordingSizeMB + 0.1, 1)); });
         DecreaseMaxRecordingSizeMBCommand = ReactiveCommand.Create(() => { if (RecordingSettings.MaxRecordingSizeMB > 0) RecordingSettings.MaxRecordingSizeMB = Math.Max(0, Math.Round(RecordingSettings.MaxRecordingSizeMB - 0.1, 1)); });
+        IncreaseMaxRecordingSecondsCommand = ReactiveCommand.Create(() => { if (RecordingSettings.MaxRecordingSeconds < 3600) RecordingSettings.MaxRecordingSeconds = Math.Min(3600, RecordingSettings.MaxRecordingSeconds + 10); });
+        DecreaseMaxRecordingSecondsCommand = ReactiveCommand.Create(() => { if (RecordingSettings.MaxRecordingSeconds > 0) RecordingSettings.MaxRecordingSeconds = Math.Max(0, RecordingSettings.MaxRecordingSeconds - 10); });
         IncreasePlaybackUiFpsCommand = ReactiveCommand.Create(() => { if (PlaybackUiFps < 120) PlaybackUiFps = Math.Min(120, PlaybackUiFps + 5); });
         DecreasePlaybackUiFpsCommand = ReactiveCommand.Create(() => { if (PlaybackUiFps > 1) PlaybackUiFps = Math.Max(1, PlaybackUiFps - 5); });
         IncreasePlaybackTimelineFpsCommand = ReactiveCommand.Create(() => { if (PlaybackTimelineFps < 120) PlaybackTimelineFps = Math.Min(120, PlaybackTimelineFps + 5); });

@@ -157,6 +157,32 @@
                     </StackPanel>
 
                     <StackPanel Spacing="5" Margin="0,5,0,0">
+                        <TextBlock Text="{Binding [MaxRecordingSeconds], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Slider Minimum="0" Maximum="1800" Value="{Binding RecordingSettings.MaxRecordingSeconds}"
+                                    TickFrequency="10" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                            <c:CompactNumericStep Value="{Binding RecordingSettings.MaxRecordingSeconds}"
+                                                   IncreaseCommand="{Binding IncreaseMaxRecordingSecondsCommand}"
+                                                   DecreaseCommand="{Binding DecreaseMaxRecordingSecondsCommand}"/>
+                        </StackPanel>
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,3,0,0">
+                            <TextBlock Text="{Binding [RecordAutoStopAction], Source={x:Static services:LocalizationService.Instance}}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,12,0"/>
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding AvailableRecordingAutoStopActions}"
+                                      SelectedValue="{Binding RecordingSettings.AutoStopAction}"
+                                      SelectedValueBinding="{Binding Value}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <TextBlock Text="{Binding DisplayName}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5" Margin="0,5,0,0">
                         <TextBlock Text="{Binding [PlaybackUiFps], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <Slider Minimum="1" Maximum="120" Value="{Binding PlaybackUiFps}"

@@ -291,6 +291,8 @@ public class AppSettingsService : IAppSettingsService
         dest.VideoCodec = source.VideoCodec;
         dest.VideoEncoderHint = source.VideoEncoderHint;
         dest.RecordFPS = source.RecordFPS;
+        dest.MaxRecordingSeconds = source.MaxRecordingSeconds;
+        dest.RecordingAutoStopAction = source.RecordingAutoStopAction;
         dest.UseFixedRecordPath = source.UseFixedRecordPath;
         dest.TempDirectory = source.TempDirectory;
         dest.SnipHotkey = source.SnipHotkey;
