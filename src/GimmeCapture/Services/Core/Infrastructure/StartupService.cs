@@ -55,11 +55,15 @@ public class StartupService
 
             if (runOnStartup)
             {
-                // Write only when missing or stale (e.g. the exe path changed after a reinstall/update).
-                if (existingValue != expectedValue)
+                if (ShouldClaimRegistration(existingValue, expectedValue!))
                 {
                     key.SetValue(AppName, expectedValue!);
                     AppLog.Information($"StartupRegistration: registered run-on-startup -> {expectedValue} (previous: {existingValue ?? "<none>"})");
+                }
+                else if (existingValue != expectedValue)
+                {
+                    AppLog.Information(
+                        $"StartupRegistration: left another install's entry alone -> {existingValue} (this copy: {expectedValue})");
                 }
             }
             else
@@ -129,5 +133,44 @@ public class StartupService
     internal static bool IsDisabledStateBlob(byte[]? state)
     {
         return state is { Length: > 0 } && (state[0] & 1) != 0;
+    }
+
+    /// <summary>
+    /// Whether this copy should take over the startup registration.
+    ///
+    /// Yes when there is nothing usable there: no entry at all, or one pointing at an executable that no longer
+    /// exists (the reinstall/update case the re-assert exists for). NO when a valid entry points at a DIFFERENT
+    /// install that is still on disk — otherwise whichever copy ran last wins, and a developer's bin\Debug build
+    /// silently becomes the thing Windows launches at login, until the next clean build deletes that path and
+    /// auto-start breaks with no visible cause.
+    ///
+    /// Pure so the precedence rules are unit-testable without touching the registry.
+    /// </summary>
+    internal static bool ShouldClaimRegistration(string? existingValue, string expectedValue)
+    {
+        if (string.IsNullOrWhiteSpace(existingValue)) return true;
+        if (string.Equals(existingValue, expectedValue, StringComparison.OrdinalIgnoreCase)) return false;
+
+        var existingExe = ExtractExecutablePath(existingValue);
+        return string.IsNullOrEmpty(existingExe) || !System.IO.File.Exists(existingExe);
+    }
+
+    /// <summary>
+    /// Pulls the executable out of a Run value. The value we write is <c>"path" --startup</c>, but a hand-edited
+    /// or older entry may be unquoted, so both shapes are handled.
+    /// </summary>
+    internal static string? ExtractExecutablePath(string? runValue)
+    {
+        if (string.IsNullOrWhiteSpace(runValue)) return null;
+
+        var value = runValue.Trim();
+        if (value[0] == '"')
+        {
+            int closing = value.IndexOf('"', 1);
+            return closing > 1 ? value[1..closing] : null;
+        }
+
+        int space = value.IndexOf(' ');
+        return space < 0 ? value : value[..space];
     }
 }
