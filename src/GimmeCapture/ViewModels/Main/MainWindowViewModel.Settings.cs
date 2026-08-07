@@ -217,9 +217,78 @@ public partial class MainWindowViewModel
         private set => this.RaiseAndSetIfChanged(ref _isStartupBlockedByOs, value);
     }
 
+    private bool _isStartupEntryMissing;
+    /// <summary>
+    /// True when run-on-startup is ON but the OS has no registration for us at all — distinct from
+    /// <see cref="IsStartupBlockedByOs"/>, where the entry exists and the OS is ignoring it.
+    ///
+    /// This state is reachable: something outside the app can delete the entry (security tooling, "startup
+    /// cleaner" utilities, a profile reset), and the app only re-asserts it while launching — the one thing a
+    /// missing entry prevents. Until this existed the settings switch read "on", nothing was logged, and the only
+    /// symptom was the app silently not being there after several reboots.
+    /// </summary>
+    public bool IsStartupEntryMissing
+    {
+        get => _isStartupEntryMissing;
+        private set => this.RaiseAndSetIfChanged(ref _isStartupEntryMissing, value);
+    }
+
     private void RefreshStartupBlockedByOs()
     {
-        IsStartupBlockedByOs = RunOnStartup && _settingsSideEffectCoordinator.IsStartupDisabledByOs();
+        bool disabledByOs = _settingsSideEffectCoordinator.IsStartupDisabledByOs();
+        IsStartupBlockedByOs = RunOnStartup && disabledByOs;
+        // Only "missing" when the OS is not already the explanation, so the two warnings never both show.
+        IsStartupEntryMissing = RunOnStartup
+            && !disabledByOs
+            && !_settingsSideEffectCoordinator.IsStartupRegistered();
+    }
+
+    /// <summary>
+    /// Re-checks the OS registration and restores it if it has gone missing while the app was running.
+    ///
+    /// The startup-time re-assert cannot cover this case: a missing entry is exactly what stops the app launching
+    /// at login, so that code never runs. Opening the window by hand is the one moment the app is alive with the
+    /// entry gone. Each disappearance is logged as a warning, so a recurring remover leaves a countable trail
+    /// instead of being invisible; the UI only nags when the repair itself did not take.
+    /// </summary>
+    public void ReverifyStartupRegistration()
+    {
+        if (!RunOnStartup)
+        {
+            RefreshStartupBlockedByOs();
+            return;
+        }
+
+        if (!_settingsSideEffectCoordinator.IsStartupRegistered()
+            && !_settingsSideEffectCoordinator.IsStartupDisabledByOs())
+        {
+            AppLog.Warning(
+                "StartupRegistration.Check",
+                "The startup entry was gone while the app was running; re-registering it. Something outside the " +
+                "app removed it.");
+            _settingsSideEffectCoordinator.ApplyRunOnStartup(true);
+        }
+
+        RefreshStartupBlockedByOs();
+    }
+
+    /// <summary>
+    /// Records what the OS actually thinks, every launch, whether or not anything needed changing.
+    /// <c>SetStartup</c> logs only when it WRITES, so a run where the entry was already correct and a run where
+    /// the check never happened looked identical in the log — which is exactly the ambiguity that made a
+    /// disappearing entry take several reboots and a registry dump to pin down.
+    /// </summary>
+    private void LogStartupRegistrationState()
+    {
+        if (!RunOnStartup)
+        {
+            AppLog.Information("StartupRegistration.State: setting=off");
+            return;
+        }
+
+        bool registered = _settingsSideEffectCoordinator.IsStartupRegistered();
+        bool disabledByOs = _settingsSideEffectCoordinator.IsStartupDisabledByOs();
+        AppLog.Information($"StartupRegistration.State: setting=on registered={registered} disabledByOs={disabledByOs}");
     }
 
     private bool _autoCheckUpdates;
@@ -778,12 +847,23 @@ public partial class MainWindowViewModel
             // the entry off (Windows: Task Manager -> "Startup apps"), which makes Windows ignore the Run value
             // entirely — the app then looks correctly registered and still never launches at login. Surface it.
             RefreshStartupBlockedByOs();
+            LogStartupRegistrationState();
             if (IsStartupBlockedByOs)
             {
                 AppLog.Warning(
                     "StartupRegistration.Check",
                     "Run-on-startup is enabled but the OS has DISABLED this startup entry, so it will not launch " +
                     "at login. Re-enable it in Task Manager -> Startup apps.");
+            }
+            else if (IsStartupEntryMissing)
+            {
+                // Re-asserted moments ago and STILL absent, so the write itself failed or something removed it
+                // immediately. Either way the app will not launch at the next login and the user needs to know
+                // now, not after several silent reboots.
+                AppLog.Warning(
+                    "StartupRegistration.Check",
+                    "Run-on-startup is enabled but no startup entry exists even after re-registering. Something " +
+                    "outside the app is removing it, or the registry write failed.");
             }
 
             RefreshLlamaModelCatalog();

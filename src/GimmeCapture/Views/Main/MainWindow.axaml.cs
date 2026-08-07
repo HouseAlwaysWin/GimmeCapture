@@ -120,6 +120,11 @@ public partial class MainWindow : Window
         if (e.Property == Window.IsVisibleProperty && IsVisible)
         {
             ProcessMemoryTrimService.NotifyActivity("main-window-visible");
+
+            // The startup-time re-assert cannot repair a MISSING entry, because a missing entry is precisely what
+            // stops the app launching at login — the code never runs. Opening the window by hand is the one
+            // moment the app is alive with the entry gone, so it is where the repair has to happen.
+            (DataContext as MainWindowViewModel)?.ReverifyStartupRegistration();
         }
 
         if (e.Property == Window.WindowStateProperty || e.Property == Window.IsVisibleProperty || e.Property == Window.BoundsProperty)

@@ -215,6 +215,7 @@
   "HistoryRemoveConfirm": "Remove “{0}” and delete the file from disk? This cannot be undone.",
   "RunOnStartup": "Run On Startup",
   "RunOnStartupBlockedByOs": "⚠ Windows has disabled this startup entry, so the app will not launch at login. Re-enable \"GimmeCapture\" in Task Manager → Startup apps.",
+  "RunOnStartupEntryMissing": "⚠ The startup entry has disappeared. Something on this machine removed it (security software or a \"startup cleaner\" are the usual causes). Toggle this off and on to re-create it; if it keeps vanishing, allow-list GimmeCapture in that tool.",
   "AutoCheckUpdates": "Auto Check Updates",
   "BorderThickness": "Border Thickness:",
   "BorderColor": "Border Color:",

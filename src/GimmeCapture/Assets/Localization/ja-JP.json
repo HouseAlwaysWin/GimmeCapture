@@ -215,6 +215,7 @@
   "HistoryRemoveConfirm": "「{0}」を履歴から削除し、ファイルもディスクから削除しますか?この操作は元に戻せません。",
   "RunOnStartup": "スタートアップ起動",
   "RunOnStartupBlockedByOs": "⚠ Windows がこのスタートアップ項目を無効にしているため、ログイン時に起動しません。タスク マネージャー → スタートアップ アプリで GimmeCapture を有効にしてください。",
+  "RunOnStartupEntryMissing": "⚠ スタートアップ項目が消えています。この PC 上の何かが削除しました（セキュリティソフトや「スタートアップ整理」ツールが一般的です）。上の設定をオフにしてからオンにすると再作成されます。消え続ける場合は、そのツールで GimmeCapture を除外設定に追加してください。",
   "AutoCheckUpdates": "自動更新チェック",
   "BorderThickness": "枠線の太さ:",
   "BorderColor": "枠線の色:",
