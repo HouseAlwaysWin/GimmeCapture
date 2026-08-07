@@ -215,6 +215,7 @@
   "HistoryRemoveConfirm": "要移除「{0}」並從磁碟刪除該檔案嗎?此動作無法復原。",
   "RunOnStartup": "開機自動啟動",
   "RunOnStartupBlockedByOs": "⚠ Windows 已停用此開機項目，所以開機時不會啟動。請到「工作管理員 → 啟動應用程式」把 GimmeCapture 重新啟用。",
+  "RunOnStartupEntryMissing": "⚠ 開機項目不見了。這台電腦上有東西把它刪掉了（常見是防毒軟體或「開機項目清理」工具）。把上面選項關掉再打開可以重建；若一直消失，請在那個工具裡把 GimmeCapture 加入例外清單。",
   "AutoCheckUpdates": "自動檢查更新",
   "BorderThickness": "邊框粗細:",
   "BorderColor": "邊框顏色:",

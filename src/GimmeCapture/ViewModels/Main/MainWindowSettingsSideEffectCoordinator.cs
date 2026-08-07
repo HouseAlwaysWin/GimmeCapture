@@ -45,6 +45,16 @@ internal sealed class MainWindowSettingsSideEffectCoordinator
         return _startupRegistrationService.IsDisabledByOs();
     }
 
+    /// <summary>
+    /// Whether the OS still has a startup registration for us. Different question from
+    /// <see cref="IsStartupDisabledByOs"/>: that one is "the entry exists and the OS is ignoring it", this one is
+    /// "there is no entry at all" — which is what happens when something outside the app deletes it.
+    /// </summary>
+    public bool IsStartupRegistered()
+    {
+        return _startupRegistrationService.IsRegistered();
+    }
+
     public void ApplyThemeColors(Color themeColor, Color themeDeepColor)
     {
         _themeResourceService.UpdateThemeColors(themeColor, themeDeepColor);

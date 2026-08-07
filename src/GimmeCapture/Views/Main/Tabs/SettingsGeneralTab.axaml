@@ -19,6 +19,13 @@
                            Foreground="#FFC107"
                            TextWrapping="Wrap"
                            Margin="24,-4,0,0"/>
+                <!-- Different failure: the entry is GONE rather than switched off. Something outside the app can
+                     delete it, and the app only re-asserts while launching — which a missing entry prevents. -->
+                <TextBlock Text="{Binding [RunOnStartupEntryMissing], Source={x:Static services:LocalizationService.Instance}}"
+                           IsVisible="{Binding IsStartupEntryMissing}"
+                           Foreground="#FFC107"
+                           TextWrapping="Wrap"
+                           Margin="24,-4,0,0"/>
                 <CheckBox IsChecked="{Binding AutoCheckUpdates}" Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}"/>
                 
                 <TextBlock Text="{Binding [Language], Source={x:Static services:LocalizationService.Instance}}" Margin="0,10,0,5"/>
