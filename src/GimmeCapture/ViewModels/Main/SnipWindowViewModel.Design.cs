@@ -31,7 +31,7 @@ public partial class SnipWindowViewModel
             bool includeCursor = false)
             => Task.FromResult(new SKBitmap(1, 1));
 
-        public Task CopyToClipboardAsync(SKBitmap bitmap) => Task.CompletedTask;
+        public Task<bool> CopyToClipboardAsync(SKBitmap bitmap) => Task.FromResult(true);
 
         public Task<bool> CopyToClipboardAsync(string text) => Task.FromResult(true);
 

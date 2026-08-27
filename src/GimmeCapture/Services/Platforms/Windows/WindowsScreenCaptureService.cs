@@ -432,17 +432,18 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         canvas.DrawPath(path, paint);
     }
 
-    public async Task CopyToClipboardAsync(SKBitmap bitmap)
+    public async Task<bool> CopyToClipboardAsync(SKBitmap bitmap)
     {
         if (OperatingSystem.IsWindows())
         {
             /*
              * Windows-specific implementation using System.Windows.Forms.Clipboard for maximum compatibility
-             * with other Windows apps. The OLE SetImage write is SYNCHRONOUS and can wedge for a long time — a
-             * large image racing the Windows clipboard-history listeners (or another app holding the clipboard
-             * open) can stall it. Running it on the UI thread froze the whole app, so do the encode + write on a
-             * dedicated STA thread bounded by a timeout. SetImage flushes the data (copy:true) internally, so it
-             * persists on the clipboard after the worker thread exits.
+             * with other Windows apps. The OLE write is SYNCHRONOUS and can wedge for a long time — a large
+             * image racing the Windows clipboard-history listeners (or another app holding the clipboard open)
+             * can stall it. Running it on the UI thread froze the whole app, so do the encode + write on a
+             * dedicated STA thread bounded by a timeout. SetDataObject(copy:true) flushes the data so it
+             * persists after the worker thread exits; the retry overload rides out another process briefly
+             * holding the clipboard open — the main cause of "paste gave me the previous image".
              */
             var copied = await StaClipboard.RunAsync(() =>
             {
@@ -454,25 +455,35 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 ms.Position = 0;
 
                 using var winBitmap = new System.Drawing.Bitmap(ms);
-                System.Windows.Forms.Clipboard.SetImage(winBitmap);
+                var dataObject = new System.Windows.Forms.DataObject();
+                // Standard Bitmap for legacy apps; PNG for modern apps (keeps transparency).
+                dataObject.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
+                ms.Position = 0;
+                dataObject.SetData("PNG", false, ms);
+                System.Windows.Forms.Clipboard.SetDataObject(dataObject, copy: true, retryTimes: 10, retryDelay: 150);
             }, TimeSpan.FromSeconds(8), "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
 
             if (copied)
             {
-                return;
+                return true;
             }
             // Windows write failed or timed out — fall through to the Avalonia clipboard as a best-effort fallback.
         }
 
-        // Fallback / Non-Windows implementation
-        await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        // Fallback / Non-Windows implementation. Reports failure honestly: a silent miss here used to
+        // leave the PREVIOUS clipboard content in place while the UI claimed "Copied".
+        return await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            var topLevel = ResolveClipboardTopLevel();
-            if (topLevel?.Clipboard is { } clipboard)
+            try
             {
-                using var image = SKImage.FromBitmap(bitmap);
+                var topLevel = ResolveClipboardTopLevel();
+                if (topLevel?.Clipboard is not { } clipboard)
+                {
+                    AppLog.Warning("Clipboard.CopyImage.Fallback", "No TopLevel/clipboard available.");
+                    return false;
+                }
 
-                // Encode to PNG for clipboard
+                using var image = SKImage.FromBitmap(bitmap);
                 using var encodedData = image.Encode(SKEncodedImageFormat.Png, 100);
                 using var stream = encodedData.AsStream();
                 using var ms = new MemoryStream();
@@ -480,9 +491,13 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 ms.Position = 0;
 
                 var avaloniaBitmap = new global::Avalonia.Media.Imaging.Bitmap(ms);
-
-                // Use new extension method way
                 await global::Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warning("Clipboard.CopyImage.Fallback", ex);
+                return false;
             }
         });
     }

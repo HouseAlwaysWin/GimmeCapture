@@ -208,8 +208,10 @@ public partial class SnipWindowViewModel
 
     private Task ExecuteCopyCaptureAsync() => RunCaptureCommitAsync("StatusProcessing", async bitmap =>
     {
-        await _captureService.CopyToClipboardAsync(bitmap);
-        _mainVm?.SetStatus("StatusCopied");
+        // A failed write leaves the PREVIOUS clipboard content in place — saying "Copied" then would
+        // have the user paste a stale image. Surface it as an error instead so they re-copy.
+        bool copied = await _captureService.CopyToClipboardAsync(bitmap);
+        _mainVm?.SetStatus(copied ? "StatusCopied" : "StatusCopyFailed");
 
         // Copies are clipboard-only by default; when history is on, persist a managed copy so it
         // shows up in the history panel (and is cleaned up on remove/prune).

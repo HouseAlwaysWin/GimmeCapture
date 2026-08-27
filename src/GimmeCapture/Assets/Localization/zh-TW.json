@@ -247,6 +247,7 @@
   "StatusModified": "設定已變更，別忘了儲存喔！",
   "StatusReset": "設定已重設為預設值",
   "StatusCopied": "已複製到剪貼簿！",
+  "StatusCopyFailed": "複製失敗 — 剪貼簿忙碌中，請再試一次",
   "StatusProcessing": "正在處理...",
   "StatusTranslating": "正在翻譯...",
   "StatusSaving": "正在儲存...",
