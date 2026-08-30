@@ -393,6 +393,39 @@ public static class Win32Helpers
         SetWindowDisplayAffinity(hwnd, affinity);
     }
 
+    // ---- Pointer position: which monitor the user is actually looking at ----
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Win32Point
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out Win32Point lpPoint);
+
+    /// <summary>
+    /// The mouse pointer's position in physical desktop pixels, or <c>null</c> off-Windows or when the call
+    /// fails. Used to place transient notifications on the monitor the user is working on rather than on the
+    /// primary one — callers must handle <c>null</c> by falling back to their own default.
+    /// </summary>
+    public static PixelPoint? TryGetCursorPosition()
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+
+        try
+        {
+            return GetCursorPos(out var point) ? new PixelPoint(point.X, point.Y) : null;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Win32.GetCursorPos", ex);
+            return null;
+        }
+    }
+
     // ---- Diagnostics: enumerate this process's top-level windows (to find what draws a lingering frame) ----
 
     [DllImport("user32.dll")]

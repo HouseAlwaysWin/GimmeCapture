@@ -248,6 +248,7 @@
   "StatusReset": "Settings Reset to Default",
   "StatusCopied": "Copied to Clipboard!",
   "StatusCopyFailed": "Copy failed — another app is holding the clipboard. The clipboard still has the previous item; please try again.",
+  "StatusCopyingToClipboard": "Copying to clipboard…",
   "StatusProcessing": "Processing...",
   "StatusTranslating": "Translating...",
   "StatusSaving": "Saving...",

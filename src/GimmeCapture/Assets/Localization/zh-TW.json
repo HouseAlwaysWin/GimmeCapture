@@ -248,6 +248,7 @@
   "StatusReset": "設定已重設為預設值",
   "StatusCopied": "已複製到剪貼簿！",
   "StatusCopyFailed": "複製失敗 — 剪貼簿被其他程式佔用。剪貼簿仍是上一筆內容，請再試一次。",
+  "StatusCopyingToClipboard": "正在複製到剪貼簿…",
   "StatusProcessing": "正在處理...",
   "StatusTranslating": "正在翻譯...",
   "StatusSaving": "正在儲存...",

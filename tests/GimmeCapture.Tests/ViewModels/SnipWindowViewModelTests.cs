@@ -410,6 +410,151 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
+    public async Task CopyCapture_WhenTheClipboardWriteIsSlow_KeepsAStandInSpinnerUpUntilItLands()
+    {
+        // A live commit hides the overlay to grab clean pixels, taking the in-overlay spinner with it — so a
+        // clipboard write that stalls behind another app holding the clipboard ran with a completely clear
+        // screen. The clipboard still holds its PREVIOUS content for that whole window, so "looks finished"
+        // meant "paste the previous capture". A stand-in spinner must be up while the write is in flight, and
+        // gone once it lands.
+        var capture = new Mock<IScreenCaptureService>();
+        capture
+            .Setup(c => c.CaptureScreenWithAnnotationsAsync(
+                It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(),
+                It.IsAny<IEnumerable<Annotation>>(), It.IsAny<IEnumerable<UserSelectionRect>>(),
+                It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
+            .ReturnsAsync(new SkiaSharp.SKBitmap(40, 30));
+
+        var writeLanded = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        capture
+            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .Returns(writeLanded.Task);
+
+        var coordinator = new Mock<ICaptureVisibilityCoordinator>();
+        coordinator
+            .Setup(c => c.HideAndWaitForCaptureAsync(It.IsAny<Action>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        mainVm.EnableHistory = false; // keep the commit clipboard-only; history would write a file
+
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object);
+        vm.SelectionRect = new Rect(10, 10, 40, 30);
+
+        vm.UseStandaloneSpinnerDelayForTest(TimeSpan.Zero); // assert on the branch, not on a wall-clock timer
+
+        int shown = 0, hidden = 0;
+        vm.ShowProcessingWindowAction = () => shown++;
+        vm.HideProcessingWindowAction = () => hidden++;
+
+        var copy = vm.RunCopyCaptureForTestAsync();
+
+        // The write is still in flight: the stand-in must come up and stay up.
+        await WaitUntilAsync(() => Volatile.Read(ref shown) > 0, TimeSpan.FromSeconds(20));
+        Assert.Equal(0, hidden);
+
+        writeLanded.SetResult(true);
+        await copy;
+
+        Assert.Equal(1, shown);
+        Assert.Equal(1, hidden);
+        Assert.Equal(LocalizationService.Instance["StatusCopied"], mainVm.StatusText);
+    }
+
+    [Fact]
+    public async Task CopyCapture_WhenTheClipboardWriteIsFast_NeverFlashesTheStandInSpinner()
+    {
+        // The stand-in exists for stalled writes; an ordinary instant copy must not pop a window on screen.
+        var capture = new Mock<IScreenCaptureService>();
+        capture
+            .Setup(c => c.CaptureScreenWithAnnotationsAsync(
+                It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(),
+                It.IsAny<IEnumerable<Annotation>>(), It.IsAny<IEnumerable<UserSelectionRect>>(),
+                It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
+            .ReturnsAsync(new SkiaSharp.SKBitmap(40, 30));
+        capture
+            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .ReturnsAsync(true);
+
+        var coordinator = new Mock<ICaptureVisibilityCoordinator>();
+        coordinator
+            .Setup(c => c.HideAndWaitForCaptureAsync(It.IsAny<Action>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        mainVm.EnableHistory = false;
+
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object);
+        vm.SelectionRect = new Rect(10, 10, 40, 30);
+
+        // A delay that cannot elapse within the test: if the stand-in still appeared, the anti-flash gate is gone.
+        vm.UseStandaloneSpinnerDelayForTest(TimeSpan.FromMinutes(5));
+
+        int shown = 0;
+        vm.ShowProcessingWindowAction = () => shown++;
+
+        await vm.RunCopyCaptureForTestAsync();
+
+        Assert.Equal(0, shown);
+    }
+
+    [Fact]
+    public async Task CopyCapture_WhenFrozen_UsesTheOverlaySpinnerRatherThanAStandIn()
+    {
+        // A frozen commit crops the still in place and leaves the overlay — and the spinner it hosts — on screen.
+        // The stand-in exists only to replace a spinner the live path hid; raising it here would put a second
+        // spinner on top of the first.
+        var capture = new Mock<IScreenCaptureService>();
+        var writeLanded = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        capture
+            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .Returns(writeLanded.Task);
+
+        var coordinator = new Mock<ICaptureVisibilityCoordinator>();
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        mainVm.EnableHistory = false;
+
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object);
+        vm.Surface.UseHeadlessBackdropForTest();
+        vm.Surface.FreezeFromPreOverlayGrab(new SkiaSharp.SKBitmap(800, 600), 1.0);
+        vm.SelectionRect = new Rect(10, 10, 40, 30);
+
+        // Zero delay, so a stand-in would appear immediately if the frozen branch did not gate it.
+        vm.UseStandaloneSpinnerDelayForTest(TimeSpan.Zero);
+
+        int shown = 0;
+        vm.ShowProcessingWindowAction = () => shown++;
+
+        var copy = vm.RunCopyCaptureForTestAsync();
+        await Task.Delay(TimeSpan.FromMilliseconds(200)); // give a stand-in every chance to appear
+        writeLanded.SetResult(true);
+        await copy;
+
+        Assert.Equal(0, shown);
+        Assert.False(vm.ShowProcessingOverlay); // the overlay spinner is torn down at the end, as before
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException("Condition was not met before the timeout elapsed.");
+            }
+
+            await Task.Delay(25);
+        }
+    }
+
+    [Fact]
     public void SwitchingMode_DropsTheFrozenStill()
     {
         // Freeze is screenshot-only, but the gate used to be enforced only at the freeze entrances — so a
