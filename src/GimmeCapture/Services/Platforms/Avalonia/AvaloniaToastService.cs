@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using GimmeCapture.Services.Abstractions;
@@ -22,16 +23,17 @@ public sealed class AvaloniaToastService : IToastService
     // better than the primary screen".
     private PixelPoint? _stackAnchor;
 
-    public void Show(string message, MainWindowViewModel.ToastSeverity severity)
+    public void Show(string message, MainWindowViewModel.ToastSeverity severity, Bitmap? preview = null)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
+            preview?.Dispose(); // ownership transferred to us even when there is nothing to show
             return;
         }
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
-            Dispatcher.UIThread.Post(() => Show(message, severity));
+            Dispatcher.UIThread.Post(() => Show(message, severity, preview));
             return;
         }
 
@@ -49,7 +51,7 @@ public sealed class AvaloniaToastService : IToastService
             _toasts[0].Close();
         }
 
-        var toast = new ToastWindow(message, severity);
+        var toast = new ToastWindow(message, severity, preview);
         toast.ReadyForLayout += (_, _) => Reflow();
         toast.Closed += (_, _) =>
         {

@@ -409,6 +409,72 @@ public class SnipWindowViewModelTests
         Assert.Equal(LocalizationService.Instance[expectedStatusKey], mainVm.StatusText);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CopyCapture_AsksForAPreviewOfWhatLanded_OnlyWhenTheWriteSucceeded(bool writeLanded)
+    {
+        // "Copied!" never says WHICH image is on the clipboard, so the confirmation carries a thumbnail of what
+        // was written. On a FAILED write the clipboard still holds its previous content — a thumbnail of the
+        // image that did not land would assert exactly the wrong thing, so none is requested.
+        var capture = new Mock<IScreenCaptureService>();
+        capture
+            .Setup(c => c.CaptureScreenWithAnnotationsAsync(
+                It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(),
+                It.IsAny<IEnumerable<Annotation>>(), It.IsAny<IEnumerable<UserSelectionRect>>(),
+                It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
+            .ReturnsAsync(new SkiaSharp.SKBitmap(400, 300));
+        capture
+            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .ReturnsAsync(writeLanded);
+
+        var coordinator = new Mock<ICaptureVisibilityCoordinator>();
+        coordinator
+            .Setup(c => c.HideAndWaitForCaptureAsync(It.IsAny<Action>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        mainVm.EnableHistory = false;
+
+        int previewToasts = 0, plainToasts = 0;
+        mainVm.ShowPreviewToastAction = (_, _, _) => previewToasts++;
+        mainVm.ShowToastAction = (_, _) => plainToasts++;
+
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object);
+        vm.SelectionRect = new Rect(10, 10, 400, 300);
+
+        // The real thumbnail needs a render platform this test class does not stand up, so record the request
+        // and hand back nothing — which doubles as the "thumbnail unavailable" case asserted below.
+        var previewedSizes = new List<(int Width, int Height)>();
+        vm.UseClipboardPreviewFactoryForTest(source =>
+        {
+            previewedSizes.Add((source.Width, source.Height));
+            return null;
+        });
+
+        await vm.RunCopyCaptureForTestAsync();
+
+        if (writeLanded)
+        {
+            // Asked exactly once, and for the image that was actually written — not a stale one.
+            Assert.Equal([(400, 300)], previewedSizes);
+        }
+        else
+        {
+            Assert.Empty(previewedSizes);
+        }
+
+        // Either way the user is still told: a thumbnail that cannot be built must cost the preview, never the
+        // confirmation itself.
+        Assert.Equal(0, previewToasts);
+        Assert.Equal(1, plainToasts);
+        Assert.Equal(
+            LocalizationService.Instance[writeLanded ? "StatusCopied" : "StatusCopyFailed"],
+            mainVm.StatusText);
+    }
+
     [Fact]
     public async Task CopyCapture_WhenTheClipboardWriteIsSlow_KeepsAStandInSpinnerUpUntilItLands()
     {

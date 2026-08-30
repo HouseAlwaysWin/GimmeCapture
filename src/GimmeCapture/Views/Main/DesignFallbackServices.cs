@@ -22,7 +22,14 @@ internal sealed class NoOpSnipWindowFactory : ISnipWindowFactory
 
 internal sealed class NoOpToastService : IToastService
 {
-    public void Show(string message, GimmeCapture.ViewModels.Main.MainWindowViewModel.ToastSeverity severity) { }
+    public void Show(
+        string message,
+        GimmeCapture.ViewModels.Main.MainWindowViewModel.ToastSeverity severity,
+        Avalonia.Media.Imaging.Bitmap? preview = null)
+    {
+        // Ownership still transfers even when nothing is shown, so a design-time toast can't leak the thumbnail.
+        preview?.Dispose();
+    }
 }
 
 internal sealed class NoOpScreenLayoutService : IScreenLayoutService

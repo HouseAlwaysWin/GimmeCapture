@@ -1,3 +1,4 @@
+using Avalonia.Media.Imaging;
 using GimmeCapture.ViewModels.Main;
 
 namespace GimmeCapture.Services.Abstractions;
@@ -9,5 +10,10 @@ namespace GimmeCapture.Services.Abstractions;
 /// </summary>
 public interface IToastService
 {
-    void Show(string message, MainWindowViewModel.ToastSeverity severity);
+    /// <param name="preview">
+    /// Optional thumbnail shown beside the message. A "copied" confirmation that names no image cannot tell you
+    /// WHICH image you are about to paste, which is the whole question after a copy — so the copy confirmation
+    /// carries a preview of what actually landed on the clipboard. The toast takes ownership and disposes it.
+    /// </param>
+    void Show(string message, MainWindowViewModel.ToastSeverity severity, Bitmap? preview = null);
 }

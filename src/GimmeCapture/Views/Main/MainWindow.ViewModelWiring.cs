@@ -97,6 +97,7 @@ public partial class MainWindow
             };
 
             vm.ShowToastAction = (message, severity) => _toastService.Show(message, severity);
+            vm.ShowPreviewToastAction = (message, severity, preview) => _toastService.Show(message, severity, preview);
 
             vm.RequestCaptureAction = OpenSnipWindow;
             vm.ShowCaptureCountdownAction = ShowCaptureCountdownAsync;
