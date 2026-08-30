@@ -119,15 +119,15 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
         });
     }
 
-    public async Task CopyToClipboardAsync(SKBitmap bitmap)
+    public async Task<bool> CopyToClipboardAsync(SKBitmap bitmap)
     {
-        await Dispatcher.UIThread.InvokeAsync(async () =>
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
         {
             try
             {
                 if (ResolveTopLevel()?.Clipboard is not { } clipboard)
                 {
-                    return;
+                    return false;
                 }
 
                 using var image = SKImage.FromBitmap(bitmap);
@@ -135,10 +135,12 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
                 using var stream = data.AsStream();
                 var avaloniaBitmap = new global::Avalonia.Media.Imaging.Bitmap(stream);
                 await global::Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
+                return true;
             }
             catch (Exception ex)
             {
                 AppLog.Warning("LinuxScreenCapture.CopyImage", ex);
+                return false;
             }
         });
     }

@@ -247,6 +247,7 @@
   "StatusModified": "Settings have been modified. Click Save to apply.",
   "StatusReset": "Settings Reset to Default",
   "StatusCopied": "Copied to Clipboard!",
+  "StatusCopyFailed": "Copy failed — another app is holding the clipboard. The clipboard still has the previous item; please try again.",
   "StatusProcessing": "Processing...",
   "StatusTranslating": "Translating...",
   "StatusSaving": "Saving...",

@@ -21,16 +21,16 @@ public class FloatingImageViewModelTests
         public Bitmap? CopiedImage { get; private set; }
         public bool CopyCalled { get; private set; }
         
-        public Task CopyImageAsync(Bitmap bitmap)
+        public Task<bool> CopyImageAsync(Bitmap bitmap)
         {
             CopyCalled = true;
             CopiedImage = bitmap;
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
-        public Task CopyTextAsync(string text) => Task.CompletedTask;
-        public Task CopyFileAsync(string filePath) => Task.CompletedTask;
-        public Task CopyFileAndImageAsync(string filePath, Avalonia.Media.Imaging.Bitmap bitmap) => Task.CompletedTask;
+        public Task<bool> CopyTextAsync(string text) => Task.FromResult(true);
+        public Task<bool> CopyFileAsync(string filePath) => Task.FromResult(true);
+        public Task<bool> CopyFileAndImageAsync(string filePath, Avalonia.Media.Imaging.Bitmap bitmap) => Task.FromResult(true);
     }
 
     [Fact]

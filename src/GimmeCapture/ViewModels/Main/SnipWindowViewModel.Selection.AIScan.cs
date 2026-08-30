@@ -987,8 +987,10 @@ public partial class SnipWindowViewModel
 
             if (!string.IsNullOrWhiteSpace(textToCopy))
             {
-                await _captureService.CopyToClipboardAsync(textToCopy);
-                _mainVm?.SetStatus("StatusCopied");
+                // A lost race for the clipboard leaves the previous content in place — say so instead of
+                // reporting a copy that never landed.
+                bool copied = await _captureService.CopyToClipboardAsync(textToCopy);
+                _mainVm?.SetStatus(copied ? "StatusCopied" : "StatusCopyFailed");
             }
         });
         CopyTranslationTextCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.CopyTranslation", ex));

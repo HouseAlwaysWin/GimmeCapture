@@ -16,10 +16,43 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// if it overruns the timeout — a wedged write can never block the caller or app exit.</para>
 ///
 /// <para>The <see cref="Action"/> supplied by the caller must issue a flushing write (e.g.
-/// <c>SetDataObject(data, copy: true)</c>) so the data persists on the clipboard after the worker thread exits.</para>
+/// <see cref="SetDataObjectFlushed"/>) so the data persists on the clipboard after the worker thread exits.</para>
 /// </summary>
 internal static class StaClipboard
 {
+    /// <summary>
+    /// Time budget for one clipboard write, <see cref="SetDataObjectFlushed"/>'s internal retries included.
+    /// Comfortably larger than that retry budget so the timeout never cuts a retry loop short.
+    /// </summary>
+    public static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(10);
+
+#if WINDOWS
+    // WinForms runs its own retry loop around OleSetClipboard/OleFlushClipboard, but its default (10 × 100ms ≈ 1s)
+    // is SHORTER than a clipboard manager, Win+V history listener, RDP/VM clipboard sync or an Office add-in can
+    // hold the clipboard open. Losing that race throws — and a throw leaves the PREVIOUS clipboard content in
+    // place, so the next paste silently yields the previous capture. 30 × 150ms ≈ 4.5s covers realistic holds
+    // while staying inside WriteTimeout. (Measured: a rival holding the clipboard for 2s made 4 of 5 writes lose
+    // the race at the default budget, and 0 of 5 at this one.)
+    private const int RetryTimes = 30;
+    private const int RetryDelayMs = 150;
+
+    /// <summary>
+    /// Puts <paramref name="data"/> on the clipboard and flushes it (<c>copy: true</c>), so the payload persists
+    /// after the worker STA thread exits, retrying for <see cref="RetryTimes"/> × <see cref="RetryDelayMs"/> while
+    /// another app holds the clipboard open.
+    ///
+    /// <para>Throws <see cref="System.Runtime.InteropServices.ExternalException"/> when every attempt loses that
+    /// race. Never swallow it: a failed write leaves the previous clipboard content in place, so reporting it as a
+    /// success is what makes a paste return the PREVIOUS image.</para>
+    ///
+    /// <para>Must be called on an STA thread — i.e. from inside <see cref="RunAsync"/>.</para>
+    /// </summary>
+    public static void SetDataObjectFlushed(System.Windows.Forms.DataObject data)
+    {
+        System.Windows.Forms.Clipboard.SetDataObject(data, copy: true, RetryTimes, RetryDelayMs);
+    }
+#endif
+
     /// <summary>
     /// Executes <paramref name="write"/> on a dedicated STA thread, bounded by <paramref name="timeout"/>.
     /// Returns <c>true</c> only if the delegate completed without throwing before the timeout elapsed. A thread

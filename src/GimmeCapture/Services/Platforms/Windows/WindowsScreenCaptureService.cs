@@ -432,17 +432,17 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         canvas.DrawPath(path, paint);
     }
 
-    public async Task CopyToClipboardAsync(SKBitmap bitmap)
+    public async Task<bool> CopyToClipboardAsync(SKBitmap bitmap)
     {
         if (OperatingSystem.IsWindows())
         {
             /*
              * Windows-specific implementation using System.Windows.Forms.Clipboard for maximum compatibility
-             * with other Windows apps. The OLE SetImage write is SYNCHRONOUS and can wedge for a long time — a
-             * large image racing the Windows clipboard-history listeners (or another app holding the clipboard
-             * open) can stall it. Running it on the UI thread froze the whole app, so do the encode + write on a
-             * dedicated STA thread bounded by a timeout. SetImage flushes the data (copy:true) internally, so it
-             * persists on the clipboard after the worker thread exits.
+             * with other Windows apps. The OLE write is SYNCHRONOUS and can wedge for a long time — a large image
+             * racing the Windows clipboard-history listeners (or another app holding the clipboard open) can stall
+             * it. Running it on the UI thread froze the whole app, so do the encode + write on a dedicated STA
+             * thread bounded by a timeout. The write flushes the data (copy:true), so it persists on the clipboard
+             * after the worker thread exits.
              */
             var copied = await StaClipboard.RunAsync(() =>
             {
@@ -454,22 +454,34 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 ms.Position = 0;
 
                 using var winBitmap = new System.Drawing.Bitmap(ms);
-                System.Windows.Forms.Clipboard.SetImage(winBitmap);
-            }, TimeSpan.FromSeconds(8), "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
+
+                // Same payload Clipboard.SetImage would write, but routed through the shared retry budget:
+                // SetImage's built-in ~1s of retries is shorter than a clipboard manager can hold the clipboard
+                // open, and losing that race throws — leaving the PREVIOUS image on the clipboard for the next
+                // paste. See StaClipboard.SetDataObjectFlushed.
+                var payload = new System.Windows.Forms.DataObject();
+                payload.SetData(System.Windows.Forms.DataFormats.Bitmap, autoConvert: true, winBitmap);
+                StaClipboard.SetDataObjectFlushed(payload);
+            }, StaClipboard.WriteTimeout, "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
 
             if (copied)
             {
-                return;
+                return true;
             }
             // Windows write failed or timed out — fall through to the Avalonia clipboard as a best-effort fallback.
         }
 
         // Fallback / Non-Windows implementation
-        await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        return await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            var topLevel = ResolveClipboardTopLevel();
-            if (topLevel?.Clipboard is { } clipboard)
+            try
             {
+                var topLevel = ResolveClipboardTopLevel();
+                if (topLevel?.Clipboard is not { } clipboard)
+                {
+                    return false;
+                }
+
                 using var image = SKImage.FromBitmap(bitmap);
 
                 // Encode to PNG for clipboard
@@ -483,6 +495,12 @@ public class WindowsScreenCaptureService : IScreenCaptureService
 
                 // Use new extension method way
                 await global::Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warning("Clipboard.CopyImage.Fallback", ex);
+                return false;
             }
         });
     }
@@ -500,11 +518,19 @@ public class WindowsScreenCaptureService : IScreenCaptureService
             // The OLE/WinForms clipboard write is SYNCHRONOUS and can block for a long time — a large payload
             // racing the Windows clipboard-history listeners (or another app holding the clipboard open) can
             // wedge it. Running it on the UI thread froze the whole app when OCR produced long text. Do it on a
-            // dedicated STA thread bounded by a timeout so the clipboard can never block the UI thread; a
-            // successful SetText flushes the data (copy:true) so it persists after the worker thread exits.
+            // dedicated STA thread bounded by a timeout so the clipboard can never block the UI thread; the write
+            // flushes the data (copy:true) so it persists after the worker thread exits.
             return await StaClipboard.RunAsync(
-                () => System.Windows.Forms.Clipboard.SetText(text),
-                TimeSpan.FromSeconds(4),
+                () =>
+                {
+                    // Clipboard.SetText's own retry budget (~1s) is too short to outlast a clipboard manager
+                    // holding the clipboard open, and losing that race leaves the PREVIOUS content in place.
+                    // Same payload Clipboard.SetText writes (CF_UNICODETEXT, no auto-conversion).
+                    var payload = new System.Windows.Forms.DataObject();
+                    payload.SetData(System.Windows.Forms.DataFormats.UnicodeText, autoConvert: false, text);
+                    StaClipboard.SetDataObjectFlushed(payload);
+                },
+                StaClipboard.WriteTimeout,
                 "Clipboard.SetText",
                 "ClipboardSetText").ConfigureAwait(false);
         }

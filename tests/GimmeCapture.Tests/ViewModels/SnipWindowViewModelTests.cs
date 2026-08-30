@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interaction;
 using GimmeCapture.ViewModels;
 using GimmeCapture.ViewModels.Main;
@@ -368,6 +369,44 @@ public class SnipWindowViewModelTests
                 It.IsAny<IEnumerable<Annotation>>(), It.IsAny<IEnumerable<UserSelectionRect>>(),
                 It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()),
             Times.Never);
+    }
+
+    [Theory]
+    [InlineData(true, "StatusCopied")]
+    [InlineData(false, "StatusCopyFailed")]
+    public async Task CopyCapture_ReportsWhetherTheClipboardWriteActuallyLanded(bool writeLanded, string expectedStatusKey)
+    {
+        // A clipboard write that loses the race for the clipboard (a clipboard manager / Win+V history / RDP
+        // clipboard sync holding it open longer than the retry budget) leaves the PREVIOUS content in place. The
+        // copy used to report "copied" regardless, so the next paste silently produced the previous capture with
+        // nothing on screen saying otherwise. The status must follow the write's actual outcome.
+        var capture = new Mock<IScreenCaptureService>();
+        capture
+            .Setup(c => c.CaptureScreenWithAnnotationsAsync(
+                It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(),
+                It.IsAny<IEnumerable<Annotation>>(), It.IsAny<IEnumerable<UserSelectionRect>>(),
+                It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
+            .ReturnsAsync(new SkiaSharp.SKBitmap(40, 30));
+        capture
+            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .ReturnsAsync(writeLanded);
+
+        var coordinator = new Mock<ICaptureVisibilityCoordinator>();
+        coordinator
+            .Setup(c => c.HideAndWaitForCaptureAsync(It.IsAny<Action>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        mainVm.EnableHistory = false; // keep the commit clipboard-only; history would write a file
+
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object);
+        vm.SelectionRect = new Rect(10, 10, 40, 30);
+
+        await vm.RunCopyCaptureForTestAsync();
+
+        Assert.Equal(LocalizationService.Instance[expectedStatusKey], mainVm.StatusText);
     }
 
     [Fact]
