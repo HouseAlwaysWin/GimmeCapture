@@ -9,6 +9,7 @@ using System.Threading;
 using GimmeCapture.Services.Abstractions;
 using SkiaSharp;
 using GimmeCapture.Services.Platforms.Avalonia;
+using GimmeCapture.ViewModels.Floating;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -257,6 +258,58 @@ public partial class SnipWindowViewModel
         }
     }
 
+    /// <summary>Longest edge of the copy-confirmation thumbnail, in pixels.</summary>
+    private const int ClipboardPreviewMaxEdge = 160;
+
+    private Func<SKBitmap, Avalonia.Media.Imaging.Bitmap?> _clipboardPreviewFactory = TryCreateClipboardPreview;
+
+    /// <summary>
+    /// Test seam: building the thumbnail needs an Avalonia render platform, which the ViewModel tests do not
+    /// stand up (same reason as <see cref="Rendering.OverlaySurface.UseHeadlessBackdropForTest"/>). Lets a test
+    /// assert WHEN a preview is asked for without needing one to exist. Production never calls this.
+    /// </summary>
+    internal void UseClipboardPreviewFactoryForTest(Func<SKBitmap, Avalonia.Media.Imaging.Bitmap?> factory) =>
+        _clipboardPreviewFactory = factory;
+
+    /// <summary>
+    /// A small detached copy of what was just written to the clipboard, for the confirmation toast. Detached
+    /// because the capture bitmap is disposed as soon as the capture ritual returns, and downscaled because this
+    /// is a 56px thumbnail that may outlive several more captures. Null (and only that) if it cannot be built —
+    /// a missing thumbnail must never cost the user the confirmation itself.
+    /// </summary>
+    private static Avalonia.Media.Imaging.Bitmap? TryCreateClipboardPreview(SKBitmap source)
+    {
+        try
+        {
+            if (source.Width <= 0 || source.Height <= 0)
+            {
+                return null;
+            }
+
+            int longestEdge = Math.Max(source.Width, source.Height);
+            double scale = Math.Min(1.0, (double)ClipboardPreviewMaxEdge / longestEdge);
+            int width = Math.Max(1, (int)Math.Round(source.Width * scale));
+            int height = Math.Max(1, (int)Math.Round(source.Height * scale));
+
+            using var scaled = source.Resize(
+                new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear));
+            if (scaled == null)
+            {
+                return null;
+            }
+
+            return FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(
+                scaled, out var preview, out _)
+                ? preview
+                : null;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("SnipCapture.ClipboardPreview", ex);
+            return null;
+        }
+    }
+
     private async Task ShowStandaloneSpinnerAfterDelayAsync(CancellationToken ct)
     {
         await Task.Delay(_standaloneSpinnerDelay, ct);
@@ -275,7 +328,11 @@ public partial class SnipWindowViewModel
         // reporting an unconditional "copied" here is what made the next paste silently yield the previous
         // capture. Report what actually happened; the capture is still persisted to history either way.
         bool copied = await _captureService.CopyToClipboardAsync(bitmap);
-        _mainVm?.SetStatus(copied ? "StatusCopied" : "StatusCopyFailed");
+
+        // The confirmation carries a thumbnail of what landed, so the answer to "what am I about to paste?" is
+        // on screen instead of something you have to paste to find out. Built here because the ritual disposes
+        // `bitmap` on the way out — the thumbnail is detached, and SetCopyStatus owns it from this point.
+        _mainVm?.SetCopyStatus(copied, copied ? _clipboardPreviewFactory(bitmap) : null);
 
         // Copies are clipboard-only by default; when history is on, persist a managed copy so it
         // shows up in the history panel (and is cleaned up on remove/prune).
