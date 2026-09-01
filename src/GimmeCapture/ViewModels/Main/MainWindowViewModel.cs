@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
@@ -139,6 +140,12 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>Shows a floating toast; wired to a capture-excluded ToastWindow by the view.</summary>
     public Action<string, ToastSeverity>? ShowToastAction { get; set; }
 
+    /// <summary>
+    /// Shows a floating toast carrying a thumbnail. Separate from <see cref="ShowToastAction"/> so the plain
+    /// callers stay two-argument. The toast takes ownership of the bitmap and disposes it.
+    /// </summary>
+    public Action<string, ToastSeverity, Bitmap>? ShowPreviewToastAction { get; set; }
+
     // Status keys that are routine/idle noise and should NOT pop a toast.
     private static readonly HashSet<string> _quietStatusKeys = new(StringComparer.Ordinal)
     {
@@ -153,6 +160,31 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         ShowToastAction?.Invoke(message, ClassifyToastSeverity(key));
+    }
+
+    /// <summary>
+    /// Status for a finished image copy. <paramref name="preview"/> is a detached thumbnail of the image that was
+    /// written, shown in the confirmation toast: "copied" on its own never says WHICH image is on the clipboard,
+    /// which is the only question that matters before pasting. Ownership passes to the toast.
+    ///
+    /// <para>Only a SUCCESSFUL copy gets a preview — on failure the clipboard still holds its previous content, so
+    /// showing the image that did not land would assert exactly the wrong thing.</para>
+    /// </summary>
+    public void SetCopyStatus(bool copied, Bitmap? preview)
+    {
+        string key = copied ? "StatusCopied" : "StatusCopyFailed";
+        _currentStatusKey = key;
+        _currentStatusOcrLanguage = null;
+        StatusText = LocalizationService.Instance[key];
+
+        if (copied && preview != null && ShowPreviewToastAction != null)
+        {
+            ShowPreviewToastAction(StatusText, ToastSeverity.Success, preview);
+            return;
+        }
+
+        preview?.Dispose();
+        MaybeShowToast(key, StatusText);
     }
 
     /// <summary>Shows a transient toast for a localization key without changing the persistent status text.</summary>

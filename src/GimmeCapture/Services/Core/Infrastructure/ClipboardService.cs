@@ -15,7 +15,7 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 
 public class ClipboardService : IClipboardService
 {
-    public async Task CopyImageAsync(Bitmap bitmap)
+    public async Task<bool> CopyImageAsync(Bitmap bitmap)
     {
         try
         {
@@ -25,8 +25,8 @@ public class ClipboardService : IClipboardService
                 // Windows-specific robust copy. The OLE SetDataObject write is SYNCHRONOUS and can wedge on a
                 // large image racing the Windows clipboard-history listeners (or another app holding the clipboard
                 // open) — running it on the UI thread froze the whole app. Do the encode + write on a dedicated
-                // STA thread bounded by a timeout so the clipboard can never block the UI thread. SetDataObject
-                // with copy:true flushes the data, so it persists after the worker thread exits.
+                // STA thread bounded by a timeout so the clipboard can never block the UI thread. The write
+                // flushes the data (copy:true), so it persists after the worker thread exits.
                 var copied = await StaClipboard.RunAsync(() =>
                 {
                     var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
@@ -46,50 +46,59 @@ public class ClipboardService : IClipboardService
                     using var pngStream = new System.IO.MemoryStream(pngBytes);
                     data.SetData("PNG", false, pngStream);
 
-                    RetryClipboardWrite(() => System.Windows.Forms.Clipboard.SetDataObject(data, true));
-                }, TimeSpan.FromSeconds(8), "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
+                    StaClipboard.SetDataObjectFlushed(data);
+                }, StaClipboard.WriteTimeout, "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
 
-                if (!copied)
+                if (copied)
                 {
-                    // The failed STA write left the PREVIOUS clipboard content in place — try the Avalonia
-                    // clipboard before giving up, so a paste doesn't silently produce a stale image.
-                    await CopyImageFallbackAsync(bitmap);
+                    return true;
                 }
+
+                // The failed STA write left the PREVIOUS clipboard content in place — try the Avalonia
+                // clipboard before giving up, so a paste doesn't silently produce a stale image.
+                return await CopyImageFallbackAsync(bitmap);
             }
             else
 #endif
             {
-                await CopyImageFallbackAsync(bitmap);
+                return await CopyImageFallbackAsync(bitmap);
             }
         }
         catch (Exception ex)
         {
             AppLog.Warning("Clipboard.CopyImage", ex);
+            return false;
         }
     }
 
-    private async Task CopyImageFallbackAsync(Bitmap bitmap)
+    private async Task<bool> CopyImageFallbackAsync(Bitmap bitmap)
     {
         var topLevel = GetTopLevel();
         if (topLevel?.Clipboard is { } clipboard)
         {
             // Trying explicit extension method call
             await Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, bitmap);
+            return true;
         }
+
+        return false;
     }
 
-    public async Task CopyTextAsync(string text)
+    public async Task<bool> CopyTextAsync(string text)
     {
         var topLevel = GetTopLevel();
         if (topLevel?.Clipboard is { } clipboard)
         {
             await clipboard.SetTextAsync(text);
+            return true;
         }
+
+        return false;
     }
 
-    public async Task CopyFileAsync(string filePath)
+    public async Task<bool> CopyFileAsync(string filePath)
     {
-        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return false;
 
 #if WINDOWS
         if (OperatingSystem.IsWindows())
@@ -97,14 +106,18 @@ public class ClipboardService : IClipboardService
             var fullPath = Path.GetFullPath(filePath);
             // SetFileDropList is a synchronous OLE write that can wedge when the clipboard is contended; run it on
             // a dedicated STA thread bounded by a timeout so it can never block the UI thread.
-            await StaClipboard.RunAsync(() =>
+            return await StaClipboard.RunAsync(() =>
             {
                 var fileList = new System.Collections.Specialized.StringCollection();
                 fileList.Add(fullPath);
 
-                // Use WinForms for reliable file copy (standard Windows way)
-                RetryClipboardWrite(() => System.Windows.Forms.Clipboard.SetFileDropList(fileList));
-            }, TimeSpan.FromSeconds(8), "Clipboard.CopyFile", "ClipboardSetFiles").ConfigureAwait(false);
+                // Use WinForms for reliable file copy (standard Windows way). Written through the shared retry
+                // budget rather than Clipboard.SetFileDropList, whose own ~1s of retries is too short to outlast
+                // a clipboard manager holding the clipboard open.
+                var data = new System.Windows.Forms.DataObject();
+                data.SetFileDropList(fileList);
+                StaClipboard.SetDataObjectFlushed(data);
+            }, StaClipboard.WriteTimeout, "Clipboard.CopyFile", "ClipboardSetFiles").ConfigureAwait(false);
         }
         else
 #endif
@@ -119,17 +132,19 @@ public class ClipboardService : IClipboardService
                 if (file != null)
                 {
                     await Avalonia.Input.Platform.ClipboardExtensions.SetFilesAsync(clipboard, new[] { file });
+                    return true;
                 }
             }
+
+            return false;
         }
     }
 
-    public async Task CopyFileAndImageAsync(string filePath, Bitmap bitmap)
+    public async Task<bool> CopyFileAndImageAsync(string filePath, Bitmap bitmap)
     {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
         {
-            await CopyImageAsync(bitmap);
-            return;
+            return await CopyImageAsync(bitmap);
         }
 
         try
@@ -140,7 +155,7 @@ public class ClipboardService : IClipboardService
                 var fullPath = Path.GetFullPath(filePath);
                 // The OLE SetDataObject write is synchronous and can wedge when the clipboard is contended; run it
                 // (plus the thumbnail encode) on a bounded STA thread so it can never block the UI thread.
-                await StaClipboard.RunAsync(() =>
+                return await StaClipboard.RunAsync(() =>
                 {
                     // The FILE is the primary payload (e.g. a trimmed video clip) — set it first so
                     // it always lands on the clipboard. The thumbnail bitmap is best-effort: if it
@@ -166,50 +181,23 @@ public class ClipboardService : IClipboardService
                         AppLog.Warning("Clipboard.CopyFileAndImage.Thumbnail", imgEx);
                     }
 
-                    RetryClipboardWrite(() => System.Windows.Forms.Clipboard.SetDataObject(data, true));
-                }, TimeSpan.FromSeconds(8), "Clipboard.CopyFileAndImage", "ClipboardSetFileAndImage").ConfigureAwait(false);
+                    StaClipboard.SetDataObjectFlushed(data);
+                }, StaClipboard.WriteTimeout, "Clipboard.CopyFileAndImage", "ClipboardSetFileAndImage").ConfigureAwait(false);
             }
             else
 #endif
             {
                 // Fallback: Copy file first, then image (the second will likely win on non-Windows)
                 // or just copy image as it's the "richer" one for annotations
-                await CopyImageAsync(bitmap);
+                return await CopyImageAsync(bitmap);
             }
         }
         catch (Exception ex)
         {
             AppLog.Warning("Clipboard.CopyFileAndImage", ex);
+            return false;
         }
     }
-
-#if WINDOWS
-    // Runs a flushing clipboard write with a short bounded retry for the transient "clipboard is locked by another
-    // app" ExternalException. Rethrows the last error if every attempt fails so the STA runner reports the write
-    // as failed rather than as a false success. Must be called on an STA thread (see StaClipboard).
-    private static void RetryClipboardWrite(Action write)
-    {
-        System.Runtime.InteropServices.ExternalException? lastError = null;
-        for (int i = 0; i < 5; i++)
-        {
-            try
-            {
-                write();
-                return;
-            }
-            catch (System.Runtime.InteropServices.ExternalException ex)
-            {
-                lastError = ex;
-                System.Threading.Thread.Sleep(100);
-            }
-        }
-
-        if (lastError != null)
-        {
-            throw lastError;
-        }
-    }
-#endif
 
     private TopLevel? GetTopLevel()
     {

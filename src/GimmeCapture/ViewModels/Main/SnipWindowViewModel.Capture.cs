@@ -9,6 +9,7 @@ using System.Threading;
 using GimmeCapture.Services.Abstractions;
 using SkiaSharp;
 using GimmeCapture.Services.Platforms.Avalonia;
+using GimmeCapture.ViewModels.Floating;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -170,6 +171,20 @@ public partial class SnipWindowViewModel
     }
 
     /// <summary>
+    /// How long the post-commit work in <see cref="RunCaptureCommitAsync"/> may run before the stand-in spinner
+    /// appears. Long enough that an ordinary fast copy/save never flashes a window on screen, short enough that
+    /// nobody can paste inside it.
+    /// </summary>
+    private TimeSpan _standaloneSpinnerDelay = TimeSpan.FromMilliseconds(400);
+
+    /// <summary>
+    /// Test seam: pins the anti-flash delay so a test asserts on the branch it means to, instead of racing a
+    /// wall-clock timer on a loaded machine. Zero to make the stand-in appear at once, or a long delay to prove
+    /// it never appears. Production never calls this.
+    /// </summary>
+    internal void UseStandaloneSpinnerDelayForTest(TimeSpan delay) => _standaloneSpinnerDelay = delay;
+
+    /// <summary>
     /// The shared capture ritual: spinner up, commit the selection, hand the bitmap to <paramref name="consume"/>,
     /// then tear down and close. Copy / Save / Pin used to each re-implement these five beats, and whichever one
     /// drifted silently bypassed freeze-frame — so the ritual being a single entry point is the point, not a
@@ -179,6 +194,9 @@ public partial class SnipWindowViewModel
     private async Task RunCaptureCommitAsync(string? statusKey, Func<SKBitmap, Task> consume)
     {
         bool showsSpinner = statusKey != null;
+        var spinnerCts = new CancellationTokenSource();
+        Task? standaloneSpinner = null;
+
         try
         {
             if (showsSpinner)
@@ -189,13 +207,47 @@ public partial class SnipWindowViewModel
                 ProcessingText = LocalizationService.Instance[statusKey!] ?? "Processing...";
             }
 
+            // Only a LIVE commit hides the overlay to grab clean pixels; a frozen one crops the still in place and
+            // leaves the overlay — and the spinner it hosts — on screen. Read before the commit, because that is
+            // the state the commit will act on.
+            bool overlayWillBeHidden = !Surface.IsFrozen;
+
             // The spinner is safe to raise BEFORE the commit: on the live path the surface hides the overlay
             // before grabbing, and on the frozen path the pixels come from a still, so it can't be captured either.
             using var bitmap = await Surface.CommitAsync();
+
+            // A live commit took the overlay off screen and the in-overlay spinner with it, so nothing marks the
+            // work that follows. That matters because the clipboard still holds its PREVIOUS content until the
+            // write lands, and the write can take seconds while another app holds the clipboard open — a user
+            // looking at a cleared screen assumes the copy is done and pastes the previous capture. Stand a
+            // separate always-on-top spinner in for the hidden one, after a delay so a fast copy never flashes it.
+            // Raised AFTER the capture either way, so it is never grabbed into the image.
+            if (showsSpinner && overlayWillBeHidden)
+            {
+                standaloneSpinner = ShowStandaloneSpinnerAfterDelayAsync(spinnerCts.Token);
+            }
+
             await consume(bitmap);
         }
         finally
         {
+            if (standaloneSpinner != null)
+            {
+                // Cancel first, then let the delay task settle, so a spinner cannot be raised after this teardown.
+                spinnerCts.Cancel();
+                try
+                {
+                    await standaloneSpinner;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected: consume() finished before the delay elapsed.
+                }
+
+                HideProcessingWindowAction?.Invoke();
+            }
+
+            spinnerCts.Dispose();
             PersistTranslatedSelectionsAfterCaptureIfNeeded();
             if (showsSpinner)
             {
@@ -206,12 +258,81 @@ public partial class SnipWindowViewModel
         }
     }
 
-    private Task ExecuteCopyCaptureAsync() => RunCaptureCommitAsync("StatusProcessing", async bitmap =>
+    /// <summary>Longest edge of the copy-confirmation thumbnail, in pixels.</summary>
+    private const int ClipboardPreviewMaxEdge = 160;
+
+    private Func<SKBitmap, Avalonia.Media.Imaging.Bitmap?> _clipboardPreviewFactory = TryCreateClipboardPreview;
+
+    /// <summary>
+    /// Test seam: building the thumbnail needs an Avalonia render platform, which the ViewModel tests do not
+    /// stand up (same reason as <see cref="Rendering.OverlaySurface.UseHeadlessBackdropForTest"/>). Lets a test
+    /// assert WHEN a preview is asked for without needing one to exist. Production never calls this.
+    /// </summary>
+    internal void UseClipboardPreviewFactoryForTest(Func<SKBitmap, Avalonia.Media.Imaging.Bitmap?> factory) =>
+        _clipboardPreviewFactory = factory;
+
+    /// <summary>
+    /// A small detached copy of what was just written to the clipboard, for the confirmation toast. Detached
+    /// because the capture bitmap is disposed as soon as the capture ritual returns, and downscaled because this
+    /// is a 56px thumbnail that may outlive several more captures. Null (and only that) if it cannot be built —
+    /// a missing thumbnail must never cost the user the confirmation itself.
+    /// </summary>
+    private static Avalonia.Media.Imaging.Bitmap? TryCreateClipboardPreview(SKBitmap source)
     {
-        // A failed write leaves the PREVIOUS clipboard content in place — saying "Copied" then would
-        // have the user paste a stale image. Surface it as an error instead so they re-copy.
+        try
+        {
+            if (source.Width <= 0 || source.Height <= 0)
+            {
+                return null;
+            }
+
+            int longestEdge = Math.Max(source.Width, source.Height);
+            double scale = Math.Min(1.0, (double)ClipboardPreviewMaxEdge / longestEdge);
+            int width = Math.Max(1, (int)Math.Round(source.Width * scale));
+            int height = Math.Max(1, (int)Math.Round(source.Height * scale));
+
+            using var scaled = source.Resize(
+                new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear));
+            if (scaled == null)
+            {
+                return null;
+            }
+
+            return FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(
+                scaled, out var preview, out _)
+                ? preview
+                : null;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("SnipCapture.ClipboardPreview", ex);
+            return null;
+        }
+    }
+
+    private async Task ShowStandaloneSpinnerAfterDelayAsync(CancellationToken ct)
+    {
+        await Task.Delay(_standaloneSpinnerDelay, ct);
+
+        // The delay can complete just as the work finishes; don't raise a spinner the teardown has already
+        // decided against. (Even if it slipped through, the finally hides it — this only avoids the flash.)
+        ct.ThrowIfCancellationRequested();
+        ShowProcessingWindowAction?.Invoke();
+    }
+
+    // "Copying to clipboard…" rather than a generic "Processing…": the clipboard keeps its PREVIOUS content until
+    // the write lands, so the spinner's job is to say what is unfinished, not just that something is.
+    private Task ExecuteCopyCaptureAsync() => RunCaptureCommitAsync("StatusCopyingToClipboard", async bitmap =>
+    {
+        // A clipboard write that loses the race for the clipboard leaves the PREVIOUS content in place, so
+        // reporting an unconditional "copied" here is what made the next paste silently yield the previous
+        // capture. Report what actually happened; the capture is still persisted to history either way.
         bool copied = await _captureService.CopyToClipboardAsync(bitmap);
-        _mainVm?.SetStatus(copied ? "StatusCopied" : "StatusCopyFailed");
+
+        // The confirmation carries a thumbnail of what landed, so the answer to "what am I about to paste?" is
+        // on screen instead of something you have to paste to find out. Built here because the ritual disposes
+        // `bitmap` on the way out — the thumbnail is detached, and SetCopyStatus owns it from this point.
+        _mainVm?.SetCopyStatus(copied, copied ? _clipboardPreviewFactory(bitmap) : null);
 
         // Copies are clipboard-only by default; when history is on, persist a managed copy so it
         // shows up in the history panel (and is cleaned up on remove/prune).

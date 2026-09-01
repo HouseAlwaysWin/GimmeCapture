@@ -241,8 +241,10 @@ public partial class MainWindowViewModel
         try
         {
             using var bitmap = new Bitmap(item.FilePath);
-            await _clipboardService.CopyImageAsync(bitmap);
-            SetStatus("StatusCopied");
+            // A write that loses the race for the clipboard leaves the previous content in place — report that
+            // rather than a copy that never landed.
+            bool copied = await _clipboardService.CopyImageAsync(bitmap);
+            SetStatus(copied ? "StatusCopied" : "StatusCopyFailed");
         }
         catch (Exception ex)
         {

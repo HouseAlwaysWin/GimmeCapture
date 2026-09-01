@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Interop;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 
@@ -15,17 +19,30 @@ public sealed class AvaloniaToastService : IToastService
     private const int MaxVisible = 4;
     private readonly List<ToastWindow> _toasts = new();
 
-    public void Show(string message, MainWindowViewModel.ToastSeverity severity)
+    // Where the current stack of toasts lives, fixed when the stack opens. Null means "no stack, or nowhere
+    // better than the primary screen".
+    private PixelPoint? _stackAnchor;
+
+    public void Show(string message, MainWindowViewModel.ToastSeverity severity, Bitmap? preview = null)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
+            preview?.Dispose(); // ownership transferred to us even when there is nothing to show
             return;
         }
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
-            Dispatcher.UIThread.Post(() => Show(message, severity));
+            Dispatcher.UIThread.Post(() => Show(message, severity, preview));
             return;
+        }
+
+        if (_toasts.Count == 0)
+        {
+            // Anchor the stack to the pointer when it opens, and keep that anchor for the stack's whole life:
+            // a "copied to clipboard" confirmation is only a confirmation if it appears where the user is
+            // looking, and re-resolving on every reflow would make a stack hop monitors mid-read.
+            _stackAnchor = Win32Helpers.TryGetCursorPosition();
         }
 
         // Cap the number of simultaneous toasts; drop the oldest.
@@ -34,7 +51,7 @@ public sealed class AvaloniaToastService : IToastService
             _toasts[0].Close();
         }
 
-        var toast = new ToastWindow(message, severity);
+        var toast = new ToastWindow(message, severity, preview);
         toast.ReadyForLayout += (_, _) => Reflow();
         toast.Closed += (_, _) =>
         {
@@ -50,11 +67,11 @@ public sealed class AvaloniaToastService : IToastService
     {
         if (_toasts.Count == 0)
         {
+            _stackAnchor = null;
             return;
         }
 
-        var screen = _toasts[0].Screens?.Primary
-            ?? (_toasts[0].Screens is { All.Count: > 0 } s ? s.All[0] : null);
+        var screen = ResolveStackScreen(_toasts[0].Screens);
         if (screen == null)
         {
             return;
@@ -81,5 +98,25 @@ public sealed class AvaloniaToastService : IToastService
             toast.Position = new PixelPoint(Math.Max(wa.X, x), Math.Max(wa.Y, y));
             y += h + spacing;
         }
+    }
+
+    /// <summary>
+    /// The screen the stack belongs on: the one holding <see cref="_stackAnchor"/>, falling back to the primary.
+    /// Toasts used to be pinned to the primary screen unconditionally, which on a multi-monitor desktop put every
+    /// confirmation on a monitor the user might not be looking at — a notification nobody sees is not one.
+    /// </summary>
+    private Screen? ResolveStackScreen(Screens? screens)
+    {
+        if (screens == null)
+        {
+            return null;
+        }
+
+        if (_stackAnchor is { } anchor && screens.ScreenFromPoint(anchor) is { } anchored)
+        {
+            return anchored;
+        }
+
+        return screens.Primary ?? (screens.All.Count > 0 ? screens.All[0] : null);
     }
 }

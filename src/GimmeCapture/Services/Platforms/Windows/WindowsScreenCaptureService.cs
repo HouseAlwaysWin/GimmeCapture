@@ -438,12 +438,11 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         {
             /*
              * Windows-specific implementation using System.Windows.Forms.Clipboard for maximum compatibility
-             * with other Windows apps. The OLE write is SYNCHRONOUS and can wedge for a long time — a large
-             * image racing the Windows clipboard-history listeners (or another app holding the clipboard open)
-             * can stall it. Running it on the UI thread froze the whole app, so do the encode + write on a
-             * dedicated STA thread bounded by a timeout. SetDataObject(copy:true) flushes the data so it
-             * persists after the worker thread exits; the retry overload rides out another process briefly
-             * holding the clipboard open — the main cause of "paste gave me the previous image".
+             * with other Windows apps. The OLE write is SYNCHRONOUS and can wedge for a long time — a large image
+             * racing the Windows clipboard-history listeners (or another app holding the clipboard open) can stall
+             * it. Running it on the UI thread froze the whole app, so do the encode + write on a dedicated STA
+             * thread bounded by a timeout. The write flushes the data (copy:true), so it persists on the clipboard
+             * after the worker thread exits.
              */
             var copied = await StaClipboard.RunAsync(() =>
             {
@@ -455,13 +454,19 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 ms.Position = 0;
 
                 using var winBitmap = new System.Drawing.Bitmap(ms);
-                var dataObject = new System.Windows.Forms.DataObject();
-                // Standard Bitmap for legacy apps; PNG for modern apps (keeps transparency).
-                dataObject.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
+
+                // Same payload Clipboard.SetImage would write, but routed through the shared retry budget:
+                // SetImage's built-in ~1s of retries is shorter than a clipboard manager can hold the clipboard
+                // open, and losing that race throws — leaving the PREVIOUS image on the clipboard for the next
+                // paste. See StaClipboard.SetDataObjectFlushed.
+                var payload = new System.Windows.Forms.DataObject();
+                payload.SetData(System.Windows.Forms.DataFormats.Bitmap, autoConvert: true, winBitmap);
+                // PNG alongside the bitmap so modern apps (Chrome/Discord/Slack) keep transparency,
+                // matching the pin-window copy path.
                 ms.Position = 0;
-                dataObject.SetData("PNG", false, ms);
-                System.Windows.Forms.Clipboard.SetDataObject(dataObject, copy: true, retryTimes: 10, retryDelay: 150);
-            }, TimeSpan.FromSeconds(8), "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
+                payload.SetData("PNG", false, ms);
+                StaClipboard.SetDataObjectFlushed(payload);
+            }, StaClipboard.WriteTimeout, "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
 
             if (copied)
             {
@@ -515,11 +520,19 @@ public class WindowsScreenCaptureService : IScreenCaptureService
             // The OLE/WinForms clipboard write is SYNCHRONOUS and can block for a long time — a large payload
             // racing the Windows clipboard-history listeners (or another app holding the clipboard open) can
             // wedge it. Running it on the UI thread froze the whole app when OCR produced long text. Do it on a
-            // dedicated STA thread bounded by a timeout so the clipboard can never block the UI thread; a
-            // successful SetText flushes the data (copy:true) so it persists after the worker thread exits.
+            // dedicated STA thread bounded by a timeout so the clipboard can never block the UI thread; the write
+            // flushes the data (copy:true) so it persists after the worker thread exits.
             return await StaClipboard.RunAsync(
-                () => System.Windows.Forms.Clipboard.SetText(text),
-                TimeSpan.FromSeconds(4),
+                () =>
+                {
+                    // Clipboard.SetText's own retry budget (~1s) is too short to outlast a clipboard manager
+                    // holding the clipboard open, and losing that race leaves the PREVIOUS content in place.
+                    // Same payload Clipboard.SetText writes (CF_UNICODETEXT, no auto-conversion).
+                    var payload = new System.Windows.Forms.DataObject();
+                    payload.SetData(System.Windows.Forms.DataFormats.UnicodeText, autoConvert: false, text);
+                    StaClipboard.SetDataObjectFlushed(payload);
+                },
+                StaClipboard.WriteTimeout,
                 "Clipboard.SetText",
                 "ClipboardSetText").ConfigureAwait(false);
         }

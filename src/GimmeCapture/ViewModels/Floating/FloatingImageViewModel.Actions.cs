@@ -139,6 +139,9 @@ public partial class FloatingImageViewModel
     // Puts the image on the clipboard as a file in the toolbar's SelectedImageFormat (so pasting into a folder
     // yields the chosen format, like the pin's Save) alongside the raw bitmap (so pasting into an editor still
     // works). Falls back to a plain image copy if encoding the file fails.
+    //
+    // A clipboard write can lose the race for the clipboard, and that leaves the PREVIOUS content in place — so
+    // the outcome is logged rather than assumed; a pin has no status line to report it on.
     private async Task CopyBitmapInSelectedFormatAsync(Bitmap bitmap)
     {
         string fmt = (SelectedImageFormat ?? "PNG").ToLowerInvariant();
@@ -160,7 +163,11 @@ public partial class FloatingImageViewModel
                 string temp = System.IO.Path.Combine(
                     tempDir, GimmeCapture.Services.Core.Infrastructure.CaptureFileNameService.SuggestedBaseName() + "." + ext);
                 await System.IO.File.WriteAllBytesAsync(temp, bytes);
-                await _clipboardService.CopyFileAndImageAsync(temp, bitmap);
+                if (!await _clipboardService.CopyFileAndImageAsync(temp, bitmap))
+                {
+                    WarnCopyDidNotLand("FloatingImage.CopyFormat");
+                }
+
                 return;
             }
             catch (Exception ex)
@@ -169,8 +176,17 @@ public partial class FloatingImageViewModel
             }
         }
 
-        await _clipboardService.CopyImageAsync(bitmap);
+        if (!await _clipboardService.CopyImageAsync(bitmap))
+        {
+            WarnCopyDidNotLand("FloatingImage.Copy");
+        }
     }
+
+    private static void WarnCopyDidNotLand(string context) =>
+        GimmeCapture.Services.Core.Infrastructure.AppLog.Warning(
+            context,
+            new InvalidOperationException(
+                "Clipboard write did not land — the clipboard still holds its previous content."));
 
     private async Task CutAsync()
     {

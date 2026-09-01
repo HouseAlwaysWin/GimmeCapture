@@ -240,15 +240,20 @@ public partial class FloatingVideoViewModel
                     // Put the clip on the clipboard as a file (+ a best-effort thumbnail). Never let a null
                     // thumbnail stop the file copy, or a stale prior clipboard entry would paste instead.
                     var thumb = await GetFlattenedBitmapAsync() ?? VideoBitmap;
-                    if (thumb != null)
+                    bool copied = thumb != null
+                        ? await _clipboardService.CopyFileAndImageAsync(produced, thumb)
+                        : await _clipboardService.CopyFileAsync(produced);
+                    if (!copied)
                     {
-                        await _clipboardService.CopyFileAndImageAsync(produced, thumb);
+                        // The write lost the race for the clipboard, so the clipboard still holds its previous
+                        // content — record that rather than letting the "copied" log line imply success.
+                        AppLog.Warning(
+                            "FloatingVideo.Copy",
+                            new InvalidOperationException(
+                                "Clipboard write did not land — the clipboard still holds its previous content."));
                     }
-                    else
-                    {
-                        await _clipboardService.CopyFileAsync(produced);
-                    }
-                    AppLog.Information($"FloatingVideo.Copy -> {Path.GetFileName(produced)} ({new FileInfo(produced).Length} bytes)");
+
+                    AppLog.Information($"FloatingVideo.Copy -> {Path.GetFileName(produced)} ({new FileInfo(produced).Length} bytes, clipboard={(copied ? "ok" : "FAILED")})");
 
                     // Persist a newly-produced clip (trimmed/converted/transcoded) into History; skip when the
                     // source file itself was copied unchanged.
@@ -265,7 +270,14 @@ public partial class FloatingVideoViewModel
                     var bitmapToCopy = await GetFlattenedBitmapAsync();
                     if (bitmapToCopy != null)
                     {
-                        await _clipboardService.CopyImageAsync(bitmapToCopy);
+                        if (!await _clipboardService.CopyImageAsync(bitmapToCopy))
+                        {
+                            AppLog.Warning(
+                                "FloatingVideo.CopyFrame",
+                                new InvalidOperationException(
+                                    "Clipboard write did not land — the clipboard still holds its previous content."));
+                        }
+
                         return;
                     }
                 }
