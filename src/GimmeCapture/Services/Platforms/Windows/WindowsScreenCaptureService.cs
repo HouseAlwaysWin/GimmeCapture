@@ -461,6 +461,10 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 // paste. See StaClipboard.SetDataObjectFlushed.
                 var payload = new System.Windows.Forms.DataObject();
                 payload.SetData(System.Windows.Forms.DataFormats.Bitmap, autoConvert: true, winBitmap);
+                // PNG alongside the bitmap so modern apps (Chrome/Discord/Slack) keep transparency,
+                // matching the pin-window copy path.
+                ms.Position = 0;
+                payload.SetData("PNG", false, ms);
                 StaClipboard.SetDataObjectFlushed(payload);
             }, StaClipboard.WriteTimeout, "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
 
@@ -471,7 +475,8 @@ public class WindowsScreenCaptureService : IScreenCaptureService
             // Windows write failed or timed out — fall through to the Avalonia clipboard as a best-effort fallback.
         }
 
-        // Fallback / Non-Windows implementation
+        // Fallback / Non-Windows implementation. Reports failure honestly: a silent miss here used to
+        // leave the PREVIOUS clipboard content in place while the UI claimed "Copied".
         return await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
             try
@@ -479,12 +484,11 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 var topLevel = ResolveClipboardTopLevel();
                 if (topLevel?.Clipboard is not { } clipboard)
                 {
+                    AppLog.Warning("Clipboard.CopyImage.Fallback", "No TopLevel/clipboard available.");
                     return false;
                 }
 
                 using var image = SKImage.FromBitmap(bitmap);
-
-                // Encode to PNG for clipboard
                 using var encodedData = image.Encode(SKEncodedImageFormat.Png, 100);
                 using var stream = encodedData.AsStream();
                 using var ms = new MemoryStream();
@@ -492,8 +496,6 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 ms.Position = 0;
 
                 var avaloniaBitmap = new global::Avalonia.Media.Imaging.Bitmap(ms);
-
-                // Use new extension method way
                 await global::Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
                 return true;
             }

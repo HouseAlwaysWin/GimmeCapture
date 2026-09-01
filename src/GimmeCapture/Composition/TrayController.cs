@@ -35,6 +35,11 @@ public sealed class TrayController
 
     public void Install()
     {
+        // A duplicate launch signals the single-instance guard instead of starting a second app;
+        // surface that as "show the main window", same as clicking the tray icon.
+        Program.SingleInstance?.StartActivationListener(() =>
+            Dispatcher.UIThread.Post(ShowMainWindow));
+
         try
         {
             var loc = LocalizationService.Instance;

@@ -27,7 +27,7 @@ public class ClipboardService : IClipboardService
                 // open) — running it on the UI thread froze the whole app. Do the encode + write on a dedicated
                 // STA thread bounded by a timeout so the clipboard can never block the UI thread. The write
                 // flushes the data (copy:true), so it persists after the worker thread exits.
-                return await StaClipboard.RunAsync(() =>
+                var copied = await StaClipboard.RunAsync(() =>
                 {
                     var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
 
@@ -48,6 +48,15 @@ public class ClipboardService : IClipboardService
 
                     StaClipboard.SetDataObjectFlushed(data);
                 }, StaClipboard.WriteTimeout, "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
+
+                if (copied)
+                {
+                    return true;
+                }
+
+                // The failed STA write left the PREVIOUS clipboard content in place — try the Avalonia
+                // clipboard before giving up, so a paste doesn't silently produce a stale image.
+                return await CopyImageFallbackAsync(bitmap);
             }
             else
 #endif

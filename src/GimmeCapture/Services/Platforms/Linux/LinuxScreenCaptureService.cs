@@ -121,12 +121,15 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
 
     public async Task<bool> CopyToClipboardAsync(SKBitmap bitmap)
     {
+        // Reports failure honestly: a silent miss here leaves the PREVIOUS clipboard content in place,
+        // and the UI would otherwise claim "Copied" over a stale image.
         return await Dispatcher.UIThread.InvokeAsync(async () =>
         {
             try
             {
                 if (ResolveTopLevel()?.Clipboard is not { } clipboard)
                 {
+                    AppLog.Warning("LinuxScreenCapture.CopyImage", "No TopLevel/clipboard available.");
                     return false;
                 }
 

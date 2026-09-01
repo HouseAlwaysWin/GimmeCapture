@@ -106,7 +106,9 @@ internal static class AppStoragePaths
         }
     }
 
-    private static string GetInstallInstanceKey(string appDirectory)
+    /// <summary>Stable short key for one installed copy of the app (hash of its install directory).
+    /// Also scopes the single-instance mutex so two different installs can still run side by side.</summary>
+    internal static string GetInstallInstanceKey(string appDirectory)
     {
         string normalized = Path.GetFullPath(appDirectory)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
