@@ -10,6 +10,10 @@ class Program
     /// <summary>Command-line arguments passed to <see cref="Main"/> (e.g. <c>--startup</c> from Windows Run).</summary>
     public static string[] CommandLineArgs { get; private set; } = [];
 
+    /// <summary>The single-instance mutex owner for this process; TrayController wires its activation
+    /// listener so a duplicate launch pops the running instance's main window. Null in a duplicate.</summary>
+    internal static SingleInstanceGuard? SingleInstance { get; private set; }
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -20,6 +24,16 @@ class Program
         AppLog.Initialize();
         try
         {
+            // One running app per installed copy: a duplicate launch (double-clicked twice, autostart
+            // racing a manual start) hands off to the running instance instead of opening a second one.
+            SingleInstance = SingleInstanceGuard.TryAcquire();
+            if (SingleInstance == null)
+            {
+                AppLog.Information("Program.DuplicateLaunch.HandedOffToRunningInstance");
+                SingleInstanceGuard.SignalRunningInstance();
+                return;
+            }
+
             // Ensure Working Directory is correct (Fix for Auto-Start)
             var exeDir = RuntimePathProvider.GetExecutableDirectory();
             if (!string.IsNullOrEmpty(exeDir))
@@ -42,6 +56,7 @@ class Program
             {
                 Services.Platforms.Linux.LinuxWindowShape.Shutdown();
             }
+            SingleInstance?.Dispose();
             AppLog.Shutdown();
         }
     }
