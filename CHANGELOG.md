@@ -9,7 +9,7 @@
 
 ---
 
-## Unreleased
+## v0.68.0 - 2026-09-02
 
 > Consolidates everything since v0.66.0, including the work tagged as **v0.67.0 – v0.67.2**. Those three tags
 > were published without a version bump or a release-log entry — their builds report themselves as `0.66.0` —
