@@ -2,6 +2,33 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.68.0 - 2026-09-02
+
+- **Capture menus and dropdowns** — the overlay no longer steals focus, and new **freeze-frame** screenshots
+  snapshot the desktop before the overlay opens, the only reliable way to catch tray flyouts and the Start menu.
+- **Scrolling capture**: live thumbnail of the growing strip, a live warning when stitching loses track, and
+  fixes for long screenshots coming out short or displaying sideways.
+- **OCR `Auto` actually detects the language** (it silently always used Chinese), plus three separate crash
+  causes fixed in back-to-back captures and AI scan.
+- **AV1 recording** where the hardware can genuinely encode it, and **auto-stop at a configured length** that
+  pins or saves the clip.
+- **Clipboard honesty** — a failed copy no longer reports success, and the confirmation shows a thumbnail of
+  what actually landed on the clipboard.
+- **Single running instance**; a startup entry deleted from outside is repaired, and a development build no
+  longer steals the registration.
+- **Removed**: Imgur upload — blocked in Taiwan and the only upload target.
+- Consolidates the work tagged `v0.67.0` – `v0.67.2`, which shipped without a version bump or a log entry.
+
+## v0.66.0 - 2026-07-22
+
+- **A/V sync fixed** — video is paced by wall clock rather than a frame counter, so recordings no longer drift
+  short whenever capture falls behind the target fps.
+- **File-name templates** drive all six places the app names a file; **audio-only extract** to WAV/MP3/M4A/Opus.
+- **History** tabs grouped by capture kind (screenshots / recordings), with a new date/name sort selector.
+- **Run-on-startup reports when Windows has disabled the entry** in Task Manager → Startup apps, instead of
+  showing a switch the OS silently overrides.
+- One-click **Imgur upload** (removed again in v0.68.0) and optional quick-OCR `.txt` output alongside captures.
+
 ## v0.65.0 - 2026-07-17
 
 - **Translation overlay overhaul** — hidden-toolbar no longer grays Chromium browsers or blocks clicks;

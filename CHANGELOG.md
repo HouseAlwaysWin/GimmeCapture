@@ -9,6 +9,118 @@
 
 ---
 
+## Unreleased
+
+> Consolidates everything since v0.66.0, including the work tagged as **v0.67.0 – v0.67.2**. Those three tags
+> were published without a version bump or a release-log entry — their builds report themselves as `0.66.0` —
+> so their changes are recorded here rather than left undocumented.
+
+### ✂️ Snip & capture
+
+- **Menus and dropdowns can be captured now.** The overlay activated itself on open, which stole foreground
+  focus and closed exactly the focus-sensitive UI you were trying to capture — dropdown lists, right-click
+  context menus. It now opens without taking focus (**Capture without stealing focus**, on by default), so the
+  menu stays open until you commit the selection.
+- **Freeze-frame screenshots** (**Freeze screen on screenshot**, on by default) snapshot the desktop *before*
+  the overlay appears and let you select on that still. This is the only reliable way to capture Windows shell
+  "light dismiss" popups — the tray flyout, the Start menu, most left-click dropdowns — which close the instant
+  any full-screen overlay covers them, focus or no focus. Trade-off: the overlay shows a still instead of the
+  live see-through, and clicking the live app inside the selection is disabled; toggle it off to restore the
+  previous behaviour. Screenshot captures only — recording, translation and scrolling stay live.
+- **The toolbar freeze button acts on the capture you are looking at.** It used to flip the setting for the
+  *next* capture, so pressing it appeared to do nothing. The setting keeps its own job: it decides the initial
+  state, and it stays the only way to catch shell popups, which need the still grabbed before the overlay opens.
+
+### 📜 Scrolling capture
+
+- **Live preview of the strip as it grows.** A small window docked beside the captured region shows the stitched
+  result in real time, so a misplacement or a stall is visible while you can still do something about it,
+  instead of only in the finished pin.
+- **A live warning when stitching loses track.** The aligner can only extend the strip while the view still
+  overlaps it; scroll too fast past its edge and every later frame fails to align, the capture silently stops
+  growing, and you discover the stub image only at the end. The hint window now says so after about 1.2 s of
+  misses — scrolling back a little re-overlaps the strip and stitching resumes on its own.
+- **Fixed long screenshots coming out short.** The offset search only scored rows near each edge of the strip.
+  Once the strip grew past roughly twice the frame height those two windows separated, every offset between
+  them went unscored, and stitching stopped finding matches.
+- **Fixed long screenshots displaying sideways.** The scrolling pin chose its reading axis from image aspect, so
+  a vertical capture of a wide region was displayed as horizontal content until it grew taller than it was
+  wide. The axis now follows the capture instead. Repeated page content could also produce a confident but
+  backwards match; those are now vetoed against the scroll direction.
+
+### 🔤 OCR
+
+- **`Auto` language detection actually detects.** It never did — the path had no `Auto` arm and fell through to
+  the simplified-Chinese recogniser, so Japanese came back as Chinese or as nothing. Detection now recognises a
+  sample with each installed recogniser and compares: kana and hangul are emitted by exactly one model each, so
+  they decide outright. Quick OCR reports which language it picked. The Modules button installs all five
+  languages (~68 MB), because a tick earned by having only Chinese installed was a lie about what `Auto` could
+  read.
+- **Fixed crashes during AI scan and back-to-back captures.** Three separate causes: ONNX sessions disposed out
+  from under a running inference, sessions torn down between consecutive captures, and concurrent `Run` calls on
+  a single session — inference is now serialised. The AI scan also gets its own copy of the frozen frame.
+- Quick OCR shows **one** spinner instead of two.
+
+### 🎬 Recording
+
+- **AV1 recording, where the hardware can genuinely do it.** The option appears only after test-opening an
+  encoder, because every vendor ships an AV1 encoder that exists but fails to open on hardware that cannot
+  encode it (NVIDIA before Ada, AMD before RDNA 3, Intel before Arc) — gating on the name alone would have put
+  an option in the UI that silently degrades to H.265 on most machines. Software AV1 is deliberately not a
+  fallback: it cannot keep up with a live capture, and trading dropped frames for smaller files is the wrong
+  failure. This also fixes a bogus warning that reported a fallback for every hardware H.265 recording.
+- **Auto-stop at a configured length**, then pin the clip or save it to the video folder. New Record-tab
+  settings beside the size limit; the duration counts recorded time only, matching the on-screen timer. An
+  unattended stop never pops the save dialog — the clip is filed straight away.
+
+### 📋 Clipboard
+
+- **"Copied" no longer lies.** Pasting sometimes produced the *previous* screenshot. Three stacked causes, all
+  silent: the Windows copy had no retry, so another process briefly holding the clipboard open (clipboard
+  history, Office, RDP tools) made it fail; the fallback did nothing when it could not resolve a window; and the
+  caller reported success either way. The copy now reports success end to end, retries the write, and shows an
+  error toast instead of a false "Copied", so you re-copy rather than pasting something stale.
+- **The copy confirmation shows a thumbnail of what actually landed on the clipboard.** "Copied to clipboard!"
+  never said *which* image, so the only way to find out was to paste — the exact uncertainty the fixes above
+  were meant to remove. Only a successful copy gets a thumbnail.
+- A standalone **spinner during slow clipboard writes**, so a large image no longer looks like a hang.
+
+### ⚙️ Startup & running instances
+
+- **Only one copy of the app runs at a time.** Double-clicking the app, or autostart racing a manual launch,
+  opened a second full instance. A duplicate launch now brings the running app's window forward instead. The
+  guard is scoped to the install directory, so two different installs still run side by side, and any failure
+  fails open so it can never block startup.
+- **A startup entry deleted from outside is noticed and repaired.** Security tooling and "startup cleaner"
+  utilities remove it, and the app only re-asserted the entry while launching — which is precisely what a
+  missing entry prevents. So the switch read "on", nothing was logged, and the only symptom was the app not
+  being there after several reboots. Opening the main window now re-checks and restores it, logs each
+  disappearance, and warns in Settings → General if the repair does not stick.
+- **A development build no longer steals the startup registration.** The re-assert on every launch handed the
+  entry to whichever copy ran last, so a `bin\Debug` build could quietly become the thing Windows launches at
+  login — until the next clean build deleted that path and auto-start broke with nothing to show for it. A
+  valid entry pointing at another install that still exists is now left alone; a stale one, the reinstall case
+  the re-assert exists for, is still taken over.
+
+### 🖼️ Interface
+
+- **The main window has an outline.** It is borderless with a near-black background, so against a dark desktop
+  or another dark window its edges simply vanished. The outline follows the theme accent rather than adding a
+  fourth hard-coded colour.
+
+### 🗑️ Removed
+
+- **Imgur upload is gone.** Imgur is blocked in Taiwan, where this app is used, and the feature saw little use
+  even where it worked. It was the only upload target, so the upload capability is removed entirely rather than
+  leaving an empty abstraction behind for a second provider that does not exist. Existing configs need no
+  migration — the stored client ID is simply dropped on the next save.
+
+### 🧹 Maintenance
+
+- `verify.ps1` deletes a passing run's artifacts instead of hoarding them, and now smoke-tests the Linux release
+  publish locally, so a release cannot fail after the tag has been pushed.
+- Added a native-crash diagnosis skill for the assistant workflow.
+
 ## v0.66.0 - 2026-07-22
 
 ### 🎬 Recording
