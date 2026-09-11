@@ -9,6 +9,22 @@
 
 ---
 
+## Unreleased
+
+### ⚙️ General
+
+- **Run on startup actually launches the app at sign-in.** It never has in a released build. Released builds ask
+  Windows for administrator rights, and Windows **silently skips elevated programs listed under
+  `HKCU\...\Run`** at sign-in — no app, no error, nothing in the event log, and nothing in our own log
+  because the app is never started. The registry entry looked perfect the whole time, so every check the app made
+  reported "registered" while auto-start had in fact never run. It only worked in development builds, which do
+  not ask for administrator rights. Startup is now registered as a **logon scheduled task** (the supported way to
+  start an elevated app at sign-in without a UAC prompt); the stale `Run` entry is removed on the first launch
+  after updating, and the setting keeps working as before on unelevated builds. The app also stops reporting
+  itself as registered when the only thing it has is a `Run` entry Windows will ignore.
+
+---
+
 ## v0.68.0 - 2026-09-02
 
 > Consolidates everything since v0.66.0, including the work tagged as **v0.67.0 – v0.67.2**. Those three tags

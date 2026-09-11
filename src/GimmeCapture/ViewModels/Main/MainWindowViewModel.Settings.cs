@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -271,8 +271,8 @@ public partial class MainWindowViewModel
         {
             AppLog.Warning(
                 "StartupRegistration.Check",
-                "The startup entry was gone while the app was running; re-registering it. Something outside the " +
-                "app removed it.");
+                "No working startup registration while the app was running; re-registering it. Something " +
+                "outside the app removed it, or this install has not yet been migrated off the Run key.");
             _settingsSideEffectCoordinator.ApplyRunOnStartup(true);
         }
 
@@ -869,8 +869,10 @@ public partial class MainWindowViewModel
                 // now, not after several silent reboots.
                 AppLog.Warning(
                     "StartupRegistration.Check",
-                    "Run-on-startup is enabled but no startup entry exists even after re-registering. Something " +
-                    "outside the app is removing it, or the registry write failed.");
+                    "Run-on-startup is enabled but no working startup registration exists even after " +
+                    "re-registering. Something outside the app is removing it, or the write failed — for an " +
+                    "elevated build that means the logon task could not be created (see StartupTask warnings), " +
+                    "since Windows ignores an elevated HKCU Run entry.");
             }
 
             RefreshLlamaModelCatalog();
