@@ -558,8 +558,8 @@
   "RefreshReleaseList": "一覧を再読み込み",
   "InstallSelectedVersion": "ダウンロードしてインストール",
   "InstallSelectedVersionReady": "バージョン {0} の準備ができました。今すぐ再起動してインストールしますか？",
-  "ElevatedWindowNoticeTitle": "管理者ウィンドウはキャプチャできません",
-  "ElevatedWindowNoticeMessage": "現在フォーカスされているウィンドウは、管理者権限で実行されているプログラムのものです。この場合、Windows は非昇格アプリのグローバルホットキーをブロックします。\n\nGimmeCapture を閉じて「管理者として実行」で開き直すか、そのウィンドウ以外でホットキーを使用してください。\n\n今すぐ GimmeCapture を管理者として再起動しますか？"
+  "ElevatedWindowNoticeTitle": "管理者ウィンドウでホットキーがブロックされます",
+  "ElevatedWindowNoticeMessage": "{0} は他のプログラムが登録済みのため、GimmeCapture はキーボードフックでしか受け取れません。管理者として実行中のウィンドウがフォーカスされているあいだ、Windows はそのフックをブロックします。\n\n他のホットキーはここでも動作します。管理者ウィンドウ上で {0} を使うには、GimmeCapture を管理者として実行してください。\n\n今すぐ管理者として再起動しますか？"
   ,"AIDownloadPrompt": "AI \u30e2\u30b8\u30e5\u30fc\u30eb\u3092\u30c0\u30a6\u30f3\u30ed\u30fc\u30c9\u3057\u307e\u3059\u304b\uff1f",
   "AIDownloadTitle": "AI \u30e2\u30b8\u30e5\u30fc\u30eb\u306e\u30c0\u30a6\u30f3\u30ed\u30fc\u30c9",
   "ActionCopyVideo": "\u52d5\u753b\u3092\u30b3\u30d4\u30fc",

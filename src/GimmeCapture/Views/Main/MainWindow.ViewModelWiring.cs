@@ -74,6 +74,15 @@ public partial class MainWindow
 
             vm.HotkeyService.OnHotkeyRegistrationFailed = (id, hotkey, error) =>
             {
+                // Temporary registrations (an unfocused overlay's capture keys, a scrolling session's
+                // finish/cancel) only mirror keys the low-level keyboard hook already serves, so losing one to
+                // another app is not worth a modal dialog — the hook still handles it wherever Windows allows.
+                if (HotkeyIds.IsTemporaryOverlayHotkey(id))
+                {
+                    vm.StatusText = $"[RegisterFailed] {hotkey} (temporary overlay hotkey; the keyboard hook still covers it)";
+                    return;
+                }
+
                 var hotkeyName = id switch
                 {
                     HotkeyIds.Snip => LocalizationService.Instance["StartCapture"] ?? "Screenshot",

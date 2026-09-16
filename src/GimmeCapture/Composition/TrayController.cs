@@ -37,7 +37,7 @@ public sealed class TrayController
     {
         // A duplicate launch signals the single-instance guard instead of starting a second app;
         // surface that as "show the main window", same as clicking the tray icon.
-        Program.SingleInstance?.StartActivationListener(() =>
+        Program.StartActivationListener(() =>
             Dispatcher.UIThread.Post(ShowMainWindow));
 
         try

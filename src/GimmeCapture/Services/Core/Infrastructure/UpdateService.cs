@@ -358,19 +358,33 @@ public sealed class UpdateService : ReactiveObject
                 appDataConfigMarkerPath);
             File.WriteAllText(scriptPath, script, System.Text.Encoding.Default);
 
-            Process.Start(new ProcessStartInfo
+            // An install this user cannot write to — Program Files, from the installer's all-users mode — needs
+            // the swap itself elevated, because the app is asInvoker. Without this the script's robocopy burns
+            // its retries on access-denied, rolls back and relaunches the old version, and the user is left with
+            // an "update" that silently changed nothing. Per-user installs (the default) stay prompt-free.
+            bool needsElevation = !IsDirectoryWritable(appDir);
+            var scriptStartInfo = new ProcessStartInfo
             {
                 FileName = "cmd.exe",
                 Arguments = $"/c \"{scriptPath}\"",
-                UseShellExecute = false,
                 CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            });
+                WindowStyle = ProcessWindowStyle.Hidden,
+                // runas needs the shell to do the elevating, so UseShellExecute has to be on for that path only.
+                UseShellExecute = needsElevation,
+                Verb = needsElevation ? "runas" : string.Empty
+            };
+
+            Process.Start(scriptStartInfo);
 
             Environment.Exit(0);
         }
         catch (Exception ex)
         {
+            // Includes the user declining the UAC prompt above (Win32Exception). The swap never started, so drop
+            // the pending-update state we just wrote — otherwise the next launch reports a failed update that
+            // was never attempted.
+            TryClearPendingUpdateStateAfterFailedApply();
+
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 PlatformErrorDialog.ShowError($"Update failed: {ex.Message}", "Update Error");
@@ -897,6 +911,51 @@ exit /b 1
             {
                 yield return state;
             }
+        }
+    }
+
+    /// <summary>
+    /// Whether this process can replace files in the install directory — probed by creating a file there rather
+    /// than reasoning about ACLs. Manifested apps get no UAC virtualization, so a Program Files install (the
+    /// installer's all-users mode) honestly fails this for an asInvoker build.
+    /// </summary>
+    private static bool IsDirectoryWritable(string directory)
+    {
+        if (string.IsNullOrEmpty(directory))
+        {
+            return false;
+        }
+
+        try
+        {
+            string probePath = Path.Combine(directory, $".gimmecapture-write-probe-{Guid.NewGuid():N}");
+            using var probe = new FileStream(
+                probePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Information(
+                $"Update: the install directory is not writable by this process ({ex.GetType().Name}); the swap will ask for elevation.");
+            return false;
+        }
+    }
+
+    /// <summary>Best-effort removal of the pending-update marker when the swap never started.</summary>
+    private static void TryClearPendingUpdateStateAfterFailedApply()
+    {
+        try
+        {
+            var appDir = Path.GetDirectoryName(RuntimePathProvider.GetExecutablePath())
+                ?? RuntimePathProvider.GetExecutableDirectory();
+            if (!string.IsNullOrEmpty(appDir))
+            {
+                ClearPendingUpdateState(appDir);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Update.ClearPendingState", ex);
         }
     }
 

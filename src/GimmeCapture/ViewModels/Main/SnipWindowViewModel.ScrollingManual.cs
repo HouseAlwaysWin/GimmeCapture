@@ -249,6 +249,8 @@ public partial class SnipWindowViewModel
         _manualPrevFrame = _manualAccumulated.Copy();
         _manualFinishing = false;
         _manualScrollActive = true;
+        // Hand the action/close keys over to the session-scoped registrations made below.
+        SyncUnfocusedOverlayHotkeys();
         // Scrolling capture is inherently live — every strip is a fresh grab of the scrolled target.
         SyncSurfaceActivity();
         _manualAlignFailStreak = 0;

@@ -14,6 +14,33 @@ class Program
     /// listener so a duplicate launch pops the running instance's main window. Null in a duplicate.</summary>
     internal static SingleInstanceGuard? SingleInstance { get; private set; }
 
+    private static Action? _activationCallback;
+
+    /// <summary>Wires the duplicate-launch activation callback and remembers it, so a guard taken back after a
+    /// declined elevated restart keeps listening.</summary>
+    internal static void StartActivationListener(Action onActivationRequested)
+    {
+        _activationCallback = onActivationRequested;
+        SingleInstance?.StartActivationListener(onActivationRequested);
+    }
+
+    /// <summary>
+    /// Hands the instance mutex over to an elevated copy of ourselves that is about to start. The new process
+    /// acquires it while this one is still shutting down, and whoever loses decides it is a duplicate and exits —
+    /// which would mean the user consents to UAC and the app simply disappears.
+    /// </summary>
+    internal static void ReleaseSingleInstanceForRestart() => SingleInstance?.Dispose();
+
+    /// <summary>Takes the guard back when that restart did not happen after all (the user declined UAC).</summary>
+    internal static void ReacquireSingleInstanceAfterFailedRestart()
+    {
+        SingleInstance = SingleInstanceGuard.TryAcquire();
+        if (SingleInstance != null && _activationCallback != null)
+        {
+            SingleInstance.StartActivationListener(_activationCallback);
+        }
+    }
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -29,6 +56,15 @@ class Program
             SingleInstance = SingleInstanceGuard.TryAcquire();
             if (SingleInstance == null)
             {
+                // An auto-start launch that lost the race must stay quiet: a second registration (a Run value
+                // plus a Startup-folder shortcut, or a leftover logon task) would otherwise pop the running
+                // instance's main window at every sign-in. A duplicate the USER started still shows the app.
+                if (StartupService.ShouldLaunchToTrayOnly(CommandLineArgs))
+                {
+                    AppLog.Information("Program.DuplicateLaunch.StartupLaunchIgnored");
+                    return;
+                }
+
                 AppLog.Information("Program.DuplicateLaunch.HandedOffToRunningInstance");
                 SingleInstanceGuard.SignalRunningInstance();
                 return;

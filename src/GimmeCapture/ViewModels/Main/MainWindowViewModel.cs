@@ -224,7 +224,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
     public Func<int, CancellationToken, Task>? ShowCaptureCountdownAction { get; set; }
     public Action? CloseCaptureCountdownAction { get; set; }
-    public Action? RequestElevatedWindowPromptAction { get; set; }
+    public Action<string>? RequestElevatedWindowPromptAction { get; set; }
     public Action? RequestOpenModulesAction { get; set; }
     public Func<SnipWindowViewModel?>? GetActiveSnipViewModelAction { get; set; }
     public Func<Task<string?>>? PickFolderAction { get; set; }
@@ -495,9 +495,9 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         };
 
-        HotkeyService.OnElevatedWindowFocused = () =>
+        HotkeyService.OnElevatedWindowFocused = blockedHotkey =>
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => RequestElevatedWindowPromptAction?.Invoke());
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => RequestElevatedWindowPromptAction?.Invoke(blockedHotkey));
         };
 
         // Settings auto-save: any settings property change persists immediately (debounced).

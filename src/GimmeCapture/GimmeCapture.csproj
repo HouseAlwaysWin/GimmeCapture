@@ -20,8 +20,11 @@
   <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <ApplicationManifest Condition="'$(Configuration)' == 'Release'">app.admin.manifest</ApplicationManifest>
-    <ApplicationManifest Condition="'$(Configuration)' != 'Release'">app.manifest</ApplicationManifest>
+    <!-- asInvoker in every configuration. Release used to ship app.admin.manifest (requireAdministrator),
+         which made Windows silently skip our HKCU Run entry at logon - so run-on-startup never worked in a
+         released build after v0.42.0. Elevation is now asked for on demand (the "restart as administrator"
+         notice) when an elevated window actually blocks a hotkey. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Windows;
 using Moq;
 using Xunit;
@@ -210,5 +211,34 @@ public class HotkeyServiceTests
         // Assert
         // Should unregister 1 and 2
         Assert.Equal(unregBefore + 2, service.UnregCallCount);
+    }
+
+    [Fact]
+    public void FirstHookOnlyHotkey_WhenEveryHotkeyRegistered_ReportsNothingBlocked()
+    {
+        // The elevated-window notice hangs off this: a hotkey RegisterHotKey accepted still fires while an
+        // administrator window is in front (WM_HOTKEY ignores UIPI), so warning about it would be pure noise.
+        var service = new TestableHotkeyService();
+        service.SetHandle(new IntPtr(1234));
+
+        service.Register(HotkeyIds.Snip, "Shift+F1");
+        service.Register(HotkeyIds.Record, "Shift+F2");
+
+        Assert.Null(service.FirstHookOnlyHotkey());
+    }
+
+    [Fact]
+    public void FirstHookOnlyHotkey_WhenRegistrationFailed_NamesTheHookOnlyHotkey()
+    {
+        // PrintScreen already owned by the Snipping Tool: only the low-level hook can see it, and Windows stops
+        // feeding that hook over an administrator window — the one case the notice exists for.
+        var service = new TestableHotkeyService();
+        service.SetHandle(new IntPtr(1234));
+
+        service.Register(HotkeyIds.Record, "Shift+F2");
+        service.LastRegResult = false;
+        service.Register(HotkeyIds.Snip, "PrintScreen");
+
+        Assert.Equal("PrintScreen", service.FirstHookOnlyHotkey());
     }
 }

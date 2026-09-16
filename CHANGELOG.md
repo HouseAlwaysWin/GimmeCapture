@@ -13,15 +13,26 @@
 
 ### ⚙️ General
 
-- **Run on startup actually launches the app at sign-in.** It never has in a released build. Released builds ask
-  Windows for administrator rights, and Windows **silently skips elevated programs listed under
-  `HKCU\...\Run`** at sign-in — no app, no error, nothing in the event log, and nothing in our own log
-  because the app is never started. The registry entry looked perfect the whole time, so every check the app made
-  reported "registered" while auto-start had in fact never run. It only worked in development builds, which do
-  not ask for administrator rights. Startup is now registered as a **logon scheduled task** (the supported way to
-  start an elevated app at sign-in without a UAC prompt); the stale `Run` entry is removed on the first launch
-  after updating, and the setting keeps working as before on unelevated builds. The app also stops reporting
-  itself as registered when the only thing it has is a `Run` entry Windows will ignore.
+- **Run on startup actually launches the app at sign-in — and the app no longer asks for administrator rights.**
+  Every released build since v0.42.0 asked Windows to run it as administrator, and Windows **silently skips
+  elevated programs listed under `HKCU\...\Run`** at sign-in — no app, no error, nothing in the event log, and
+  nothing in our own log because the app is never started. The registry entry looked perfect the whole time, so
+  every check reported "registered" while auto-start had in fact never run. Released builds now start as a normal
+  program, the way development builds always have: the startup entry works again, and launching GimmeCapture no
+  longer shows a UAC prompt.
+- **Administrator rights are requested only when something actually needs them.** Hotkeys keep working while an
+  administrator window (Task Manager, an elevated terminal) is in front. The exception is a hotkey another
+  program already owns — Print Screen claimed by the Snipping Tool, say — which GimmeCapture can only catch with
+  a keyboard hook, and Windows blocks that hook over administrator windows. Only then does it offer to restart as
+  administrator, naming the hotkey in question, instead of interrupting at every administrator window the way it
+  used to. That restart also works again: it could previously shut down without coming back.
+- **Cancel, Copy / Save and the recording keys keep working over administrator windows** while the capture
+  overlay deliberately leaves focus where it is ("Don't steal focus when capturing").
+- **Updating an install under `Program Files` asks for elevation instead of quietly changing nothing.** A normal
+  program cannot replace files there, so the update rolled itself back and relaunched the old version with no
+  explanation. It now prompts once and applies. Per-user installs — the installer's default — are unchanged.
+- **Auto-start no longer pops the main window open at sign-in** when more than one startup registration exists
+  (a Run entry plus a Startup-folder shortcut, for instance); the duplicate launch just exits.
 
 ---
 
