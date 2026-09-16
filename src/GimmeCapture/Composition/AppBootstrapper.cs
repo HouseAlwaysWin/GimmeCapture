@@ -144,13 +144,13 @@ public sealed class AppBootstrapper : IAsyncDisposable
     {
         viewModel.RequestCaptureAction = mode => _snipWindowFactory.Value.Open(viewModel, mode);
         viewModel.GetActiveSnipViewModelAction = () => _snipWindowFactory.Value.GetActiveViewModel() as SnipWindowViewModel;
-        viewModel.RequestElevatedWindowPromptAction = () =>
-            ShowElevatedWindowNoticeAsync().Forget("ElevatedNotice.Show");
+        viewModel.RequestElevatedWindowPromptAction = blockedHotkey =>
+            ShowElevatedWindowNoticeAsync(blockedHotkey).Forget("ElevatedNotice.Show");
     }
 
     private bool _isElevatedNoticeShowing;
 
-    private async Task ShowElevatedWindowNoticeAsync()
+    private async Task ShowElevatedWindowNoticeAsync(string blockedHotkey)
     {
         if (_isElevatedNoticeShowing)
         {
@@ -170,7 +170,7 @@ public sealed class AppBootstrapper : IAsyncDisposable
             var result = await ConfirmationDialog.ShowConfirmation(
                 owner,
                 loc["ElevatedWindowNoticeTitle"],
-                loc["ElevatedWindowNoticeMessage"],
+                string.Format(loc["ElevatedWindowNoticeMessage"], blockedHotkey),
                 ConfirmationMode.YesNo,
                 WindowStartupLocation.CenterScreen);
 
@@ -207,6 +207,11 @@ public sealed class AppBootstrapper : IAsyncDisposable
             return;
         }
 
+        // Let go of the single-instance mutex first. The elevated copy acquires it as it starts, while this
+        // process is still tearing down — if it loses that race it decides it is a duplicate and exits, so the
+        // user would consent to UAC and watch the app disappear instead of come back elevated.
+        Program.ReleaseSingleInstanceForRestart();
+
         try
         {
             var startInfo = new System.Diagnostics.ProcessStartInfo
@@ -228,10 +233,13 @@ public sealed class AppBootstrapper : IAsyncDisposable
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            // User declined the UAC elevation prompt; keep running unelevated.
+            // User declined the UAC elevation prompt; keep running unelevated — and take the guard back, or this
+            // instance would stop being the one a later duplicate launch hands off to.
+            Program.ReacquireSingleInstanceAfterFailedRestart();
         }
         catch (Exception ex)
         {
+            Program.ReacquireSingleInstanceAfterFailedRestart();
             AppLog.Warning("ElevatedNotice.RestartAsAdministrator", ex);
         }
     }

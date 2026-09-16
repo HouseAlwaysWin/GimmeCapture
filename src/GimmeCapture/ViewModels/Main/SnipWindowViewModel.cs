@@ -458,6 +458,16 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             .Skip(1)
             .Subscribe(_ => this.RaisePropertyChanged(nameof(ShouldAvoidStealingFocus)))
             .DisposeWith(_disposables);
+        // The overlay's unfocused capture keys are served by a process-wide keyboard hook that an elevated
+        // foreground window silences, so they are mirrored as temporary global hotkeys whenever the overlay is
+        // not holding focus. Mode/translation/text-entry/freeze all change either that state or which keys apply.
+        Observable.Merge(
+                this.WhenAnyValue(x => x.CurrentMode).Select(_ => Unit.Default),
+                this.WhenAnyValue(x => x.IsTranslationMode).Select(_ => Unit.Default),
+                this.WhenAnyValue(x => x.IsEnteringText).Select(_ => Unit.Default),
+                _surface.WhenAnyValue(x => x.IsFrozen).Select(_ => Unit.Default))
+            .Subscribe(_ => SyncUnfocusedOverlayHotkeys())
+            .DisposeWith(_disposables);
         _selectionStateController = new SnipSelectionStateController(
             shouldTriggerAutoScan: ShouldTriggerAutoScan,
             triggerAutoScan: () => RunOCRScanAsync().Forget("Snip.AutoScan"),
@@ -942,6 +952,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _audioMeterTimer.Stop();
         _audioLevelMonitor.Dispose();
         _hoverAnimationTimer.Stop();
+        UnregisterUnfocusedOverlayHotkeys();
         _disposables.Dispose();
         _translationSession?.Dispose();
         _aiScanSessionService?.Dispose();

@@ -1,9 +1,20 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
+/// <summary>
+/// Run-on-startup, backed by the HKCU Run key.
+///
+/// The Run key only works as a backend because the app ships an asInvoker manifest in every configuration.
+/// Release builds used to ask for administrator rights, and Windows SILENTLY SKIPS elevated programs listed in
+/// <c>HKCU\...\Run</c> at logon — no process, no error, nothing in the event log, and not a line in our own log
+/// because the app never reaches <c>Main</c>. Auto-start therefore never happened in a released build after
+/// v0.42.0, while the registry entry looked perfect and every self-check reported "registered". Elevation is now
+/// requested on demand (the "restart as administrator" notice) instead of at every launch, which keeps this
+/// backend honest: what is written here is what Windows actually runs.
+/// </summary>
 public class StartupService
 {
     private const string AppName = "GimmeCapture";
@@ -41,84 +52,18 @@ public class StartupService
                 return;
             }
 
-            var expectedValue = $"\"{exePath}\" {RunArgumentForTrayStartup}";
-
             if (!runOnStartup)
             {
-                // Clear BOTH backends: an install that predates the scheduled task still has a Run value, and one
-                // that has since been upgraded still has the task. Leaving either behind keeps auto-starting the
-                // app after the user switched the setting off.
-                RemoveStartupTask(exePath);
                 RemoveRunValue(exePath, "the setting is off");
                 return;
             }
 
-            // Elevated build → the Run key is a dead end (Windows silently skips elevated Run entries at logon),
-            // so the scheduled task is the only registration that actually launches us. See
-            // WindowsStartupTaskService for the full explanation.
-            if (WindowsStartupTaskService.IsElevated() && TryRegisterStartupTask(exePath, expectedValue))
-            {
-                return;
-            }
-
-            RegisterRunValue(expectedValue);
+            RegisterRunValue($"\"{exePath}\" {RunArgumentForTrayStartup}");
         }
         catch (Exception ex)
         {
             AppLog.Warning("StartupRegistration.Set", ex);
         }
-    }
-
-    /// <summary>
-    /// Registers the logon task and retires the Run value it replaces. Returns false only when the task could not
-    /// be created, which is the caller's cue to fall back to the Run key — a registration Windows will ignore for
-    /// an elevated build, but better than leaving the user with nothing while the failure is logged.
-    /// </summary>
-    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static bool TryRegisterStartupTask(string exePath, string expectedValue)
-    {
-        var existingTaskCommand = WindowsStartupTaskService.TryReadRegisteredCommandLine();
-        if (existingTaskCommand != null && !ShouldClaimRegistration(existingTaskCommand, expectedValue))
-        {
-            // Same precedence as the Run key: another install that still exists on disk keeps the registration,
-            // so a dev build launching does not repoint the logon task at bin\Debug.
-            AppLog.Information(
-                $"StartupTask: left another install's logon task alone -> {existingTaskCommand} (this copy: {expectedValue})");
-            return true;
-        }
-
-        if (!WindowsStartupTaskService.TryRegister(exePath))
-        {
-            AppLog.Warning(
-                "StartupRegistration.Set",
-                "Could not create the logon task, so run-on-startup fell back to the HKCU Run key — which Windows "
-                + "IGNORES for an elevated build. Auto-start will not work until the task can be created.");
-            return false;
-        }
-
-        // The task now owns startup. A leftover Run value would only ever be skipped by Windows, and it is the
-        // thing that made auto-start look configured while doing nothing, so take it out.
-        RemoveRunValue(exePath, "the logon task replaces it");
-        return true;
-    }
-
-    /// <summary>
-    /// Removes the logon task, unless it belongs to a different install that is still on disk. A definition this
-    /// process cannot read (a standard user cannot list System32\Tasks) leaves no way to tell, and there the
-    /// user's explicit "off" wins over an owner we cannot identify.
-    /// </summary>
-    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static void RemoveStartupTask(string exePath)
-    {
-        var existingTaskCommand = WindowsStartupTaskService.TryReadRegisteredCommandLine();
-        if (existingTaskCommand != null && !OwnsRegistration(existingTaskCommand, exePath))
-        {
-            AppLog.Information(
-                $"StartupTask: left another install's logon task alone -> {existingTaskCommand} (this copy: {exePath})");
-            return;
-        }
-
-        WindowsStartupTaskService.TryUnregister();
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -176,8 +121,9 @@ public class StartupService
 
     /// <summary>
     /// Whether a registration is this copy's to delete: it points at this executable, or at one that no longer
-    /// exists (a leftover from an install that has been moved or removed). Shared by both backends so switching
-    /// run-on-startup off cannot take out a different install's auto-start.
+    /// exists (a leftover from an install that has been moved or removed). The mirror of
+    /// <see cref="ShouldClaimRegistration"/>, so switching run-on-startup off cannot take out a different
+    /// install's auto-start.
     /// </summary>
     internal static bool OwnsRegistration(string? existingValue, string exePath)
     {
@@ -191,28 +137,11 @@ public class StartupService
             || !System.IO.File.Exists(existingExe);
     }
 
-    /// <summary>
-    /// Whether a registration exists that Windows will actually act on at logon.
-    ///
-    /// An elevated build's Run value does NOT count: Windows silently skips elevated entries in HKCU\Run, so
-    /// reporting one as "registered" is exactly the false green light that let auto-start be broken in every
-    /// shipped build while the settings screen and the log both said it was fine.
-    /// </summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public static bool IsRegistered()
     {
         try
         {
-            if (WindowsStartupTaskService.Exists())
-            {
-                return true;
-            }
-
-            if (WindowsStartupTaskService.IsElevated())
-            {
-                return false;
-            }
-
             using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, false);
             if (key == null) return false;
 
@@ -242,14 +171,6 @@ public class StartupService
     {
         try
         {
-            // StartupApproved governs the Run VALUE only. Once the logon task owns startup, a leftover blob from
-            // when this install used the Run key says nothing about whether we launch — reporting it would send
-            // the user to a Task Manager switch that no longer controls anything.
-            if (WindowsStartupTaskService.Exists())
-            {
-                return false;
-            }
-
             using var key = Registry.CurrentUser.OpenSubKey(StartupApprovedRunKeyPath, false);
             return IsDisabledStateBlob(key?.GetValue(AppName) as byte[]);
         }

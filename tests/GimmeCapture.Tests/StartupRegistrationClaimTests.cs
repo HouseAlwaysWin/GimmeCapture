@@ -82,6 +82,26 @@ public sealed class StartupRegistrationClaimTests : IDisposable
         Assert.Equal(expected, StartupService.ExtractExecutablePath(runValue));
     }
 
+    [Fact]
+    public void TurningTheSettingOffSparesAnotherInstallsEntry()
+    {
+        // The mirror of the claim rule: deleting a DIFFERENT install's value would break that copy's auto-start,
+        // which is never this copy's business — so "off" here only ever removes our own entry.
+        string otherExe = Path.Combine(_dir, "OtherInstall.exe");
+        File.WriteAllText(otherExe, "exe");
+
+        Assert.False(StartupService.OwnsRegistration(Value(otherExe), _realExe));
+    }
+
+    [Fact]
+    public void TurningTheSettingOffTakesOurOwnAndAbandonedEntries()
+    {
+        Assert.True(StartupService.OwnsRegistration(Value(_realExe), _realExe));
+        Assert.True(StartupService.OwnsRegistration(Value(_realExe.ToUpperInvariant()), _realExe));
+        Assert.True(StartupService.OwnsRegistration(Value(Path.Combine(_dir, "Gone.exe")), _realExe));
+        Assert.True(StartupService.OwnsRegistration("", _realExe));
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort temp cleanup */ }

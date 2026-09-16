@@ -390,6 +390,13 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        // Temporary registrations that exist only while an unfocused overlay is up (see
+        // SnipWindowViewModel.UnfocusedHotkeys.cs), routed before the main-window hotkey mapping.
+        if (TryHandleUnfocusedOverlayHotkey(id))
+        {
+            return;
+        }
+
         var now = DateTime.UtcNow;
         if (id == _lastGlobalHotkeyId && (now - _lastGlobalHotkeyUtc) < TimeSpan.FromMilliseconds(600))
         {

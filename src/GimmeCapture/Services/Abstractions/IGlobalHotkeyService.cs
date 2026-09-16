@@ -14,9 +14,10 @@ public interface IGlobalHotkeyService : IDisposable
     Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
 
     /// <summary>
-    /// Raised when a window running at a higher integrity level (e.g. an elevated app such as
-    /// Task Manager) gains focus while this process is not elevated. Global hotkeys cannot be
-    /// delivered in that situation (Windows UIPI), so the UI can surface a hint to the user.
+    /// Raised when a window running at a higher integrity level (an elevated app such as Task Manager) gains
+    /// focus while this process is not elevated AND at least one hotkey is served ONLY by the low-level keyboard
+    /// hook, which UIPI silences there. The argument is that hotkey, so the UI can name it. Hotkeys RegisterHotKey
+    /// accepted keep working over an elevated window and never raise this.
     /// </summary>
-    Action? OnElevatedWindowFocused { get; set; }
+    Action<string>? OnElevatedWindowFocused { get; set; }
 }

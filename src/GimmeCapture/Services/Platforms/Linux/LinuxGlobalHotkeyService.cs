@@ -25,7 +25,7 @@ public sealed class LinuxGlobalHotkeyService : IGlobalHotkeyService
 {
     public Action<int>? OnHotkeyPressed { get; set; }
     public Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
-    public Action? OnElevatedWindowFocused { get; set; }
+    public Action<string>? OnElevatedWindowFocused { get; set; }
 
     // X11 event types / masks / grab modes.
     private const int KeyPress = 2;

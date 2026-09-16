@@ -37,7 +37,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     // Action to fire when hotkey is pressed, passing the ID
     public Action<int>? OnHotkeyPressed { get; set; }
     public Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
-    public Action? OnElevatedWindowFocused { get; set; }
+    public Action<string>? OnElevatedWindowFocused { get; set; }
     
     private IntPtr _oldWndProc = IntPtr.Zero;
     private WndProc? _newWndProc; // Keep reference to prevent GC
@@ -659,6 +659,15 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             return;
         }
 
+        // A hotkey RegisterHotKey accepted still fires over an elevated window — WM_HOTKEY reaches our message
+        // window whatever has focus. Only a hook-only hotkey actually stops working there, so with none of those
+        // registered there is nothing to warn about and the notice would be pure noise.
+        string? blockedHotkey = FirstHookOnlyHotkey();
+        if (blockedHotkey == null)
+        {
+            return;
+        }
+
         // Notify once per distinct elevated process so every privileged app is covered, while the same
         // app does not nag repeatedly (including when focus returns from our own dialog).
         if (_notifiedElevatedPids.Contains(pid))
@@ -675,16 +684,37 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
         _notifiedElevatedPids.Add(pid);
         _lastElevationNoticeTicks = now;
-        WriteDebugLog($"elevated foreground pid={pid} detected; raising hotkey-blocked notice");
+        WriteDebugLog($"elevated foreground pid={pid} detected; raising hotkey-blocked notice for {blockedHotkey}");
 
         try
         {
-            OnElevatedWindowFocused?.Invoke();
+            OnElevatedWindowFocused?.Invoke(blockedHotkey);
         }
         catch (Exception ex)
         {
             WriteDebugLog($"elevated notice callback error={ex}");
         }
+    }
+
+    /// <summary>
+    /// The first hotkey only the low-level keyboard hook can serve: RegisterHotKey refused it (typically
+    /// ERROR_HOTKEY_ALREADY_REGISTERED — PrintScreen owned by the Snipping Tool, a combo taken by another app),
+    /// so the hook matches it instead. Those are the only hotkeys an elevated foreground window silences, which
+    /// is what the notice is for. Null when every registered hotkey went through RegisterHotKey.
+    /// </summary>
+    internal string? FirstHookOnlyHotkey()
+    {
+        foreach (var id in _registeredCombos.Keys)
+        {
+            if (!_registeredIds.Contains(id)
+                && _hotkeyStrings.TryGetValue(id, out var hotkey)
+                && !string.IsNullOrWhiteSpace(hotkey))
+            {
+                return hotkey;
+            }
+        }
+
+        return null;
     }
 
     private bool IsProcessHigherIntegrity(uint pid)
