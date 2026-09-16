@@ -86,19 +86,21 @@ tests/
 docs/                          # architecture roadmap, refactor plan, release catalog
 scripts/                       # verify.ps1, check-localization.ps1, ensure-ffmpeg-libs.ps1,
                                # ensure-ffmpeg-libs-linux.sh, test-compress.ps1, build-installer.ps1
-.github/workflows/             # ci.yml, linux-compile-check.yml, release.yml
+.github/workflows/             # ci.yml, linux-compile-check.yml, linux-tests.yml, release.yml
 release.ps1 / release.bat      # release automation (main branch only)
 ```
 
 ## Build, Test & Verify
 
-> **Tests, `verify.ps1` and the full app still require Windows** (the Tests project is
-> single-target `net10.0-windows`); CI runs them on `windows-latest`. The solution
-> **compiles on Linux/macOS** with `dotnet build -p:EnableWindowsTargeting=true` —
-> enforced by the `linux-compile-check.yml` workflow on every `claude/**` push and PR
-> (~80 s), building BOTH TFMs. The `net10.0` head also *runs* on a Linux X11 desktop
-> (full feature set minus WGC per-window recording), but has no automated test
-> coverage yet — nothing executes tests against the `net10.0` head.
+> **`verify.ps1`, the Windows-only tests and the full feature set still require Windows**;
+> CI runs them on `windows-latest`. The Tests project multi-targets
+> `net10.0-windows10.0.19041.0;net10.0`, with the Windows-only test files fenced out of the
+> `net10.0` head in its csproj. The solution **compiles on Linux/macOS** with
+> `dotnet build -p:EnableWindowsTargeting=true` — enforced by `linux-compile-check.yml` on
+> every `claude/**` push and PR (~80 s), building BOTH TFMs — and `linux-tests.yml`
+> **executes the cross-platform suite against the `net10.0` head on ubuntu** on the same
+> triggers. The `net10.0` head also *runs* on a Linux X11 desktop (full feature set minus
+> WGC per-window recording).
 
 **Before building Release/Publish**, native FFmpeg DLLs must exist under
 `src/GimmeCapture/ffmpeg-lib/` or the build fails (guardrail target
@@ -131,8 +133,14 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 build + test) before pushing. Use `-SkipPublish` to skip the publish smoke step.
 
 CI on every PR/`main` push: `ci.yml` (windows-latest) runs ensure-FFmpeg → `verify.ps1`
-(which includes the localization check) → upload coverage; `linux-compile-check.yml`
-(ubuntu-latest) type-checks both TFMs. PRs run `verify.ps1 -SkipPublish`.
+(which includes the localization check) → upload coverage. PRs run `verify.ps1 -SkipPublish`.
+
+Two ubuntu-latest workflows run on every `claude/**` push and PR: `linux-compile-check.yml`
+type-checks both TFMs, and `linux-tests.yml` runs the suite against the `net10.0` head (it
+provisions the FFmpeg `.so` bundle and restores unlocked with `--force-evaluate`; on push
+events only, it commits refreshed `packages.lock.json` back to the branch — so a `claude/**`
+branch can gain a `chore(ci): refresh packages.lock.json` commit, and you should pull before
+pushing again).
 
 ## Architecture & Conventions
 
@@ -231,13 +239,16 @@ Three locales are kept in **strict key parity**:
 - **Keep package lock files in sync** (`packages.lock.json`); CI restores in locked
   mode. If you change `PackageReference`s, restore so the lock file updates.
 - **Don't commit native FFmpeg DLLs** — they are produced by script and gitignored.
-- **Non-Windows environments: compile yes, tests no.** Use
-  `dotnet build GimmeCapture.slnx -p:EnableWindowsTargeting=true` (or rely on the
-  `Linux Compile Check` workflow on every `claude/**` push) for compiler feedback on
-  both TFMs. Tests and `verify.ps1` still require Windows; the app itself runs on a
-  Linux X11 desktop from the `net10.0` head (everything except WGC per-window
-  recording). State these limitations rather than claiming a green build from a
-  compile alone.
+- **Non-Windows environments: compile and the cross-platform tests yes, `verify.ps1` no.**
+  Use `dotnet build GimmeCapture.slnx -p:EnableWindowsTargeting=true` for compiler feedback
+  on both TFMs, and
+  `dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj -f net10.0 -p:EnableWindowsTargeting=true`
+  for the tests that are not Windows-fenced — or rely on the `Linux Compile Check` and
+  `Linux Tests` workflows, which both run on every `claude/**` push. `verify.ps1`
+  (localization parity + coverage gate + publish smoke) and the Windows-only tests still
+  require Windows; the app itself runs on a Linux X11 desktop from the `net10.0` head
+  (everything except WGC per-window recording). Say which of these actually ran rather than
+  claiming a green build from a compile alone.
 - **Git workflow**: develop on the assigned feature branch, commit with clear
   messages, push with `git push -u origin <branch>`. Do **not** open a PR unless
   explicitly asked.
