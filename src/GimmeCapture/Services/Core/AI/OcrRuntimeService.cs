@@ -27,9 +27,15 @@ public sealed class OcrRuntimeService : IDisposable
     /// <summary>
     /// How long the sessions survive after the last consumer lets go. Deliberately NOT immediate: tearing a
     /// DirectML session down and building a new one seconds later is what precedes every observed crash, and
-    /// back-to-back scans used to do exactly that. Matches the memory-trim debounce that follows the unload.
+    /// back-to-back scans used to do exactly that.
+    ///
+    /// Five seconds turned out to be far shorter than the rhythm captures actually arrive in: a real session logs
+    /// a session build at ~370 ms plus the model files being read again, and that was paid on every capture more
+    /// than five seconds after the last one — which is most of them. Two minutes covers a working rhythm and
+    /// still frees the sessions once the user has moved on; the memory trim then runs on its own, longer, idle
+    /// schedule.
     /// </summary>
-    private static readonly TimeSpan UnloadIdleDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan UnloadIdleDelay = TimeSpan.FromMinutes(2);
 
     private readonly AIResourceService _aiResourceService;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
@@ -247,9 +253,9 @@ public sealed class OcrRuntimeService : IDisposable
         // the log showed sessions being created with nothing explaining why, which is exactly what made the crash
         // pattern hard to read.
         AppLog.Information("OcrRuntime.Unloaded");
-        // OCR is a one-shot scan, so reclaim promptly after it finishes. Debounced (5s): a re-scan within the
-        // window cancels this rather than trimming then immediately reloading.
-        ProcessMemoryTrimService.RequestIdleTrimAsync("ocr-unloaded", TimeSpan.FromSeconds(5))
+        // Hand the freed native memory back once the app is genuinely idle — the trim service owns that idle
+        // window now, so a re-scan in the meantime cancels this instead of trimming and immediately reloading.
+        ProcessMemoryTrimService.RequestIdleTrimAsync("ocr-unloaded")
             .Forget("MemoryTrim.OcrUnloaded");
     }
 

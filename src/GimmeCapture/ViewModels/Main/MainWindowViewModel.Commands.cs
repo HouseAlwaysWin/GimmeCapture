@@ -24,7 +24,13 @@ public partial class MainWindowViewModel
             }
         }
 
-        await SaveSettingsAsync();
+        // Persist without making the overlay wait for it. The snapshot is still taken here, so what lands on disk
+        // is the state at the moment of this capture — but the serialize + atomic file write no longer sit
+        // between the hotkey and the overlay appearing. That write is ordinary disk I/O: usually a few ms, and
+        // occasionally seconds when something else (antivirus, a busy disk) is in the way, which is exactly the
+        // "I pressed the hotkey and nothing happened" report. The debounced auto-save covers the same state
+        // anyway, so nothing is lost if this write finishes after the overlay is up.
+        SaveSettingsAsync().Forget("Settings.SaveOnCapture");
         RequestCaptureAction?.Invoke(mode);
         SetStatus("StatusSnip");
     }

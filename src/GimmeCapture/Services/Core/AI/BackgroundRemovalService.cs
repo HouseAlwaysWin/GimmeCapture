@@ -667,7 +667,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
 
         if (released)
         {
-            ProcessMemoryTrimService.RequestIdleTrimAsync("u2net-idle", TimeSpan.FromSeconds(5)).Forget("MemoryTrim.U2NetIdle");
+            ProcessMemoryTrimService.RequestIdleTrimAsync("u2net-idle").Forget("MemoryTrim.U2NetIdle");
         }
     }
 
