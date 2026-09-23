@@ -18,9 +18,17 @@ on:
 permissions:
   contents: write # lock-file auto-commit (push events on claude/** only)
 
+# A newer push to the same branch (or PR) supersedes the run in progress. Cancelling one mid-way is safe for the
+# lock-file commit as well: the newer run restores and commits whatever is still stale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    # A normal run takes a minute or two; the hang detector below fires at 8 minutes. This is only the backstop.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 

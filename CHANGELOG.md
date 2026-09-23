@@ -30,6 +30,12 @@
 - **Closing the translate overlay stops its auto-detect.** With auto-detect on, closing the overlay left it
   capturing the screen, running OCR and translating every 1.5 seconds in the background for the rest of the
   session.
+- **Smart selection no longer takes the app down.** Pressing Esc or switching tools while smart selection was still
+  analysing a pinned image could free the AI model underneath it — a native crash that closed the whole app with no
+  error. A model is now released only once nothing is using it. Switching the smart-selection model variant also
+  no longer leaves the previous one (hundreds of MB to about 1 GB) stranded in memory.
+- **Switching or unloading the translation model mid-translation no longer crashes:** the model is freed only after
+  the translation using it has finished.
 
 ### ⚡ Performance
 
@@ -39,6 +45,31 @@
 - **Slow capture opens are now diagnosable:** each capture logs `SnipOpen.Timings` (time waiting for the UI
   thread, then each stage up to the overlay being shown), and a `UiStall` warning is logged whenever the UI
   thread stops responding for more than 250 ms.
+- **Stopping a long recording no longer freezes the app.** Finishing an MP4, MKV or MOV recording rewrote the whole
+  file — and copied it, when saving to another drive — on the UI thread, so the app stopped responding until that
+  was done. It now happens in the background.
+
+### 🔒 Security & supply chain
+
+- **"Copy recording" starts PowerShell by its full Windows path.** It used to be found through `PATH`, whose first
+  entry is a folder any program running as you can write to (the AI runtime folder), so a `powershell.exe` planted
+  there would have run instead. File names containing `[` or `]` are copied too now; they were read as wildcards
+  and silently skipped.
+- **Every build bundles exactly the same FFmpeg.** Builds used to download whatever BtbN's rolling "latest" FFmpeg
+  was that day, unchecked. They now fetch one exact build — FFmpeg n8.1.3 (2026-09-22), mirrored in this
+  repository's releases — and refuse anything whose SHA-256 differs. THIRD-PARTY-NOTICES.md names that exact
+  version, so the GPL corresponding-source notice points at the exact source.
+
+### 🧹 Maintenance
+
+- CI uploads the coverage report again. Since `verify.ps1` began deleting a passing run's artifacts, it deleted the
+  report before the upload step ran, so green runs uploaded nothing.
+- Tests that need a local video clip or a render-probe switch are reported as **skipped** while those are not set,
+  instead of counting as passes for work they never did, and `scripts/test-compress.ps1` now also runs the
+  crop+rotate export checks it said it ran. The empty placeholder test is gone.
+- Workflows cancel superseded PR runs, time out instead of hanging for six hours, and ask only for the token
+  permissions they use. The release job's one third-party action is pinned to a commit SHA, Dependabot keeps the
+  workflow actions current, and CodeQL scans the C# code and the workflows.
 
 ---
 

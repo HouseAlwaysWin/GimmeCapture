@@ -9,7 +9,7 @@ namespace GimmeCapture.Tests;
 /// <summary>
 /// Characterization tests for the audio transcoders (<see cref="LibavAacTranscoder"/>,
 /// <see cref="LibavOpusTranscoder"/>, <see cref="LibavPinAudioPcmDecoder"/>), which previously had zero
-/// direct coverage. GATED like <see cref="CompressIntegrationTests"/>: a no-op pass unless
+/// direct coverage. OPT-IN like <see cref="CompressIntegrationTests"/>: skipped unless
 /// COMPRESS_IT_OUTDIR is set, so it never runs on CI / Linux. Requires Windows + the bundled FFmpeg libs
 /// (aac + libopus encoders). Drive via <c>scripts/test-compress.ps1</c>, or set the env var and run:
 ///   dotnet test --filter FullyQualifiedName~LibavAudioTranscoder
@@ -17,8 +17,9 @@ namespace GimmeCapture.Tests;
 /// </summary>
 public class LibavAudioTranscoderTests
 {
-    private static string? OutDir => Environment.GetEnvironmentVariable("COMPRESS_IT_OUTDIR");
-    private static bool Enabled => !string.IsNullOrWhiteSpace(OutDir);
+    private const string OutDirVariable = "COMPRESS_IT_OUTDIR";
+
+    private static string? OutDir => Environment.GetEnvironmentVariable(OutDirVariable);
 
     private static string OutPath(string name)
     {
@@ -29,11 +30,9 @@ public class LibavAudioTranscoderTests
     private static string NewWav(string name, double seconds = 1.0) =>
         WavTestAudio.WriteSineWav(OutPath(name), seconds);
 
-    [Fact]
+    [OptInFact(OutDirVariable)]
     public void EncodeWavToM4a_ProducesReadableAacAudio()
     {
-        if (!Enabled) return;
-
         string wav = NewWav("aac_src.wav");
         string m4a = OutPath("aac_out.m4a");
 
@@ -45,11 +44,9 @@ public class LibavAudioTranscoderTests
         Assert.True(decoded.PcmBytes.Length > 0, "AAC output has no decodable audio");
     }
 
-    [Fact]
+    [OptInFact(OutDirVariable)]
     public void EncodeWavToM4a_HonorsBitrate_HigherQualityIsLarger()
     {
-        if (!Enabled) return;
-
         // A 2s tone at 192k vs 96k: the higher-bitrate file must be meaningfully larger.
         string wav = NewWav("aac_rate_src.wav", seconds: 2.0);
         string hi = OutPath("aac_high.m4a");
@@ -63,11 +60,9 @@ public class LibavAudioTranscoderTests
         Assert.True(hiLen > loLen, $"High-bitrate AAC ({hiLen}) should exceed low-bitrate ({loLen})");
     }
 
-    [Fact]
+    [OptInFact(OutDirVariable)]
     public void EncodeWavToM4a_MonoMixdown_ProducesReadableAudio()
     {
-        if (!Enabled) return;
-
         string wav = NewWav("aac_mono_src.wav");
         string m4a = OutPath("aac_mono.m4a");
 
@@ -78,11 +73,9 @@ public class LibavAudioTranscoderTests
         Assert.True(decoded.PcmBytes.Length > 0, "mono AAC output has no decodable audio");
     }
 
-    [Fact]
+    [OptInFact(OutDirVariable)]
     public void EncodeWavToOpusOgg_ProducesReadableAudio()
     {
-        if (!Enabled) return;
-
         string wav = NewWav("opus_src.wav");
         string ogg = OutPath("opus_out.ogg");
 
@@ -93,11 +86,9 @@ public class LibavAudioTranscoderTests
         Assert.True(decoded.PcmBytes.Length > 0, "Opus output has no decodable audio");
     }
 
-    [Fact]
+    [OptInFact(OutDirVariable)]
     public void RoundTrip_WavToAacToPcm_YieldsStereo16BitPcm()
     {
-        if (!Enabled) return;
-
         string wav = NewWav("rt_src.wav", seconds: 1.0);
         string m4a = OutPath("rt_out.m4a");
         LibavAacTranscoder.EncodeWavToM4a(wav, m4a, VideoQuality.Medium);
@@ -112,11 +103,9 @@ public class LibavAudioTranscoderTests
         Assert.Equal(0, decoded.PcmBytes.Length % 4);
     }
 
-    [Fact]
+    [OptInFact(OutDirVariable)]
     public void EncodeWavToMp3_ProducesReadableMp3Audio()
     {
-        if (!Enabled) return;
-
         string wav = NewWav("mp3_src.wav");
         string mp3 = OutPath("mp3_out.mp3");
 

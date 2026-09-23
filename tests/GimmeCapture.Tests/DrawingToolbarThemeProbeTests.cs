@@ -22,14 +22,9 @@ public class DrawingToolbarThemeProbeTests
     private static readonly string OutDir =
         Environment.GetEnvironmentVariable("RENDER_OUT") ?? Path.Combine(Path.GetTempPath(), "gimmecapture-render");
 
-    [Fact]
+    [OptInFact("RENDER_PROBE=1")]
     public void Probe_DrawingToolbarButtonTheme()
     {
-        if (Environment.GetEnvironmentVariable("RENDER_PROBE") != "1")
-        {
-            return;
-        }
-
         AppBuilder.Configure<GimmeCapture.App>()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })

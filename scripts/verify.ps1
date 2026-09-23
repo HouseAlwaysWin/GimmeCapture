@@ -92,6 +92,12 @@ if (-not $coverageFile) {
     throw "Coverage report was not generated."
 }
 
+# Keep a copy OUTSIDE this run's directory: a passing run deletes that directory at the end, and CI uploads the
+# report only after this script returns — so every green CI run used to upload nothing at all.
+$latestCoverageDir = Join-Path $root "artifacts\coverage"
+New-Item -ItemType Directory -Force -Path $latestCoverageDir | Out-Null
+Copy-Item -LiteralPath $coverageFile.FullName -Destination (Join-Path $latestCoverageDir "coverage.cobertura.xml") -Force
+
 [xml]$coverageXml = Get-Content -LiteralPath $coverageFile.FullName
 $lineRate = [double]::Parse(
     $coverageXml.coverage.'line-rate',

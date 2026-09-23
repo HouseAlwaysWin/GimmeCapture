@@ -1,0 +1,21 @@
+# Keeps the actions used by .github/workflows current — including the SHA-pinned one in release.yml, whose SHA and
+# version comment Dependabot rewrites together. Minor and patch bumps arrive as one grouped PR a week. Each major
+# bump gets a PR of its own: a major can change behaviour, and release.yml only runs on a tag push, so CI on the
+# PR cannot vouch for anything that workflow uses.
+#
+# NuGet is not listed yet. Every project restores in locked mode from packages.lock.json, and Dependabot's
+# documentation does not say it regenerates those lock files — a bump that did not would fail every locked restore.
+# Vulnerable NuGet packages are still reported by Dependabot alerts, which is a repository setting.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

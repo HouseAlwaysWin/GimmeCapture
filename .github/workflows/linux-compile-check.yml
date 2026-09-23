@@ -15,9 +15,18 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+# A newer push to the same branch (or PR) supersedes the run in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   compile:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

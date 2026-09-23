@@ -11,26 +11,29 @@ namespace GimmeCapture.Tests;
 /// <summary>
 /// Real-encode checks for the exporter's composite hooks and the crop+rotate BGRA path (the dims fix):
 /// the post-transform hook must draw on the CROPPED+ROTATED frame exactly where the editor preview shows
-/// it. GATED like <see cref="CompressIntegrationTests"/> — a no-op pass unless COMPRESS_IT_SOURCE /
+/// it. OPT-IN like <see cref="CompressIntegrationTests"/> — skipped unless COMPRESS_IT_SOURCE /
 /// COMPRESS_IT_OUTDIR are set (Windows + bundled FFmpeg libs required). Drive via scripts/test-compress.ps1.
 /// </summary>
 public class LibavClipExporterCompositeTests
 {
-    private static string? Source => Environment.GetEnvironmentVariable("COMPRESS_IT_SOURCE");
-    private static string? OutDir => Environment.GetEnvironmentVariable("COMPRESS_IT_OUTDIR");
+    private const string SourceVariable = "COMPRESS_IT_SOURCE";
+    private const string OutDirVariable = "COMPRESS_IT_OUTDIR";
 
-    private static bool Enabled =>
-        !string.IsNullOrWhiteSpace(Source) && File.Exists(Source) && !string.IsNullOrWhiteSpace(OutDir);
+    private static string? Source => Environment.GetEnvironmentVariable(SourceVariable);
+    private static string? OutDir => Environment.GetEnvironmentVariable(OutDirVariable);
 
-    [Fact]
+    // [OptInFact] has already skipped the test unless both variables are set. A source that does not exist is a
+    // mistake in how the test was driven, so it fails instead of passing without encoding anything.
+    private static string RequireSource()
+    {
+        Assert.True(File.Exists(Source), $"{SourceVariable} does not point at an existing file: '{Source}'.");
+        return Source!;
+    }
+
+    [OptInFact(SourceVariable, OutDirVariable)]
     public async Task CropPlusRotate_WithPostTransformComposite_BurnsMarkerAtDrawnPosition()
     {
-        if (!Enabled)
-        {
-            return; // gate: does nothing unless the runner provides a source + output dir
-        }
-
-        string source = Source!;
+        string source = RequireSource();
         string outDir = OutDir!;
         Directory.CreateDirectory(outDir);
 
@@ -83,15 +86,10 @@ public class LibavClipExporterCompositeTests
         Assert.False(r2 > 200 && g2 < 60 && b2 < 60, "far corner unexpectedly solid red");
     }
 
-    [Fact]
+    [OptInFact(SourceVariable, OutDirVariable)]
     public async Task CropPlusRotate_WithoutComposite_ProducesRotatedCropDims()
     {
-        if (!Enabled)
-        {
-            return;
-        }
-
-        string source = Source!;
+        string source = RequireSource();
         string outDir = OutDir!;
         Directory.CreateDirectory(outDir);
 

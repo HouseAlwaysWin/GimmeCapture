@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+# Read-only by default; only the job that publishes the release asks for write access, below.
+permissions:
+  contents: read
+
 jobs:
   # Refuse to publish a release whose source does not say it is that release. v0.67.0-v0.67.2 and then
   # v0.68.1 were all tagged by hand on commits whose csproj still carried the previous version and whose
@@ -13,6 +17,7 @@ jobs:
   # release.ps1 always produces a commit that passes this; a hand-pushed tag has to as well.
   verify-release-metadata:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -37,6 +42,7 @@ jobs:
   build-linux:
     needs: verify-release-metadata
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -125,6 +131,9 @@ jobs:
   release:
     needs: build-linux
     runs-on: windows-latest
+    # A whole release takes 7-9 minutes. This only stops a hung one (a stuck choco install, say) from holding the
+    # runner for the 6-hour default.
+    timeout-minutes: 45
     permissions:
       contents: write
 
@@ -259,8 +268,11 @@ jobs:
         }
         $lines | Set-Content -Encoding ascii SHA256SUMS.txt
 
+    # The only third-party action in any workflow, and it runs with write access to releases, so it is pinned to a
+    # full commit SHA: a moved or hijacked tag cannot change what publishes the release. Dependabot updates the SHA
+    # and the version comment together.
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
       with:
         files: |
           GimmeCapture_win-x64.zip
