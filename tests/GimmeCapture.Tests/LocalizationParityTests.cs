@@ -10,8 +10,7 @@ public class LocalizationParityTests
     [Fact]
     public void AllSupportedLanguagesHaveIdenticalKeys()
     {
-        string root = FindRepositoryRoot();
-        string localizationDir = Path.Combine(root, "src", "GimmeCapture", "Assets", "Localization");
+        string localizationDir = Path.Combine(RepositoryFiles.AppSource, "Assets", "Localization");
         string[] files = ["en-US.json", "zh-TW.json", "ja-JP.json"];
         var keySets = files.ToDictionary(
             file => file,
@@ -30,21 +29,5 @@ public class LocalizationParityTests
                 expected.SetEquals(keySets[file]),
                 $"{file} localization keys differ from {files[0]}.");
         }
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current != null)
-        {
-            if (File.Exists(Path.Combine(current.FullName, "GimmeCapture.slnx")))
-            {
-                return current.FullName;
-            }
-
-            current = current.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Repository root not found.");
     }
 }

@@ -30,12 +30,12 @@ public partial class MainWindow
         base.OnDataContextChanged(e);
         if (DataContext is MainWindowViewModel vm)
         {
-            vm.PickFolderAction = async () =>
+            vm.PickFolderAction = async title =>
             {
                 var storage = this.StorageProvider;
                 var folders = await storage.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
                 {
-                    Title = "選擇錄影儲存資料夾",
+                    Title = title,
                     AllowMultiple = false
                 });
 
@@ -100,8 +100,8 @@ public partial class MainWindow
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     ConfirmationDialog.ShowConfirmation(
                         this,
-                        "快捷鍵註冊失敗",
-                        $"無法註冊「{hotkeyName}」的快捷鍵 {hotkey}。這個組合可能已被 Windows 或其他程式使用。",
+                        LocalizationService.Instance["HotkeyRegisterFailedTitle"],
+                        string.Format(LocalizationService.Instance["HotkeyRegisterFailedMessage"], hotkeyName, hotkey),
                         ConfirmationMode.OkOnly).Forget("Hotkey.RegisterFailedDialog"));
             };
 

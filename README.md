@@ -22,16 +22,21 @@ The project name is a tribute to **BABYMETAL** and the song **["Gimme chocolate!
 
 ## Highlights
 
-- **Snip mode**: Capture a region quickly, then copy, save, annotate, or pin it.
+- **Snip mode**: Capture a region quickly, then copy, save, annotate, or pin it — right-click menus, dropdowns
+  and the Start menu included.
 - **Record mode**: Record your screen with system + microphone audio, webcam picture-in-picture, a
   keystroke overlay, and live toolbar controls.
 - **Scrolling capture**: Stitch a long page or chat into one tall image while you scroll.
 - **Translate mode**: OCR-assisted region selection with local translation overlays.
-- **Compress tab**: Re-encode any video smaller (H.264/H.265) with a batch queue and an advanced editor.
+- **Compress tab**: Re-encode any video smaller (H.264/H.265/AV1, or GIF/WebM) with a batch queue and an advanced
+  editor.
 - **Pin windows**: Keep images and videos on top as floating reference windows.
 - **AI tools**: Background removal, smart object/region selection, and OCR — all local, downloaded on demand.
 - **Annotation tools**: Boxes, arrows, lines, text, mosaic/blur redaction, highlighter, callouts, and step markers.
-- **Custom hotkeys** and **visual customization** (theme colors, border thickness, mask opacity, decorations).
+- **Quick OCR**: Shift+F4 copies the text in a region, with automatic language detection.
+- **History**: Every saved or copied capture in one place, searchable by file name.
+- **Custom hotkeys**, **file-name templates** and **visual customization** (theme colors, border thickness,
+  toolbar position, decorations).
 - **In-app auto-update**: Downloads and installs new releases without leaving the app.
 
 ## Platform support
@@ -46,6 +51,17 @@ GimmeCapture runs on **Windows 10/11** and **Linux (X11)**.
   recording has no Linux equivalent and is hidden** — the capture-scope picker keeps monitor selection.
   Global hotkeys use X11 (they work under XWayland; native Wayland global hotkeys are not yet supported).
 
+## Snip
+
+- **Capture menus and dropdowns**: the overlay opens without taking focus, so right-click menus and dropdown
+  lists stay open until you finish the selection.
+- **Freeze the screen** (on by default): the whole desktop is captured *before* the overlay appears — the only
+  reliable way to capture the Start menu, the tray flyout and other popups that close as soon as anything covers
+  them.
+- **Quick OCR** (Shift+F4): recognizes the text in a region and copies it, optionally saving a `.txt` beside the
+  capture. `Auto` picks the language by comparing the installed recognizers on the text itself.
+- The copy confirmation shows a thumbnail of what actually landed on the clipboard.
+
 ## Recording
 
 Recording mode supports:
@@ -54,6 +70,8 @@ Recording mode supports:
 - **Webcam picture-in-picture** (corner, size, and rectangular/circular shape)
 - **Keystroke overlay** and cursor/click visualization
 - Multiple export formats: **MP4, MKV, GIF, WebM, MOV** (high-quality palette-based GIF)
+- **AV1** recording on hardware that can encode it live (NVIDIA RTX 40, AMD RDNA 3, Intel Arc and newer)
+- **Auto-stop** after a set length or file size
 - **Capture-scope picker** — record a specific monitor (both platforms) or window (Windows/WGC)
 - Live recording toolbar, audio-level feedback, mute toggle, and a global stop hotkey
 
@@ -64,6 +82,8 @@ Capture content taller than the screen — a long web page, document, or chat lo
 - Select a region, then scroll the target by hand while frames are captured and stitched
 - Automatic vertical/horizontal direction detection (or lock a direction)
 - The capture region outline stays out of the stitched image and passes your scrolling through
+- A live preview of the growing strip, and a warning as soon as stitching loses track
+- Long screenshots pin as a scrollable window
 
 ## Translation Mode
 
@@ -86,8 +106,10 @@ The current user-facing local translation model list is:
 
 Import any video and re-encode it smaller, entirely in-process (libav):
 
-- **H.264 / H.265**, **compress-to-target-size** (true two-pass for H.264), resolution downscale,
-  frame-rate cap, encoder preset, CRF, and audio bitrate / mono-stereo mixdown or drop-audio.
+- **H.264 / H.265 / AV1 (SVT-AV1)**, **compress-to-target-size** (true two-pass for H.264), resolution
+  downscale, frame-rate cap, encoder preset, CRF, video filters, and audio bitrate / mono-stereo mixdown or
+  drop-audio.
+- **GIF and WebM output**, and **audio-only extract**.
 - **Batch queue** with parallel encoding, per-item settings + presets, and a live output-size estimate.
 - **Advanced video editor**: trim / speed / crop / rotate plus annotations, redaction, and
   freeze-frame, with an inline side-by-side quality compare.
@@ -110,6 +132,13 @@ Pinned windows are meant for quick reference while you work.
 - Pin captured images as floating windows
 - Pin video clips with playback controls (audio included)
 - Keep windows on top while preserving lightweight interaction
+- Choose the export format right from the pin toolbar
+
+## History
+
+With history on (the default), every saved or copied capture and every finished recording is kept in the
+**History** tab, split into screenshots and recordings, sortable and searchable by file name. The newest 300 are
+kept.
 
 ## Updates
 

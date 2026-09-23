@@ -318,7 +318,8 @@
                         Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding SkipBackCommand}"/>
                 <Button Content="{Binding [CompressCompareStepBack], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding StepBackCommand}"/>
-                <Button Theme="{StaticResource GothicMetalButton}" MinWidth="56" Command="{Binding PlayPauseCommand}">
+                <Button Theme="{StaticResource GothicMetalButton}" MinWidth="56" Command="{Binding PlayPauseCommand}"
+                        ToolTip.Tip="{Binding [PlayPause], Source={x:Static services:LocalizationService.Instance}}">
                     <Panel Width="16" Height="16">
                         <Path Data="M 2,1 L 2,15 L 14,8 Z" Fill="White" IsVisible="{Binding !IsPlaying}"/>
                         <StackPanel Orientation="Horizontal" Spacing="3"
