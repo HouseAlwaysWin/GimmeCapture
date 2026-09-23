@@ -10,8 +10,25 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace GimmeCapture.Services.Core.AI;
 
+/// <summary>
+/// Owns the one SAM2 encoder/decoder session pair every pin shares.
+///
+/// Guarded exactly like <see cref="OcrRuntimeService"/>, and for the same reason: freeing an ONNX session while
+/// another thread is inside <c>Run</c> on it faults the process with an access violation (0xC0000005) — not a
+/// catchable .NET exception, so the app just vanishes. SAM2 used to hand out raw session references: the encoder
+/// ran fire-and-forget on the thread pool while Esc or a tool switch released the last lease, and releasing the
+/// last lease disposed the sessions on the spot. Now every native call happens inside a
+/// <see cref="BeginSessionUse"/> scope, teardown waits for the scopes to drain, and inference is serialised
+/// (two threads in <c>Run</c> on one session crash just the same).
+/// </summary>
 public sealed class SAM2RuntimeService : IDisposable
 {
+    /// <summary>How long an unload or variant swap waits for in-flight inference before giving up on it.</summary>
+    private static readonly TimeSpan SwapTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>Shorter at shutdown: past this, leaking the sessions beats stalling process exit.</summary>
+    private static readonly TimeSpan ShutdownUnloadTimeout = TimeSpan.FromSeconds(5);
+
     private readonly AIPathService _pathService;
     private readonly NativeResolverService _resolverService;
     private InferenceSession? _cachedEncoder;
@@ -21,6 +38,8 @@ public sealed class SAM2RuntimeService : IDisposable
     private readonly SemaphoreSlim _modelLoadingLock = new(1, 1);
     private readonly object _leaseLock = new();
     private readonly HashSet<string> _activeLeases = new();
+    private readonly ResourceUseGate _useGate = new();
+    private readonly SemaphoreSlim _inferenceLock = new(1, 1);
 
     public SAM2RuntimeService(AIPathService pathService, NativeResolverService resolverService)
     {
@@ -41,6 +60,9 @@ public sealed class SAM2RuntimeService : IDisposable
             }
         }
     }
+
+    /// <summary>In-flight session uses. Diagnostics and tests only.</summary>
+    internal int ActiveSessionUses => _useGate.ActiveUses;
 
     public string AcquireLease()
     {
@@ -68,8 +90,44 @@ public sealed class SAM2RuntimeService : IDisposable
 
         if (shouldUnload)
         {
-            UnloadModels();
+            // Off the caller's thread: the last lease is typically released from the UI (Esc, tool switch, pin
+            // closing), and the unload now waits for an inference still in flight — seconds for an encoder run on CPU.
+            Task.Run(() => UnloadModels()).Forget("Sam2Runtime.IdleUnload");
         }
+    }
+
+    /// <summary>
+    /// Takes the sessions for one inference and keeps them alive for its duration. ALWAYS use the scope's sessions
+    /// rather than caching them: outside a scope they may already be disposed, and calling <c>Run</c> — or even
+    /// reading metadata — on a disposed session is an access violation, not an exception.
+    ///
+    /// Inference is SERIALISED: one scope at a time. The sessions may be null (never loaded, or unloaded while the
+    /// caller waited) — callers treat that as "SAM2 is not available right now".
+    /// Do not nest scopes on one thread: the inference lock is not re-entrant.
+    /// </summary>
+    public Sam2SessionUse BeginSessionUse()
+    {
+        var scope = _useGate.BeginUse();
+        try
+        {
+            _inferenceLock.Wait();
+        }
+        catch
+        {
+            scope.Dispose();
+            throw;
+        }
+
+        // Read once both gates are held: a swap or unload only runs when no use is open, so these cannot change
+        // under the caller.
+        return new Sam2SessionUse(
+            () =>
+            {
+                _inferenceLock.Release();
+                scope.Dispose();
+            },
+            _cachedEncoder,
+            _cachedDecoder);
     }
 
     public async Task LoadModelsAsync(SAM2Variant variant)
@@ -88,46 +146,56 @@ public sealed class SAM2RuntimeService : IDisposable
                 return;
             }
 
-            UnloadModels();
             _resolverService.SetupNativeResolvers();
 
             var paths = _pathService.GetSAM2Paths(variant);
             if (!File.Exists(paths.Encoder) || !File.Exists(paths.Decoder))
             {
-                System.Diagnostics.Debug.WriteLine("[AI] Check Model files missing, cannot load.");
+                AppLog.Warning("Sam2Runtime.Load", $"SAM2 {variant} model files are missing; cannot load.");
                 return;
             }
 
             await Task.Run(() =>
             {
-                try
+                // The old pair is replaced under exclusive access. The previous code called the lease-gated
+                // UnloadModels here, which returned early whenever a pin held a lease — and then simply overwrote
+                // the cached sessions, orphaning the old pair (hundreds of MB to ~1 GB) until the process exited.
+                if (!_useGate.TryBeginExclusive(SwapTimeout, out var swap))
                 {
-                    var options = new SessionOptions
+                    AppLog.Warning(
+                        "Sam2Runtime.SwapTimedOut",
+                        $"SAM2 still busy after {SwapTimeout.TotalSeconds:0}s; staying on {_cachedVariant?.ToString() ?? "none"} instead of loading {variant}.");
+                    return;
+                }
+
+                using (swap)
+                {
+                    bool releasedOldPair = DisposeSessions();
+                    try
                     {
-                        GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_BASIC,
-                        LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
-                    };
+                        var options = new SessionOptions
+                        {
+                            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_BASIC,
+                            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
+                        };
 
-                    OnnxProviderConfigurator.AppendGpuProvidersWithFallback(options);
+                        OnnxProviderConfigurator.AppendGpuProvidersWithFallback(options);
 
-                    System.Diagnostics.Debug.WriteLine($"[AI] Loading Encoder: {paths.Encoder}");
-                    _cachedEncoder = new InferenceSession(paths.Encoder, options);
-
-                    System.Diagnostics.Debug.WriteLine($"[AI] Loading Decoder: {paths.Decoder}");
-                    _cachedDecoder = new InferenceSession(paths.Decoder, options);
-
-                    _cachedVariant = variant;
-                    _isWarmedUp = false;
-                    System.Diagnostics.Debug.WriteLine("[AI] Models Loaded Successfully");
-
-                    WarmupSessions();
+                        _cachedEncoder = new InferenceSession(paths.Encoder, options);
+                        _cachedDecoder = new InferenceSession(paths.Decoder, options);
+                        _cachedVariant = variant;
+                        _isWarmedUp = false;
+                        AppLog.Information($"Sam2Runtime.Loaded: {variant}{(releasedOldPair ? " (replaced the previous variant)" : string.Empty)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLog.Warning("Sam2Runtime.Load", ex);
+                        DisposeSessions();
+                        throw;
+                    }
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[AI] Model Load Error: {ex.Message}");
-                    UnloadModels();
-                    throw;
-                }
+
+                WarmupSessions();
             });
         }
         finally
@@ -160,21 +228,64 @@ public sealed class SAM2RuntimeService : IDisposable
         }
     }
 
+    /// <summary>
+    /// The current sessions, for "is SAM2 loaded" checks only. Never call <c>Run</c> or read metadata on these:
+    /// outside a <see cref="BeginSessionUse"/> scope they can be disposed at any moment.
+    /// </summary>
     public (InferenceSession? Encoder, InferenceSession? Decoder) GetSessions()
     {
         return (_cachedEncoder, _cachedDecoder);
     }
 
-    public void UnloadModels()
+    public void UnloadModels() => UnloadModels(SwapTimeout);
+
+    /// <summary>
+    /// Frees the sessions once no pin holds a lease and nothing is running on them. If inference is still in flight
+    /// after <paramref name="timeout"/> the sessions are deliberately LEAKED — the process reclaims them at exit,
+    /// whereas disposing them under a running inference faults it.
+    /// </summary>
+    private void UnloadModels(TimeSpan timeout)
     {
-        lock (_leaseLock)
+        if (HasActiveLeases)
         {
-            if (_activeLeases.Count > 0)
+            return;
+        }
+
+        if (!_useGate.TryBeginExclusive(timeout, out var exclusive))
+        {
+            AppLog.Warning(
+                "Sam2Runtime.UnloadTimedOut",
+                "SAM2 sessions still in use; skipping unload rather than disposing them mid-inference.");
+            return;
+        }
+
+        bool released;
+        using (exclusive)
+        {
+            // A lease taken while this waited for the in-flight run means the sessions are wanted again.
+            if (HasActiveLeases)
             {
                 return;
             }
+
+            released = DisposeSessions();
         }
 
+        if (released)
+        {
+            ProcessMemoryTrimService.RequestIdleTrimAsync("sam2-unloaded")
+                .Forget("MemoryTrim.Sam2Unloaded");
+        }
+    }
+
+    public void Dispose()
+    {
+        UnloadModels(ShutdownUnloadTimeout);
+    }
+
+    /// <summary>Caller MUST hold exclusive access via <see cref="_useGate"/>. Returns whether anything was freed.</summary>
+    private bool DisposeSessions()
+    {
         bool releasedResources = _cachedEncoder != null || _cachedDecoder != null;
 
         _cachedEncoder?.Dispose();
@@ -185,35 +296,34 @@ public sealed class SAM2RuntimeService : IDisposable
 
         _cachedVariant = null;
         _isWarmedUp = false;
-        if (releasedResources)
-        {
-            ProcessMemoryTrimService.RequestIdleTrimAsync("sam2-unloaded")
-                .Forget("MemoryTrim.Sam2Unloaded");
-        }
+        return releasedResources;
     }
 
-    public void Dispose()
-    {
-        UnloadModels();
-    }
-
+    /// <summary>Runs one throwaway inference so the first real click is not the one paying for kernel setup.</summary>
     private void WarmupSessions()
     {
-        if (_isWarmedUp || _cachedEncoder == null || _cachedDecoder == null)
+        if (_isWarmedUp)
         {
             return;
         }
 
-        System.Diagnostics.Debug.WriteLine("[AI] Warming up SAM2 sessions centralized...");
+        using var sessionUse = BeginSessionUse();
+        var encoder = sessionUse.Encoder;
+        var decoder = sessionUse.Decoder;
+        if (encoder == null || decoder == null)
+        {
+            return;
+        }
+
         try
         {
             var encoderInput = new DenseTensor<float>(new[] { 1, 3, 1024, 1024 });
-            var encInputMetaData = _cachedEncoder.InputMetadata;
+            var encInputMetaData = encoder.InputMetadata;
             var encInputName = encInputMetaData.Keys.AsValueEnumerable().FirstOrDefault(k => k == "image" || k == "pixel_values") ?? "image";
             var encInputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(encInputName, encoderInput) };
-            using var encResults = _cachedEncoder.Run(encInputs);
+            using var encResults = encoder.Run(encInputs);
 
-            var decInputMetaData = _cachedDecoder.InputMetadata;
+            var decInputMetaData = decoder.InputMetadata;
             var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
             var decInputs = new List<NamedOnnxValue>();
 
@@ -252,14 +362,38 @@ public sealed class SAM2RuntimeService : IDisposable
             AddMock(new[] { "has_mask_input", "has_mask" }, new[] { 1 }, 0f);
             AddMock(new[] { "orig_im_size", "im_size" }, new[] { 2 }, 1024f);
 
-            using var decResults = _cachedDecoder.Run(decInputs);
+            using var decResults = decoder.Run(decInputs);
 
             _isWarmedUp = true;
-            System.Diagnostics.Debug.WriteLine("[AI] Centralized warmup complete.");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AI] Session Warmup Warning (Non-fatal): {ex.Message}");
+            // Non-fatal: the first real inference simply pays the setup cost instead.
+            AppLog.Warning("Sam2Runtime.Warmup", ex);
         }
+    }
+}
+
+/// <summary>
+/// One inference's hold on the SAM2 sessions. Dispose it (use <c>using</c>) as soon as the native calls are done:
+/// while it is open, the sessions cannot be unloaded or swapped — and no other inference can start.
+/// </summary>
+public sealed class Sam2SessionUse : IDisposable
+{
+    private Action? _release;
+
+    internal Sam2SessionUse(Action release, InferenceSession? encoder, InferenceSession? decoder)
+    {
+        _release = release;
+        Encoder = encoder;
+        Decoder = decoder;
+    }
+
+    public InferenceSession? Encoder { get; }
+    public InferenceSession? Decoder { get; }
+
+    public void Dispose()
+    {
+        Interlocked.Exchange(ref _release, null)?.Invoke();
     }
 }

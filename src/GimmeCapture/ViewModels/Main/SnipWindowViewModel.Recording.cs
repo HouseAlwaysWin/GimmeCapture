@@ -719,13 +719,18 @@ public partial class SnipWindowViewModel
                 {
                     var psi = new System.Diagnostics.ProcessStartInfo
                     {
-                        FileName = "powershell",
+                        // Full path: a bare "powershell" was resolved through PATH (see PowerShellClipboardCommand).
+                        FileName = GimmeCapture.Services.Interop.PowerShellClipboardCommand.ExecutablePath,
                         Arguments = GimmeCapture.Services.Interop.PowerShellClipboardCommand.BuildSetClipboardArguments(actualOutputPath),
                         UseShellExecute = false,
                         CreateNoWindow = true
                     };
-                    var process = System.Diagnostics.Process.Start(psi);
-                    process?.WaitForExit(2000); // Wait up to 2 seconds
+                    // Waiting up to 2 s for PowerShell used to block the UI thread this command runs on.
+                    await Task.Run(() =>
+                    {
+                        using var process = System.Diagnostics.Process.Start(psi);
+                        process?.WaitForExit(2000);
+                    });
                 }
                 catch (Exception ex)
                 {

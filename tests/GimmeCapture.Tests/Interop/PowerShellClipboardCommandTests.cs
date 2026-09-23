@@ -8,7 +8,7 @@ public class PowerShellClipboardCommandTests
     public void PlainPath_IsSingleQuoted()
     {
         var args = PowerShellClipboardCommand.BuildSetClipboardArguments(@"C:\videos\clip.mp4");
-        Assert.Contains(@"Set-Clipboard -Path 'C:\videos\clip.mp4'", args);
+        Assert.Contains(@"Set-Clipboard -LiteralPath 'C:\videos\clip.mp4'", args);
     }
 
     [Fact]
@@ -25,7 +25,7 @@ public class PowerShellClipboardCommandTests
     public void InjectionAttempt_StaysInsideTheQuotedLiteral()
     {
         var args = PowerShellClipboardCommand.BuildSetClipboardArguments("x'; Remove-Item C:\\ -Recurse #");
-        // The closing quote of the injection is doubled, so it cannot end the -Path literal.
+        // The closing quote of the injection is doubled, so it cannot end the -LiteralPath literal.
         Assert.Contains("'x''; Remove-Item C:\\ -Recurse #'", args);
     }
 
@@ -33,6 +33,24 @@ public class PowerShellClipboardCommandTests
     public void Null_ProducesEmptyQuotedPath()
     {
         var args = PowerShellClipboardCommand.BuildSetClipboardArguments(null!);
-        Assert.Contains("Set-Clipboard -Path ''", args);
+        Assert.Contains("Set-Clipboard -LiteralPath ''", args);
+    }
+
+    [Fact]
+    public void BracketsInTheFilename_AreNotTreatedAsWildcards()
+    {
+        // With -Path, "clip[1].mp4" is a wildcard pattern that matches nothing, so nothing got copied.
+        var args = PowerShellClipboardCommand.BuildSetClipboardArguments(@"C:\videos\clip[1].mp4");
+        Assert.Contains(@"Set-Clipboard -LiteralPath 'C:\videos\clip[1].mp4'", args);
+        Assert.DoesNotContain("-Path ", args);
+    }
+
+    [WindowsFact]
+    public void PowerShellIsStartedByItsFullSystemPath()
+    {
+        // A bare "powershell" is resolved through PATH, whose first entry is the user-writable AI runtime folder.
+        Assert.True(System.IO.Path.IsPathFullyQualified(PowerShellClipboardCommand.ExecutablePath));
+        Assert.EndsWith(@"WindowsPowerShell\v1.0\powershell.exe", PowerShellClipboardCommand.ExecutablePath,
+            System.StringComparison.OrdinalIgnoreCase);
     }
 }
