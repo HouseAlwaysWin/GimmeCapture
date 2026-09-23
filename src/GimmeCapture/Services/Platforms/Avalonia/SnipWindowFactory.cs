@@ -1,7 +1,9 @@
 using Avalonia.Controls;
 using System;
+using System.Diagnostics;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Translation;
 using GimmeCapture.ViewModels.Main;
@@ -50,12 +52,21 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
                 existingVm.HandleCaptureModeRequest(mode);
             }
 
+            // Consume the request stamp: this press re-targeted the overlay that is already open, so its wait
+            // must not be reported later as the wait of whatever opens next.
+            CaptureOpenTrace.TakeWaitedForUiThreadMs();
             existing.Activate();
             return;
         }
 
+        // Stage timings for the span the log never had: the request -> the overlay actually on screen. This is
+        // what a "pressed the hotkey and nothing happened" report gets checked against (see CaptureOpenTrace).
+        double? waitedForUiThreadMs = CaptureOpenTrace.TakeWaitedForUiThreadMs();
+        var openStopwatch = Stopwatch.StartNew();
+
         var snip = new SnipWindow(_screenLayoutService, _windowLayerService);
         ConfigureWindowBounds(snip);
+        double afterWindowMs = openStopwatch.Elapsed.TotalMilliseconds;
         // One detector for the whole snip session, shared by translate mode and quick OCR: the auto-language probe
         // rebuilds ONNX sessions to compare recognisers, so it is cached per session rather than per capture.
         var scriptDetector = new OcrScriptDetector(vm.AIResourceService);
@@ -82,6 +93,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
                 vm.OcrRuntimeService,
                 ocrEngineFactory),
             scriptDetector);
+        double afterServicesMs = openStopwatch.Elapsed.TotalMilliseconds;
 
         var snipVm = new SnipWindowViewModel(
             vm.BorderColor,
@@ -115,6 +127,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             snipVm.InitializeTranslationToolbarPosition();
         }
 
+        double afterViewModelMs = openStopwatch.Elapsed.TotalMilliseconds;
+
         // Freeze-frame: for a plain screenshot (not recording/translation/scrolling), snapshot the WHOLE desktop
         // BEFORE the overlay is shown, so shell "light dismiss" popups (tray flyout / Start menu / left-click
         // dropdowns) — which close the instant any full-screen overlay appears over them — are captured. The user
@@ -145,6 +159,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             }
         }
 
+        double afterFreezeGrabMs = openStopwatch.Elapsed.TotalMilliseconds;
+
         // Open without stealing foreground focus so focus-sensitive target UI (dropdowns, right-click context
         // menus) stays open and can be captured. ShowActivated must be set BEFORE Show(). Translation mode is
         // excluded (it needs real focus for its text controls) — see ShouldAvoidStealingFocus. In freeze-frame
@@ -156,6 +172,16 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
 
         snip.DataContext = snipVm;
         snip.Show();
+
+        AppLog.Information(
+            $"SnipOpen.Timings mode={mode} "
+            + $"waitedForUiThread={(waitedForUiThreadMs is { } waited ? waited.ToString("F0") : "n/a")} "
+            + $"window={afterWindowMs:F0} "
+            + $"services={afterServicesMs - afterWindowMs:F0} "
+            + $"viewModel={afterViewModelMs - afterServicesMs:F0} "
+            + $"freezeGrab={afterFreezeGrabMs - afterViewModelMs:F0} "
+            + $"show={openStopwatch.Elapsed.TotalMilliseconds - afterFreezeGrabMs:F0} "
+            + $"total={openStopwatch.Elapsed.TotalMilliseconds:F0}ms");
     }
 
     public object? GetActiveViewModel()

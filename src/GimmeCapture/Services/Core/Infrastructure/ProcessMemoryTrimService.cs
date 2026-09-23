@@ -51,6 +51,25 @@ public static class ProcessMemoryTrimService
         }
     }
 
+    /// <summary>
+    /// How long the app has to go untouched before a trim may run.
+    ///
+    /// This used to be seconds — 5 s after the capture overlay closed, 30 s for a full trim — which made a normal
+    /// working rhythm (capture, look at it, capture again) pay for a trim between captures. A real session shows
+    /// what that costs: <c>EmptyWorkingSet</c> took the process from 593 MB of working set to 5.8 MB with private
+    /// bytes unchanged, so the next capture had to fault all of it back in, and the full trim's blocking,
+    /// compacting gen2 GC pauses every thread — the UI one included. A trim is now what the name always claimed:
+    /// an IDLE-time reclaim, not a between-captures one.
+    /// </summary>
+    public static readonly TimeSpan IdleTrimDelay = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// A caller may ask to wait LONGER than the idle window, never shorter: passing a short delay is exactly how
+    /// trims ended up running in the middle of active use.
+    /// </summary>
+    internal static TimeSpan ClampToIdleWindow(TimeSpan? requestedDelay) =>
+        requestedDelay is { } requested && requested > IdleTrimDelay ? requested : IdleTrimDelay;
+
     public static Task<bool> RequestIdleTrimAsync(
         string reason,
         TimeSpan? delay = null,
@@ -58,7 +77,7 @@ public static class ProcessMemoryTrimService
     {
         return FullTrimScheduler.RequestTrimAsync(
             reason,
-            delay ?? TimeSpan.FromSeconds(30),
+            ClampToIdleWindow(delay),
             ct);
     }
 
@@ -69,7 +88,7 @@ public static class ProcessMemoryTrimService
     {
         return WorkingSetTrimScheduler.RequestTrimAsync(
             reason,
-            delay ?? TimeSpan.FromSeconds(5),
+            ClampToIdleWindow(delay),
             ct);
     }
 

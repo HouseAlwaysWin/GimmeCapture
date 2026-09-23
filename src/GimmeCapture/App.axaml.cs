@@ -60,6 +60,10 @@ public partial class App : Application
             _trayController = new TrayController(this, _bootstrapper, desktop);
             _trayController.Install();
 
+            // The one failure the log could never show: the UI thread blocked long enough that a hotkey press
+            // only reaches the app seconds later, so "nothing happens" when the user asks for a capture.
+            UiThreadStallMonitor.Start();
+
             // Once the app settles into idle, do a FULL trim (GC to collect startup/JIT garbage + working-set
             // reclaim). Decoupled from the window-shown activity so it isn't immediately cancelled; the scheduler
             // still skips it if the user is interacting. Note: while the main window is open and rendering,
@@ -70,7 +74,9 @@ public partial class App : Application
                 // Best-effort mop-up of temp workspaces a previous crash/kill left behind (age-gated; safe with a
                 // concurrent second instance). Runs off the UI thread at settle so it never delays startup.
                 TempWorkspaceCleaner.SweepOrphans();
-                await ProcessMemoryTrimService.RequestIdleTrimAsync("startup-settled", TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                // No explicit delay any more: the trim waits out the idle window the service enforces, so a user
+                // who captures something in the first minutes never pays for a trim they are about to undo.
+                await ProcessMemoryTrimService.RequestIdleTrimAsync("startup-settled").ConfigureAwait(false);
             });
         }
 
