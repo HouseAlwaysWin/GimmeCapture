@@ -45,7 +45,7 @@ public class PowerShellClipboardCommandTests
         Assert.DoesNotContain("-Path ", args);
     }
 
-    [Fact]
+    [WindowsFact]
     public void PowerShellIsStartedByItsFullSystemPath()
     {
         // A bare "powershell" is resolved through PATH, whose first entry is the user-writable AI runtime folder.
