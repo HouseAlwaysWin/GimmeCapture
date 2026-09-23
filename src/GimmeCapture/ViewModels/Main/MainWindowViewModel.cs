@@ -494,7 +494,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 // Stamped before the dispatcher hop: how long this post waits is the difference between "the
                 // capture was slow" and "the UI thread was busy and never saw the key press" (see CaptureOpenTrace).
                 CaptureOpenTrace.Requested();
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode).Subscribe());
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode).SubscribeLoggingErrors());
             }
         };
 

@@ -2,6 +2,16 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.68.1 - 2026-09-16
+
+- **Run on startup works in released builds again** — they no longer ask for administrator rights, which since
+  v0.42.0 made Windows silently skip the startup entry. Launching no longer shows a UAC prompt either.
+- **Administrator rights only when something needs them** — the "restart as administrator" prompt now appears
+  only when a hotkey really is blocked over an administrator window, names that hotkey, and the restart no
+  longer exits instead of coming back.
+- Updating an install under Program Files asks for elevation instead of silently rolling back, and a second
+  startup registration no longer pops the main window open at sign-in.
+
 ## v0.68.0 - 2026-09-02
 
 - **Capture menus and dropdowns** — the overlay no longer steals focus, and new **freeze-frame** screenshots

@@ -103,5 +103,7 @@ class Program
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace()
-            .UseReactiveUI(_ => { });
+            // A command that fails with nobody listening would otherwise hit ReactiveUI's default handler, which
+            // rethrows on the UI thread and ends the process (see UnhandledCommandExceptionReporter).
+            .UseReactiveUI(rx => rx.WithExceptionHandler(UnhandledCommandExceptionReporter.Shared));
 }

@@ -669,7 +669,7 @@ public partial class SnipWindow : Window
                     {
                         // Use dispatcher to ensure window is shown/initialized before starting
                          Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                            vm.RemoveBackgroundCommand.Execute().Subscribe();
+                            vm.RemoveBackgroundCommand.Execute().SubscribeLoggingErrors();
                          });
                     }
 

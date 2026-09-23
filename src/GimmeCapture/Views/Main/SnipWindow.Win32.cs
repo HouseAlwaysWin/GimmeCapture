@@ -278,6 +278,21 @@ public partial class SnipWindow : Window
 
     private IntPtr LLKeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
+        // Windows calls this from native code: an exception that escapes does not reach any .NET handler, it
+        // terminates the process on the spot. Whatever went wrong with one key, log it and let the key through.
+        try
+        {
+            return HandleLLKeyboardHook(nCode, wParam, lParam);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("SnipWindow.KeyboardHook", ex);
+            return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
+        }
+    }
+
+    private IntPtr HandleLLKeyboardHook(int nCode, IntPtr wParam, IntPtr lParam)
+    {
         if (nCode >= 0 && _viewModel != null)
         {
             int msg = wParam.ToInt32();
@@ -470,7 +485,7 @@ public partial class SnipWindow : Window
         if (MatchesUnfocusedCaptureHotkey(_viewModel.ActiveToolbarHotkey, isMatch))
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => _viewModel?.ToggleToolbarCommand?.Execute().Subscribe(),
+                () => _viewModel?.ToggleToolbarCommand?.Execute().SubscribeLoggingErrors(),
                 Avalonia.Threading.DispatcherPriority.Input);
             return true;
         }
@@ -478,7 +493,7 @@ public partial class SnipWindow : Window
         if (MatchesUnfocusedCaptureHotkey(_viewModel.ActiveActionHotkey, isMatch))
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => _viewModel?.HandleActiveActionHotkeyCommand?.Execute().Subscribe(),
+                () => _viewModel?.HandleActiveActionHotkeyCommand?.Execute().SubscribeLoggingErrors(),
                 Avalonia.Threading.DispatcherPriority.Input);
             return true;
         }
@@ -486,7 +501,7 @@ public partial class SnipWindow : Window
         if (MatchesUnfocusedCaptureHotkey(_viewModel.FullscreenSelectHotkey, isMatch))
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => _viewModel?.SelectFullscreenCommand?.Execute().Subscribe(),
+                () => _viewModel?.SelectFullscreenCommand?.Execute().SubscribeLoggingErrors(),
                 Avalonia.Threading.DispatcherPriority.Input);
             return true;
         }
@@ -494,7 +509,7 @@ public partial class SnipWindow : Window
         if (MatchesUnfocusedCaptureHotkey(_viewModel.SwitchToSnipHotkey, isMatch))
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => _viewModel?.SwitchToSnipCommand?.Execute().Subscribe(),
+                () => _viewModel?.SwitchToSnipCommand?.Execute().SubscribeLoggingErrors(),
                 Avalonia.Threading.DispatcherPriority.Input);
             return true;
         }
@@ -502,7 +517,7 @@ public partial class SnipWindow : Window
         if (MatchesUnfocusedCaptureHotkey(_viewModel.SwitchToRecordHotkey, isMatch))
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => _viewModel?.SwitchToRecordCommand?.Execute().Subscribe(),
+                () => _viewModel?.SwitchToRecordCommand?.Execute().SubscribeLoggingErrors(),
                 Avalonia.Threading.DispatcherPriority.Input);
             return true;
         }
@@ -510,7 +525,7 @@ public partial class SnipWindow : Window
         if (MatchesUnfocusedCaptureHotkey(_viewModel.SwitchToTranslateHotkey, isMatch))
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => _viewModel?.SwitchToTranslateCommand?.Execute().Subscribe(),
+                () => _viewModel?.SwitchToTranslateCommand?.Execute().SubscribeLoggingErrors(),
                 Avalonia.Threading.DispatcherPriority.Input);
             return true;
         }
@@ -532,7 +547,7 @@ public partial class SnipWindow : Window
         if (isKeyDown && !ownsForeground && CanToggleToolbarWhileUnfocused() && MatchesToolbarToggleKeyNow(keyStr))
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(
-                () => _viewModel?.ToggleToolbarCommand?.Execute().Subscribe(),
+                () => _viewModel?.ToggleToolbarCommand?.Execute().SubscribeLoggingErrors(),
                 Avalonia.Threading.DispatcherPriority.Input);
             return true;
         }
@@ -695,13 +710,13 @@ public partial class SnipWindow : Window
             {
                 if (IsMatch(_viewModel.ActivePlaybackHotkey))
                 {
-                    _viewModel.PauseRecordingCommand?.Execute().Subscribe();
+                    _viewModel.PauseRecordingCommand?.Execute().SubscribeLoggingErrors();
                     return true;
                 }
 
                 if (IsMatch(_viewModel.ActiveStopHotkey))
                 {
-                    _viewModel.StopRecordingCommand?.Execute().Subscribe();
+                    _viewModel.StopRecordingCommand?.Execute().SubscribeLoggingErrors();
                     return true;
                 }
             }
@@ -719,13 +734,13 @@ public partial class SnipWindow : Window
             {
                 if (IsModifierCombo(_viewModel.CopyHotkey) && IsMatch(_viewModel.CopyHotkey))
                 {
-                    _viewModel.CopyCommand?.Execute().Subscribe();
+                    _viewModel.CopyCommand?.Execute().SubscribeLoggingErrors();
                     return true;
                 }
 
                 if (IsModifierCombo(_viewModel.SaveHotkey) && IsMatch(_viewModel.SaveHotkey))
                 {
-                    _viewModel.SaveCommand?.Execute().Subscribe();
+                    _viewModel.SaveCommand?.Execute().SubscribeLoggingErrors();
                     return true;
                 }
             }
@@ -751,43 +766,43 @@ public partial class SnipWindow : Window
         switch (winAction)
         {
             case HotkeyRouterService.WindowHotkeyAction.ActiveAction:
-                _viewModel.HandleActiveActionHotkeyCommand?.Execute().Subscribe();
+                _viewModel.HandleActiveActionHotkeyCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             case HotkeyRouterService.WindowHotkeyAction.ToggleToolbar:
-                _viewModel.ToggleToolbarCommand?.Execute().Subscribe();
+                _viewModel.ToggleToolbarCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             case HotkeyRouterService.WindowHotkeyAction.Save:
-                _viewModel.SaveCommand?.Execute().Subscribe();
+                _viewModel.SaveCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             case HotkeyRouterService.WindowHotkeyAction.Copy:
-                _viewModel.CopyCommand?.Execute().Subscribe();
+                _viewModel.CopyCommand?.Execute().SubscribeLoggingErrors();
                 return true;
         }
 
         // 2. Common Action Hotkeys (Snip/Record/Translate)
-        if (IsMatch(_viewModel.UndoHotkey)) { _viewModel.UndoCommand?.Execute().Subscribe(); return true; }
-        if (IsMatch(_viewModel.RedoHotkey)) { _viewModel.RedoCommand?.Execute().Subscribe(); return true; }
-        if (IsMatch(_viewModel.ClearHotkey)) { _viewModel.ClearAnnotationsCommand?.Execute().Subscribe(); return true; }
+        if (IsMatch(_viewModel.UndoHotkey)) { _viewModel.UndoCommand?.Execute().SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.RedoHotkey)) { _viewModel.RedoCommand?.Execute().SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.ClearHotkey)) { _viewModel.ClearAnnotationsCommand?.Execute().SubscribeLoggingErrors(); return true; }
 
         // 3. Drawing Tools
-        if (IsMatch(_viewModel.RectangleHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Rectangle).Subscribe(); return true; }
-        if (IsMatch(_viewModel.EllipseHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Ellipse).Subscribe(); return true; }
-        if (IsMatch(_viewModel.ArrowHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Arrow).Subscribe(); return true; }
-        if (IsMatch(_viewModel.LineHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Line).Subscribe(); return true; }
-        if (IsMatch(_viewModel.MosaicHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Mosaic).Subscribe(); return true; }
-        if (IsMatch(_viewModel.BlurHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Blur).Subscribe(); return true; }
-        if (IsMatch(_viewModel.PenHotkey)) { _viewModel.ToggleToolGroupCommand?.Execute("Pen").Subscribe(); return true; }
-        if (IsMatch(_viewModel.TextHotkey)) { _viewModel.ToggleToolGroupCommand?.Execute("Text").Subscribe(); return true; }
+        if (IsMatch(_viewModel.RectangleHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Rectangle).SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.EllipseHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Ellipse).SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.ArrowHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Arrow).SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.LineHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Line).SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.MosaicHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Mosaic).SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.BlurHotkey)) { _viewModel.SelectToolCommand?.Execute(Models.AnnotationType.Blur).SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.PenHotkey)) { _viewModel.ToggleToolGroupCommand?.Execute("Pen").SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.TextHotkey)) { _viewModel.ToggleToolGroupCommand?.Execute("Text").SubscribeLoggingErrors(); return true; }
 
         // 4. Mode Switching
-        if (IsMatch(_viewModel.SwitchToSnipHotkey)) { _viewModel.SwitchToSnipCommand?.Execute().Subscribe(); return true; }
-        if (IsMatch(_viewModel.SwitchToRecordHotkey)) { _viewModel.SwitchToRecordCommand?.Execute().Subscribe(); return true; }
-        if (IsMatch(_viewModel.SwitchToTranslateHotkey)) { _viewModel.SwitchToTranslateCommand?.Execute().Subscribe(); return true; }
+        if (IsMatch(_viewModel.SwitchToSnipHotkey)) { _viewModel.SwitchToSnipCommand?.Execute().SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.SwitchToRecordHotkey)) { _viewModel.SwitchToRecordCommand?.Execute().SubscribeLoggingErrors(); return true; }
+        if (IsMatch(_viewModel.SwitchToTranslateHotkey)) { _viewModel.SwitchToTranslateCommand?.Execute().SubscribeLoggingErrors(); return true; }
 
         // 5. Snip/Recording Specific Hotkeys
         if (_viewModel.CurrentMode == SnipMode.Recording && IsMatch(_viewModel.ActivePlaybackHotkey))
         {
-            _viewModel.PauseRecordingCommand?.Execute().Subscribe();
+            _viewModel.PauseRecordingCommand?.Execute().SubscribeLoggingErrors();
             return true;
         }
 
@@ -795,14 +810,14 @@ public partial class SnipWindow : Window
         if (_viewModel.CurrentMode == SnipMode.Recording && _viewModel.RecState != RecordingState.Idle
             && IsMatch(_viewModel.ActiveStopHotkey))
         {
-            _viewModel.StopRecordingCommand?.Execute().Subscribe();
+            _viewModel.StopRecordingCommand?.Execute().SubscribeLoggingErrors();
             return true;
         }
 
         if ((_viewModel.CurrentMode == SnipMode.Screenshot || _viewModel.CurrentMode == SnipMode.Recording) &&
             IsMatch(_viewModel.FullscreenSelectHotkey))
         {
-            _viewModel.SelectFullscreenCommand?.Execute().Subscribe();
+            _viewModel.SelectFullscreenCommand?.Execute().SubscribeLoggingErrors();
             return true;
         }
 
@@ -821,25 +836,25 @@ public partial class SnipWindow : Window
 
             if (specificAction == HotkeyRouterService.WindowHotkeyAction.TranslateAll)
             {
-                _viewModel.TranslateAllSelectionsCommand?.Execute().Subscribe();
+                _viewModel.TranslateAllSelectionsCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             }
 
             if (IsMatch(_viewModel.TranslatePinHotkey))
             {
-                _viewModel.PinTranslationResultsCommand?.Execute().Subscribe();
+                _viewModel.PinTranslationResultsCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             }
 
             if (IsMatch(_viewModel.ScanAllHotkey))
             {
-                _viewModel.ScanAllTextCommand?.Execute().Subscribe();
+                _viewModel.ScanAllTextCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             }
 
             if (IsMatch(_viewModel.ClearAllHotkey))
             {
-                _viewModel.ClearAllSelectionsCommand?.Execute().Subscribe();
+                _viewModel.ClearAllSelectionsCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             }
         }

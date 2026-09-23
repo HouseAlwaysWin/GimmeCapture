@@ -571,6 +571,9 @@
   "InstallSelectedVersion": "下載並安裝",
   "InstallSelectedVersionReady": "版本 {0} 已準備完成。立即重新啟動並安裝？",
   "ElevatedWindowNoticeTitle": "熱鍵被系統管理員視窗擋住",
+  "CommandFailedToast": "這個操作失敗了，詳細原因已寫入記錄檔。",
+  "RecordingSaveFailedTitle": "錄影沒有儲存成功",
+  "RecordingSaveFailedKeptSegments": "錄影無法完成：{0}\n\n沒有刪除任何東西，原始錄影仍保留在：\n{1}",
   "ElevatedWindowNoticeMessage": "{0} 已經被其他程式註冊，GimmeCapture 只能用鍵盤 hook 接這個組合；而前景是以系統管理員身分執行的視窗時，Windows 會擋掉這個 hook。\n\n其他熱鍵在這裡仍然正常。若要在系統管理員視窗上使用 {0}，請以系統管理員身分執行 GimmeCapture。\n\n現在就以系統管理員身分重新啟動 GimmeCapture 嗎？"
   ,"ModuleAIDescription": "\u672c\u5730 AI \u6a21\u7d44\u5171\u7528\u7684\u57f7\u884c\u968e\u6bb5\u6a94\u6848\u3002",
   "ModuleVoskDescription": "\u7528\u65bc\u97f3\u8a0a\u7ffb\u8b6f\u7684\u96e2\u7dda\u8a9e\u97f3\u8fa8\u8b58\u6a21\u578b\u3002",

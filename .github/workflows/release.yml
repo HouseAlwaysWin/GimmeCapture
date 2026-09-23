@@ -6,9 +6,36 @@ on:
       - 'v*'
 
 jobs:
+  # Refuse to publish a release whose source does not say it is that release. v0.67.0-v0.67.2 and then
+  # v0.68.1 were all tagged by hand on commits whose csproj still carried the previous version and whose
+  # CHANGELOG had no section for them; the build injects the tag's version into the binaries, so nothing
+  # ever looked wrong - until the next release.ps1 run attributed those changes to the wrong version.
+  # release.ps1 always produces a commit that passes this; a hand-pushed tag has to as well.
+  verify-release-metadata:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Tag must match the csproj Version and have a CHANGELOG section
+      shell: bash
+      run: |
+        version="${GITHUB_REF_NAME#v}"
+        csproj_version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/GimmeCapture/GimmeCapture.csproj | head -n 1)
+        if [ "$csproj_version" != "$version" ]; then
+          echo "::error::Tag $GITHUB_REF_NAME, but src/GimmeCapture/GimmeCapture.csproj says <Version>$csproj_version</Version>. Cut releases with release.ps1 instead of pushing a tag by hand."
+          exit 1
+        fi
+        if ! grep -qF "## v$version " CHANGELOG.md && ! grep -qxF "## v$version" CHANGELOG.md; then
+          echo "::error::CHANGELOG.md has no '## v$version' section. Cut releases with release.ps1 instead of pushing a tag by hand."
+          exit 1
+        fi
+        echo "Release metadata OK: v$version"
+
   # Linux (net10.0 head) self-contained single-file build. Runs first; the Windows job below
   # downloads its artifact and publishes everything to one GitHub Release.
   build-linux:
+    needs: verify-release-metadata
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code

@@ -848,6 +848,21 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     private IntPtr LowLevelKeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
+        // Called from native code: an escaping exception terminates the process outright instead of reaching any
+        // .NET handler — and this hook sees every key the user types. Log, and let the key through.
+        try
+        {
+            return HandleLowLevelKeyboardHook(nCode, wParam, lParam);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("GlobalHotkey.KeyboardHook", ex);
+            return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
+        }
+    }
+
+    private IntPtr HandleLowLevelKeyboardHook(int nCode, IntPtr wParam, IntPtr lParam)
+    {
         if (nCode < 0)
         {
             return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);

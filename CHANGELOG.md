@@ -11,6 +11,39 @@
 
 ## Unreleased
 
+### 🛡️ Reliability
+
+- **Settings you change now survive a restart.** 24 settings and hotkeys were written to the config correctly but
+  never read back, so every launch quietly reset them to their defaults — and the next save wrote the defaults
+  over your choice. Affected, among others: *Freeze screen on screenshot*, *Don't steal focus when capturing*,
+  hardware video decoding, video quality / custom CRF / bitrate, the maximum recording size, webcam size and
+  circle, the keystroke overlay, and the in-overlay hotkeys for remove background, magic wand, full-screen
+  select, mode switching and stopping a recording. A test now fails the build if a new setting is added without
+  being loaded.
+- **A recording that fails to save is no longer deleted.** When finishing a recording failed, the error was shown
+  and then the raw recording was deleted along with the temporary files, so the capture was simply gone. The raw
+  recording is now kept, the dialog says where it is, and the reason is written to the log (it used to go
+  nowhere in release builds). Recording diagnostics — mux fallbacks, dropped audio — now reach the log too.
+- **A failing action no longer closes the app.** Any shortcut or button whose action threw — for example Ctrl+S
+  while the auto-save folder is read-only — ended the whole app. The action now fails on its own: it is logged
+  and a short message says it did not work.
+- **Closing the translate overlay stops its auto-detect.** With auto-detect on, closing the overlay left it
+  capturing the screen, running OCR and translating every 1.5 seconds in the background for the rest of the
+  session.
+
+### ⚡ Performance
+
+- **Opening a capture no longer waits for a settings write**, memory is only handed back to Windows after five
+  minutes of inactivity instead of seconds after every capture (the next capture had to page it all back in),
+  and OCR models stay loaded for two minutes between captures instead of five seconds.
+- **Slow capture opens are now diagnosable:** each capture logs `SnipOpen.Timings` (time waiting for the UI
+  thread, then each stage up to the overlay being shown), and a `UiStall` warning is logged whenever the UI
+  thread stops responding for more than 250 ms.
+
+---
+
+## v0.68.1 - 2026-09-16
+
 ### ⚙️ General
 
 - **Run on startup actually launches the app at sign-in — and the app no longer asks for administrator rights.**

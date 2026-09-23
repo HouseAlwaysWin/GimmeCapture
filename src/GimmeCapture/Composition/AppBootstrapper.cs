@@ -43,6 +43,23 @@ public sealed class AppBootstrapper : IAsyncDisposable
         _downloadWindowService = new Lazy<IDownloadWindowService>(RuntimeServiceFactory.CreateDownloadWindowService);
         _toastService = new Lazy<IToastService>(RuntimeServiceFactory.CreateToastService);
         _snipWindowFactory = new Lazy<ISnipWindowFactory>(RuntimeServiceFactory.CreateSnipWindowFactory);
+
+        // The crash-free half of a failing command is registered with ReactiveUI before any window exists
+        // (UnhandledCommandExceptionReporter); this adds the half the user sees, now that toasts can be shown.
+        UnhandledCommandExceptionReporter.Shared.AttachUserNotification(_ =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    _toastService.Value.Show(
+                        LocalizationService.Instance["CommandFailedToast"],
+                        MainWindowViewModel.ToastSeverity.Error);
+                }
+                catch (Exception toastFailure)
+                {
+                    AppLog.Warning("Command.UnhandledToast", toastFailure);
+                }
+            }));
     }
 
     public MainWindow CreateMainWindow()

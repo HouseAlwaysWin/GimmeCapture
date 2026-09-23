@@ -247,6 +247,12 @@ public class AppSettingsService : IAppSettingsService
             await LoadFromPathAsync(targetPath, saveDirectoryOverride);
     }
 
+    /// <summary>
+    /// Copies a freshly loaded <see cref="AppSettings"/> into the live instance. EVERY persisted property needs a
+    /// line here: one that is missing is not an error anywhere, it just reverts to its default on the next launch
+    /// (24 settings and hotkeys once did exactly that). <c>AppSettingsLoadRoundTripTests</c> fails the build for any
+    /// persisted property added to the model without its copy.
+    /// </summary>
     public void UpdateSettings(AppSettings source)
     {
         var dest = Settings;
@@ -261,6 +267,8 @@ public class AppSettingsService : IAppSettingsService
         dest.HideSnipPinDecoration = source.HideSnipPinDecoration;
         dest.HideSnipPinBorder = source.HideSnipPinBorder;
         dest.HideSnipSelectionDecoration = source.HideSnipSelectionDecoration;
+        dest.CaptureWithoutStealingFocus = source.CaptureWithoutStealingFocus;
+        dest.FreezeScreenOnScreenshot = source.FreezeScreenOnScreenshot;
         dest.CaptureDelay = source.CaptureDelay;
         dest.OcrTextLayout = source.OcrTextLayout;
         dest.SaveOcrTextToFile = source.SaveOcrTextToFile;
@@ -269,6 +277,8 @@ public class AppSettingsService : IAppSettingsService
         dest.HideRecordPinDecoration = source.HideRecordPinDecoration;
         dest.HideRecordPinBorder = source.HideRecordPinBorder;
         dest.HideRecordSelectionDecoration = source.HideRecordSelectionDecoration;
+        dest.DefaultHideSnipToolbar = source.DefaultHideSnipToolbar;
+        dest.DefaultHideRecordToolbar = source.DefaultHideRecordToolbar;
         dest.AutoSave = source.AutoSave;
         dest.EnableHistory = source.EnableHistory;
         dest.RevealAfterSave = source.RevealAfterSave;
@@ -280,18 +290,29 @@ public class AppSettingsService : IAppSettingsService
         dest.EnableWebcam = source.EnableWebcam;
         dest.WebcamDeviceName = source.WebcamDeviceName;
         dest.WebcamCorner = source.WebcamCorner;
+        dest.WebcamSize = source.WebcamSize;
+        dest.WebcamCircular = source.WebcamCircular;
         dest.RecordMicrophone = source.RecordMicrophone;
         dest.SelectedMicDeviceId = source.SelectedMicDeviceId;
         dest.MicVolume = source.MicVolume;
         dest.HighlightCursor = source.HighlightCursor;
         dest.HighlightClicks = source.HighlightClicks;
+        dest.ShowKeystrokes = source.ShowKeystrokes;
+        dest.PipelinedEncoding = source.PipelinedEncoding;
         dest.VideoSaveDirectory = source.VideoSaveDirectory;
         dest.RecordFormat = source.RecordFormat;
         dest.VideoCodec = source.VideoCodec;
         dest.VideoEncoderHint = source.VideoEncoderHint;
+        dest.VideoQuality = source.VideoQuality;
+        dest.CustomVideoCrf = source.CustomVideoCrf;
+        dest.CustomVideoBitrateKbps = source.CustomVideoBitrateKbps;
         dest.RecordFPS = source.RecordFPS;
+        dest.MaxRecordingSizeMB = source.MaxRecordingSizeMB;
         dest.MaxRecordingSeconds = source.MaxRecordingSeconds;
         dest.RecordingAutoStopAction = source.RecordingAutoStopAction;
+        dest.PlaybackUiFps = source.PlaybackUiFps;
+        dest.PlaybackTimelineFps = source.PlaybackTimelineFps;
+        dest.HardwareDecodeEnabled = source.HardwareDecodeEnabled;
         dest.UseFixedRecordPath = source.UseFixedRecordPath;
         dest.TempDirectory = source.TempDirectory;
         dest.SnipHotkey = source.SnipHotkey;
@@ -319,6 +340,11 @@ public class AppSettingsService : IAppSettingsService
         dest.Snip.Toolbar = source.Snip.Toolbar;
         dest.Snip.SelectionMode = source.Snip.SelectionMode;
         dest.Snip.CropMode = source.Snip.CropMode;
+        dest.Snip.RemoveBackground = source.Snip.RemoveBackground;
+        dest.Snip.MagicWand = source.Snip.MagicWand;
+        dest.Snip.FullscreenSelect = source.Snip.FullscreenSelect;
+        dest.Snip.SwitchToTranslate = source.Snip.SwitchToTranslate;
+        dest.Snip.SwitchToRecord = source.Snip.SwitchToRecord;
 
         dest.Record.Rectangle = source.Record.Rectangle;
         dest.Record.Ellipse = source.Record.Ellipse;
@@ -337,6 +363,10 @@ public class AppSettingsService : IAppSettingsService
         dest.Record.Toolbar = source.Record.Toolbar;
         dest.Record.Action = source.Record.Action;
         dest.Record.Playback = source.Record.Playback;
+        dest.Record.Stop = source.Record.Stop;
+        dest.Record.FullscreenSelect = source.Record.FullscreenSelect;
+        dest.Record.SwitchToSnip = source.Record.SwitchToSnip;
+        dest.Record.SwitchToTranslate = source.Record.SwitchToTranslate;
 
         dest.Translate.Action = source.Translate.Action;
         dest.Translate.Pin = source.Translate.Pin;

@@ -68,7 +68,7 @@ public abstract class FloatingWindowBase : Window
             {
                 if (DataContext is FloatingWindowViewModelBase vm)
                 {
-                    vm.ConfirmTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                    vm.ConfirmTextEntryCommand.Execute(System.Reactive.Unit.Default).SubscribeLoggingErrors();
                 }
             },
             focusTextInput: () => this.FindControl<TextBox>("TextInputOverlay")?.Focus(),
@@ -607,18 +607,18 @@ public abstract class FloatingWindowBase : Window
         else if (e.Key == Key.C && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             // vm.CopyCommand ??
-            if (vm is FloatingImageViewModel imgVm) imgVm.CopyCommand.Execute().Subscribe();
-             else if (vm is FloatingVideoViewModel vidVm) vidVm.CopyCommand.Execute().Subscribe();
+            if (vm is FloatingImageViewModel imgVm) imgVm.CopyCommand.Execute().SubscribeLoggingErrors();
+             else if (vm is FloatingVideoViewModel vidVm) vidVm.CopyCommand.Execute().SubscribeLoggingErrors();
             e.Handled = true;
         }
         else if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
-            vm.UndoCommand.Execute().Subscribe();
+            vm.UndoCommand.Execute().SubscribeLoggingErrors();
             e.Handled = true;
         }
         else if (e.Key == Key.Y && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
-            vm.RedoCommand.Execute().Subscribe();
+            vm.RedoCommand.Execute().SubscribeLoggingErrors();
             e.Handled = true;
         }
     }

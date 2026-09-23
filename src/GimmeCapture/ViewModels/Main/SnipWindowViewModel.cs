@@ -946,6 +946,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _quickOcrCts?.Cancel();
         _quickOcrCts?.Dispose();
         CancelTranslationWarmup();
+        // Only a mode switch used to stop this loop, and closing the overlay is not a mode switch: a translate
+        // overlay closed with auto-detect on kept capturing the screen, running OCR and translating every 1.5 s for
+        // the rest of the session — holding this disposed view model alive the whole time.
+        StopAutoDetectLoop();
         _translationCts?.Cancel();
         _translationCts?.Dispose();
         LocalizationService.Instance.PropertyChanged -= OnLocalizationPropertyChanged;
