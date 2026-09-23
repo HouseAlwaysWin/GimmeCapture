@@ -6,9 +6,22 @@ on:
     branches:
       - main
 
+# The token only reads the repository here. Stating it keeps the workflow least-privilege even if the repository's
+# default token permissions are ever widened.
+permissions:
+  contents: read
+
+# A newer push to the same PR makes the older run pointless, so it is cancelled. Runs on main never are: every
+# merge gets its own verdict.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify:
     runs-on: windows-latest
+    # A normal run takes 3-5 minutes. This only stops a hung run from holding the runner for the 6-hour default.
+    timeout-minutes: 30
 
     steps:
     - name: Checkout code
@@ -19,9 +32,10 @@ jobs:
       with:
         dotnet-version: '10.0.x'
 
-    # The bundled FFmpeg build is pinned (URL + SHA-256 inside the script), so the
-    # extracted DLLs are cacheable; keying on the script hash invalidates the cache
-    # exactly when the pinned build changes. Saves a ~93 MB download per run.
+    # The bundled FFmpeg build is pinned (URL + SHA-256 inside the script) to a
+    # byte-identical mirror of one exact BtbN build, so the extracted DLLs are cacheable;
+    # keying on the script hash invalidates the cache exactly when the pin changes.
+    # Saves a ~89 MB download per run.
     - name: Cache FFmpeg DLLs
       id: cache-ffmpeg
       uses: actions/cache@v4
@@ -51,10 +65,14 @@ jobs:
       shell: powershell
       run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 ${{ github.event_name == 'pull_request' && '-SkipPublish' || '' }}
 
+    # verify.ps1 leaves the report at artifacts/coverage/ once coverage has run. The old path
+    # pointed into the run's own artifacts directory, which a PASSING run deletes before this
+    # step — so every green run uploaded nothing. A green run without the report would be that
+    # bug again, so it fails; a red run may have stopped before coverage, so it only warns.
     - name: Upload coverage
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: coverage
-        path: artifacts/verify/**/coverage/**
-        if-no-files-found: ignore
+        path: artifacts/coverage/coverage.cobertura.xml
+        if-no-files-found: ${{ job.status == 'success' && 'error' || 'warn' }}

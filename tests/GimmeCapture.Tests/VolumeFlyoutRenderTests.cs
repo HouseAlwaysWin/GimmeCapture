@@ -18,7 +18,7 @@ using Xunit;
 namespace GimmeCapture.Tests;
 
 // Offscreen "snapshot" render that MEASURES the horizontal centering of the vertical volume slider.
-// Gated behind RENDER_PROBE=1. Writes PNGs + a measurements file so the exact accent-pixel offset from
+// Skipped unless RENDER_PROBE=1. Writes PNGs + a measurements file so the exact accent-pixel offset from
 // centre can be inspected.
 public class VolumeFlyoutRenderTests
 {
@@ -108,14 +108,9 @@ public class VolumeFlyoutRenderTests
         return (minX + maxX) / 2.0;
     }
 
-    [Fact]
+    [OptInFact("RENDER_PROBE=1")]
     public void Measure_VolumeSliderCentering()
     {
-        if (Environment.GetEnvironmentVariable("RENDER_PROBE") != "1")
-        {
-            return;
-        }
-
         AppBuilder.Configure<GimmeCapture.App>()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })

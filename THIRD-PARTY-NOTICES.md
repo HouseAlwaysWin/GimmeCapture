@@ -20,17 +20,23 @@ must be, and is, released under the GPL.
 | **x264** (libx264) | GPL-2.0-or-later (or commercial) | https://www.videolan.org/developers/x264.html |
 | **x265** (libx265) | GPL-2.0-or-later (or commercial) | https://www.videolan.org/developers/x265.html |
 
-The exact FFmpeg build is BtbN's `ffmpeg-n8.1-latest-win64-gpl-shared-8.1` (avcodec-62 /
-avformat-62 / avutil-60 ABI). It is **not** committed to this repository — it is fetched at build
-time by [`scripts/ensure-ffmpeg-libs.ps1`](scripts/ensure-ffmpeg-libs.ps1) and placed in
-`src/GimmeCapture/ffmpeg-lib/`.
+The exact FFmpeg build is **FFmpeg `n8.1.3-20260922`** as built by BtbN ("Latest Auto-Build
+(2026-09-22 13:18)"), `win64-gpl-shared` and `linux64-gpl-shared` (avcodec-62 / avformat-62 / avutil-60
+ABI). Byte-identical copies of those two archives, together with BtbN's own checksum list, are mirrored in
+this repository's
+[`deps-ffmpeg-n8.1-20260922`](https://github.com/HouseAlwaysWin/GimmeCapture/releases/tag/deps-ffmpeg-n8.1-20260922)
+prerelease and pinned by URL and SHA-256 in
+[`scripts/ensure-ffmpeg-libs.ps1`](scripts/ensure-ffmpeg-libs.ps1) and
+[`scripts/ensure-ffmpeg-libs-linux.sh`](scripts/ensure-ffmpeg-libs-linux.sh), which place the libraries in
+`src/GimmeCapture/ffmpeg-lib/` at build time. They are **not** committed to this repository.
 
 ### Corresponding source (GPLv3 §6 / GPLv2 §3)
 
 The complete corresponding source for FFmpeg, x264, and x265 is freely available from the
-upstream projects linked above and from the exact build tree published at
-https://github.com/BtbN/FFmpeg-Builds. No GPL component is modified by this project; the
-unmodified shared libraries are redistributed as built by BtbN.
+upstream projects linked above: FFmpeg's own source is its `n8.1.3` release tag, and the build
+scripts that pin the source revision of every library bundled into this build are in
+https://github.com/BtbN/FFmpeg-Builds as of 2026-09-22. No GPL component is modified by this
+project; the unmodified shared libraries are redistributed as built by BtbN.
 
 ## Managed FFmpeg bindings
 

@@ -11,28 +11,31 @@ namespace GimmeCapture.Tests;
 
 /// <summary>
 /// Real-encode integration check for the Compress pipeline (exercises LibavClipExporter end to end with
-/// the new options). It is GATED: a no-op pass unless COMPRESS_IT_SOURCE (an existing video) and
+/// the new options). It is OPT-IN: reported as skipped unless COMPRESS_IT_SOURCE (an existing video) and
 /// COMPRESS_IT_OUTDIR are set, so it never runs on CI / Linux. Requires Windows + the bundled FFmpeg libs.
 /// Drive it via <c>scripts/test-compress.ps1</c>, or set the two env vars and run:
 ///   dotnet test --filter FullyQualifiedName~CompressIntegration
 /// </summary>
 public class CompressIntegrationTests
 {
-    private static string? Source => Environment.GetEnvironmentVariable("COMPRESS_IT_SOURCE");
-    private static string? OutDir => Environment.GetEnvironmentVariable("COMPRESS_IT_OUTDIR");
+    private const string SourceVariable = "COMPRESS_IT_SOURCE";
+    private const string OutDirVariable = "COMPRESS_IT_OUTDIR";
 
-    private static bool Enabled =>
-        !string.IsNullOrWhiteSpace(Source) && File.Exists(Source) && !string.IsNullOrWhiteSpace(OutDir);
+    private static string? Source => Environment.GetEnvironmentVariable(SourceVariable);
+    private static string? OutDir => Environment.GetEnvironmentVariable(OutDirVariable);
 
-    [Fact]
+    // [OptInFact] has already skipped the test unless both variables are set. A source that does not exist is a
+    // mistake in how the test was driven, so it fails instead of passing without encoding anything.
+    private static string RequireSource()
+    {
+        Assert.True(File.Exists(Source), $"{SourceVariable} does not point at an existing file: '{Source}'.");
+        return Source!;
+    }
+
+    [OptInFact(SourceVariable, OutDirVariable)]
     public async Task EncodeMatrix_ProducesCorrectOutputs()
     {
-        if (!Enabled)
-        {
-            return; // gate: does nothing unless the runner provides a source + output dir
-        }
-
-        string source = Source!;
+        string source = RequireSource();
         string outDir = OutDir!;
         Directory.CreateDirectory(outDir);
 
@@ -143,15 +146,10 @@ public class CompressIntegrationTests
     // Mirrors the CRF segment-resume pipeline: encode the clip as two video-only chunks, concat them, then
     // mux audio built once for the whole clip. Validates that the stitched output spans the full duration,
     // keeps the source dimensions, and carries audio (no per-chunk audio, no re-encode at concat).
-    [Fact]
+    [OptInFact(SourceVariable, OutDirVariable)]
     public async Task SegmentResume_ConcatAndMux_ProducesContinuousOutput()
     {
-        if (!Enabled)
-        {
-            return;
-        }
-
-        string source = Source!;
+        string source = RequireSource();
         string outDir = OutDir!;
         Directory.CreateDirectory(outDir);
 
@@ -196,15 +194,10 @@ public class CompressIntegrationTests
     }
 
     // The compare window's frame-step relies on DecodeFrameAtAsync returning a BGRA frame at a timestamp.
-    [Fact]
+    [OptInFact(SourceVariable, OutDirVariable)]
     public async Task DecodeFrameAt_ReturnsBgraFrame_OfRequestedSize()
     {
-        if (!Enabled)
-        {
-            return;
-        }
-
-        string source = Source!;
+        string source = RequireSource();
         var player = new LibavVideoFramePlayer();
         double duration = await player.ProbeDurationSecondsAsync(source) ?? 0;
 

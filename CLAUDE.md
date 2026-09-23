@@ -86,7 +86,8 @@ tests/
 docs/                          # architecture roadmap, refactor plan, release catalog
 scripts/                       # verify.ps1, check-localization.ps1, ensure-ffmpeg-libs.ps1,
                                # ensure-ffmpeg-libs-linux.sh, test-compress.ps1, build-installer.ps1
-.github/workflows/             # ci.yml, linux-compile-check.yml, linux-tests.yml, release.yml
+.github/workflows/             # ci.yml, linux-compile-check.yml, linux-tests.yml, release.yml, codeql.yml
+.github/dependabot.yml         # weekly GitHub Actions version bumps
 release.ps1 / release.bat      # release automation (main branch only)
 ```
 
@@ -109,6 +110,13 @@ release.ps1 / release.bat      # release automation (main branch only)
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1
 ```
+
+That script and its Linux twin `ensure-ffmpeg-libs-linux.sh` pin **one exact FFmpeg build**
+(n8.1.3, 2026-09-22) by URL and SHA-256, downloading it from this repository's
+`deps-ffmpeg-n8.1-20260922` prerelease — a byte-identical mirror of BtbN's build, because
+BtbN's own `latest` asset keeps changing and its dated builds get deleted. To move FFmpeg,
+mirror the new build as another prerelease the same way, then update the URL and hash in
+**both** scripts together with the exact version in `THIRD-PARTY-NOTICES.md`.
 
 Common commands:
 
@@ -133,7 +141,9 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 build + test) before pushing. Use `-SkipPublish` to skip the publish smoke step.
 
 CI on every PR/`main` push: `ci.yml` (windows-latest) runs ensure-FFmpeg → `verify.ps1`
-(which includes the localization check) → upload coverage. PRs run `verify.ps1 -SkipPublish`.
+(which includes the localization check) → upload coverage (`verify.ps1` leaves the report at
+`artifacts/coverage/`). PRs run `verify.ps1 -SkipPublish`. `codeql.yml` analyses the C# code
+and the workflow files (build-mode none) on PRs, `main` pushes and weekly.
 
 Two ubuntu-latest workflows run on every `claude/**` push and PR: `linux-compile-check.yml`
 type-checks both TFMs, and `linux-tests.yml` runs the suite against the `net10.0` head (it
@@ -221,6 +231,10 @@ Three locales are kept in **strict key parity**:
 - Coverage gate is **25% line coverage** (enforced by `verify.ps1`). Add tests for
   new service/VM logic; favor testing services and orchestration that don't require
   a live UI thread. `ReactiveUITestInitializer` sets up ReactiveUI scheduling.
+- A test that cannot run everywhere says so in its attribute, so it is reported as **skipped**:
+  `[WindowsFact]` for Windows-only behaviour, `[OptInFact("ENV_VAR", "OTHER=1")]` for tests that
+  need a local clip, an output folder or a probe switch. Never gate with an early `return` — that
+  counts as a pass for something that was never checked.
 - Benchmarks live in `tests/GimmeCapture.Benchmarks/` (run manually, not in CI).
 
 ## Releases

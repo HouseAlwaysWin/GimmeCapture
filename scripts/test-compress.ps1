@@ -5,12 +5,13 @@
 .DESCRIPTION
     1. Ensures the bundled FFmpeg libs exist (build + runtime need them).
     2. Builds the solution (Debug) and runs the normal unit tests.
-    3. Runs the gated real-encode matrix (CompressIntegrationTests) against a source video, which
+    3. Runs the opt-in real-encode matrix (CompressIntegrationTests) against a source video, which
        self-verifies resolution downscale, CRF size ordering, H.265, drop-audio, MKV-has-audio, and the
-       ~5 MB target-size landing — all via the project's own libav probes (no ffprobe needed).
-    4. Runs the gated audio-transcoder characterization tests (LibavAudioTranscoderTests) which synthesize
+       ~5 MB target-size landing — all via the project's own libav probes (no ffprobe needed) — plus the
+       exporter's crop+rotate composite checks (LibavClipExporterCompositeTests) on the same clip.
+    4. Runs the opt-in audio-transcoder characterization tests (LibavAudioTranscoderTests) which synthesize
        a WAV in-process and exercise LibavAacTranscoder / LibavOpusTranscoder / LibavPinAudioPcmDecoder.
-       Both gated suites key off COMPRESS_IT_OUTDIR, so they no-op on CI / Linux.
+       All three opt-in suites key off COMPRESS_IT_OUTDIR, so CI / Linux report them as skipped.
 
     Provide a real clip with -Source (e.g. your 4K file). If omitted, a short 4K test clip is generated
     with ffmpeg.exe when it is available on PATH.
@@ -39,8 +40,8 @@ if (-not $SkipBuild) {
     dotnet build GimmeCapture.slnx -c Debug
 }
 
-Write-Host '== [3/5] Unit tests (excluding the gated encode/transcoder suites) ==' -ForegroundColor Cyan
-dotnet test $testProj -c Debug --filter 'FullyQualifiedName!~CompressIntegration&FullyQualifiedName!~LibavAudioTranscoder'
+Write-Host '== [3/5] Unit tests (excluding the opt-in encode/transcoder suites) ==' -ForegroundColor Cyan
+dotnet test $testProj -c Debug --filter 'FullyQualifiedName!~CompressIntegration&FullyQualifiedName!~LibavClipExporterComposite&FullyQualifiedName!~LibavAudioTranscoder'
 
 # --- Resolve a source clip -------------------------------------------------
 $work = Join-Path $env:TEMP 'gimme_compress_test'
@@ -74,7 +75,7 @@ $env:COMPRESS_IT_SOURCE = $Source
 $env:COMPRESS_IT_OUTDIR = $outDir
 
 Write-Host '== [5/5] Real-encode matrix + audio-transcoder characterization (self-verifying) ==' -ForegroundColor Cyan
-dotnet test $testProj -c Debug --filter 'FullyQualifiedName~CompressIntegration|FullyQualifiedName~LibavAudioTranscoder'
+dotnet test $testProj -c Debug --filter 'FullyQualifiedName~CompressIntegration|FullyQualifiedName~LibavClipExporterComposite|FullyQualifiedName~LibavAudioTranscoder'
 $rc = $LASTEXITCODE
 
 Remove-Item Env:\COMPRESS_IT_SOURCE, Env:\COMPRESS_IT_OUTDIR -ErrorAction SilentlyContinue
