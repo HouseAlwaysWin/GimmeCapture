@@ -33,6 +33,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
     private string? _loadedModelPath;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly SemaphoreSlim _inferLock = new(1, 1);
+    private volatile bool _disposed;
     // Unload the (multi-GB) GGUF weights after they've gone unused for a while, so leaving the app idle in
     // translation mode doesn't hold RAM/VRAM. A subsequent translation transparently reloads.
     private readonly IdleReleaseScheduler _idleUnload;
@@ -56,6 +57,9 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         {
             return string.Empty;
         }
+
+        // A disposed engine must not quietly load a multi-GB model again that nothing will ever free.
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         var cacheKey = $"{TranslationPromptCacheVersion}|{_cache.BuildKey(EngineType, sourceLang, targetLang, text)}";
         if (_cache.TryGet(cacheKey, out var cached))
@@ -139,7 +143,15 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         await _inferLock.WaitAsync(ct);
         try
         {
-            await foreach (var token in _executor.InferAsync(prompt, inference, ct))
+            // Read under the lock: the idle unloader may have freed the model between loading it and getting here,
+            // and nothing can free it while this lock is held.
+            var executor = _executor;
+            if (executor == null)
+            {
+                return string.Empty;
+            }
+
+            await foreach (var token in executor.InferAsync(prompt, inference, ct))
             {
                 sb.Append(token);
             }
@@ -147,6 +159,12 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         finally
         {
             _inferLock.Release();
+
+            // Dispose could not free the model while this translation was generating on it; it is done now.
+            if (_disposed)
+            {
+                ReleaseIdleModel();
+            }
         }
 
         return CleanupTranslationResult(sb.ToString());
@@ -165,40 +183,66 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             return;
         }
 
-        await _loadLock.WaitAsync(ct);
+        // Replacing the model frees the current weights, so no inference may be running on them: take the inference
+        // lock first. This used to hold only _loadLock, and switching models while a translation was generating freed
+        // the native weights under it — a use-after-free in llama.cpp. Lock order is always _inferLock → _loadLock,
+        // the same as ReleaseModel / ReleaseIdleModel / Dispose, so these can never deadlock each other.
+        await _inferLock.WaitAsync(ct);
         try
         {
-            if (_executor != null && string.Equals(_loadedModelPath, modelPath, StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
-            DisposeModel();
-
-            var settings = _settingsService.Settings;
-            var parameters = new ModelParams(modelPath)
-            {
-                ContextSize = (uint)Math.Clamp(settings.LlamaContextSize, 512, 8192),
-                GpuLayerCount = Math.Max(0, settings.LlamaGpuLayers)
-            };
-
+            await _loadLock.WaitAsync(ct);
             try
             {
-                _weights = await LLamaWeights.LoadFromFileAsync(parameters, ct);
-                _modelParams = parameters;
-                _executor = new StatelessExecutor(_weights, parameters);
-                _loadedModelPath = modelPath;
+                await LoadModelHoldingBothLocksAsync(modelPath, ct);
             }
-            catch (Exception ex) when (ex is TypeInitializationException or RuntimeError)
+            finally
             {
-                throw new InvalidOperationException(
-                    "Llama backend is not available. Install LLamaSharp.Backend.Cpu (or another matching backend) and ensure native files are present in output.",
-                    ex);
+                _loadLock.Release();
             }
         }
         finally
         {
-            _loadLock.Release();
+            _inferLock.Release();
+        }
+
+        // Disposed while this was loading: Dispose could not free a model that did not exist yet, and nothing will
+        // translate with it or unload it now — so free it here rather than leak gigabytes for the rest of the run.
+        if (_disposed)
+        {
+            ReleaseIdleModel();
+            ObjectDisposedException.ThrowIf(true, this);
+        }
+    }
+
+    /// <summary>Caller MUST hold <c>_inferLock</c> then <c>_loadLock</c>: this frees the current weights.</summary>
+    private async Task LoadModelHoldingBothLocksAsync(string modelPath, CancellationToken ct)
+    {
+        if (_executor != null && string.Equals(_loadedModelPath, modelPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        DisposeModel();
+
+        var settings = _settingsService.Settings;
+        var parameters = new ModelParams(modelPath)
+        {
+            ContextSize = (uint)Math.Clamp(settings.LlamaContextSize, 512, 8192),
+            GpuLayerCount = Math.Max(0, settings.LlamaGpuLayers)
+        };
+
+        try
+        {
+            _weights = await LLamaWeights.LoadFromFileAsync(parameters, ct);
+            _modelParams = parameters;
+            _executor = new StatelessExecutor(_weights, parameters);
+            _loadedModelPath = modelPath;
+        }
+        catch (Exception ex) when (ex is TypeInitializationException or RuntimeError)
+        {
+            throw new InvalidOperationException(
+                "Llama backend is not available. Install LLamaSharp.Backend.Cpu (or another matching backend) and ensure native files are present in output.",
+                ex);
         }
     }
 
@@ -225,8 +269,16 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
 
         try
         {
+            // Non-blocking here too: this is called on the UI thread when leaving translate mode, and a blocking
+            // Wait sat out an entire multi-GB model load. (Loads also hold _inferLock now, so the check above
+            // normally catches that case first.)
+            if (!_loadLock.Wait(0))
+            {
+                _idleUnload.NotifyUse();
+                return;
+            }
+
             _idleUnload.Cancel();
-            _loadLock.Wait();
             try
             {
                 DisposeModel();
@@ -281,31 +333,17 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
 
     public void Dispose()
     {
+        _disposed = true;
         _idleUnload.Cancel();
-        // Free the model under the locks so we don't race a still-running inference (rare at shutdown). If one
-        // is somehow still in flight, skip the managed dispose — process exit reclaims the native memory.
-        if (_inferLock.Wait(0))
-        {
-            try
-            {
-                _loadLock.Wait();
-                try
-                {
-                    DisposeModel();
-                }
-                finally
-                {
-                    _loadLock.Release();
-                }
-            }
-            finally
-            {
-                _inferLock.Release();
-            }
-        }
 
-        _loadLock.Dispose();
-        _inferLock.Dispose();
+        // Free the model now if nothing is generating. If a translation is still in flight (closing the overlay
+        // mid-translation), it frees the model itself the moment it finishes — see TranslateWithPromptAsync — instead
+        // of the multi-GB weights waiting for finalization.
+        ReleaseIdleModel();
+
+        // The semaphores are deliberately NOT disposed: an in-flight translation still releases _inferLock when it
+        // finishes, and disposing it first turned that Release into an ObjectDisposedException. Neither ever
+        // allocates a wait handle here, so there is nothing to leak.
     }
 
     internal static string CleanupTranslationResult(string result)

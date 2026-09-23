@@ -417,7 +417,10 @@ public partial class RecordingService
                 try
                 {
                     var muxedPath = Path.Combine(_tempDir, $"muxed_with_audio.{GetTargetExtension(format)}");
-                    var muxStats = LibavMuxer.MuxVideoAndAudio(sourceVideo, targetAudio, muxedPath, GetMuxerFormatName(format));
+                    // Off the caller's thread: Stop/Copy/Pin await this from UI commands, and a synchronous mux of a
+                    // long recording froze the whole UI (and its progress window) for as long as the mux ran.
+                    var muxStats = await Task.Run(() =>
+                        LibavMuxer.MuxVideoAndAudio(sourceVideo, targetAudio, muxedPath, GetMuxerFormatName(format)));
                     LogToFile($"[Finalize] Native mux ({format}) success: {muxedPath}, bytes={(File.Exists(muxedPath) ? new FileInfo(muxedPath).Length : 0)}, videoPackets={muxStats.VideoPackets}, audioPackets={muxStats.AudioPackets}");
                     await TryMoveWithRetryAsync(muxedPath, _outputFile);
                     return true;
@@ -437,7 +440,8 @@ public partial class RecordingService
             else
             {
                 string remuxedPath = Path.Combine(_tempDir, $"remuxed_video_only.{GetTargetExtension(format)}");
-                var remuxStats = LibavMuxer.RemuxVideo(sourceVideo, remuxedPath, GetMuxerFormatName(format));
+                var remuxStats = await Task.Run(() =>
+                    LibavMuxer.RemuxVideo(sourceVideo, remuxedPath, GetMuxerFormatName(format)));
                 LogToFile($"[Finalize] Native video-only remux ({format}) success: {remuxedPath}, bytes={(File.Exists(remuxedPath) ? new FileInfo(remuxedPath).Length : 0)}, videoPackets={remuxStats.VideoPackets}");
                 await TryMoveWithRetryAsync(remuxedPath, _outputFile);
             }
@@ -671,11 +675,20 @@ public partial class RecordingService
         Exception? lastEx = null;
         for (int i = 0; i < 5; i++)
         {
-            if (TryMoveWithFallback(sourcePath, destinationPath, out lastEx))
+            // The "move" is a full File.Copy whenever the output folder is on another drive — gigabytes for a long
+            // recording — so it must not run on the UI thread the Stop/Copy/Pin commands await this from.
+            var (moved, error) = await Task.Run(() =>
+            {
+                bool ok = TryMoveWithFallback(sourcePath, destinationPath, out var moveError);
+                return (ok, moveError);
+            });
+
+            if (moved)
             {
                 return;
             }
 
+            lastEx = error;
             await Task.Delay(500);
         }
 

@@ -156,10 +156,19 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 
     private async Task PrepareImageCoreAsync(SKBitmap original)
     {
-        var encoderSession = _encoderSession ?? throw new InvalidOperationException("SAM2 encoder session is not initialized.");
+        if (_encoderSession == null)
+            throw new InvalidOperationException("SAM2 encoder session is not initialized.");
 
         await Task.Run(() =>
         {
+            // The session comes from a use scope, never from the cached field: the scope keeps it alive (and
+            // serialised) for the whole run. Esc or a tool switch releases the last lease; with the cached reference
+            // the runtime disposed the session while this was still inside Run — a native access violation, i.e. the
+            // pin window and the whole app vanishing.
+            using var sessionUse = _runtimeService.BeginSessionUse();
+            var encoderSession = sessionUse.Encoder
+                ?? throw new InvalidOperationException("SAM2 was unloaded before the image could be prepared.");
+
             _originalWidth = original.Width;
             _originalHeight = original.Height;
 
@@ -268,6 +277,14 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
         {
             var results = new List<Avalonia.Rect>();
 
+            // Use scope: keeps the decoder alive for the whole detection pass (see PrepareImageCoreAsync).
+            using var sessionUse = _runtimeService.BeginSessionUse();
+            var decoderSession = sessionUse.Decoder;
+            if (decoderSession == null)
+            {
+                return results;
+            }
+
             // 1. Generate Grid Points (use lower density to avoid too many inference calls)
             var points = new List<(float X, float Y)>();
             // Limit to 32 = 1024 points max for maximum coverage of small icons
@@ -281,13 +298,15 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
             }
             
 
-            var decInputMetaData = _decoderSession.InputMetadata;
+            var decInputMetaData = decoderSession.InputMetadata;
             var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
 
-            // Process each point individually (batch=1) in PARALLEL
+            // Process each point individually (batch=1)
             var lockObj = new object();
 
-            Parallel.ForEach(points, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cancellationToken }, (pt, state) =>
+            // One point at a time: every iteration runs the SAME decoder session, and two threads inside Run on one
+            // ONNX session is itself an access violation (see OcrRuntimeService). This used to run four-way parallel.
+            Parallel.ForEach(points, new ParallelOptions { MaxDegreeOfParallelism = 1, CancellationToken = cancellationToken }, (pt, state) =>
             {
                 if (cancellationToken.IsCancellationRequested) return;
                 
@@ -314,7 +333,7 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
                     var maskInput = new DenseTensor<float>(new[] { 1, 1, 256, 256 });
                     var hasMaskInput = new DenseTensor<float>(new[] { 1 });
 
-                    var decInputMetaData = _decoderSession.InputMetadata;
+                    var decInputMetaData = decoderSession.InputMetadata;
                     var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
                     var inputs = new List<NamedOnnxValue>();
 
@@ -360,7 +379,7 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
                     AddInput(new[] { "has_mask_input", "has_mask" }, System.Linq.Enumerable.ToArray(hasMaskInput), hasMaskInput.Dimensions.AsValueEnumerable().ToArray());
                     AddInput(new[] { "orig_im_size", "im_size" }, new float[] { 1024f, 1024f }, new[] { 2 });
 
-                    using var result = _decoderSession.Run(inputs);
+                    using var result = decoderSession.Run(inputs);
                     var masksOutput = result.AsValueEnumerable().FirstOrDefault(r => r.Name.Contains("mask") && !r.Name.Contains("low_res"))?.AsTensor<float>();
                     var iouOutput = result.AsValueEnumerable().FirstOrDefault(r => r.Name.Contains("iou"))?.AsTensor<float>();
 
@@ -447,6 +466,11 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
             int n = pointList.Count;
             if (n == 0) return Array.Empty<byte>();
 
+            // Use scope: keeps the decoder alive and serialised for this click's run (see PrepareImageCoreAsync).
+            using var sessionUse = _runtimeService.BeginSessionUse();
+            var decoderSession = sessionUse.Decoder;
+            if (decoderSession == null) return Array.Empty<byte>();
+
             // SAM2 CRITICAL: Points must scale to the 1024-grid (since image is stretched)
             float scaleX = 1024f / (float)_originalWidth;
             float scaleY = 1024f / (float)_originalHeight;
@@ -469,7 +493,7 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
             var hasMaskInput = new DenseTensor<float>(new[] { 1 });
             hasMaskInput[0] = 0f;
 
-            var decInputMetaData = _decoderSession.InputMetadata;
+            var decInputMetaData = decoderSession.InputMetadata;
             var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
             var inputs = new List<NamedOnnxValue>();
             
@@ -513,7 +537,7 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
             // SAM2 CRITICAL: orig_im_size must be [1024, 1024] when using stretching
             AddInput(new[] { "orig_im_size", "im_size" }, new float[] { 1024f, 1024f }, new[] { 2 });
 
-            using var results = _decoderSession.Run(inputs);
+            using var results = decoderSession.Run(inputs);
             var masksResult = results.AsValueEnumerable().FirstOrDefault(r => r.Name == "upsampled_masks") ?? results.AsValueEnumerable().FirstOrDefault(r => r.Name == "masks") ?? results.AsValueEnumerable().FirstOrDefault(r => r.Name == "mask_values") ?? results.AsValueEnumerable().FirstOrDefault(r => r.Name.Contains("mask") && !r.Name.Contains("low_res"));
             var iouResult = results.AsValueEnumerable().FirstOrDefault(r => r.Name == "iou_predictions" || r.Name == "iou_prediction" || r.Name.Contains("iou"));
 
@@ -767,19 +791,26 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
     public string GetModelInfo()
     {
         if (!_isInitialized) return "Not Initialized";
+
+        // Even reading metadata touches the native session, so it needs the same use scope as a Run.
+        using var sessionUse = _runtimeService.BeginSessionUse();
+        var encoder = sessionUse.Encoder;
+        var decoder = sessionUse.Decoder;
+        if (encoder == null || decoder == null) return "Not Loaded";
+
         // CRITICAL: Build Timestamp to verify DLL update
         var info = $"[BUILD: {DateTime.Now:HH:mm:ss}]\n";
         info += "Encoder Inputs:\n";
-        foreach (var input in _encoderSession!.InputMetadata)
+        foreach (var input in encoder.InputMetadata)
             info += $"  - {input.Key}: {string.Join("x", input.Value.Dimensions.AsValueEnumerable().ToArray())}\n";
         info += "Encoder Outputs:\n";
-        foreach (var output in _encoderSession!.OutputMetadata)
+        foreach (var output in encoder.OutputMetadata)
             info += $"  - {output.Key}: {string.Join("x", output.Value.Dimensions.AsValueEnumerable().ToArray())}\n";
         info += "Decoder Inputs:\n";
-        foreach (var input in _decoderSession!.InputMetadata)
+        foreach (var input in decoder.InputMetadata)
             info += $"  - {input.Key}: {string.Join("x", input.Value.Dimensions.AsValueEnumerable().ToArray())}\n";
         info += "Decoder Outputs:\n";
-        foreach (var output in _decoderSession!.OutputMetadata)
+        foreach (var output in decoder.OutputMetadata)
             info += $"  - {output.Key}: {string.Join("x", output.Value.Dimensions.AsValueEnumerable().ToArray())}\n";
         return info;
     }

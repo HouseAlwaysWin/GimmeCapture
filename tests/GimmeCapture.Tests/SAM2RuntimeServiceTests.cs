@@ -81,6 +81,63 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         Assert.False(sut.IsLoadedAndWarmed);
     }
 
+
+    /// <summary>Long enough for a blocked call to show it is blocked; short enough to keep the suite fast.</summary>
+    private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(200);
+
+    private SAM2RuntimeService CreateRuntime()
+    {
+        var settingsService = new AppSettingsService(_baseDir);
+        var pathService = new AIPathService(settingsService);
+        return new SAM2RuntimeService(pathService, new NativeResolverService(pathService));
+    }
+
+    [Fact]
+    public async Task UnloadWaitsForTheRunningInferenceInsteadOfFreeingUnderIt()
+    {
+        // The crash this guards: Esc released the last lease and the sessions were disposed while the encoder was
+        // still inside Run on the thread pool — an access violation, not an exception.
+        using var sut = CreateRuntime();
+        var runningInference = sut.BeginSessionUse();
+
+        var unload = Task.Run(() => sut.UnloadModels());
+        var first = await Task.WhenAny(unload, Task.Delay(Settle));
+        Assert.NotSame(unload, first);
+
+        runningInference.Dispose();
+        await unload.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task InferenceIsSerialised()
+    {
+        // Two threads inside Run on one ONNX session crash the process just like a disposed one.
+        using var sut = CreateRuntime();
+        var first = sut.BeginSessionUse();
+
+        var second = Task.Run(() => sut.BeginSessionUse());
+        var winner = await Task.WhenAny(second, Task.Delay(Settle));
+        Assert.NotSame(second, winner);
+
+        first.Dispose();
+        using var secondUse = await second.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, sut.ActiveSessionUses);
+    }
+
+    [Fact]
+    public void ASessionUseReleasesExactlyOnce()
+    {
+        using var sut = CreateRuntime();
+        var use = sut.BeginSessionUse();
+
+        use.Dispose();
+        use.Dispose(); // a double dispose must not release the gate twice
+
+        Assert.Equal(0, sut.ActiveSessionUses);
+        using var next = sut.BeginSessionUse(); // and the next inference can still start
+        Assert.Equal(1, sut.ActiveSessionUses);
+    }
+
     public void Dispose()
     {
         try
