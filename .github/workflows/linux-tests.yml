@@ -39,7 +39,7 @@ jobs:
 
       - name: Cache FFmpeg .so bundle
         id: cache-ffmpeg
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: src/GimmeCapture/ffmpeg-lib
           key: ffmpeg-linux-so-${{ hashFiles('scripts/ensure-ffmpeg-libs-linux.sh') }}
@@ -51,7 +51,7 @@ jobs:
         run: bash scripts/ensure-ffmpeg-libs-linux.sh
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-linuxtest-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
