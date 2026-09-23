@@ -16,6 +16,13 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// Maintains a JSON-backed index of captures that were persisted to disk (saved screenshots and
 /// finalized recordings), plus a small PNG thumbnail per item. Honors <see cref="AppSettings.EnableHistory"/>.
 /// </summary>
+/// <remarks>
+/// Every public method leaves its caller's thread at the gate (<see cref="ConfigureAwaitOptions.ForceYielding"/>).
+/// The callers are UI code — every copy and save adds an item — and a plain <c>ConfigureAwait(false)</c> does not
+/// leave the thread when the awaited task has already completed, which is the usual case here (a free gate, an
+/// index already loaded). That is how the full-size decode, resize and PNG encode of each thumbnail, and the file
+/// deletes of a history clear, all used to run on the UI thread.
+/// </remarks>
 public sealed class CaptureHistoryService
 {
     private const int MaxItems = 300;
@@ -75,7 +82,7 @@ public sealed class CaptureHistoryService
             return;
         }
 
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        await _gate.WaitAsync(ct).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         try
         {
             await EnsureLoadedAsync().ConfigureAwait(false);
@@ -115,7 +122,7 @@ public sealed class CaptureHistoryService
             return;
         }
 
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        await _gate.WaitAsync(ct).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         try
         {
             await EnsureLoadedAsync().ConfigureAwait(false);
@@ -149,7 +156,7 @@ public sealed class CaptureHistoryService
 
     public async Task<IReadOnlyList<CaptureHistoryItem>> GetItemsAsync()
     {
-        await _gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync().ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         try
         {
             await EnsureLoadedAsync().ConfigureAwait(false);
@@ -166,7 +173,7 @@ public sealed class CaptureHistoryService
     {
         if (string.IsNullOrEmpty(id)) return;
 
-        await _gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync().ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         try
         {
             await EnsureLoadedAsync().ConfigureAwait(false);
@@ -191,7 +198,7 @@ public sealed class CaptureHistoryService
 
     public async Task ClearAsync(bool deleteSourceFiles = false)
     {
-        await _gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync().ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         try
         {
             await EnsureLoadedAsync().ConfigureAwait(false);

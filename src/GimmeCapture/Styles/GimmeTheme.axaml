@@ -8,6 +8,14 @@
         <Setter Property="behaviors:NumericUpDownFix.Enable" Value="True"/>
     </Style>
 
+    <!-- A screen reader names a button after its content. For an icon-only button that was the icon's
+         type: "Avalonia.Controls.Shapes.Path, button", with the localized tooltip demoted to help text.
+         Name every button after its tooltip instead; one without a tooltip keeps its text as the name,
+         and an explicit AutomationProperties.Name on the button still wins over this style. -->
+    <Style Selector=":is(Button)">
+        <Setter Property="AutomationProperties.Name" Value="{Binding $self.(ToolTip.Tip)}"/>
+    </Style>
+
     <Styles.Resources>
         <ResourceDictionary>
             <!-- Theme Color Palette -->
@@ -46,9 +54,17 @@
                 </Setter>
             </ControlTheme>
 
-            <!-- Official Style Gothic Metal Button (Octagonal/Clipped Corners) -->
+            <!-- Keyboard focus ring for the custom button themes below. Each one replaces Fluent's Button theme
+                 wholesale, and with it the only focus visual Fluent draws (its :focus-visible states), so Tab
+                 moved through them without showing where focus was. Avalonia shows a focus adorner only for
+                 keyboard navigation, never after a click. -->
+            <FocusAdornerTemplate x:Key="GimmeFocusAdorner">
+                <Border BorderThickness="2" BorderBrush="{DynamicResource ThemeAccentBrush}" Margin="-3" CornerRadius="3"/>
+            </FocusAdornerTemplate>
 
+            <!-- Official Style Gothic Metal Button (Octagonal/Clipped Corners) -->
             <ControlTheme x:Key="GothicMetalButton" TargetType="Button">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Setter Property="Background" Value="Black"/>
                 <Setter Property="Foreground" Value="{StaticResource ChromeSilverBrush}"/>
                 <Setter Property="Padding" Value="15,6"/>
@@ -147,6 +163,7 @@
 
             <!-- Small Gothic Metal Button -->
             <ControlTheme x:Key="SmallGothicMetalButton" TargetType="Button">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Setter Property="Background" Value="Black"/>
                 <Setter Property="Foreground" Value="{StaticResource ChromeSilverBrush}"/>
                 <Setter Property="Padding" Value="8,2"/>
@@ -244,6 +261,7 @@
             <!-- SmallGothicMetalButton + ".active" state (accent-filled body), for tool buttons whose
                  active tool is flagged via Classes.active (e.g. the drawing toolbar in the video editor). -->
             <ControlTheme x:Key="GothicToolMetalButton" TargetType="Button" BasedOn="{StaticResource SmallGothicMetalButton}">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Style Selector="^.active">
                     <Setter Property="Foreground" Value="White"/>
                 </Style>
@@ -254,6 +272,7 @@
 
             <!-- Window Control Button (Octagonal Gothic Style) -->
             <ControlTheme x:Key="WindowControlButton" TargetType="Button">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Setter Property="Background" Value="Black"/>
                 <Setter Property="Foreground" Value="{StaticResource ChromeSilverBrush}"/>
                 <Setter Property="Padding" Value="0"/>
@@ -358,6 +377,7 @@
 
             <!-- Metal Button Style -->
             <ControlTheme x:Key="MetalButton" TargetType="Button">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Setter Property="Background" Value="{StaticResource GothicBlackBrush}"/>
                 <Setter Property="Foreground" Value="White"/>
                 <Setter Property="BorderThickness" Value="2"/>
@@ -423,6 +443,7 @@
 
             <!-- Small Metal Button Variant for Settings -->
             <ControlTheme x:Key="SmallMetalButton" TargetType="Button">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Setter Property="Background" Value="{StaticResource GothicBlackBrush}"/>
                 <Setter Property="Foreground" Value="White"/>
                 <Setter Property="BorderThickness" Value="1"/>
@@ -484,6 +505,7 @@
 
             <!-- SnipToolbar Button Style -->
             <ControlTheme x:Key="SnipButton" TargetType="Button">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Setter Property="Background" Value="#2A2A2A"/>
                 <Setter Property="Foreground" Value="White"/>
                 <Setter Property="Padding" Value="6,4"/>
@@ -522,6 +544,7 @@
 
             <!-- SnipToolbar Button with Active State Support -->
             <ControlTheme x:Key="SnipToolButton" TargetType="Button">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Setter Property="Background" Value="#2A2A2A"/>
                 <Setter Property="Foreground" Value="White"/>
                 <Setter Property="Padding" Value="6,4"/>
@@ -564,6 +587,7 @@
             </ControlTheme>
 
             <ControlTheme x:Key="SnipToggleButton" TargetType="ToggleButton">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Setter Property="Background" Value="#2A2A2A"/>
                 <Setter Property="Foreground" Value="White"/>
                 <Setter Property="Padding" Value="6,4"/>
@@ -607,6 +631,7 @@
             
             <!-- Hexagon Window Button Style for Custom Title Bar -->
             <ControlTheme x:Key="HexagonWindowButton" TargetType="Button">
+                <Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="#CCCCCC"/>
                 <Setter Property="Width" Value="28"/>

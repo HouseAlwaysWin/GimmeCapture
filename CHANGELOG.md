@@ -48,6 +48,41 @@
 - **Stopping a long recording no longer freezes the app.** Finishing an MP4, MKV or MOV recording rewrote the whole
   file — and copied it, when saving to another drive — on the UI thread, so the app stopped responding until that
   was done. It now happens in the background.
+- **A capture no longer freezes while OCR reloads.** Once the OCR model had been idle-unloaded, the overlay's text
+  scan rebuilt it on the UI thread — about 0.4 s in which the overlay ignored everything (it showed up in the log as
+  a `UiStall`). It now loads in the background.
+- **Removing an AI module no longer freezes the app.** Removal waited — up to 30 seconds — for an inference still
+  running on that model, then deleted hundreds of MB, all on the UI thread. A removal that fails now says why,
+  instead of leaving the module installed without a word.
+- **Copying or saving no longer stalls on the history thumbnail.** With history on, every copy and save decoded the
+  full-size capture, scaled it and encoded a thumbnail on the UI thread (about 30 ms for a 4K capture); clearing
+  the history deleted its files there too.
+- **Resizing a pin is smoother.** Every step of a resize or zoom re-read each pixel of the pinned image to work out
+  its see-through areas (about 9 ms per step at 4K). The image is now scanned once, and a resize only rescales the
+  result.
+
+### ♿ Accessibility
+
+- **Screen readers can tell the buttons apart.** An icon-only button — most of every toolbar — was announced by its
+  icon's type name ("Avalonia.Controls.Shapes.Path, button"). Every button is now named after its localized
+  tooltip, and the icon buttons that had none (window controls, play/pause, colour swatches, bold/italic, mosaic
+  sizes) have one or an explicit name.
+- **Keyboard focus is visible.** The app's own button styles replaced the only focus indicator the UI framework
+  draws, so Tab moved through them without showing where it was. They now show a focus ring — for the keyboard
+  only, never after a click.
+
+### 🌐 Localization
+
+- **No more Chinese-only or English-only text.** The folder picker (titled "select the recording folder" in Chinese
+  for all four folder settings), the hotkey-registration failure and the Enter-hotkey warning were Chinese in every
+  language; the pin dialogs' YES/NO, the pinned video's seek tooltips, the update-failure message, the blur
+  strengths, the translation tab's Refresh button and several window titles were English in every language. All
+  now follow the app language, and a test fails the build when UI text is hardcoded again.
+
+### 📝 Docs
+
+- The README, in all three languages, caught up with v0.60–v0.68: capturing menus, freeze-frame, Quick OCR, AV1,
+  auto-stop, GIF/WebM output and history — and no longer advertises the removed mask-opacity setting.
 
 ### 🔒 Security & supply chain
 

@@ -85,10 +85,10 @@
 
             <!-- Button Area -->
             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20" Margin="0,0,0,30">
-                <Button Content="YES" Width="100" Height="32" 
+                <Button Content="{Binding [Yes], Source={x:Static services:LocalizationService.Instance}}" Width="100" Height="32" 
                         Command="{Binding CloseCommand}" CommandParameter="{x:True}"
                         Theme="{StaticResource SnipButton}" Background="#330000" BorderBrush="#E60012"/>
-                <Button Content="NO" Width="100" Height="32" 
+                <Button Content="{Binding [No], Source={x:Static services:LocalizationService.Instance}}" Width="100" Height="32" 
                         Command="{Binding CloseCommand}" CommandParameter="{x:False}"
                         Theme="{StaticResource SnipButton}" Background="#222222" BorderBrush="#555555"/>
             </StackPanel>

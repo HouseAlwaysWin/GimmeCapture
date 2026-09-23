@@ -9,6 +9,7 @@ using System;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Core.Interaction;
 using GimmeCapture.Services.Interop;
 using Avalonia.Media.Imaging;
 using Avalonia.Media;
@@ -62,8 +63,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
     private PropertyChangedEventHandler? _boundViewModelPropertyChangedHandler;
     private Bitmap? _cachedOpaqueBitmap;
     private PixelSize _cachedOpaqueBitmapSize;
-    private Rect _cachedOpaqueRenderedRect;
-    private List<Rect>? _cachedOpaqueImageRects;
+    private List<PixelRect>? _cachedOpaquePixelRects;
     private readonly List<Rect> _interactiveHitTestRegions = new();
     private WndProcDelegate? _wndProcDelegate;
     private IntPtr _oldWndProc;
@@ -339,24 +339,21 @@ public partial class FloatingImageWindow : FloatingWindowBase
             renderedRect.Height);
 
         var bitmap = vm.Image;
-        if (_cachedOpaqueImageRects == null
+        // The scan reads every pixel, so it runs once per image; a resize or zoom only rescales its result. It used
+        // to rescan the whole bitmap whenever the drawn size changed — on every step of a drag-resize.
+        if (_cachedOpaquePixelRects == null
             || !ReferenceEquals(_cachedOpaqueBitmap, bitmap)
-            || _cachedOpaqueBitmapSize != bitmap.PixelSize
-            || !RectsClose(_cachedOpaqueRenderedRect, imageWindowRect))
+            || _cachedOpaqueBitmapSize != bitmap.PixelSize)
         {
             _cachedOpaqueBitmap = bitmap;
             _cachedOpaqueBitmapSize = bitmap.PixelSize;
-            _cachedOpaqueRenderedRect = imageWindowRect;
-            _cachedOpaqueImageRects = BuildOpaqueImageRects(bitmap, imageWindowRect);
-        }
-
-        if (_cachedOpaqueImageRects == null)
-        {
-            return;
+            _cachedOpaquePixelRects = ScanOpaquePixelRects(bitmap);
         }
 
         double scaling = RenderScaling;
-        foreach (var rect in _cachedOpaqueImageRects)
+        var imageRects = OpaqueRegionScanner.Map(
+            _cachedOpaquePixelRects, bitmap.PixelSize.Width, bitmap.PixelSize.Height, imageWindowRect);
+        foreach (var rect in imageRects)
         {
             dest.Add(new Rect(rect.X * scaling, rect.Y * scaling, rect.Width * scaling, rect.Height * scaling));
             _interactiveHitTestRegions.Add(rect);
@@ -510,15 +507,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
         }
     }
 
-    private static bool RectsClose(Rect a, Rect b)
-    {
-        return Math.Abs(a.X - b.X) < 0.5
-            && Math.Abs(a.Y - b.Y) < 0.5
-            && Math.Abs(a.Width - b.Width) < 0.5
-            && Math.Abs(a.Height - b.Height) < 0.5;
-    }
-
-    private static List<Rect> BuildOpaqueImageRects(Bitmap bitmap, Rect renderedRect)
+    private static List<PixelRect> ScanOpaquePixelRects(Bitmap bitmap)
     {
         int width = bitmap.PixelSize.Width;
         int height = bitmap.PixelSize.Height;
@@ -536,70 +525,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
         {
             handle = GCHandle.Alloc(rented, GCHandleType.Pinned);
             bitmap.CopyPixels(new PixelRect(0, 0, width, height), handle.AddrOfPinnedObject(), stride * height, stride);
-
-            double scaleX = renderedRect.Width / width;
-            double scaleY = renderedRect.Height / height;
-            var active = new Dictionary<(int Start, int Length), Rect>();
-            var result = new List<Rect>();
-
-            for (int y = 0; y < height; y++)
-            {
-                var next = new Dictionary<(int Start, int Length), Rect>();
-                int rowOffset = y * stride;
-                int x = 0;
-
-                while (x < width)
-                {
-                    int alphaIndex = rowOffset + (x * bytesPerPixel) + 3;
-                    if (rented[alphaIndex] <= 8)
-                    {
-                        x++;
-                        continue;
-                    }
-
-                    int start = x;
-                    x++;
-                    while (x < width)
-                    {
-                        alphaIndex = rowOffset + (x * bytesPerPixel) + 3;
-                        if (rented[alphaIndex] <= 8)
-                        {
-                            break;
-                        }
-
-                        x++;
-                    }
-
-                    int length = x - start;
-                    var key = (start, length);
-                    if (active.Remove(key, out var existing))
-                    {
-                        next[key] = new Rect(existing.X, existing.Y, existing.Width, existing.Height + scaleY);
-                    }
-                    else
-                    {
-                        next[key] = new Rect(
-                            renderedRect.X + (start * scaleX),
-                            renderedRect.Y + (y * scaleY),
-                            Math.Max(scaleX, length * scaleX),
-                            Math.Max(scaleY, scaleY));
-                    }
-                }
-
-                foreach (var leftover in active.Values)
-                {
-                    result.Add(leftover);
-                }
-
-                active = next;
-            }
-
-            foreach (var rect in active.Values)
-            {
-                result.Add(rect);
-            }
-
-            return result;
+            return OpaqueRegionScanner.Scan(rented.AsSpan(0, stride * height), width, height, stride);
         }
         finally
         {

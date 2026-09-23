@@ -387,7 +387,9 @@ public sealed class UpdateService : ReactiveObject
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                PlatformErrorDialog.ShowError($"Update failed: {ex.Message}", "Update Error");
+                PlatformErrorDialog.ShowError(
+                    string.Format(LocalizationService.Instance["UpdateError"], ex.Message),
+                    LocalizationService.Instance["UpdateErrorTitle"]);
             });
         }
     }

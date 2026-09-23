@@ -11,7 +11,7 @@
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="GimmeCapture.Views.Main.SnipWindow"
         x:DataType="vm:SnipWindowViewModel"
-        Title="SnipWindow"
+        Title="{Binding [WindowTitleCaptureOverlay], Source={x:Static services:LocalizationService.Instance}}"
         TransparencyLevelHint="Transparent"
         WindowDecorations="None"
         WindowState="Normal"

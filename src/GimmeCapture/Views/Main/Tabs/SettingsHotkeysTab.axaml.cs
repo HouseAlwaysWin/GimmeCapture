@@ -151,8 +151,8 @@ public partial class SettingsHotkeysTab : UserControl
                 {
                     await ConfirmationDialog.ShowConfirmation(
                         warningOwner,
-                        "快捷鍵風險提示",
-                        $"快捷鍵 {hotkeyStr} 已套用，但 Enter 類組合在右鍵選單、文字輸入、IME 與焦點切換時比較容易失效或干擾。\n建議優先改用 F6 / F8 這類功能鍵。",
+                        LocalizationService.Instance["HotkeyEnterRiskTitle"],
+                        string.Format(LocalizationService.Instance["HotkeyEnterRiskMessage"], hotkeyStr),
                         ConfirmationMode.OkOnly);
 
                     if (textBox.IsFocused)

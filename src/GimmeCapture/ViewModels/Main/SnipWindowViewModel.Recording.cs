@@ -792,7 +792,7 @@ public partial class SnipWindowViewModel
 
                 if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath))
                 {
-                    System.Diagnostics.Debug.WriteLine($"找不到錄影檔案: {recordingPath}");
+                    AppLog.Warning("Recording.PinRecording", $"Recording file not found: {recordingPath}");
                     // Still close the snip overlay — otherwise a failed pin leaves the selection on screen with
                     // no way to dismiss it (reported on the dual-monitor repro). See docs/WGC_HANDOFF.md.
                     CloseAction?.Invoke();

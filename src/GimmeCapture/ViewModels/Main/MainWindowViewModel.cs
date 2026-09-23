@@ -227,7 +227,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public Action<string>? RequestElevatedWindowPromptAction { get; set; }
     public Action? RequestOpenModulesAction { get; set; }
     public Func<SnipWindowViewModel?>? GetActiveSnipViewModelAction { get; set; }
-    public Func<Task<string?>>? PickFolderAction { get; set; }
+    /// <summary>Shows a folder picker with the given (already localized) title; null when cancelled.</summary>
+    public Func<string, Task<string?>>? PickFolderAction { get; set; }
     // Opens a file picker (filtered to *.gguf) for choosing the custom translation model; null = cancelled.
     public Func<Task<string?>>? PickGgufFileAction { get; set; }
     public Func<string, string, bool, Task<bool>>? ConfirmAction { get; set; }
@@ -452,7 +453,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             if (PickFolderAction != null)
             {
-                var path = await PickFolderAction();
+                var path = await PickFolderAction(LocalizationService.Instance["PickAIResourcesFolderTitle"]);
                 if (!string.IsNullOrEmpty(path))
                 {
                     AIResourcesDirectory = path;
