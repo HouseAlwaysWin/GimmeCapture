@@ -39,7 +39,7 @@ public partial class SnipToolbar : UserControl
             return;
         }
 
-        vm.SelectCaptureTargetCommand.Execute(target).Subscribe();
+        vm.SelectCaptureTargetCommand.Execute(target).SubscribeLoggingErrors();
 
         // Monitors/regions are single-select → close the picker. Windows are multi-select → keep the
         // flyout open so the user can toggle several before starting the recording.

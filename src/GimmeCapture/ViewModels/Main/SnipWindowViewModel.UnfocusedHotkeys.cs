@@ -115,19 +115,19 @@ public partial class SnipWindowViewModel
                 DismissOrClose();
                 return true;
             case HotkeyIds.OverlayAction:
-                HandleActiveActionHotkeyCommand?.Execute().Subscribe();
+                HandleActiveActionHotkeyCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             case HotkeyIds.OverlayCopy when HasContentForCopyOrSave:
-                CopyCommand?.Execute().Subscribe();
+                CopyCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             case HotkeyIds.OverlaySave when HasContentForCopyOrSave:
-                SaveCommand?.Execute().Subscribe();
+                SaveCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             case HotkeyIds.OverlayRecordPause when RecState != RecordingState.Idle:
-                PauseRecordingCommand?.Execute().Subscribe();
+                PauseRecordingCommand?.Execute().SubscribeLoggingErrors();
                 return true;
             case HotkeyIds.OverlayRecordStop when RecState != RecordingState.Idle:
-                StopRecordingCommand?.Execute().Subscribe();
+                StopRecordingCommand?.Execute().SubscribeLoggingErrors();
                 return true;
         }
 

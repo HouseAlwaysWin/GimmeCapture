@@ -730,7 +730,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     {
         if (IsEnteringText)
         {
-            CancelTextEntryCommand.Execute().Subscribe();
+            CancelTextEntryCommand.Execute().SubscribeLoggingErrors();
             return true;
         }
 

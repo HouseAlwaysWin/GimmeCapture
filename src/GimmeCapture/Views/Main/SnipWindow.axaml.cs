@@ -368,7 +368,7 @@ public partial class SnipWindow : Window
         if (_viewModel != null && _viewModel.RecState != RecordingState.Idle)
         {
             // Use Fire and Forget for the command, it handles internal state
-            _viewModel.StopRecordingCommand.Execute().Subscribe();
+            _viewModel.StopRecordingCommand.Execute().SubscribeLoggingErrors();
         }
 
         // Restore Pin windows to Topmost
@@ -542,22 +542,22 @@ public partial class SnipWindow : Window
                     }
                     System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched ActiveActionHotkey! Firing HandleActiveActionHotkeyCommand.");
                     _activeActionHotkeyHeld = true;
-                    _viewModel.HandleActiveActionHotkeyCommand?.Execute().Subscribe();
+                    _viewModel.HandleActiveActionHotkeyCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                     break;
                 case HotkeyRouterService.WindowHotkeyAction.ToggleToolbar:
                     System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched ActiveToolbarHotkey! Firing ToggleToolbarCommand.");
-                    _viewModel.ToggleToolbarCommand?.Execute().Subscribe();
+                    _viewModel.ToggleToolbarCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                     break;
                 case HotkeyRouterService.WindowHotkeyAction.Save:
                     System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched SaveHotkey! Firing SaveCommand.");
-                    _viewModel.SaveCommand?.Execute().Subscribe();
+                    _viewModel.SaveCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                     break;
                 case HotkeyRouterService.WindowHotkeyAction.Copy:
                     System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched CopyHotkey! Firing CopyCommand.");
-                    _viewModel.CopyCommand?.Execute().Subscribe();
+                    _viewModel.CopyCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                     break;
             }
@@ -571,22 +571,22 @@ public partial class SnipWindow : Window
 
                 if (specificAction == HotkeyRouterService.WindowHotkeyAction.TranslateAll)
                 {
-                    _viewModel.TranslateAllSelectionsCommand?.Execute().Subscribe();
+                    _viewModel.TranslateAllSelectionsCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                 }
                 else if (IsMatch(_viewModel.TranslatePinHotkey))
                 {
-                    _viewModel.PinTranslationResultsCommand?.Execute().Subscribe();
+                    _viewModel.PinTranslationResultsCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                 }
                 else if (IsMatch(_viewModel.ScanAllHotkey))
                 {
-                    _viewModel.ScanAllTextCommand?.Execute().Subscribe();
+                    _viewModel.ScanAllTextCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                 }
                 else if (IsMatch(_viewModel.ClearAllHotkey))
                 {
-                    _viewModel.ClearAllSelectionsCommand?.Execute().Subscribe();
+                    _viewModel.ClearAllSelectionsCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                 }
             }

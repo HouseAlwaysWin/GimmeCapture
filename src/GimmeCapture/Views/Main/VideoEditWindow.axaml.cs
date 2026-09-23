@@ -47,7 +47,7 @@ public partial class VideoEditWindow : Window
             {
                 if (DataContext is VideoEditViewModel vm)
                 {
-                    vm.Draw.ConfirmTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                    vm.Draw.ConfirmTextEntryCommand.Execute(System.Reactive.Unit.Default).SubscribeLoggingErrors();
                 }
             },
             focusTextInput: () => EditTextEntry?.FocusTextInput(),
@@ -156,7 +156,7 @@ public partial class VideoEditWindow : Window
         {
             if (e.Key == Key.Escape)
             {
-                vm.Draw.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                vm.Draw.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).SubscribeLoggingErrors();
                 e.Handled = true;
             }
             return; // typing — leave every other key to the TextBox
@@ -184,11 +184,11 @@ public partial class VideoEditWindow : Window
                 e.Handled = true;
                 break;
             case Key.Z when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                vm.Draw.UndoCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                vm.Draw.UndoCommand.Execute(System.Reactive.Unit.Default).SubscribeLoggingErrors();
                 e.Handled = true;
                 break;
             case Key.Y when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                vm.Draw.RedoCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                vm.Draw.RedoCommand.Execute(System.Reactive.Unit.Default).SubscribeLoggingErrors();
                 e.Handled = true;
                 break;
         }

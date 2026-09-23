@@ -295,6 +295,9 @@ public partial class SnipWindowViewModel
         _autoDetectTask = Task.Run(() => AutoDetectLoopAsync(_autoDetectCts.Token));
     }
 
+    /// <summary>Whether the translate auto-detect loop is live — observable so its lifetime can be tested.</summary>
+    internal bool IsAutoDetectLoopRunning => _autoDetectCts != null;
+
     public void StopAutoDetectLoop()
     {
         _autoDetectCts?.Cancel();

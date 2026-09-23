@@ -294,7 +294,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     {
         if (IsPointRemovalMode)
         {
-            CancelInteractiveCommand.Execute().Subscribe();
+            CancelInteractiveCommand.Execute().SubscribeLoggingErrors();
             return true;
         }
 

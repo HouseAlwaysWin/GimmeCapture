@@ -692,4 +692,18 @@ public class SnipWindowViewModelTests
 
         public IReadOnlyList<RecordableWindow> GetRecordableWindows(IntPtr? excludeHWnd = null) => [];
     }
+
+    [Fact]
+    public void Dispose_StopsTheTranslateAutoDetectLoop()
+    {
+        // Closing a translate overlay is not a mode switch, and a mode switch used to be the only thing that stopped
+        // this loop: it kept capturing, running OCR and translating every 1.5 s after the overlay was gone.
+        var vm = new SnipWindowViewModel();
+        vm.StartAutoDetectLoop();
+        Assert.True(vm.IsAutoDetectLoopRunning);
+
+        vm.Dispose();
+
+        Assert.False(vm.IsAutoDetectLoopRunning);
+    }
 }

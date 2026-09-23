@@ -29,6 +29,7 @@ public partial class RecordingService
         }
 
         string mergedMkv = Path.Combine(_tempDir, "merged.mkv");
+        bool finalized = false;
 
         try
         {
@@ -37,18 +38,40 @@ public partial class RecordingService
             FinalizationProgress = 30;
             var mergedAudio = await BuildFinalAudioAsync();
             await FinalizeByTargetFormatAsync(mergedMkv, mergedAudio, cropFilter: null);
+            finalized = true;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error finalizing recording: {ex.Message}");
-            Infrastructure.PlatformErrorDialog.ShowError($"Error saving recording: {ex.Message}", "Save Error");
+            ReportFinalizeFailureKeepingSegments(ex);
         }
         finally
         {
-            CleanupTempDirectory();
+            // The raw segments are the only copy of the recording until the final file exists. Deleting them after a
+            // failed finalize - which this used to do unconditionally - turned a save error into a lost recording.
+            if (finalized)
+            {
+                CleanupTempDirectory();
+            }
+
             // Recording finalized — release the large frame/audio/encode buffers back to the OS.
             _ = Infrastructure.ProcessMemoryTrimService.RequestIdleTrimAsync("after-recording");
         }
+    }
+
+    /// <summary>
+    /// A finalize that failed leaves the session directory (raw segments + audio) in place, logs why, and tells the
+    /// user where it is — the recording can still be recovered from there. It used to log to Debug output only
+    /// (nothing in a release build) and then delete the directory.
+    /// </summary>
+    private void ReportFinalizeFailureKeepingSegments(Exception failure)
+    {
+        Infrastructure.AppLog.Error("Recording.Finalize", failure);
+        Infrastructure.AppLog.Warning("Recording.Finalize", $"Kept the raw recording segments for recovery at {_tempDir}.");
+
+        var loc = Infrastructure.LocalizationService.Instance;
+        Infrastructure.PlatformErrorDialog.ShowError(
+            string.Format(loc["RecordingSaveFailedKeptSegments"], failure.Message, _tempDir),
+            loc["RecordingSaveFailedTitle"]);
     }
 
     // Separate-files mode: build the shared audio once, then finalize each window's track to its own output
@@ -64,6 +87,7 @@ public partial class RecordingService
         await Task.Delay(100);
 
         string? mergedAudio = await BuildFinalAudioAsync();
+        Exception? firstTrackFailure = null;
 
         try
         {
@@ -97,7 +121,9 @@ public partial class RecordingService
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[Finalize] Track {i} finalize failed: {ex.Message}");
+                    // Used to be Debug-only: a track silently missing from the output, with nothing in the log.
+                    Infrastructure.AppLog.Error($"Recording.FinalizeTrack{i}", ex);
+                    firstTrackFailure ??= ex;
                     track.OutputFile = string.Empty;
                 }
 
@@ -106,7 +132,17 @@ public partial class RecordingService
         }
         finally
         {
-            CleanupTempDirectory();
+            // Same rule as the single-output path: a track that failed has no final file, so its raw segments are
+            // the only copy — keep the session rather than delete what cannot be recovered any other way.
+            if (firstTrackFailure == null)
+            {
+                CleanupTempDirectory();
+            }
+        }
+
+        if (firstTrackFailure != null)
+        {
+            ReportFinalizeFailureKeepingSegments(firstTrackFailure);
         }
     }
 
@@ -730,6 +766,7 @@ public partial class RecordingService
 
     private void LogToFile(string message)
     {
-        Debug.WriteLine($"[RecordingService] {message}");
+        // Was Debug.WriteLine only, so none of these (mux fallbacks, audio drops, retries) reached a release log.
+        Infrastructure.AppLog.Information($"Recording.{message}");
     }
 }

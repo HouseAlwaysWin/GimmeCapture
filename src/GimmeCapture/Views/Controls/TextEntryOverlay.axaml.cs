@@ -59,12 +59,12 @@ public partial class TextEntryOverlay : UserControl
 
         if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
-            vm.ConfirmTextEntryCommand.Execute(Unit.Default).Subscribe();
+            vm.ConfirmTextEntryCommand.Execute(Unit.Default).SubscribeLoggingErrors();
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
         {
-            vm.CancelTextEntryCommand.Execute(Unit.Default).Subscribe();
+            vm.CancelTextEntryCommand.Execute(Unit.Default).SubscribeLoggingErrors();
             e.Handled = true;
         }
     }

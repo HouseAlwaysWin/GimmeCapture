@@ -171,7 +171,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
                 if (runAI)
                 {
                     Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                        newVm.RemoveBackgroundCommand.Execute().Subscribe();
+                        newVm.RemoveBackgroundCommand.Execute().SubscribeLoggingErrors();
                     });
                 }
 

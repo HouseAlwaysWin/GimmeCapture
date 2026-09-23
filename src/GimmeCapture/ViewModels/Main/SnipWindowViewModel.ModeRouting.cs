@@ -426,20 +426,20 @@ public partial class SnipWindowViewModel
         {
             case HotkeyRouterService.SnipGlobalHotkeyAction.ActiveAction:
                 System.Diagnostics.Debug.WriteLine("[SnipWindowViewModel] Routed to ActiveAction hotkey.");
-                HandleActiveActionHotkeyCommand?.Execute().Subscribe();
+                HandleActiveActionHotkeyCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case HotkeyRouterService.SnipGlobalHotkeyAction.ToggleToolbar:
                 System.Diagnostics.Debug.WriteLine("[SnipWindowViewModel] Routed to ToggleToolbar hotkey.");
-                ToggleToolbarCommand?.Execute().Subscribe();
+                ToggleToolbarCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case HotkeyRouterService.SnipGlobalHotkeyAction.ScreenshotMode:
-                HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
+                HandleScreenshotModeHotkeyCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case HotkeyRouterService.SnipGlobalHotkeyAction.RecordingMode:
-                HandleRecordingModeHotkeyCommand?.Execute().Subscribe();
+                HandleRecordingModeHotkeyCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case HotkeyRouterService.SnipGlobalHotkeyAction.TranslateMode:
-                SetTranslationModeCommand?.Execute().Subscribe();
+                SetTranslationModeCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case HotkeyRouterService.SnipGlobalHotkeyAction.CopyAutoAction:
                 AutoActionMode = SnipAutoAction.Copy;
@@ -462,21 +462,21 @@ public partial class SnipWindowViewModel
         {
             case SnipMode.Screenshot:
                 if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Snip_SwitchToTranslate))
-                    { SwitchToTranslateCommand?.Execute().Subscribe(); return true; }
+                    { SwitchToTranslateCommand?.Execute().SubscribeLoggingErrors(); return true; }
                 if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Snip_SwitchToRecord))
-                    { SwitchToRecordCommand?.Execute().Subscribe(); return true; }
+                    { SwitchToRecordCommand?.Execute().SubscribeLoggingErrors(); return true; }
                 break;
             case SnipMode.Recording:
                 if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Record_SwitchToSnip))
-                    { SwitchToSnipCommand?.Execute().Subscribe(); return true; }
+                    { SwitchToSnipCommand?.Execute().SubscribeLoggingErrors(); return true; }
                 if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Record_SwitchToTranslate))
-                    { SwitchToTranslateCommand?.Execute().Subscribe(); return true; }
+                    { SwitchToTranslateCommand?.Execute().SubscribeLoggingErrors(); return true; }
                 break;
             case SnipMode.Translation:
                 if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Translate_SwitchToSnip))
-                    { SwitchToSnipCommand?.Execute().Subscribe(); return true; }
+                    { SwitchToSnipCommand?.Execute().SubscribeLoggingErrors(); return true; }
                 if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Translate_SwitchToRecord))
-                    { SwitchToRecordCommand?.Execute().Subscribe(); return true; }
+                    { SwitchToRecordCommand?.Execute().SubscribeLoggingErrors(); return true; }
                 break;
         }
         return false;
@@ -489,7 +489,7 @@ public partial class SnipWindowViewModel
             case CaptureMode.Normal:
                 LockSelectedScreenshotSelection = false;
                 AutoActionMode = ResolveAutoActionMode(mode);
-                HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
+                HandleScreenshotModeHotkeyCommand?.Execute().SubscribeLoggingErrors();
                 // Reused overlay: the snip hotkey was pressed while the overlay is still open, so OnOpened does
                 // NOT run again and the open-time OCR auto-scan never re-fires. Re-trigger it here so re-entering
                 // screenshot mode shows OCR candidates just like a fresh open.
@@ -497,15 +497,15 @@ public partial class SnipWindowViewModel
                 break;
             case CaptureMode.Record:
                 LockSelectedScreenshotSelection = false;
-                HandleRecordingModeHotkeyCommand?.Execute().Subscribe();
+                HandleRecordingModeHotkeyCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case CaptureMode.Pin:
                 LockSelectedScreenshotSelection = false;
-                HandleActiveActionHotkeyCommand?.Execute().Subscribe();
+                HandleActiveActionHotkeyCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case CaptureMode.Translate:
                 LockSelectedScreenshotSelection = false;
-                SetTranslationModeCommand?.Execute().Subscribe();
+                SetTranslationModeCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case CaptureMode.Copy:
                 LockSelectedScreenshotSelection = false;
@@ -774,7 +774,7 @@ public partial class SnipWindowViewModel
             }
 
             System.Diagnostics.Debug.WriteLine("[ActiveAction] Recording: stop/pin");
-            PinCommand?.Execute().Subscribe();
+            PinCommand?.Execute().SubscribeLoggingErrors();
             return;
         }
 
@@ -782,13 +782,13 @@ public partial class SnipWindowViewModel
         if (CurrentMode == SnipMode.Recording && CurrentState == SnipState.Selected)
         {
             System.Diagnostics.Debug.WriteLine("[ActiveAction] Recording: start");
-            StartRecordingCommand?.Execute().Subscribe();
+            StartRecordingCommand?.Execute().SubscribeLoggingErrors();
             return;
         }
 
         // 截圖模式或未進入錄影：釘選
         System.Diagnostics.Debug.WriteLine("[SnipWindowViewModel] Invoking PinCommand.");
-        PinCommand?.Execute().Subscribe();
+        PinCommand?.Execute().SubscribeLoggingErrors();
     }
 
     private void ToggleTranslationMode()
@@ -933,7 +933,7 @@ public partial class SnipWindowViewModel
     public void DismissOrClose()
     {
         if (_manualScrollActive) { FinishManualScrollCapture(cancelled: true); return; }
-        if (IsEnteringText) { CancelTextEntryCommand.Execute(Unit.Default).Subscribe(); return; }
+        if (IsEnteringText) { CancelTextEntryCommand.Execute(Unit.Default).SubscribeLoggingErrors(); return; }
         if (RecState != RecordingState.Idle) { return; }
         if (IsTranslationMode) { Close(); return; }
         if (IsDrawingMode) { IsDrawingMode = false; return; }

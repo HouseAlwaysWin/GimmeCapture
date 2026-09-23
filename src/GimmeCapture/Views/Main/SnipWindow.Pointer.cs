@@ -54,7 +54,7 @@ public partial class SnipWindow : Window
                 return;
             }
 
-            _viewModel.ConfirmTextEntryCommand.Execute(Unit.Default).Subscribe();
+            _viewModel.ConfirmTextEntryCommand.Execute(Unit.Default).SubscribeLoggingErrors();
             _lastTextFinishTime = DateTime.Now;
 
             // Let the same click reach another toolbar button so switching tools is immediate.
@@ -293,7 +293,7 @@ public partial class SnipWindow : Window
             _viewModel.CurrentState = SnipState.Selecting;
             _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
             _viewModel.IsDrawingMode = false;
-            _viewModel.ClearAnnotationsCommand.Execute().Subscribe();
+            _viewModel.ClearAnnotationsCommand.Execute().SubscribeLoggingErrors();
             e.Handled = true;
             return;
         }
@@ -305,7 +305,7 @@ public partial class SnipWindow : Window
                  _viewModel.CurrentState = SnipState.Selecting;
                  _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
                  _viewModel.IsDrawingMode = false;
-                 _viewModel.ClearAnnotationsCommand.Execute().Subscribe();
+                 _viewModel.ClearAnnotationsCommand.Execute().SubscribeLoggingErrors();
                  e.Handled = true;
                  return;
             }
