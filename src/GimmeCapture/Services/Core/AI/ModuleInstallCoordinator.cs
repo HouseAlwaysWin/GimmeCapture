@@ -125,25 +125,19 @@ public sealed class ModuleInstallCoordinator
         return await operation(cancellationToken).ConfigureAwait(false);
     }
 
-    public void Remove(string type, string? llamaModelId = null)
+    /// <summary>
+    /// Removes a module's files. False means the removal failed and <see cref="LastErrorMessage"/> says why. It
+    /// blocks — unloading waits for an inference still running on the module's models — so call it off the UI thread.
+    /// </summary>
+    public bool Remove(string type, string? llamaModelId = null)
     {
-        switch (type)
+        return type switch
         {
-            case "AICore":
-                Orchestrator.RemoveAICoreResources();
-                break;
-            case "SAM2":
-                Orchestrator.RemoveSAM2Resources(_settingsService.Settings.SelectedSAM2Variant);
-                break;
-            case "OCR":
-                Orchestrator.RemoveOCRResources();
-                break;
-            case "LlamaModels":
-                if (!string.IsNullOrWhiteSpace(llamaModelId))
-                {
-                    Orchestrator.RemoveLlamaModelPreset(llamaModelId);
-                }
-                break;
-        }
+            "AICore" => Orchestrator.RemoveAICoreResources(),
+            "SAM2" => Orchestrator.RemoveSAM2Resources(_settingsService.Settings.SelectedSAM2Variant),
+            "OCR" => Orchestrator.RemoveOCRResources(),
+            "LlamaModels" => string.IsNullOrWhiteSpace(llamaModelId) || Orchestrator.RemoveLlamaModelPreset(llamaModelId),
+            _ => true
+        };
     }
 }

@@ -7,7 +7,7 @@
         mc:Ignorable="d" d:DesignWidth="350" d:DesignHeight="100"
         x:Class="GimmeCapture.Views.Shared.DownloadProgressWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="AI Resource Download"
+        Title="{Binding [WindowTitleAIResourceDownload], Source={x:Static services:LocalizationService.Instance}}"
         Width="350" Height="100"
         WindowDecorations="None"
         Background="Transparent"

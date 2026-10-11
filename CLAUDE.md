@@ -206,6 +206,14 @@ pushing again).
   `*RuntimeService`, `ResourceQueueService`. ONNX provider config is centralized
   in `OnnxProviderConfigurator`.
 
+### Accessibility
+- A screen reader names a button after its content, which for an icon is the icon's type name.
+  Give every button text, a `ToolTip.Tip` (a global `:is(Button)` style in `GimmeTheme.axaml`
+  turns it into `AutomationProperties.Name`) or an explicit `AutomationProperties.Name`.
+- A custom button `ControlTheme` replaces Fluent's focus visual: give it
+  `<Setter Property="FocusAdorner" Value="{StaticResource GimmeFocusAdorner}"/>`.
+  `AccessibilityMarkupTests` enforce both rules on the `.axaml` sources.
+
 ### Logging
 - Use `AppLog` (Serilog wrapper). `AppLog.Initialize()`/`Shutdown()` bracket the
   app lifetime in `Program.cs`. Log with stable category strings, e.g.
@@ -220,6 +228,10 @@ Three locales are kept in **strict key parity**:
   `verify.ps1`) **fails the build** if any locale is missing keys or has extra keys.
 - When you add or remove a UI string, update **all three** JSON files with the same
   keys. There is also a `LocalizationParityTests` unit test.
+- Parity only compares keys, so `HardcodedUiTextTests` also fails the build on user-visible
+  literals: text attributes in `.axaml` (`Text`, `Content`, `Title`, `ToolTip.Tip`, …) and
+  Chinese/Japanese string literals in C#. Bind a key instead; the few deliberate literals
+  (product name, glyph labels, model-output patterns) are allow-listed there with the reason.
 - Strings are consumed via `LocalizationService` (a singleton `ReactiveObject` with
   an indexer for binding) and `EnumToLocalizedConverter`.
 - Fonts switch per language (Cinzel / Noto Serif TC / Noto Serif JP).

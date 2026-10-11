@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.OCR;
 
 namespace GimmeCapture.Services.Core.AI;
@@ -86,7 +86,9 @@ internal sealed class AIResourceInstaller
         }
         catch (Exception ex)
         {
-            _callbacks.SetLastErrorMessage($"LLM model removal failed: {ex.Message}");
+            // The Modules tab frames this in the user's language; the log keeps which module and the whole exception.
+            _callbacks.SetLastErrorMessage(ex.Message);
+            AppLog.Warning("AIResources.RemoveLlamaModel", ex);
             return false;
         }
     }
@@ -109,9 +111,8 @@ internal sealed class AIResourceInstaller
         }
         catch (Exception ex)
         {
-            string message = $"AI Core Removal Failed: {ex.Message}";
-            _callbacks.SetLastErrorMessage(message);
-            Debug.WriteLine(message);
+            _callbacks.SetLastErrorMessage(ex.Message);
+            AppLog.Warning("AIResources.RemoveAICore", ex);
             return false;
         }
     }
@@ -132,9 +133,8 @@ internal sealed class AIResourceInstaller
         }
         catch (Exception ex)
         {
-            string message = $"SAM2 Removal Failed: {ex.Message}";
-            _callbacks.SetLastErrorMessage(message);
-            Debug.WriteLine(message);
+            _callbacks.SetLastErrorMessage(ex.Message);
+            AppLog.Warning("AIResources.RemoveSAM2", ex);
             return false;
         }
     }
@@ -153,9 +153,8 @@ internal sealed class AIResourceInstaller
         }
         catch (Exception ex)
         {
-            string message = $"OCR Removal Failed: {ex.Message}";
-            _callbacks.SetLastErrorMessage(message);
-            Debug.WriteLine(message);
+            _callbacks.SetLastErrorMessage(ex.Message);
+            AppLog.Warning("AIResources.RemoveOCR", ex);
             return false;
         }
     }

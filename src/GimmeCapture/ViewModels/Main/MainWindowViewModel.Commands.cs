@@ -234,7 +234,7 @@ public partial class MainWindowViewModel
     {
         if (PickFolderAction != null)
         {
-            var path = await PickFolderAction();
+            var path = await PickFolderAction(LocalizationService.Instance["PickRecordingFolderTitle"]);
             if (!string.IsNullOrEmpty(path)) RecordingSettings.VideoSaveDirectory = path;
         }
     }
@@ -243,7 +243,7 @@ public partial class MainWindowViewModel
     {
         if (PickFolderAction != null)
         {
-            var path = await PickFolderAction();
+            var path = await PickFolderAction(LocalizationService.Instance["PickScreenshotFolderTitle"]);
             if (!string.IsNullOrEmpty(path)) SaveDirectory = path;
         }
     }
@@ -252,7 +252,7 @@ public partial class MainWindowViewModel
     {
         if (PickFolderAction != null)
         {
-            var path = await PickFolderAction();
+            var path = await PickFolderAction(LocalizationService.Instance["PickTempFolderTitle"]);
             if (!string.IsNullOrEmpty(path)) TempDirectory = path;
         }
     }

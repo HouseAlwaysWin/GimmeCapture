@@ -57,8 +57,7 @@
 
             <!-- Content Area -->
             <StackPanel Grid.Row="1" Spacing="15" Margin="20" VerticalAlignment="Center">
-                <TextBlock x:Name="MessageText" 
-                           Text="A New Fox Has Appeared!"
+                <TextBlock x:Name="MessageText"
                            Foreground="White"
                            FontSize="16"
                            TextWrapping="WrapWithOverflow"
@@ -72,7 +71,7 @@
             <!-- Footer Buttons -->
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="30" Margin="20,20,20,40" ClipToBounds="False">
                 <Button x:Name="CancelButton" 
-                        Content="NOT TODAY" 
+                        Content="{Binding [UpdateBtnCancel], Source={x:Static services:LocalizationService.Instance}}" 
                         Theme="{StaticResource GothicMetalButton}"
                         MinWidth="180" Height="48"
                         Padding="20,0"
@@ -80,7 +79,7 @@
                         Click="OnCancelClick"/>
 
                 <Button x:Name="UpdateButton" 
-                        Content="ENTER THE FOX PIT" 
+                        Content="{Binding [UpdateBtnConfirm], Source={x:Static services:LocalizationService.Instance}}" 
                         Theme="{StaticResource GothicMetalButton}"
                         MinWidth="220" Height="48"
                         Padding="20,0"
@@ -88,7 +87,7 @@
                         Click="OnUpdateClick"/>
 
                 <Button x:Name="OkButton" 
-                        Content="FOX GOD APPROVES" 
+                        Content="{Binding [UpdateBtnOk], Source={x:Static services:LocalizationService.Instance}}" 
                         Theme="{StaticResource GothicMetalButton}"
                         MinWidth="220" Height="48"
                         Padding="20,0"

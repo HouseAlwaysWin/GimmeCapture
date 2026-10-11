@@ -7,7 +7,7 @@
         mc:Ignorable="d" d:DesignWidth="350" d:DesignHeight="100"
         x:Class="GimmeCapture.Views.Shared.RecordingProgressWindow"
         x:DataType="vm:SnipWindowViewModel"
-        Title="Processing Recording..."
+        Title="{Binding [WindowTitleProcessingRecording], Source={x:Static services:LocalizationService.Instance}}"
         Width="350" Height="100"
         WindowDecorations="None"
         Background="Transparent"

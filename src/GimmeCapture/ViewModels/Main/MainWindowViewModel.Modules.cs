@@ -232,8 +232,11 @@ public partial class MainWindowViewModel
 
             var selectedId = Modules.AsValueEnumerable()
                 .FirstOrDefault(m => m.Name == "Llama Models")?.SelectedVariant;
-            _moduleInstallCoordinator.Remove(type, selectedId);
-            
+            // Removal first unloads the module's models, which waits for an inference still running on them (up to
+            // 30 s), then deletes folders of hundreds of MB. This command runs on the UI thread, where both froze the
+            // whole app; the command stays disabled until it finishes.
+            bool removed = await Task.Run(() => _moduleInstallCoordinator.Remove(type, selectedId));
+
             foreach (var m in Modules)
             {
                 if (m.Name == "ONNX Runtime & U2Net") m.IsInstalled = _moduleInstallCoordinator.IsAICoreInstalled();
@@ -241,10 +244,19 @@ public partial class MainWindowViewModel
                 if (m.Name == "PaddleOCR v5") m.IsInstalled = _moduleInstallCoordinator.IsOcrInstalled();
                 if (m.Name == "Llama Models") m.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(m.SelectedVariant);
             }
+
+            // A failed removal (a file still in use, say) used to leave the module quietly installed with no word why.
+            if (!removed && ConfirmAction != null)
+            {
+                await ConfirmAction(
+                    LocalizationService.Instance["TabModules"],
+                    string.Format(LocalizationService.Instance["ModuleRemoveFailed"], _moduleInstallCoordinator.LastErrorMessage),
+                    true);
+            }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to remove module {type}: {ex}");
+            AppLog.Error($"Modules.Remove.{type}", ex);
         }
     }
 

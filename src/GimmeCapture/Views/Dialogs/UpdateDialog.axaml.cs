@@ -32,23 +32,9 @@ namespace GimmeCapture.Views.Dialogs
             var cancelBtn = this.FindControl<Button>("CancelButton");
             var okBtn = this.FindControl<Button>("OkButton");
 
-            var loc = LocalizationService.Instance;
-
-            if (updateBtn != null) 
-            {
-                updateBtn.IsVisible = isUpdateAvailable;
-                updateBtn.Content = loc["UpdateBtnConfirm"];
-            }
-            if (cancelBtn != null) 
-            {
-                cancelBtn.IsVisible = isUpdateAvailable;
-                cancelBtn.Content = loc["UpdateBtnCancel"];
-            }
-            if (okBtn != null) 
-            {
-                okBtn.IsVisible = !isUpdateAvailable;
-                okBtn.Content = loc["UpdateBtnOk"];
-            }
+            if (updateBtn != null) updateBtn.IsVisible = isUpdateAvailable;
+            if (cancelBtn != null) cancelBtn.IsVisible = isUpdateAvailable;
+            if (okBtn != null) okBtn.IsVisible = !isUpdateAvailable;
         }
 
         private void OnUpdateClick(object? sender, RoutedEventArgs e)

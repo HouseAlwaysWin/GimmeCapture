@@ -94,9 +94,9 @@
                             </Button>
 
                             <Button Grid.Column="1"
-                                    Content="Refresh"
+                                    Content="{Binding [LlamaRefreshModels], Source={x:Static services:LocalizationService.Instance}}"
                                     Command="{Binding RefreshLlamaModelsCommand}"
-                                    ToolTip.Tip="Refresh Downloaded Models"
+                                    ToolTip.Tip="{Binding [LlamaRefreshModelsTip], Source={x:Static services:LocalizationService.Instance}}"
                                     Theme="{StaticResource SmallGothicMetalButton}"/>
                         </Grid>
 
@@ -138,7 +138,7 @@
                                     Command="{Binding SelectLlamaModelPath}"
                                     Margin="8,0,0,0"/>
                             <TextBox Text="{Binding LlamaCustomModelPath}"
-                                     PlaceholderText="C:\Models\my-model.gguf or folder path"/>
+                                     PlaceholderText="{Binding [LlamaCustomModelPathPlaceholder], Source={x:Static services:LocalizationService.Instance}}"/>
                         </DockPanel>
 
                         <TextBlock Text="{Binding [LlamaContextSize], Source={x:Static services:LocalizationService.Instance}}"

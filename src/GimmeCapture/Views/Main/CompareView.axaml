@@ -60,7 +60,8 @@
                         Theme="{StaticResource SmallGothicMetalButton}"
                         Command="{Binding StepBackCommand}"/>
                 <Button Theme="{StaticResource GothicMetalButton}" MinWidth="56"
-                        Command="{Binding PlayPauseCommand}">
+                        Command="{Binding PlayPauseCommand}"
+                        ToolTip.Tip="{Binding [PlayPause], Source={x:Static services:LocalizationService.Instance}}">
                     <Panel Width="16" Height="16">
                         <!-- play: white triangle -->
                         <Path Data="M 2,1 L 2,15 L 14,8 Z" Fill="White" IsVisible="{Binding !IsPlaying}"/>

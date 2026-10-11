@@ -70,6 +70,12 @@
                                         Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChangeThemeColorCommand}"
                                         CommandParameter="{Binding}"
                                         BorderThickness="0">
+                                    <AutomationProperties.Name>
+                                        <MultiBinding StringFormat="{}{0} {1}">
+                                            <Binding Path="[ThemeColor]" Source="{x:Static services:LocalizationService.Instance}"/>
+                                            <Binding/>
+                                        </MultiBinding>
+                                    </AutomationProperties.Name>
                                     <Panel>
                                         <Border BorderBrush="White" BorderThickness="2" CornerRadius="20" Margin="-2"
                                                 IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ThemeColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>
@@ -127,6 +133,12 @@
                                                     Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChangeColorCommand}"
                                                     CommandParameter="{Binding}"
                                                     BorderThickness="0">
+                                                <AutomationProperties.Name>
+                                                    <MultiBinding StringFormat="{}{0} {1}">
+                                                        <Binding Path="[BorderColor]" Source="{x:Static services:LocalizationService.Instance}"/>
+                                                        <Binding/>
+                                                    </MultiBinding>
+                                                </AutomationProperties.Name>
                                                 <Panel>
                                                     <Border BorderBrush="White" BorderThickness="2" CornerRadius="16" Margin="-2"
                                                             IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BorderColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>

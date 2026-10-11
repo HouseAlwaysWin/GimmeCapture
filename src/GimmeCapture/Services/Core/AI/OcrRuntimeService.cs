@@ -155,7 +155,11 @@ public sealed class OcrRuntimeService : IDisposable
         if (IsLoaded && _loadedLanguage == language)
             return;
 
-        await _loadLock.WaitAsync(ct);
+        // From here on, never on the caller's thread. The overlay's text scan calls this from the UI thread, and
+        // when the model files are installed every await below completes synchronously — so building the two
+        // ONNX sessions (~0.4 s on DirectML) and a language swap's wait for a running inference (up to
+        // SwapTimeout) all ran there: the capture overlay froze whenever OCR had been idle-unloaded.
+        await _loadLock.WaitAsync(ct).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         try
         {
             if (IsLoaded && _loadedLanguage == language)

@@ -4,7 +4,7 @@
         xmlns:views="using:GimmeCapture.Views.Dialogs"
         x:Class="GimmeCapture.Views.Dialogs.ConfirmationDialog"
         x:DataType="views:ConfirmationDialog"
-        Title="Confirmation"
+        Title="{Binding $self.DialogTitle}"
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner"
         WindowDecorations="None"

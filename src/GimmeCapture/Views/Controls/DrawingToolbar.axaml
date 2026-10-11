@@ -145,9 +145,9 @@
                                                       DecreaseCommand="{Binding DecreaseFontSizeCommand}"
                                                       VerticalAlignment="Center"/>
 
-                                <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" Content="B" FontWeight="Bold" Width="24" Height="24"
+                                <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" Content="B" FontWeight="Bold" ToolTip.Tip="{Binding [TipBold], Source={x:Static services:LocalizationService.Instance}}" Width="24" Height="24"
                                               IsChecked="{Binding IsBold}"/>
-                                <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" Content="I" FontStyle="Italic" Width="24" Height="24"
+                                <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" Content="I" FontStyle="Italic" ToolTip.Tip="{Binding [TipItalic], Source={x:Static services:LocalizationService.Instance}}" Width="24" Height="24"
                                               IsChecked="{Binding IsItalic}"/>
                             </StackPanel>
                             
@@ -197,6 +197,12 @@
                                                     BorderThickness="1" BorderBrush="#555555"
                                                     Command="{Binding $parent[UserControl].DataContext.ChangeColorCommand}"
                                                     CommandParameter="{Binding}">
+                                                <AutomationProperties.Name>
+                                                    <MultiBinding StringFormat="{}{0} {1}">
+                                                        <Binding Path="[Color]" Source="{x:Static services:LocalizationService.Instance}"/>
+                                                        <Binding/>
+                                                    </MultiBinding>
+                                                </AutomationProperties.Name>
                                                 <Button.Background>
                                                     <SolidColorBrush Color="{Binding}"/>
                                                 </Button.Background>
@@ -222,19 +228,19 @@
 
                             <StackPanel IsVisible="{Binding StyleAnnotationTool, Converter={StaticResource FillSupportedConverter}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                                 <TextBlock Text="{Binding [TipFill], Source={x:Static services:LocalizationService.Instance}}" FontSize="9" Foreground="Gray" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" Width="24" Height="24" IsChecked="{Binding IsShapeFilled}" Content="■"/>
+                                <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" Width="24" Height="24" IsChecked="{Binding IsShapeFilled}" Content="■" ToolTip.Tip="{Binding [TipFill], Source={x:Static services:LocalizationService.Instance}}"/>
                             </StackPanel>
 
                             <StackPanel IsVisible="{Binding StyleAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Mosaic}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
-                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Small" Content="S"/>
-                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Medium" Content="M"/>
-                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Large" Content="L"/>
+                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Small" Content="S" ToolTip.Tip="{Binding [MosaicCellSmallTip], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Medium" Content="M" ToolTip.Tip="{Binding [MosaicCellMediumTip], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Large" Content="L" ToolTip.Tip="{Binding [MosaicCellLargeTip], Source={x:Static services:LocalizationService.Instance}}"/>
                             </StackPanel>
 
                             <StackPanel IsVisible="{Binding StyleAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Blur}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
-                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Soft" Content="Soft"/>
-                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Medium" Content="Med"/>
-                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Strong" Content="Strong"/>
+                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Soft" Content="{Binding [BlurStrengthSoft], Source={x:Static services:LocalizationService.Instance}}" ToolTip.Tip="{Binding [BlurStrengthSoftTip], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Medium" Content="{Binding [BlurStrengthMedium], Source={x:Static services:LocalizationService.Instance}}" ToolTip.Tip="{Binding [BlurStrengthMediumTip], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Strong" Content="{Binding [BlurStrengthStrong], Source={x:Static services:LocalizationService.Instance}}" ToolTip.Tip="{Binding [BlurStrengthStrongTip], Source={x:Static services:LocalizationService.Instance}}"/>
                             </StackPanel>
                             
                             <!-- Font Size (For Text) -->

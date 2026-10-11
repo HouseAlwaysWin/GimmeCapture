@@ -12,7 +12,7 @@
         mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="300"
         x:Class="GimmeCapture.Views.Floating.FloatingVideoWindow"
         x:DataType="vm:FloatingVideoViewModel"
-        Title="Pinned Video"
+        Title="{Binding [WindowTitlePinnedVideo], Source={x:Static services:LocalizationService.Instance}}"
         WindowDecorations="None"
         Topmost="True"
         Background="Transparent"
@@ -396,7 +396,7 @@
                 <DockPanel Margin="4,2" Height="32">
                     <!-- Left: Playback buttons -->
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding RewindCommand}" ToolTip.Tip="Rewind 5s">
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding RewindCommand}" ToolTip.Tip="{Binding [VideoSeekBack5Tip], Source={x:Static services:LocalizationService.Instance}}">
                             <PathIcon Data="M11,18V6L2.5,12L11,18M18,18V6L9.5,12L18,18Z" Width="12" Height="12"/>
                         </Button>
                         <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding TogglePlaybackCommand}" ToolTip.Tip="{Binding PlaybackTooltip}">
@@ -405,7 +405,7 @@
                                 <PathIcon Data="M8,5.14V19.14L19,12.14L8,5.14Z" Width="12" Height="12" IsVisible="{Binding !IsPlaying}"/>
                             </Panel>
                         </Button>
-                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding FastForwardCommand}" ToolTip.Tip="Fast Forward 5s">
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding FastForwardCommand}" ToolTip.Tip="{Binding [VideoSeekForward5Tip], Source={x:Static services:LocalizationService.Instance}}">
                             <PathIcon Data="M13,6V18L21.5,12L13,6M6,6V18L14.5,12L6,6Z" Width="12" Height="12"/>
                         </Button>
                         <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding ToggleLoopCommand}" ToolTip.Tip="{Binding RepeatTooltip}">
