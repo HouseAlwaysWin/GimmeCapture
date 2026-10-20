@@ -186,11 +186,7 @@ public partial class MainWindowViewModel
         BorderColor = snapshot.BorderColor;
         ThemeColor = snapshot.ThemeColor;
         SelectedLanguageOption = AvailableLanguages.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.Language) ?? AvailableLanguages[0];
-        // Falls back to the first option because the codec list is machine-dependent: AV1 only appears where the
-        // hardware can encode it, so a config saved on such a machine would otherwise leave this combo blank.
-        RecordingSettings.SelectedVideoCodecOption =
-            RecordingSettings.VideoCodecOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.VideoCodec)
-            ?? RecordingSettings.VideoCodecOptions[0];
+        RecordingSettings.SelectVideoCodec(snapshot.VideoCodec);
         RecordingSettings.SelectedVideoQualityOption = RecordingSettings.VideoQualityOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.VideoQuality);
         RecordingSettings.SelectedVideoEncoderHintOption = RecordingSettings.VideoEncoderHintOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.VideoEncoderHint);
     }

@@ -34,6 +34,21 @@ internal static unsafe class LibavRecordingEncoder
     ///
     /// Cached for the process: opening an NVENC context is not free.
     /// </summary>
+    /// <summary>
+    /// The answer <see cref="HasUsableHardwareAv1Encoder"/> has already reached, or null if it has not run yet.
+    /// Never probes: running the probe means loading FFmpeg, so callers on the UI thread ask this instead.
+    /// </summary>
+    public static bool? KnownHardwareAv1Usable => System.Threading.Volatile.Read(ref _hardwareAv1State) switch
+    {
+        1 => true,
+        2 => false,
+        _ => null
+    };
+
+    /// <summary>Test seam: pretends the probe has answered (or not yet run), without loading FFmpeg.</summary>
+    internal static void SetKnownHardwareAv1UsableForTest(bool? usable) =>
+        System.Threading.Volatile.Write(ref _hardwareAv1State, usable switch { true => 1, false => 2, null => 0 });
+
     public static bool HasUsableHardwareAv1Encoder()
     {
         int cached = System.Threading.Volatile.Read(ref _hardwareAv1State);

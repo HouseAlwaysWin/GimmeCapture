@@ -16,7 +16,8 @@ public partial class MainWindowViewModel
     {
         if (mode == CaptureMode.Record)
         {
-            if (!FfmpegDownloader.IsFFmpegAvailable())
+            // On the pool: if nothing has loaded FFmpeg yet, this is where ~150 MB of native libraries get loaded.
+            if (!await Task.Run(FfmpegDownloader.IsFFmpegAvailable))
             {
                 // FFmpeg toolkit is bundled with the app. If unavailable, this installation is incomplete.
                 SetStatus("FFmpegNotReady");

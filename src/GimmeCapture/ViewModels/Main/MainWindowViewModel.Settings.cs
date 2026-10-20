@@ -826,7 +826,10 @@ public partial class MainWindowViewModel
         }
     }
 
-    public bool IsGifAvailable => RecordingFormatCapabilities.IsGifAvailable();
+    // Optimistic until FFmpeg is loaded: answering means loading ~150 MB of native libraries, which a binding must not
+    // do on the UI thread. The startup hardware probe loads them on the pool and raises these two again.
+    public bool IsGifAvailable =>
+        !Services.Core.Media.NativeFFmpeg.FFmpegRuntime.IsInitialized || RecordingFormatCapabilities.IsGifAvailable();
     public string GifUnavailableReason => LocalizationService.Instance["GifUnavailableReason"];
     public string[] AvailableRecordFormats => IsGifAvailable
         ? ["mp4", "mkv", "gif", "webm", "mov"]
@@ -837,6 +840,14 @@ public partial class MainWindowViewModel
         _isDataLoading = true;
         try
         {
+            // Which codecs this machine can record is known only after loading FFmpeg and test-opening the AV1
+            // hardware encoders: 1.75 s, measured on the UI thread at startup when the codec list did it for itself.
+            // It runs on the pool alongside the settings read; the codec list and GIF availability catch up when it
+            // answers, whichever of the two finishes first.
+            ApplyHardwareProbeWhenDoneAsync(
+                    Task.Run(Services.Core.Media.NativeFFmpeg.LibavRecordingEncoder.HasUsableHardwareAv1Encoder))
+                .Forget("Startup.HardwareProbe");
+
             var snapshot = await _settingsPersistenceService.LoadAsync(_settingsService);
             ApplySettingsSnapshot(snapshot);
 
@@ -899,6 +910,15 @@ public partial class MainWindowViewModel
 
             if (AutoCheckUpdates) _ = CheckForUpdates(true);
         }
+    }
+
+    private async Task ApplyHardwareProbeWhenDoneAsync(Task hardwareProbe)
+    {
+        await hardwareProbe;
+        RecordingSettings.ApplyHardwareAv1ProbeResult();
+        // The probe also loaded FFmpeg, so GIF availability can be answered for real now.
+        this.RaisePropertyChanged(nameof(IsGifAvailable));
+        this.RaisePropertyChanged(nameof(AvailableRecordFormats));
     }
 
     public async Task<bool> SaveSettingsAsync()
