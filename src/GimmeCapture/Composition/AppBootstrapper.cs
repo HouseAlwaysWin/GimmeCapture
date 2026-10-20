@@ -71,6 +71,12 @@ public sealed class AppBootstrapper : IAsyncDisposable
             _snipWindowFactory.Value);
     }
 
+    /// <summary>
+    /// Loads the capture overlay's code while the app is idle (<see cref="ISnipWindowFactory.ScheduleWarmUp"/>), ten
+    /// seconds in so it stays clear of startup's own work.
+    /// </summary>
+    public void ScheduleCaptureOverlayWarmUp() => _snipWindowFactory.Value.ScheduleWarmUp(TimeSpan.FromSeconds(10));
+
     public Window CreateTrayHostWindow()
     {
         if (_trayHostWindow != null)

@@ -89,6 +89,13 @@ public partial class SnipWindow : Window
     {
     }
 
+    /// <summary>
+    /// Built once at idle and closed unseen, only so the first real overlay finds its code already loaded (see
+    /// <c>SnipWindowFactory.ScheduleWarmUp</c>). Closing it must skip a real overlay's cleanup — including a repaint
+    /// of the whole desktop and a memory trim.
+    /// </summary>
+    internal bool IsWarmUp { get; init; }
+
     public SnipWindow(IScreenLayoutService screenLayoutService, IWindowLayerService windowLayerService)
     {
         _screenLayoutService = screenLayoutService ?? throw new ArgumentNullException(nameof(screenLayoutService));
@@ -336,6 +343,12 @@ public partial class SnipWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        if (IsWarmUp)
+        {
+            base.OnClosing(e);
+            return;
+        }
+
         AppLog.Information($"SnipWindow.OnClosing (RecState={_viewModel?.RecState}, Cancel={e.Cancel})");
         PersistTranslatedSelectionsForClosingIfNeeded();
         base.OnClosing(e);

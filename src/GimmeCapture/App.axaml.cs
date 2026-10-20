@@ -64,6 +64,9 @@ public partial class App : Application
             // only reaches the app seconds later, so "nothing happens" when the user asks for a capture.
             UiThreadStallMonitor.Start();
 
+            // The first capture of a run used to load the overlay's code on the spot, on the UI thread.
+            _bootstrapper.ScheduleCaptureOverlayWarmUp();
+
             // Once the app settles into idle, do a FULL trim (GC to collect startup/JIT garbage + working-set
             // reclaim). Decoupled from the window-shown activity so it isn't immediately cancelled; the scheduler
             // still skips it if the user is interacting. Note: while the main window is open and rendering,

@@ -18,6 +18,8 @@ internal sealed class NoOpSnipWindowFactory : ISnipWindowFactory
     public void Open(object mainViewModel, CaptureMode mode) { }
 
     public object? GetActiveViewModel() => null;
+
+    public void ScheduleWarmUp(System.TimeSpan delay) { }
 }
 
 internal sealed class NoOpToastService : IToastService

@@ -208,6 +208,11 @@ public partial class SnipWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
+        if (IsWarmUp)
+        {
+            return;
+        }
+
         UninstallLLKeyboardHook();
         StopLinuxSnipKeyGrab();
         _viewModel?.TranslationResultLayer?.RefreshWindowState();

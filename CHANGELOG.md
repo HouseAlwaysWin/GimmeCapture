@@ -69,6 +69,9 @@
   UI thread — 1.75 s on a fresh start, at every launch, tray starts included. The check runs in the background now and
   the list updates when it answers; a saved AV1 choice is kept until then rather than reset. The record hotkey's own
   FFmpeg check, which could load it on the UI thread too, moved off it as well.
+- **The first capture after launching opens twice as fast.** The first overlay of a run loaded its own code on the UI
+  thread — 0.45–0.65 s before it appeared, against 0.09 s for every later one. The app now builds an overlay window
+  and view model once while idle, ten seconds after launch, unseen; the first overlay then opens in about 0.22 s.
 - **`UiStall` log lines give a freeze's real length.** The watchdog ticked once a second and logged how late the tick
   was, which understated a freeze by up to a second — the recording-start freeze above was logged as 698 ms — and
   could miss one under 1.25 s entirely. It now ticks every 100 ms.
