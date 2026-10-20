@@ -119,12 +119,72 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                 newWin.Show();
             };
 
+            _exportProgressSubscription?.Dispose();
+            _exportProgressSubscription = vm.WhenAnyValue(x => x.IsExporting)
+                .Subscribe(exporting => Dispatcher.UIThread.Post(() => OnExportingChanged(vm, exporting)));
+
             // 時間軸（多段）初始化
             InitializeSegmentStrip(vm);
         }
     }
 
     private bool _disposeStarted;
+
+    // ── Export progress: the winged ProcessingWindow resource downloads use, over the pin while it exports ──
+    // A short clip exports in a blink; waiting this long before showing the bar keeps it from flashing.
+    private static readonly TimeSpan ExportProgressDelay = TimeSpan.FromMilliseconds(300);
+    private IDisposable? _exportProgressSubscription;
+    private IDisposable? _pendingExportProgress;
+    private GimmeCapture.Views.Shared.ProcessingWindow? _exportProgressWindow;
+
+    private void OnExportingChanged(FloatingVideoViewModel vm, bool exporting)
+    {
+        if (!exporting || _disposeStarted)
+        {
+            CloseExportProgressWindow();
+            return;
+        }
+
+        if (_exportProgressWindow == null && _pendingExportProgress == null)
+        {
+            _pendingExportProgress = DispatcherTimer.RunOnce(() => ShowExportProgressWindow(vm), ExportProgressDelay);
+        }
+    }
+
+    private void ShowExportProgressWindow(FloatingVideoViewModel vm)
+    {
+        _pendingExportProgress = null;
+        if (_disposeStarted || !vm.IsExporting || !IsVisible)
+        {
+            return;
+        }
+
+        // Its own window, so a pin smaller than the bar can't clip it. It doesn't take focus, so the pin's shortcuts
+        // keep working.
+        _exportProgressWindow = new GimmeCapture.Views.Shared.ProcessingWindow
+        {
+            DataContext = vm,
+            Title = LocalizationService.Instance["StatusExportingVideo"],
+            ShowActivated = false
+        };
+        _exportProgressWindow.Show(this);
+
+        // CenterOwner centres it on the whole pin, toolbar included; move it onto the video itself.
+        if (GetContentControl() is { Bounds: { Width: > 0, Height: > 0 } bounds } video)
+        {
+            PixelPoint videoCentre = video.PointToScreen(new Point(bounds.Width / 2, bounds.Height / 2));
+            PixelSize size = PixelSize.FromSize(_exportProgressWindow.ClientSize, _exportProgressWindow.DesktopScaling);
+            _exportProgressWindow.Position = new PixelPoint(videoCentre.X - size.Width / 2, videoCentre.Y - size.Height / 2);
+        }
+    }
+
+    private void CloseExportProgressWindow()
+    {
+        _pendingExportProgress?.Dispose();
+        _pendingExportProgress = null;
+        _exportProgressWindow?.Close();
+        _exportProgressWindow = null;
+    }
 
     // ── 時間軸（多段）邏輯：依片段長度按比例排版 + 播放點 ──
     private Grid? _segmentStripGrid;
@@ -265,6 +325,9 @@ public partial class FloatingVideoWindow : FloatingWindowBase
         }
 
         _disposeStarted = true;
+        _exportProgressSubscription?.Dispose();
+        _exportProgressSubscription = null;
+        CloseExportProgressWindow();
         _segmentSubscription?.Dispose();
         _segmentSubscription = null;
         if (_segmentVm is not null && _segmentLayoutHandler is not null)

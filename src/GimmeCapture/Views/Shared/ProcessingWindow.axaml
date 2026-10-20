@@ -2,13 +2,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="using:GimmeCapture.ViewModels.Main"
         xmlns:c="using:GimmeCapture.Views.Controls"
-        xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
-        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="120"
-        x:Class="GimmeCapture.Views.Dialogs.ResourceDownloadWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Title="{Binding [WindowTitleDownloadingResources], Source={x:Static services:LocalizationService.Instance}}"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="80"
+        x:Class="GimmeCapture.Views.Shared.ProcessingWindow"
         SizeToContent="WidthAndHeight"
         MinWidth="350"
         MaxWidth="600"
@@ -20,12 +16,15 @@
         Topmost="True"
         CanResize="False">
 
-    <Border Background="Transparent" 
+    <!-- The winged progress bar as a window of its own, for work shown outside the window that runs it: resource
+         downloads while the main window is hidden, and exports from a pinned video (a small pin would clip it).
+         The DataContext is the view model doing the work; the bar shows its ProcessingText. The opener sets Title. -->
+    <Border Background="Transparent"
             BorderThickness="0"
             BoxShadow="0 0 20 2 #900000"
             PointerPressed="OnPointerPressed">
         <Grid Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <c:ProcessingOverlay IsVisible="{Binding ShowProcessingOverlay}" />
+            <c:ProcessingOverlay Padding="0"/>
         </Grid>
     </Border>
 </Window>

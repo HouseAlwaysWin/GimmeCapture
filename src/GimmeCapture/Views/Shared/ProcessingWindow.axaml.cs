@@ -2,11 +2,11 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 
-namespace GimmeCapture.Views.Dialogs
+namespace GimmeCapture.Views.Shared
 {
-    public partial class ResourceDownloadWindow : Window
+    public partial class ProcessingWindow : Window
     {
-        public ResourceDownloadWindow()
+        public ProcessingWindow()
         {
             InitializeComponent();
         }

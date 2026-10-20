@@ -4,7 +4,9 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="100"
              x:Class="GimmeCapture.Views.Controls.ProcessingOverlay"
-             x:CompileBindings="False">
+             x:CompileBindings="False"
+             Padding="0,60,0,0">
+    <!-- Padding drops the bar 60 px below the top of the window it overlays; ProcessingWindow sets it to 0. -->
 
     <UserControl.Styles>
         <Style Selector="ProgressBar /template/ Border#ProgressBarRoot">
@@ -12,7 +14,7 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,60,0,0">
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Top">
         <!-- Octagonal Background Panel -->
         <Grid ColumnDefinitions="Auto,Auto,Auto" HorizontalAlignment="Center">
             

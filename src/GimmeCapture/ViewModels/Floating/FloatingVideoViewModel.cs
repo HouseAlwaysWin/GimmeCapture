@@ -105,11 +105,24 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         set => this.RaiseAndSetIfChanged(ref _isExporting, value);
     }
 
-    private double _exportProgress;
-    public double ExportProgress
+    // Export steps nest: a GIF or WebM export with a cut trims to a temporary MP4 first. IsExporting stays up until
+    // the outermost step ends, so the progress window doesn't drop while the transcode is still running.
+    private int _exportDepth;
+
+    private void BeginExport()
     {
-        get => _exportProgress;
-        set => this.RaiseAndSetIfChanged(ref _exportProgress, value);
+        if (_exportDepth++ == 0)
+        {
+            IsExporting = true;
+        }
+    }
+
+    private void EndExport()
+    {
+        if (--_exportDepth == 0)
+        {
+            IsExporting = false;
+        }
     }
 
     public bool IsPlaying => _isPlaybackActive;

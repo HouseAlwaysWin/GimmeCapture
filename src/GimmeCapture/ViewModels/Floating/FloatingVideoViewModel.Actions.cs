@@ -196,7 +196,7 @@ public partial class FloatingVideoViewModel
         Directory.CreateDirectory(tempDir);
         string outputPath = Path.Combine(tempDir, "output" + ext);
 
-        IsExporting = true;
+        BeginExport();
         try
         {
             bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, outputPath, quality, editCrop));
@@ -215,7 +215,7 @@ public partial class FloatingVideoViewModel
         }
         finally
         {
-            IsExporting = false;
+            EndExport();
         }
     }
     
@@ -327,7 +327,7 @@ public partial class FloatingVideoViewModel
         string outputPath = Path.Combine(tempDir, "output" + ext);
         VideoQuality quality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
 
-        IsExporting = true;
+        BeginExport();
         try
         {
             bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, outputPath, quality, frameComposite: redactionComposite));
@@ -346,7 +346,7 @@ public partial class FloatingVideoViewModel
         }
         finally
         {
-            IsExporting = false;
+            EndExport();
         }
     }
 
@@ -388,7 +388,7 @@ public partial class FloatingVideoViewModel
         Directory.CreateDirectory(annTempDir);
         string annOutputPath = Path.Combine(annTempDir, "output" + ext);
 
-        IsExporting = true;
+        BeginExport();
         try
         {
             bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, annOutputPath, annQuality, frameComposite: composite));
@@ -407,7 +407,7 @@ public partial class FloatingVideoViewModel
         }
         finally
         {
-            IsExporting = false;
+            EndExport();
         }
     }
 
@@ -423,7 +423,7 @@ public partial class FloatingVideoViewModel
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
-        IsExporting = true;
+        BeginExport();
         try
         {
             // The transcode source is a trimmed mp4 when the edit changes the output (cut or speed),
@@ -488,7 +488,7 @@ public partial class FloatingVideoViewModel
         }
         finally
         {
-            IsExporting = false;
+            EndExport();
         }
     }
 
@@ -553,6 +553,7 @@ public partial class FloatingVideoViewModel
             string remuxDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(remuxDir);
             string remuxOut = Path.Combine(remuxDir, "output" + targetExt);
+            BeginExport();
             try
             {
                 await Task.Run(() => LibavMuxer.RemuxAllStreams(VideoPath, remuxOut, targetContainer));
@@ -564,6 +565,10 @@ public partial class FloatingVideoViewModel
             catch (Exception ex)
             {
                 AppLog.Error("FloatingVideo.Remux", ex); // fall through to a re-encode
+            }
+            finally
+            {
+                EndExport();
             }
         }
 

@@ -1,13 +1,14 @@
 using System;
 using Avalonia.Controls;
 using GimmeCapture.Services.Abstractions;
-using GimmeCapture.Views.Dialogs;
+using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Views.Shared;
 
 namespace GimmeCapture.Services.Platforms.Desktop;
 
 public sealed class AvaloniaDownloadWindowService : IDownloadWindowService
 {
-    private ResourceDownloadWindow? _downloadWindow;
+    private ProcessingWindow? _downloadWindow;
 
     public void Update(Window owner, object? dataContext, bool isProcessing)
     {
@@ -19,9 +20,10 @@ public sealed class AvaloniaDownloadWindowService : IDownloadWindowService
             {
                 try
                 {
-                    _downloadWindow = new ResourceDownloadWindow
+                    _downloadWindow = new ProcessingWindow
                     {
-                        DataContext = dataContext
+                        DataContext = dataContext,
+                        Title = LocalizationService.Instance["WindowTitleDownloadingResources"]
                     };
 
                     if (owner.IsVisible)
@@ -36,7 +38,7 @@ public sealed class AvaloniaDownloadWindowService : IDownloadWindowService
                 }
                 catch (Exception ex)
                 {
-                    GimmeCapture.Services.Core.Infrastructure.AppLog.Error("DownloadWindow.Show", ex);
+                    AppLog.Error("DownloadWindow.Show", ex);
                 }
             }
             else

@@ -68,6 +68,14 @@
   was, which understated a freeze by up to a second — the recording-start freeze above was logged as 698 ms — and
   could miss one under 1.25 s entirely. It now ticks every 100 ms.
 
+### 🖼️ Interface
+
+- **Exporting from a pinned video shows the same winged progress bar as downloads.** Copying, saving or cropping
+  an edited clip used to dim the whole video behind a plain bar that never moved off 0.0%. The winged bar now
+  appears in its own small window over the video, so a small pin can't clip it, and it doesn't take focus. An
+  export that finishes within 0.3 s doesn't show it at all. It also stays up for the whole export: a GIF or WebM
+  export with a cut used to lose it halfway, as soon as the trim before the transcode was done.
+
 ### ♿ Accessibility
 
 - **Screen readers can tell the buttons apart.** An icon-only button — most of every toolbar — was announced by its
