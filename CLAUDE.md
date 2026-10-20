@@ -206,6 +206,13 @@ pushing again).
   `*RuntimeService`, `ResourceQueueService`. ONNX provider config is centralized
   in `OnnxProviderConfigurator`.
 
+### UI thread
+- An `async` method runs on its caller's thread until its first real yield, and `ConfigureAwait(false)` does not
+  change that when the awaited task has already completed. A service method the UI awaits must leave the caller's
+  thread before blocking work — native/COM initialization, model loads, large file I/O — with `Task.Run` or
+  `ConfigureAwaitOptions.ForceYielding`. Missing this caused the OCR-session, history-thumbnail and recording-start
+  freezes. `UiStall` warnings in the log (any freeze over ~0.35 s, with its length) are where these show up.
+
 ### Accessibility
 - A screen reader names a button after its content, which for an icon is the icon's type name.
   Give every button text, a `ToolTip.Tip` (a global `:is(Button)` style in `GimmeTheme.axaml`

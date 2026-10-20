@@ -222,15 +222,6 @@ public partial class RecordingService : ReactiveObject
         MuteSystemAudio = false;
         MuteMicrophone = false;
         if (State != RecordingState.Idle) return false;
-        if (!FFmpegRuntime.IsInitialized)
-        {
-            FFmpegRuntime.TryInitialize(out var initError);
-            if (!FFmpegRuntime.IsInitialized)
-            {
-                LastStartError = initError ?? "FFmpeg native runtime not initialized.";
-                return false;
-            }
-        }
 
         _region = region;
         _outputFile = outputFile;
@@ -277,6 +268,30 @@ public partial class RecordingService : ReactiveObject
         _audioSegments.Clear();
         _micSegments.Clear();
 
+        // Everything from here opens native resources — the FFmpeg libraries if nothing has loaded them yet, the
+        // audio endpoints, the capture source — and parts of it block: opening the loopback endpoint alone takes
+        // ~60 ms, and a start once held the overlay's UI thread for 1.8 s. Callers await this on the UI thread,
+        // so it runs on the thread pool; the result still comes back on the caller's context.
+        return await Task.Run(StartSessionAsync);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _startInProgress, 0);
+        }
+    }
+
+    private async Task<bool> StartSessionAsync()
+    {
+        if (!FFmpegRuntime.IsInitialized)
+        {
+            FFmpegRuntime.TryInitialize(out var initError);
+            if (!FFmpegRuntime.IsInitialized)
+            {
+                LastStartError = initError ?? "FFmpeg native runtime not initialized.";
+                return false;
+            }
+        }
+
         // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
         var baseDataDir = _settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
         _tempDir = Path.Combine(baseDataDir, "Temp", $"Recordings_{Guid.NewGuid()}");
@@ -292,14 +307,11 @@ public partial class RecordingService : ReactiveObject
         }
         Directory.CreateDirectory(_tempDir);
 
-        return await StartSegmentAsync();
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _startInProgress, 0);
-        }
+        return await StartSegmentAsync().ConfigureAwait(false);
     }
 
+    /// <summary>Opens the audio captures and the video session for one segment. Blocks on native initialization
+    /// for tens to hundreds of ms, so run it off the UI thread (see <see cref="StartAsync"/>).</summary>
     private async Task<bool> StartSegmentAsync()
     {
         // Record segments in MKV format for pause/resume workflow.
@@ -361,7 +373,8 @@ public partial class RecordingService : ReactiveObject
     {
         if (State != RecordingState.Paused) return;
 
-        await StartSegmentAsync();
+        // A resume reopens the audio endpoints and the capture source, just like a start.
+        await Task.Run(StartSegmentAsync);
     }
 
     public async Task StopAsync()
