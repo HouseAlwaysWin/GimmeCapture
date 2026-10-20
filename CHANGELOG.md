@@ -64,6 +64,14 @@
   opening the system-audio and microphone endpoints, checking for window-capture support, loading FFmpeg if nothing
   had yet — ran on the UI thread: 0.1–0.2 s on every start, and up to 1.8 s measured. It now runs in the background,
   and so does resuming after a pause.
+- **Launching the app no longer holds up its UI while it checks for an AV1 encoder.** Reading the saved recording
+  codec built the codec list, and the list loaded FFmpeg and test-opened the hardware AV1 encoders right there on the
+  UI thread — 1.75 s on a fresh start, at every launch, tray starts included. The check runs in the background now and
+  the list updates when it answers; a saved AV1 choice is kept until then rather than reset. The record hotkey's own
+  FFmpeg check, which could load it on the UI thread too, moved off it as well.
+- **The first capture after launching opens twice as fast.** The first overlay of a run loaded its own code on the UI
+  thread — 0.45–0.65 s before it appeared, against 0.09 s for every later one. The app now builds an overlay window
+  and view model once while idle, ten seconds after launch, unseen; the first overlay then opens in about 0.22 s.
 - **`UiStall` log lines give a freeze's real length.** The watchdog ticked once a second and logged how late the tick
   was, which understated a freeze by up to a second — the recording-start freeze above was logged as 698 ms — and
   could miss one under 1.25 s entirely. It now ticks every 100 ms.

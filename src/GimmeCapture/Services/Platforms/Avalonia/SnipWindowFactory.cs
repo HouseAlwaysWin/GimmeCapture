@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Threading;
 using System;
 using System.Diagnostics;
 using GimmeCapture.Models;
@@ -19,6 +20,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
     private readonly IScreenCaptureService _screenCaptureService;
     private readonly ITranslationSessionServiceFactory _translationSessionServiceFactory;
     private readonly IWindowDetectionService _windowDetectionService;
+    private bool _openedOnce;
 
     public SnipWindowFactory(
         IWindowManager windowManager,
@@ -44,6 +46,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             throw new ArgumentException("Expected MainWindowViewModel.", nameof(mainViewModel));
         }
 
+        _openedOnce = true;
         var existing = _windowManager.FindWindowOfType<SnipWindow>();
         if (existing != null)
         {
@@ -187,6 +190,50 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
     public object? GetActiveViewModel()
     {
         return _windowManager.FindWindowOfType<SnipWindow>()?.DataContext;
+    }
+
+    /// <summary>
+    /// The first overlay of a run used to pay for loading its own code — the window's XAML and the view model's JIT
+    /// and reactive plumbing — about 0.45-0.65 s of UI thread before it appeared, against ~0.09 s for every later
+    /// one. Building both once while the app is idle, unseen and unwired, takes about half of that out of the first
+    /// capture. The rest is the first show of a real, bound window, which cannot be rehearsed without showing one.
+    /// </summary>
+    public void ScheduleWarmUp(TimeSpan delay)
+    {
+        DispatcherTimer.RunOnce(() =>
+        {
+            // A real overlay has already loaded everything this would.
+            if (_openedOnce)
+            {
+                return;
+            }
+
+            try
+            {
+                new SnipWindow(_screenLayoutService, _windowLayerService) { IsWarmUp = true }.Close();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warning("SnipWindowFactory.WarmUp", ex);
+                return;
+            }
+
+            // Separately, so neither half holds the UI thread long. The parameterless view model has no main view
+            // model or services behind it, so it registers nothing; Dispose undoes what it set up.
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    using (new SnipWindowViewModel())
+                    {
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warning("SnipWindowFactory.WarmUp", ex);
+                }
+            }, DispatcherPriority.Background);
+        }, delay, DispatcherPriority.Background);
     }
 
     private void ConfigureWindowBounds(Window snip)

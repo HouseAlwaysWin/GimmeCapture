@@ -102,14 +102,20 @@ public class RecordingSettingsViewModel : ViewModelBase
     /// the bundled build — the Compress pipeline uses them — but they are offline encoders and cannot keep up
     /// with a realtime capture, so offering AV1 without hardware would be offering dropped frames.
     ///
-    /// Built lazily: the probe test-opens an encoder, which needs the native libraries loaded, and this view
-    /// model is constructed before that is guaranteed.
+    /// Knowing that means test-opening an encoder, after loading FFmpeg if nothing has — 1.75 s, measured on the UI
+    /// thread at startup when this list probed for itself. The list now only reads the probe's answer; the probe
+    /// runs on the thread pool (see <see cref="MainWindowViewModel.LoadSettingsAsync"/>) and
+    /// <see cref="ApplyHardwareAv1ProbeResult"/> rebuilds the list once it answers.
     /// </summary>
     public VideoCodecOption[] VideoCodecOptions => _videoCodecOptions ??= BuildVideoCodecOptions();
 
     private VideoCodecOption[]? _videoCodecOptions;
 
-    private static VideoCodecOption[] BuildVideoCodecOptions()
+    // A saved AV1 choice stays on offer until the probe can confirm or rule it out, instead of being replaced by the
+    // fallback the moment settings load — which would also save that fallback over the user's choice.
+    private bool _offerAv1UntilProbed;
+
+    private VideoCodecOption[] BuildVideoCodecOptions()
     {
         var options = new List<VideoCodecOption>(3)
         {
@@ -117,12 +123,58 @@ public class RecordingSettingsViewModel : ViewModelBase
             new() { Value = VideoCodec.H265 },
         };
 
-        if (LibavRecordingEncoder.HasUsableHardwareAv1Encoder())
+        bool? av1Usable = LibavRecordingEncoder.KnownHardwareAv1Usable;
+        if (av1Usable == true || (av1Usable is null && _offerAv1UntilProbed))
         {
             options.Add(new VideoCodecOption { Value = VideoCodec.Av1 });
         }
 
         return [.. options];
+    }
+
+    /// <summary>
+    /// Selects <paramref name="codec"/>, falling back to the first option on a machine that does not offer it (the
+    /// list is machine-dependent, so a config saved elsewhere would otherwise leave the combo blank).
+    /// </summary>
+    public void SelectVideoCodec(VideoCodec codec)
+    {
+        if (codec == VideoCodec.Av1 && LibavRecordingEncoder.KnownHardwareAv1Usable is null && !_offerAv1UntilProbed)
+        {
+            _offerAv1UntilProbed = true;
+            _videoCodecOptions = null;
+            this.RaisePropertyChanged(nameof(VideoCodecOptions));
+        }
+
+        SelectedVideoCodecOption = FindVideoCodecOption(codec) ?? VideoCodecOptions[0];
+    }
+
+    /// <summary>Rebuilds the codec list from the hardware AV1 probe's answer and keeps the selection where it can.</summary>
+    public void ApplyHardwareAv1ProbeResult()
+    {
+        var selected = VideoCodec;
+        _offerAv1UntilProbed = false;
+        var rebuilt = BuildVideoCodecOptions();
+        if (_videoCodecOptions is { } current && current.Length == rebuilt.Length)
+        {
+            return; // Same choices as before the probe answered.
+        }
+
+        _videoCodecOptions = rebuilt;
+        this.RaisePropertyChanged(nameof(VideoCodecOptions));
+        SelectedVideoCodecOption = FindVideoCodecOption(selected) ?? rebuilt[0];
+    }
+
+    private VideoCodecOption? FindVideoCodecOption(VideoCodec codec)
+    {
+        foreach (var option in VideoCodecOptions)
+        {
+            if (option.Value == codec)
+            {
+                return option;
+            }
+        }
+
+        return null;
     }
 
     public VideoQualityOption[] VideoQualityOptions { get; } = {
