@@ -9,12 +9,14 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 ///
 /// A blocked UI thread is invisible in the log and yet explains the whole class of "I pressed the hotkey and
 /// nothing happened": WM_HOTKEY and the dispatcher post that follows it queue behind whatever is running, so the
-/// overlay appears only once that finishes. A timer that should tick every second is late by exactly the length
-/// of the block — the lateness IS the measurement, and the log lines around the warning say what ran.
+/// overlay appears only once that finishes. A periodic tick is late by the length of the block, minus however much
+/// of the block fell before the tick was due — so the reading is short by up to one interval. The interval is kept
+/// small for that reason: at one second, a 1.8 s freeze at recording start was logged as 698 ms, and a freeze just
+/// under 1.25 s could go unreported altogether.
 /// </summary>
 internal static class UiThreadStallMonitor
 {
-    private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(100);
 
     /// <summary>Below this, lateness is ordinary scheduling noise (a frame, a layout pass) and not worth a line.</summary>
     private static readonly TimeSpan WarnThreshold = TimeSpan.FromMilliseconds(250);
