@@ -233,8 +233,9 @@ public partial class SnipWindowViewModel
             }
 
             // Validate before showing the countdown so the user does not wait
-            // only to discover that recording cannot start.
-            if (!_mainVm.FfmpegDownloader.IsFFmpegAvailable())
+            // only to discover that recording cannot start. On the pool: if nothing has loaded FFmpeg yet, this is
+            // where ~150 MB of native libraries get loaded.
+            if (!await Task.Run(_mainVm.FfmpegDownloader.IsFFmpegAvailable))
             {
                 _mainVm.SetStatus("FFmpegNotReady");
                 return;

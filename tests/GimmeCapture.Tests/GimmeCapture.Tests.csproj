@@ -19,6 +19,8 @@
     <Compile Remove="WindowDetectionServiceTests.cs" />
     <Compile Remove="ViewModels\MainWindowViewModelConstructionTests.cs" />
     <Compile Remove="ViewModels\MainWindowViewModelHotkeyTests.cs" />
+    <!-- Pumps a WinForms message loop to stand in for the UI thread. -->
+    <Compile Remove="RecordingStartUiStallTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

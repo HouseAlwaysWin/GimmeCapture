@@ -60,6 +60,13 @@
 - **Resizing a pin is smoother.** Every step of a resize or zoom re-read each pixel of the pinned image to work out
   its see-through areas (about 9 ms per step at 4K). The image is now scanned once, and a resize only rescales the
   result.
+- **Starting a recording no longer freezes the overlay.** Everything a start does before the recording is running —
+  opening the system-audio and microphone endpoints, checking for window-capture support, loading FFmpeg if nothing
+  had yet — ran on the UI thread: 0.1–0.2 s on every start, and up to 1.8 s measured. It now runs in the background,
+  and so does resuming after a pause.
+- **`UiStall` log lines give a freeze's real length.** The watchdog ticked once a second and logged how late the tick
+  was, which understated a freeze by up to a second — the recording-start freeze above was logged as 698 ms — and
+  could miss one under 1.25 s entirely. It now ticks every 100 ms.
 
 ### ♿ Accessibility
 
