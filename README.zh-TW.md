@@ -144,7 +144,7 @@ AI 資源會從 **Modules** 頁籤依需求下載。
 - **Windows 10 / Windows 11**（x64），或
 - **Linux (x86-64)**，須具備 **X11 工作階段**與 **PulseAudio**。於 **Linux Mint** 上開發並**測試**；可在以現代 glibc 為基礎的 Ubuntu/Debian 系列發行版上執行（例如 **Ubuntu 22.04+** 或 **Debian 12+**）。在 Wayland 桌面環境下，會透過 **XWayland** 執行。並非為 musl/Alpine 或 ARM 建置。
 
-Linux 版本以自足式的單一檔案 `.tar.gz` 形式發布（無須安裝 .NET），並隨附 FFmpeg 的 `.so` 函式庫；Windows 版本則以可攜式 `.zip` 及選用的安裝程式形式發布。
+Linux 版本以自足式的單一檔案 `.tar.gz` 形式發布（無須安裝 .NET），並隨附 FFmpeg 的 `.so` 函式庫；Windows 版本則以可攜式 `.zip` 及選用的安裝程式形式發布。`.zip` 裡是整個程式資料夾：請全部解壓縮後從中執行 `GimmeCapture.exe`，單獨拿出 exe 無法執行。
 
 ## 授權條款
 

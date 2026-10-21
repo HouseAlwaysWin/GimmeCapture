@@ -1,4 +1,4 @@
-# Publishes GimmeCapture (self-contained single-file, same shape as CI) and builds the Inno Setup installer
+# Publishes GimmeCapture (the self-contained folder CI publishes) and builds the Inno Setup installer
 # locally. Requires Inno Setup 6.3+ (ISCC.exe) — install with `choco install innosetup` or from jrsoftware.org.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1            # version from csproj
@@ -24,10 +24,10 @@ Write-Host "Building installer for version $Version"
 $publishDir = Join-Path $root "publish"
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
 
+# Properties/PublishProfiles/win-x64.pubxml, as in release.yml. The project targets two frameworks, so publish has to
+# name the Windows one.
 dotnet publish $csprojPath `
-    -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false `
+    -c Release -f net10.0-windows10.0.19041.0 -p:PublishProfile=win-x64 `
     "-p:Version=$Version" -o $publishDir
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
 

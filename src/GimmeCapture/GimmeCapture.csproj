@@ -39,12 +39,15 @@
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
     <!-- Native FFmpeg shared libs. Windows DLLs: scripts/ensure-ffmpeg-libs.ps1.
-         Linux .so (libavcodec.so.62 ??: scripts/ensure-ffmpeg-libs-linux.sh. -->
+         Linux .so (libavcodec.so.62 and the rest): scripts/ensure-ffmpeg-libs-linux.sh.
+         A publish for one runtime takes only that runtime's set, in case a machine has both. -->
     <Content Include="ffmpeg-lib\*.dll"
+             Condition="'$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('win-'))"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest"
              Link="ffmpeg-lib\%(Filename)%(Extension)" />
     <Content Include="ffmpeg-lib\*.so.*"
+             Condition="'$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('linux-'))"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest"
              Link="ffmpeg-lib\%(Filename)%(Extension)" />
@@ -74,6 +77,18 @@
     </ItemGroup>
     <Error Condition="'@(_BundledFfmpegDlls)' == ''"
            Text="Bundled FFmpeg DLLs are missing under 'src/GimmeCapture/ffmpeg-lib/'. Run scripts/ensure-ffmpeg-libs.ps1 (see ffmpeg-lib/README.txt) before Release/Publish." />
+  </Target>
+
+  <!-- The same guardrail for a Linux publish on Linux, which is how release.yml builds the Linux artifact. verify.ps1
+       also publishes linux-x64 on Windows as a smoke test, where the .so files are not expected. -->
+  <Target Name="FailIfBundledFfmpegSoMissing"
+          BeforeTargets="Publish"
+          Condition="$(RuntimeIdentifier.StartsWith('linux-')) and $([MSBuild]::IsOSPlatform('Linux'))">
+    <ItemGroup>
+      <_BundledFfmpegSharedObjects Include="ffmpeg-lib\*.so.*" />
+    </ItemGroup>
+    <Error Condition="'@(_BundledFfmpegSharedObjects)' == ''"
+           Text="Bundled FFmpeg libraries are missing under 'src/GimmeCapture/ffmpeg-lib/'. Run scripts/ensure-ffmpeg-libs-linux.sh before a Linux publish." />
   </Target>
 
   <ItemGroup>
