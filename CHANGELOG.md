@@ -188,6 +188,8 @@
 - Dead code is gone: the unused download-progress window and AI settings tab, the throwing URL-download
   overloads, `RemoveResources`, the unimplemented annotation `Feather` setting, and two helpers only their own
   tests still called (`TranslationExecutionHelper`, `VideoAnnotationFilterBuilder`).
+- The three locale files drop 64 keys nothing used any more, many of them left by removed features such as Ollama,
+  MarianMT, Vosk and the AI scan. The localization check now fails on an unused key instead of only warning.
 - Every publish uses one of two profiles, `Properties/PublishProfiles/win-x64.pubxml` and `linux-x64.pubxml`,
   instead of five copies of the same arguments. `scripts/build-installer.ps1` works again: it never named a target
   framework, which the project has needed since it gained the Linux head. A publish for one platform no longer picks

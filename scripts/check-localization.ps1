@@ -43,10 +43,10 @@ Write-Host "Localization key parity passed ($($referenceKeys.Count) keys)."
 # they agree with what the app actually requests.
 #   FAIL  on keys referenced statically in code/XAML but missing from en-US.json
 #         (those render blank/fallback at runtime).
-#   WARN  on keys defined but apparently never used (heuristic: dynamic lookups
-#         like Instance[$"Prefix{...}"] and EnumToLocalizedConverter parameters
-#         are treated as prefix wildcards, and any literal appearance in source
-#         counts as usage — so this list is advisory, not enforced).
+#   FAIL  on keys defined but never used. Dynamic lookups like Instance[$"Prefix{...}"]
+#         and EnumToLocalizedConverter parameters count as prefix wildcards, and any
+#         literal appearance in source counts as usage, so a key built some other way
+#         needs one of those forms. 64 had piled up while this was only a warning.
 $srcDir = Join-Path $root "src\GimmeCapture"
 $csText = (Get-ChildItem -Path $srcDir -Recurse -Filter *.cs | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 $xamlText = (Get-ChildItem -Path $srcDir -Recurse -Filter *.axaml | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
@@ -78,7 +78,7 @@ foreach ($key in ($referenceKeys | Sort-Object)) {
 }
 
 if ($unused.Count -gt 0) {
-    Write-Warning "Possibly unused localization keys ($($unused.Count)) - review and prune: $($unused -join ', ')"
+    throw "Localization keys nothing uses ($($unused.Count)); remove them from all three files: $($unused -join ', ')"
 }
 
 Write-Host "Localization key usage passed ($($staticRefs.Count) static refs, $($prefixes.Count) dynamic prefixes)."

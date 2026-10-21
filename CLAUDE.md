@@ -249,7 +249,9 @@ Three locales are kept in **strict key parity**:
 `src/GimmeCapture/Assets/Localization/{en-US,zh-TW,ja-JP}.json`.
 
 - `en-US.json` is the reference key set. `check-localization.ps1` (run in CI and by
-  `verify.ps1`) **fails the build** if any locale is missing keys or has extra keys.
+  `verify.ps1`) **fails the build** if any locale is missing keys or has extra keys, or if a key
+  is defined that nothing uses. A key built at run time must use `Instance[$"Prefix{...}"]` or an
+  `EnumToLocalizedConverter` `ConverterParameter`, which the check treats as prefixes.
 - When you add or remove a UI string, update **all three** JSON files with the same
   keys. There is also a `LocalizationParityTests` unit test.
 - Parity only compares keys, so `HardcodedUiTextTests` also fails the build on user-visible
