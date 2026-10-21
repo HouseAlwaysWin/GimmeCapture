@@ -15,12 +15,12 @@ namespace GimmeCapture.ViewModels.Shared;
 
 public sealed class AnnotationEditorState : ReactiveObject, IDisposable
 {
-    private static readonly AnnotationEffectSettings MosaicSmall = new() { MosaicCellSize = 18, BlurRadius = 24f, Feather = 0f };
-    private static readonly AnnotationEffectSettings MosaicMedium = new() { MosaicCellSize = 30, BlurRadius = 24f, Feather = 0f };
-    private static readonly AnnotationEffectSettings MosaicLarge = new() { MosaicCellSize = 48, BlurRadius = 24f, Feather = 0f };
-    private static readonly AnnotationEffectSettings BlurSoft = new() { MosaicCellSize = 20, BlurRadius = 10f, Feather = 0f };
-    private static readonly AnnotationEffectSettings BlurMedium = new() { MosaicCellSize = 20, BlurRadius = 18f, Feather = 0f };
-    private static readonly AnnotationEffectSettings BlurStrong = new() { MosaicCellSize = 20, BlurRadius = 28f, Feather = 0f };
+    private static readonly AnnotationEffectSettings MosaicSmall = new() { MosaicCellSize = 18, BlurRadius = 24f };
+    private static readonly AnnotationEffectSettings MosaicMedium = new() { MosaicCellSize = 30, BlurRadius = 24f };
+    private static readonly AnnotationEffectSettings MosaicLarge = new() { MosaicCellSize = 48, BlurRadius = 24f };
+    private static readonly AnnotationEffectSettings BlurSoft = new() { MosaicCellSize = 20, BlurRadius = 10f };
+    private static readonly AnnotationEffectSettings BlurMedium = new() { MosaicCellSize = 20, BlurRadius = 18f };
+    private static readonly AnnotationEffectSettings BlurStrong = new() { MosaicCellSize = 20, BlurRadius = 28f };
 
     public ObservableCollection<Annotation> Annotations { get; } = new();
 

@@ -142,12 +142,6 @@ public class AIResourceService : ReactiveObject
 
     public bool RemoveOCRResources() => _orchestrator.RemoveOCRResources();
 
-    // Deprecated but kept for compatibility if referenced elsewhere
-    public void RemoveResources()
-    {
-        _orchestrator.RemoveResources();
-    }
-
     public void UnloadAllSessions() => _orchestrator.UnloadAllSessions();
 
     public async Task<bool> EnsureAICoreAsync(CancellationToken ct = default) => await _orchestrator.EnsureAICoreAsync(ct);

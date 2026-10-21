@@ -66,7 +66,6 @@ public sealed class AnnotationSnapshot
             && IsItalic == other.IsItalic
             && EffectSettings.MosaicCellSize == other.EffectSettings.MosaicCellSize
             && EffectSettings.BlurRadius.Equals(other.EffectSettings.BlurRadius)
-            && EffectSettings.Feather.Equals(other.EffectSettings.Feather)
             && IsFilled == other.IsFilled
             && StepNumber == other.StepNumber;
     }

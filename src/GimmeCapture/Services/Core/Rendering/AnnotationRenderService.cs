@@ -10,13 +10,7 @@ using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.Rendering;
 
-public interface IAnnotationRenderService
-{
-    WriteableBitmap? RenderAnnotationPreview(Bitmap? snapshot, Annotation annotation, double referenceWidth, double referenceHeight);
-    void RenderAnnotationsToBitmap(SKBitmap bitmap, IEnumerable<Annotation> annotations, double referenceWidth, double referenceHeight, float targetWidth, float targetHeight);
-}
-
-public sealed class AnnotationRenderService : IAnnotationRenderService
+public sealed class AnnotationRenderService
 {
     public static AnnotationRenderService Shared { get; } = new();
 
