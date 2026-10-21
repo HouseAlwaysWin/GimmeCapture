@@ -47,7 +47,7 @@ public class MemoryTrimPolicyTests
     {
         // The stamp has to be consumed on read: an overlay that opens without one (tray menu, toolbar button)
         // must report "n/a" rather than the age of some earlier hotkey press.
-        CaptureOpenTrace.Requested();
+        CaptureOpenTrace.Requested(System.Diagnostics.Stopwatch.GetTimestamp());
 
         Assert.NotNull(CaptureOpenTrace.TakeWaitedForUiThreadMs());
         Assert.Null(CaptureOpenTrace.TakeWaitedForUiThreadMs());

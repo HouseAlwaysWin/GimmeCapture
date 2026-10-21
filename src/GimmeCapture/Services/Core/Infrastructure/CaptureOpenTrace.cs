@@ -17,12 +17,12 @@ internal static class CaptureOpenTrace
     private static long _requestedAtTimestamp;
 
     /// <summary>
-    /// Stamped where a capture is requested (the hotkey handler), BEFORE the dispatcher hop — so the wait that
-    /// follows is measured rather than assumed.
+    /// Stamped with when a capture was requested: the hotkey press, timed on the hotkey thread before it was handed
+    /// to the UI thread. So the wait that follows is measured rather than assumed.
     /// </summary>
-    internal static void Requested()
+    internal static void Requested(long requestedAtTimestamp)
     {
-        Volatile.Write(ref _requestedAtTimestamp, Stopwatch.GetTimestamp());
+        Volatile.Write(ref _requestedAtTimestamp, requestedAtTimestamp);
     }
 
     /// <summary>

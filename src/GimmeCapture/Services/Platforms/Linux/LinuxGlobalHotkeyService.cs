@@ -23,7 +23,7 @@ namespace GimmeCapture.Services.Platforms.Linux;
 /// </summary>
 public sealed class LinuxGlobalHotkeyService : IGlobalHotkeyService
 {
-    public Action<int>? OnHotkeyPressed { get; set; }
+    public Action<HotkeyPress>? OnHotkeyPressed { get; set; }
     public Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
     public Action<string>? OnElevatedWindowFocused { get; set; }
 
@@ -244,11 +244,12 @@ public sealed class LinuxGlobalHotkeyService : IGlobalHotkeyService
             if (kvp.Value.Keycode == keycode && kvp.Value.Mods == mods)
             {
                 int id = kvp.Key;
+                long pressedAt = System.Diagnostics.Stopwatch.GetTimestamp();
                 Dispatcher.UIThread.Post(() =>
                 {
                     try
                     {
-                        OnHotkeyPressed?.Invoke(id);
+                        OnHotkeyPressed?.Invoke(new HotkeyPress(id, pressedAt));
                     }
                     catch (Exception ex)
                     {

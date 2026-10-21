@@ -16,11 +16,13 @@
        the shared WindowCandidateHitTester instead of the real WindowDetectionService. -->
   <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
     <Compile Remove="HotkeyServiceTests.cs" />
+    <Compile Remove="Win32HotkeyThreadTests.cs" />
     <Compile Remove="WindowDetectionServiceTests.cs" />
     <Compile Remove="ViewModels\MainWindowViewModelConstructionTests.cs" />
     <Compile Remove="ViewModels\MainWindowViewModelHotkeyTests.cs" />
-    <!-- Pumps a WinForms message loop to stand in for the UI thread. -->
+    <!-- Pump a WinForms message loop to stand in for the UI thread. -->
     <Compile Remove="RecordingStartUiStallTests.cs" />
+    <Compile Remove="GlobalHotkeyHookLatencyTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
