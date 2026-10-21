@@ -51,10 +51,13 @@
   file unpacked all 478 MB of itself into `%TEMP%\.net\GimmeCapture` the first time each version ran: 2.7 s here
   before anything started, so the first frame came 6.1 s after launch instead of 2.3 s. Every earlier version's
   copy stayed there.
-  - The `.zip` and the installer now hold the app's folder (495 MB). Keep its files together: `GimmeCapture.exe`
+  - The `.zip` and the installer now hold the app's folder. Keep its files together: `GimmeCapture.exe`
     no longer runs on its own. The in-app updater moves an existing install over by itself.
   - The copies earlier versions unpacked are deleted a few seconds after start-up, except one that another running
     copy still uses. The Linux build is still a single file, and it now removes its own earlier copies the same way.
+- **The Windows app is 75 files and 49 MB smaller.** Rx, through ReactiveUI, brought along all of WPF, which
+  nothing in the app uses: 33 assemblies plus their Japanese and Chinese resources. Rx 7 no longer does. Two unused
+  libraries are gone too: CliWrap, and Microsoft.ML.Tokenizers with Google.Protobuf.
 - **The app opens faster.** From launch to the main window's first frame took 2.4–2.6 s, 2.1–2.2 s of it with the
   UI thread held; it now takes 1.9–2.0 s, with 1.6 s held (3 launches each in English and Chinese).
   - The window is built in the saved language from the start. It used to be laid out in English and then again,

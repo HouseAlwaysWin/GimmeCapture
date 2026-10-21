@@ -53,11 +53,9 @@ GPLv3:
 |---|---|
 | Avalonia, Avalonia.Desktop, Avalonia.Themes.Fluent, Avalonia.Controls.ColorPicker, Avalonia.Fonts.Inter | MIT |
 | ReactiveUI.Avalonia | MIT |
-| CliWrap | MIT |
 | NAudio | MIT |
 | SkiaSharp | MIT |
 | LLamaSharp, LLamaSharp.Backend.Cpu | MIT |
-| Microsoft.ML.Tokenizers | MIT |
 | Microsoft.ML.OnnxRuntime.DirectML | MIT |
 | ZLinq | MIT |
 | Serilog, Serilog.Sinks.File | Apache-2.0 |

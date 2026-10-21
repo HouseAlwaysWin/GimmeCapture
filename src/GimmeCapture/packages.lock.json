@@ -55,12 +55,6 @@
           "Avalonia": "12.0.4"
         }
       },
-      "CliWrap": {
-        "type": "Direct",
-        "requested": "[3.10.0, )",
-        "resolved": "3.10.0",
-        "contentHash": "Igph39WNImUFqQrpTeBDPafcCnM1u/8IooZHqMRF/5JdV5H78p+AbZkeYY1Nkz1WlbI/Gt2Hq/3rYh55jxRF9Q=="
-      },
       "FFmpeg.AutoGen": {
         "type": "Direct",
         "requested": "[8.0.0.1, )",
@@ -95,15 +89,6 @@
         "contentHash": "NzUD79BC6R7TKROLyB3XCzXTpbNZ1YfOdVbult7hoFvd/xyRecOMiRO5HTzkPXvaFlcvZ91+WNCiroAPzUE7Dw==",
         "dependencies": {
           "Microsoft.ML.OnnxRuntime.Managed": "1.20.1"
-        }
-      },
-      "Microsoft.ML.Tokenizers": {
-        "type": "Direct",
-        "requested": "[2.0.0, )",
-        "resolved": "2.0.0",
-        "contentHash": "+b8lT4cLLO/sBR2hjvE/qG6qrZG15h7/PBvnIrzTh4xDaAxdHUY6449rC+1pHzQUsBiCHZVbj+VMn+xS0sL7TA==",
-        "dependencies": {
-          "Google.Protobuf": "3.30.2"
         }
       },
       "NAudio": {
@@ -154,6 +139,12 @@
           "SkiaSharp.NativeAssets.Win32": "3.119.4",
           "SkiaSharp.NativeAssets.macOS": "3.119.4"
         }
+      },
+      "System.Reactive": {
+        "type": "Direct",
+        "requested": "[7.0.0, )",
+        "resolved": "7.0.0",
+        "contentHash": "VYaSP2Kt+45GFnr3q7c/b4awT48VvueOJV4jPjdUXi5MxC9mSUy+HkJYtm8rGZ6fC3tNHG9gBu/YwNAR/FYqhg=="
       },
       "ZLinq": {
         "type": "Direct",
@@ -258,11 +249,6 @@
         "dependencies": {
           "System.Reactive": "6.1.0"
         }
-      },
-      "Google.Protobuf": {
-        "type": "Transitive",
-        "resolved": "3.30.2",
-        "contentHash": "Y2aOVLIt75yeeEWigg9V9YnjsEm53sADtLGq0gLhwaXpk3iu8tYSoauolyhenagA2sWno2TQ2WujI0HQd6s1Vw=="
       },
       "HarfBuzzSharp": {
         "type": "Transitive",
@@ -446,11 +432,6 @@
         "resolved": "10.0.5",
         "contentHash": "2Njj2ree91ur3lWNyQrjlVgxtOz8hV7f92ezTdQc//2S1TEQiNJ6DR9/gxM91Sca0Khk28QjYiCy7C2fPgqcCw=="
       },
-      "System.Reactive": {
-        "type": "Transitive",
-        "resolved": "6.1.0",
-        "contentHash": "M5cCC1ZMkZr9jbSQGTHnVkb5TDN67qWCV7AP8TAHdGkvDlu0puT5NzemESNn9+HkYIDpWpocP68/i+/ame2/2w=="
-      },
       "Tmds.DBus.Protocol": {
         "type": "Transitive",
         "resolved": "0.92.0",
@@ -619,12 +600,6 @@
           "Avalonia": "12.0.4"
         }
       },
-      "CliWrap": {
-        "type": "Direct",
-        "requested": "[3.10.0, )",
-        "resolved": "3.10.0",
-        "contentHash": "Igph39WNImUFqQrpTeBDPafcCnM1u/8IooZHqMRF/5JdV5H78p+AbZkeYY1Nkz1WlbI/Gt2Hq/3rYh55jxRF9Q=="
-      },
       "FFmpeg.AutoGen": {
         "type": "Direct",
         "requested": "[8.0.0.1, )",
@@ -660,15 +635,6 @@
         "dependencies": {
           "Microsoft.AI.DirectML": "1.15.2",
           "Microsoft.ML.OnnxRuntime.Managed": "1.20.1"
-        }
-      },
-      "Microsoft.ML.Tokenizers": {
-        "type": "Direct",
-        "requested": "[2.0.0, )",
-        "resolved": "2.0.0",
-        "contentHash": "+b8lT4cLLO/sBR2hjvE/qG6qrZG15h7/PBvnIrzTh4xDaAxdHUY6449rC+1pHzQUsBiCHZVbj+VMn+xS0sL7TA==",
-        "dependencies": {
-          "Google.Protobuf": "3.30.2"
         }
       },
       "NAudio": {
@@ -719,6 +685,12 @@
         "dependencies": {
           "SkiaSharp.NativeAssets.Win32": "3.119.4"
         }
+      },
+      "System.Reactive": {
+        "type": "Direct",
+        "requested": "[7.0.0, )",
+        "resolved": "7.0.0",
+        "contentHash": "VYaSP2Kt+45GFnr3q7c/b4awT48VvueOJV4jPjdUXi5MxC9mSUy+HkJYtm8rGZ6fC3tNHG9gBu/YwNAR/FYqhg=="
       },
       "ZLinq": {
         "type": "Direct",
@@ -823,11 +795,6 @@
         "dependencies": {
           "System.Reactive": "6.1.0"
         }
-      },
-      "Google.Protobuf": {
-        "type": "Transitive",
-        "resolved": "3.30.2",
-        "contentHash": "Y2aOVLIt75yeeEWigg9V9YnjsEm53sADtLGq0gLhwaXpk3iu8tYSoauolyhenagA2sWno2TQ2WujI0HQd6s1Vw=="
       },
       "HarfBuzzSharp": {
         "type": "Transitive",
@@ -1012,11 +979,6 @@
         "type": "Transitive",
         "resolved": "10.0.5",
         "contentHash": "2Njj2ree91ur3lWNyQrjlVgxtOz8hV7f92ezTdQc//2S1TEQiNJ6DR9/gxM91Sca0Khk28QjYiCy7C2fPgqcCw=="
-      },
-      "System.Reactive": {
-        "type": "Transitive",
-        "resolved": "6.1.0",
-        "contentHash": "M5cCC1ZMkZr9jbSQGTHnVkb5TDN67qWCV7AP8TAHdGkvDlu0puT5NzemESNn9+HkYIDpWpocP68/i+/ame2/2w=="
       },
       "Tmds.DBus.Protocol": {
         "type": "Transitive",
