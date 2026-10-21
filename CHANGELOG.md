@@ -187,6 +187,9 @@
   writes them when `GIMMECAPTURE_DEBUG_LOG=1` is set; otherwise they are not even formatted.
 - The repository drops 135 MB of static font files the build never used (only the variable fonts ship) and an
   outdated sample `config.json`. `REFACTOR_PLAN.md` records this pass and what is next.
+- `release.ps1` refuses to run unless the local `main` is exactly `origin/main`. The Windows test run stops a test
+  stuck for 10 minutes and names the test a crashed test host was running. Three benchmarks of code that is
+  gone are removed.
 - Dead code is gone: the unused download-progress window and AI settings tab, the throwing URL-download
   overloads, `RemoveResources`, the unimplemented annotation `Feather` setting, and two helpers only their own
   tests still called (`TranslationExecutionHelper`, `VideoAnnotationFilterBuilder`).
