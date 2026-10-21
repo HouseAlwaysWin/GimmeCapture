@@ -47,6 +47,14 @@
 
 ### ⚡ Performance
 
+- **The Windows download is a folder, so the first launch after an update no longer unpacks the app.** The single
+  file unpacked all 478 MB of itself into `%TEMP%\.net\GimmeCapture` the first time each version ran: 2.7 s here
+  before anything started, so the first frame came 6.1 s after launch instead of 2.3 s. Every earlier version's
+  copy stayed there.
+  - The `.zip` and the installer now hold the app's folder (495 MB). Keep its files together: `GimmeCapture.exe`
+    no longer runs on its own. The in-app updater moves an existing install over by itself.
+  - The copies earlier versions unpacked are deleted a few seconds after start-up, except one that another running
+    copy still uses. The Linux build is still a single file, and it now removes its own earlier copies the same way.
 - **The app opens faster.** From launch to the main window's first frame took 2.4–2.6 s, 2.1–2.2 s of it with the
   UI thread held; it now takes 1.9–2.0 s, with 1.6 s held (3 launches each in English and Chinese).
   - The window is built in the saved language from the start. It used to be laid out in English and then again,
@@ -153,6 +161,11 @@
 
 ### 🧹 Maintenance
 
+- Every publish uses one of two profiles, `Properties/PublishProfiles/win-x64.pubxml` and `linux-x64.pubxml`,
+  instead of five copies of the same arguments. `scripts/build-installer.ps1` works again: it never named a target
+  framework, which the project has needed since it gained the Linux head. A publish for one platform no longer picks
+  up the other platform's FFmpeg libraries, and a Linux publish on Linux fails if they are missing, like the
+  Windows one.
 - CI uploads the coverage report again. Since `verify.ps1` began deleting a passing run's artifacts, it deleted the
   report before the upload step ran, so green runs uploaded nothing.
 - Tests that need a local video clip or a render-probe switch are reported as **skipped** while those are not set,

@@ -133,8 +133,12 @@ dotnet build GimmeCapture.slnx -c Debug
 dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj -c Release
 
 # Full local verification (mirrors CI): localization parity + restore + build +
-# test w/ coverage gate (>=25%) + single-file publish smoke test
+# test w/ coverage gate (>=25%) + publish smoke test of both release shapes
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
+
+# Publish a release shape (Properties/PublishProfiles): win-x64 is a self-contained folder,
+# linux-x64 a self-contained single file (the Linux updater swaps that one file)
+dotnet publish src/GimmeCapture/GimmeCapture.csproj -c Release -f net10.0-windows10.0.19041.0 -p:PublishProfile=win-x64 -o publish
 ```
 
 `scripts/verify.ps1` is the canonical "is my change good" check — run it (or at least

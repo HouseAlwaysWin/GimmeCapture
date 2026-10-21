@@ -85,6 +85,7 @@ jobs:
     # whose version tracks the installed SDK. That package is not in packages.lock.json, so locked
     # mode aborts the whole release with NU1004 (this is what broke v0.66.0). Pinning it in the lock
     # file would only move the break to the next SDK bump, since there is no global.json.
+    # Properties/PublishProfiles/linux-x64.pubxml: a self-contained single file, which the updater swaps.
     - name: Publish application (self-contained, single file)
       run: |
         version="${GITHUB_REF_NAME#v}"
@@ -98,13 +99,7 @@ jobs:
         dotnet restore src/GimmeCapture/GimmeCapture.csproj --locked-mode --disable-parallel
 
         dotnet publish src/GimmeCapture/GimmeCapture.csproj \
-          -f net10.0 -r linux-x64 -c Release --self-contained true --no-restore \
-          -p:PublishSingleFile=true \
-          -p:IncludeNativeLibrariesForSelfExtract=true \
-          -p:IncludeAllContentForSelfExtract=true \
-          -p:EnableCompressionInSingleFile=true \
-          -p:DebugType=none \
-          -p:DebugSymbols=false \
+          -f net10.0 -c Release -p:PublishProfile=linux-x64 --no-restore \
           -p:Version="$version" \
           -p:AssemblyVersion="$asmver" \
           -p:FileVersion="$asmver" \
@@ -171,8 +166,8 @@ jobs:
       shell: powershell
       run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
-    # Self-contained: largest but needs no .NET install. EnableCompressionInSingleFile shrinks the exe;
-    # DebugType=none avoids shipping PDBs in the artifact.
+    # Properties/PublishProfiles/win-x64.pubxml: a self-contained folder, which needs no .NET install. Not a single
+    # file: that unpacked all of itself into %TEMP% on the first launch of every version.
     - name: Publish application (self-contained)
       run: |
         dotnet restore src/GimmeCapture/GimmeCapture.csproj --locked-mode --disable-parallel
@@ -189,15 +184,8 @@ jobs:
           # Multi-target project (net10.0-windows;net10.0) since the Linux port — publish must name a
           # framework or dotnet errors NETSDK1129. The Windows artifact uses the Windows TFM.
           '-f', 'net10.0-windows10.0.19041.0'
-          '-r', 'win-x64'
-          '--self-contained', 'true'
+          '-p:PublishProfile=win-x64'
           '--no-restore'
-          '-p:PublishSingleFile=true'
-          '-p:IncludeNativeLibrariesForSelfExtract=true'
-          '-p:IncludeAllContentForSelfExtract=true'
-          '-p:EnableCompressionInSingleFile=true'
-          '-p:DebugType=none'
-          '-p:DebugSymbols=false'
           "-p:Version=$version"
           "-p:AssemblyVersion=$assemblyVersion"
           "-p:FileVersion=$assemblyVersion"

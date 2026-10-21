@@ -67,9 +67,19 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; The whole publish output (single-file GimmeCapture.exe + ffmpeg-lib\*.dll, which FFmpegRuntime loads from
-; next to the exe). recursesubdirs/createallsubdirs keeps the ffmpeg-lib subfolder.
+; The whole publish folder: the GimmeCapture.exe launcher, the app and runtime DLLs, and ffmpeg-lib\, which
+; FFmpegRuntime loads from next to the exe. recursesubdirs/createallsubdirs keeps the subfolders.
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[UninstallDelete]
+; The in-app updater copies each new version over this folder, so files a later version added are not in this
+; installer's list. Remove the app's own files as well; the AI folder of downloaded models stays, as before.
+Type: files; Name: "{app}\*.dll"
+Type: filesandordirs; Name: "{app}\ffmpeg-lib"
+Type: filesandordirs; Name: "{app}\runtimes"
+Type: filesandordirs; Name: "{app}\ja"
+Type: filesandordirs; Name: "{app}\zh-Hans"
+Type: filesandordirs; Name: "{app}\zh-Hant"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"

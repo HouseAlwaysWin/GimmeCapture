@@ -169,6 +169,8 @@ kept.
 
 The Linux build ships as a self-contained single-file `.tar.gz` (no .NET install required) with the
 FFmpeg `.so` libraries bundled; the Windows build ships as a portable `.zip` and an optional installer.
+The `.zip` holds the app's folder: extract all of it and run `GimmeCapture.exe` from there, since the exe
+does not run on its own.
 
 ## License
 

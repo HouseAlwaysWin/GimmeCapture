@@ -88,6 +88,8 @@ public partial class App : Application
                 // Best-effort mop-up of temp workspaces a previous crash/kill left behind (age-gated; safe with a
                 // concurrent second instance). Runs off the UI thread at settle so it never delays startup.
                 TempWorkspaceCleaner.SweepOrphans();
+                // Up to 478 MB per earlier version, unpacked by single-file builds and never removed.
+                BundleExtractionCleaner.SweepStaleCopies();
                 // No explicit delay any more: the trim waits out the idle window the service enforces, so a user
                 // who captures something in the first minutes never pays for a trim they are about to undo.
                 await ProcessMemoryTrimService.RequestIdleTrimAsync("startup-settled").ConfigureAwait(false);

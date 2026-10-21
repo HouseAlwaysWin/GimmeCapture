@@ -3,7 +3,7 @@ param(
     [int]$CoverageThreshold = 25,
     [switch]$SkipPublish,
     # Keep this run's artifacts even when it passes. A run costs several GB (a full build tree plus two
-    # self-contained single-file publishes), so passing runs are deleted by default; use this when you want to
+    # self-contained publishes), so passing runs are deleted by default; use this when you want to
     # inspect the build output or the coverage report of a run that succeeded.
     [switch]$KeepArtifacts
 )
@@ -116,24 +116,20 @@ if (-not $SkipPublish) {
         # NETSDK1129 ("Publish not supported without specifying a target framework").
         "--framework", "net10.0-windows10.0.19041.0",
         "--configuration", "Release",
-        "--runtime", "win-x64",
-        "--self-contained", "true",
+        # Properties/PublishProfiles/win-x64.pubxml, the profile release.yml publishes the Windows artifact with.
+        "-p:PublishProfile=win-x64",
         "--no-restore",
         "--artifacts-path", $artifacts,
         "--disable-build-servers",
-        "-p:PublishSingleFile=true",
-        "-p:IncludeNativeLibrariesForSelfExtract=true",
-        "-p:IncludeAllContentForSelfExtract=true",
-        "-p:EnableCompressionInSingleFile=true",
-        "-p:DebugType=none",
-        "-p:DebugSymbols=false",
         "--output", $publish
     )
     Invoke-DotNet @publishArgs
 
-    $publishedExe = Join-Path $publish "GimmeCapture.exe"
-    if (-not (Test-Path -LiteralPath $publishedExe)) {
-        throw "Publish smoke test did not produce GimmeCapture.exe."
+    # The Windows release is a folder: the exe is only the launcher, and the app and FFmpeg sit beside it.
+    foreach ($expected in @("GimmeCapture.exe", "GimmeCapture.dll", "ffmpeg-lib")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $publish $expected))) {
+            throw "Publish smoke test did not produce $expected."
+        }
     }
 
     # Also smoke the LINUX release artifact (net10.0 head, linux-x64 self-contained single-file). This is the
@@ -148,17 +144,11 @@ if (-not $SkipPublish) {
     $publishLinuxArgs = @(
         "publish", $appProject,
         "--framework", "net10.0",
-        "--runtime", "linux-x64",
-        "--self-contained", "true",
+        "--configuration", "Release",
+        "-p:PublishProfile=linux-x64",
         "--no-restore",
         "--artifacts-path", $artifacts,
         "--disable-build-servers",
-        "-p:PublishSingleFile=true",
-        "-p:IncludeNativeLibrariesForSelfExtract=true",
-        "-p:IncludeAllContentForSelfExtract=true",
-        "-p:EnableCompressionInSingleFile=true",
-        "-p:DebugType=none",
-        "-p:DebugSymbols=false",
         "--output", $publishLinux
     )
     Invoke-DotNet @publishLinuxArgs
