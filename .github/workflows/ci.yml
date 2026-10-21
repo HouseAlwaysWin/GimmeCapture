@@ -59,8 +59,8 @@ jobs:
     # Localization parity is already enforced inside verify.ps1 and again by the
     # LocalizationParityTests xUnit test, so no standalone step here.
 
-    # PRs skip the self-contained single-file publish smoke (the slowest verify
-    # step); pushes to main still run it so the shipping shape stays covered.
+    # PRs skip the publish smokes (the slowest verify step); pushes to main still
+    # run them so both shipping shapes stay covered.
     - name: Verify
       shell: powershell
       run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 ${{ github.event_name == 'pull_request' && '-SkipPublish' || '' }}

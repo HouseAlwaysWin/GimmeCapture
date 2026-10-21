@@ -85,7 +85,7 @@ tests/
 docs/                          # architecture roadmap, refactor plan, release catalog
 scripts/                       # verify.ps1, check-localization.ps1, ensure-ffmpeg-libs.ps1,
                                # ensure-ffmpeg-libs-linux.sh, test-compress.ps1, build-installer.ps1
-.github/workflows/             # ci.yml, linux-compile-check.yml, linux-tests.yml, release.yml, codeql.yml
+.github/workflows/             # ci.yml, linux.yml, release.yml, codeql.yml
 .github/dependabot.yml         # weekly GitHub Actions version bumps
 release.ps1 / release.bat      # release automation (main branch only)
 ```
@@ -96,10 +96,9 @@ release.ps1 / release.bat      # release automation (main branch only)
 > CI runs them on `windows-latest`. The Tests project multi-targets
 > `net10.0-windows10.0.19041.0;net10.0`, with the Windows-only test files fenced out of the
 > `net10.0` head in its csproj. The solution **compiles on Linux/macOS** with
-> `dotnet build -p:EnableWindowsTargeting=true` — enforced by `linux-compile-check.yml` on
-> every `claude/**` push and PR (~80 s), building BOTH TFMs — and `linux-tests.yml`
-> **executes the cross-platform suite against the `net10.0` head on ubuntu** on the same
-> triggers. The `net10.0` head also *runs* on a Linux X11 desktop (full feature set minus
+> `dotnet build -p:EnableWindowsTargeting=true` — enforced by `linux.yml` on every push to
+> `main` or `claude/**` and every other PR, building BOTH TFMs and then **executing the
+> cross-platform suite against the `net10.0` head on ubuntu**. The `net10.0` head also *runs* on a Linux X11 desktop (full feature set minus
 > WGC per-window recording).
 
 **Before building Release/Publish**, native FFmpeg DLLs must exist under
@@ -148,12 +147,12 @@ CI on every PR/`main` push: `ci.yml` (windows-latest) runs ensure-FFmpeg → `ve
 `artifacts/coverage/`). PRs run `verify.ps1 -SkipPublish`. `codeql.yml` analyses the C# code
 and the workflow files (build-mode none) on PRs, `main` pushes and weekly.
 
-Two ubuntu-latest workflows run on every `claude/**` push and PR: `linux-compile-check.yml`
-type-checks both TFMs, and `linux-tests.yml` runs the suite against the `net10.0` head (it
-provisions the FFmpeg `.so` bundle and restores unlocked with `--force-evaluate`; on push
-events only, it commits refreshed `packages.lock.json` back to the branch — so a `claude/**`
-branch can gain a `chore(ci): refresh packages.lock.json` commit, and you should pull before
-pushing again).
+`linux.yml` (ubuntu-latest) runs on every push to `main` or `claude/**` and on PRs from other
+branches (a `claude/**` PR shows its push run instead of running twice). In one job it type-checks
+both TFMs and runs the suite against the `net10.0` head: it provisions the FFmpeg `.so` bundle and
+restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commits refreshed
+`packages.lock.json` back to the branch — so a `claude/**` branch can gain a
+`chore(ci): refresh packages.lock.json` commit, and you should pull before pushing again.
 
 ## Architecture & Conventions
 
@@ -294,8 +293,8 @@ Three locales are kept in **strict key parity**:
   Use `dotnet build GimmeCapture.slnx -p:EnableWindowsTargeting=true` for compiler feedback
   on both TFMs, and
   `dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj -f net10.0 -p:EnableWindowsTargeting=true`
-  for the tests that are not Windows-fenced — or rely on the `Linux Compile Check` and
-  `Linux Tests` workflows, which both run on every `claude/**` push. `verify.ps1`
+  for the tests that are not Windows-fenced — or rely on the `Linux` workflow, which runs on
+  every `claude/**` push. `verify.ps1`
   (localization parity + coverage gate + publish smoke) and the Windows-only tests still
   require Windows; the app itself runs on a Linux X11 desktop from the `net10.0` head
   (everything except WGC per-window recording). Say which of these actually ran rather than
