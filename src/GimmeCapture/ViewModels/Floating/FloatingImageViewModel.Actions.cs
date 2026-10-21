@@ -11,12 +11,18 @@ using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Rendering;
 using System.Reactive.Linq;
 using System;
+using System.Linq;
+using System.Threading;
 using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
+    // Edits that replace Image run one at a time, now that their pixel work is off the UI thread: each starts from
+    // the image the previous one produced instead of racing it.
+    private readonly SemaphoreSlim _imageEditGate = new(1, 1);
+
     private void InitializeActionCommands()
     {
         // CloseCommand, ToggleToolbarCommand etc are in Base.
@@ -68,15 +74,35 @@ public partial class FloatingImageViewModel
     /// </summary>
     private async Task ApplyTransformAsync(int rotationDegrees, bool flipH, bool flipV)
     {
-        if (Image == null) return;
+        await _imageEditGate.WaitAsync();
+        try
+        {
+            await ApplyTransformCoreAsync(rotationDegrees, flipH, flipV);
+        }
+        finally
+        {
+            _imageEditGate.Release();
+        }
+    }
+
+    private async Task ApplyTransformCoreAsync(int rotationDegrees, bool flipH, bool flipV)
+    {
+        var oldImage = Image;
+        if (oldImage == null) return;
 
         // Bake any annotations into the bitmap first so they transform together with the image.
-        Bitmap source = (Annotations.AsValueEnumerable().Any() ? await GetFlattenedBitmapAsync() : Image) ?? Image;
+        Bitmap source = (Annotations.AsValueEnumerable().Any() ? await GetFlattenedBitmapAsync() : oldImage) ?? oldImage;
 
-        Bitmap? transformed = FloatingBitmapConversionHelper.TransformBitmap(source, rotationDegrees, flipH, flipV);
+        // Off the UI thread: three full copies plus the rotated draw, ~0.13 s for a 4K pin.
+        Bitmap? transformed = await Task.Run(() => FloatingBitmapConversionHelper.TransformBitmap(source, rotationDegrees, flipH, flipV));
         if (transformed == null) return;
+        if (!ReferenceEquals(Image, oldImage))
+        {
+            // The image changed meanwhile (an undo): this result no longer applies to it.
+            transformed.Dispose();
+            return;
+        }
 
-        var oldImage = Image;
         var oldPos = ScreenPosition ?? new Avalonia.PixelPoint(0, 0);
         var oldDisplayWidth = DisplayWidth;
         var oldDisplayHeight = DisplayHeight;
@@ -152,7 +178,10 @@ public partial class FloatingImageViewModel
             _ => (SKEncodedImageFormat.Png, 100)
         };
 
-        if (FloatingBitmapConversionHelper.TryEncodeBitmap(bitmap, skFormat, quality, out var bytes, out _))
+        // Off the UI thread: a 4K PNG took over 2 s. The file only sits on the clipboard, so PNG uses the fast settings.
+        var (encoded, bytes) = await Task.Run(() =>
+            (FloatingBitmapConversionHelper.TryEncodeBitmap(bitmap, skFormat, quality, out var b, out _, fastPng: true), b));
+        if (encoded)
         {
             try
             {
@@ -198,14 +227,33 @@ public partial class FloatingImageViewModel
 
     private async Task CropAsync()
     {
+        await _imageEditGate.WaitAsync();
+        try
+        {
+            await CropCoreAsync();
+        }
+        finally
+        {
+            _imageEditGate.Release();
+        }
+    }
+
+    private async Task CropCoreAsync()
+    {
         if (!IsSelectionActive || Image == null) return;
-        
+
+        // Capture state BEFORE changes for Undo
+        var oldImage = Image;
+        var oldRect = SelectionRect;
         var selected = await GetSelectedBitmapAsync();
+        if (selected != null && !ReferenceEquals(Image, oldImage))
+        {
+            selected.Dispose(); // the image changed meanwhile (an undo): the crop no longer applies to it
+            return;
+        }
+
         if (selected != null)
         {
-            // Capture state BEFORE changes for Undo
-            var oldImage = Image;
-            var oldRect = SelectionRect;
             var oldPos = ScreenPosition ?? new Avalonia.PixelPoint(0, 0);
             var oldDisplayWidth = DisplayWidth;
             var oldDisplayHeight = DisplayHeight;
@@ -353,13 +401,18 @@ public partial class FloatingImageViewModel
     // Create a flattened bitmap including annotations
     private async Task<Bitmap?> GetFlattenedBitmapAsync()
     {
-        if (Image == null) return null;
-        
+        // Read on the UI thread, where they change; the pool thread only sees this snapshot.
+        var image = Image;
+        if (image == null) return null;
+        var annotations = Annotations.ToArray();
+        double displayWidth = DisplayWidth;
+        double displayHeight = DisplayHeight;
+
         return await Task.Run(() => 
         {
             try 
             {
-                if (!FloatingBitmapConversionHelper.TryCopyToSkBitmap(Image, out var baseSkBitmap, out _)
+                if (!FloatingBitmapConversionHelper.TryCopyToSkBitmap(image, out var baseSkBitmap, out _)
                     || baseSkBitmap == null)
                     return null;
 
@@ -367,9 +420,9 @@ public partial class FloatingImageViewModel
                 {
                     AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
                         baseSkBitmap,
-                        Annotations,
-                        DisplayWidth,
-                        DisplayHeight,
+                        annotations,
+                        displayWidth,
+                        displayHeight,
                         baseSkBitmap.Width,
                         baseSkBitmap.Height);
 

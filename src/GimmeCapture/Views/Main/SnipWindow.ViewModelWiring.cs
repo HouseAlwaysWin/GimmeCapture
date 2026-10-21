@@ -712,8 +712,12 @@ public partial class SnipWindow : Window
                                         "webp" => (SkiaSharp.SKEncodedImageFormat.Webp, 90),
                                         _ => (SkiaSharp.SKEncodedImageFormat.Png, 100)
                                     };
-                                    if (GimmeCapture.ViewModels.Floating.FloatingBitmapConversionHelper.TryEncodeBitmap(
-                                            vm.Image, skFormat, quality, out var bytes, out var encErr))
+                                    // Encoded off the UI thread: a 4K PNG takes over 2 s at full compression.
+                                    var image = vm.Image;
+                                    var (encoded, bytes, encErr) = await System.Threading.Tasks.Task.Run(() =>
+                                        (GimmeCapture.ViewModels.Floating.FloatingBitmapConversionHelper.TryEncodeBitmap(
+                                            image, skFormat, quality, out var b, out var e), b, e));
+                                    if (encoded)
                                     {
                                         using (var stream = new System.IO.FileStream(file.Path.LocalPath, System.IO.FileMode.Create))
                                         {
