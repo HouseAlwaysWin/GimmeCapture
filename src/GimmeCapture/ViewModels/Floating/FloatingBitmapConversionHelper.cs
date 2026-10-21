@@ -17,14 +17,23 @@ internal static class FloatingBitmapConversionHelper
         return bytes;
     }
 
+    // zlib level 1 with the Sub filter: a 4K screenshot encodes in ~0.33 s instead of ~2.3 s, for ~18% more bytes.
+    private static readonly SKPngEncoderOptions FastPng = new(SKPngEncoderFilterFlags.Sub, 1);
+
+    /// <summary>
+    /// PNG bytes that only travel in memory (the clipboard, background removal), so they use the fast PNG settings.
+    /// </summary>
     public static bool TryEncodeBitmapToPngBytes(Bitmap? bitmap, out byte[] bytes, out string? error)
-        => TryEncodeBitmap(bitmap, SKEncodedImageFormat.Png, 100, out bytes, out error);
+        => TryEncodeBitmap(bitmap, SKEncodedImageFormat.Png, 100, out bytes, out error, fastPng: true);
 
     /// <summary>
     /// Encodes an Avalonia bitmap to the given SkiaSharp format (Png/Jpeg/Webp…) at the given quality (0-100,
     /// ignored for lossless Png). Used by the pin's Save flow so the toolbar's chosen output format is honored.
+    /// <paramref name="fastPng"/> trades ~18% size for ~7× speed on PNG; meant for bytes that never become the
+    /// user's file.
     /// </summary>
-    public static bool TryEncodeBitmap(Bitmap? bitmap, SKEncodedImageFormat format, int quality, out byte[] bytes, out string? error)
+    public static bool TryEncodeBitmap(
+        Bitmap? bitmap, SKEncodedImageFormat format, int quality, out byte[] bytes, out string? error, bool fastPng = false)
     {
         bytes = Array.Empty<byte>();
         error = null;
@@ -60,8 +69,9 @@ internal static class FloatingBitmapConversionHelper
 
                 try
                 {
-                    using var image = SKImage.FromBitmap(encodeSource);
-                    using var data = image.Encode(format, quality);
+                    using var data = format == SKEncodedImageFormat.Png && fastPng
+                        ? EncodeFastPng(encodeSource)
+                        : EncodeWithQuality(encodeSource, format, quality);
                     if (data == null)
                     {
                         error = "Encoded bitmap bytes are empty.";
@@ -88,6 +98,18 @@ internal static class FloatingBitmapConversionHelper
             error = $"Bitmap encode failed: {ex.Message}";
             return false;
         }
+    }
+
+    internal static SKData? EncodeFastPng(SKBitmap source)
+    {
+        using var pixmap = source.PeekPixels();
+        return pixmap?.Encode(FastPng);
+    }
+
+    private static SKData? EncodeWithQuality(SKBitmap source, SKEncodedImageFormat format, int quality)
+    {
+        using var image = SKImage.FromBitmap(source);
+        return image.Encode(format, quality);
     }
 
     public static SKBitmap? ToSkBitmap(Bitmap? avaloniaBitmap)

@@ -20,7 +20,8 @@ namespace GimmeCapture.Services.Core.Rendering;
 /// overlay in, and what does that imply" rather than at "give me the selection's pixels".
 ///
 /// THREADING — transitions build an Avalonia bitmap and raise change notifications, so call them on the UI
-/// thread. <see cref="CommitAsync"/> may be awaited from the UI thread (the pixel work runs off it).
+/// thread. <see cref="CommitAsync"/> may be awaited from the UI thread: the live grab runs off it, and the frozen
+/// path's crop, which stays on the caller, takes 15-30 ms even for a full 4K selection with annotations.
 /// <see cref="LeaseFrozenStill"/> and lease disposal are thread-safe: a background OCR thread returns its lease.
 /// </summary>
 public sealed class OverlaySurface : ReactiveObject, IDisposable

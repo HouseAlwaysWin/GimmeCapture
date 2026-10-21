@@ -584,8 +584,12 @@ public partial class FloatingImageViewModel
             // Save state for Undo
             PushUndoState();
 
-            // 1. Convert Avalonia Bitmap to Bytes
-            if (!FloatingBitmapConversionHelper.TryEncodeBitmapToPngBytes(Image, out var imageBytes, out var encodeError))
+            // 1. Convert Avalonia Bitmap to Bytes, off the UI thread: the PNG of a 4K pin took over 2 s to make.
+            var source = Image;
+            if (source == null) return;
+            var (encoded, imageBytes, encodeError) = await Task.Run(() =>
+                (FloatingBitmapConversionHelper.TryEncodeBitmapToPngBytes(source, out var bytes, out var error), bytes, error));
+            if (!encoded)
                 throw new Exception(encodeError ?? "Failed to serialize image.");
 
             // 2. Process — reuse this pin's background-removal service (created once, kept warm ~10s between
@@ -606,8 +610,8 @@ public partial class FloatingImageViewModel
                 // Must use current DisplayWidth/Height for scaling the UI selection to physical pixels
                 var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
                 var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
-                var scaleX = (double)Image.PixelSize.Width / refW;
-                var scaleY = (double)Image.PixelSize.Height / refH;
+                var scaleX = (double)source.PixelSize.Width / refW;
+                var scaleY = (double)source.PixelSize.Height / refH;
                 scaledRect = new Avalonia.Rect(
                     SelectionRect.X * scaleX,
                     SelectionRect.Y * scaleY,
@@ -617,8 +621,10 @@ public partial class FloatingImageViewModel
 
             var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes, scaledRect);
 
-            // 3. Update Image
-            if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromEncodedBytes(transparentBytes, out var detachedBitmap, out var decodeError))
+            // 3. Update Image (decoded off the UI thread too)
+            var (decoded, detachedBitmap, decodeError) = await Task.Run(() =>
+                (FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromEncodedBytes(transparentBytes, out var bitmap, out var error), bitmap, error));
+            if (!decoded)
                 throw new Exception(decodeError ?? "Failed to decode processed image.");
             Image = detachedBitmap;
             

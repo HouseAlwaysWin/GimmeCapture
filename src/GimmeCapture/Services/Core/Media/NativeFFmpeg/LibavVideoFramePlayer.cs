@@ -495,6 +495,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     int consecutiveDrops = 0;
                     int hwTransferFailures = 0;
                     var playbackClock = Stopwatch.StartNew();
+                    var frameWaiter = FrameDeadlineWaiter.Create(ct);
 
                     try
                     {
@@ -573,7 +574,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
 
                                 consecutiveDrops = 0;
 
-                                DelayUntilFrame(playbackClock, startedAtSeconds, seconds, speed, ct);
+                                DelayUntilFrame(frameWaiter, playbackClock, startedAtSeconds, seconds, speed, ct);
                                 if (ct.IsCancellationRequested)
                                 {
                                     break;
@@ -659,6 +660,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     finally
                     {
                         ArrayPool<byte>.Shared.Return(frameBuffer);
+                        frameWaiter.Dispose();
                     }
                 }
                 finally
@@ -684,7 +686,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         ffmpeg.avcodec_flush_buffers(decCtx);
     }
 
-    private static void DelayUntilFrame(Stopwatch playbackClock, double startedAtSeconds, double frameSeconds, double speed, CancellationToken ct)
+    // Waits on a timer and never spins; see FrameDeadlineWaiter for why.
+    internal static void DelayUntilFrame(
+        FrameDeadlineWaiter waiter, Stopwatch playbackClock, double startedAtSeconds, double frameSeconds, double speed, CancellationToken ct)
     {
         double safeSpeed = Math.Max(0.1, speed);
         double targetSeconds = Math.Max(0, frameSeconds - startedAtSeconds) / safeSpeed;
@@ -692,18 +696,12 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         while (!ct.IsCancellationRequested)
         {
             double remainingSeconds = targetSeconds - playbackClock.Elapsed.TotalSeconds;
-            if (remainingSeconds <= 0)
+            if (remainingSeconds <= FrameDeadlineWaiter.ToleranceSeconds)
             {
                 return;
             }
 
-            if (remainingSeconds > 0.02)
-            {
-                Thread.Sleep(Math.Max(1, (int)Math.Floor((remainingSeconds - 0.01) * 1000)));
-                continue;
-            }
-
-            Thread.SpinWait(256);
+            waiter.Wait(TimeSpan.FromSeconds(remainingSeconds));
         }
     }
 

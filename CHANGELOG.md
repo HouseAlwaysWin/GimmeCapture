@@ -60,6 +60,18 @@
   would have held it about 3 s at the 300 captures kept. Each new capture while it was open froze it again for about
   0.4 s, while every card and thumbnail was rebuilt. Now thumbnails load in the background, a refresh keeps the
   cards it already has, and only the rows on screen are built. The tab opens in 0.16–0.19 s.
+- **Copying, saving, rotating and removing the background of a pinned image no longer freeze the app.** On a 4K
+  pin, the UI thread was held while each did its pixel work:
+  - Copy or Save as PNG: about 2.3 s
+  - Rotate or flip: about 0.13 s
+  - Background removal: 2.3 s before the AI even started
+
+  That work now runs in the background. The PNG that only travels to the clipboard or into background removal uses
+  faster settings: about 0.33 s instead of 2.3 s, and about 18% larger. A copy encodes twice, so a copied 4K pin
+  reaches the clipboard seconds sooner. Saved files keep full compression.
+- **A playing video pin no longer keeps a CPU core busy.** Its frame pacing busy-waited through the last 20 ms
+  before every frame, which at 60 fps was the whole time: about half a core per playing pin. It now sleeps on a
+  high-resolution timer, with the same frame timing.
 - **Opening a capture no longer waits for a settings write**, memory is only handed back to Windows after five
   minutes of inactivity instead of seconds after every capture (the next capture had to page it all back in),
   and OCR models stay loaded for two minutes between captures instead of five seconds.
