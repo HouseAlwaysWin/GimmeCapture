@@ -26,7 +26,15 @@ public sealed class AppBootstrapper : IAsyncDisposable
 
     public AppBootstrapper()
     {
-        _settingsService = new AppSettingsService();
+        var settingsService = new AppSettingsService();
+        // Build the windows in the saved language from the start. Switching it once the settings have loaded lays
+        // the whole main window out a second time, and loads the CJK font in the middle of start-up.
+        if (settingsService.PeekSavedLanguage() is { } savedLanguage)
+        {
+            LocalizationService.Instance.CurrentLanguage = savedLanguage;
+        }
+
+        _settingsService = settingsService;
         _startupRegistrationService = MainWindowViewModelDependenciesFactory.CreateStartupRegistrationService();
         _settingsPersistenceService = new MainWindowSettingsPersistenceService();
         _mainWindowDependencies = new Lazy<MainWindowViewModelDependencies>(() =>
@@ -61,6 +69,9 @@ public sealed class AppBootstrapper : IAsyncDisposable
                 }
             }));
     }
+
+    /// <summary>The main view model's first settings load: the saved settings are applied once it completes.</summary>
+    internal Task InitialSettingsLoadTask => _mainWindowViewModel.Value.InitialSettingsLoadTask;
 
     public MainWindow CreateMainWindow()
     {

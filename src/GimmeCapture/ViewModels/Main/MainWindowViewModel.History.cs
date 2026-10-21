@@ -9,6 +9,7 @@ using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -159,26 +160,69 @@ public partial class MainWindowViewModel
         Avalonia.Threading.Dispatcher.UIThread.Post(() => LoadHistoryAsync().Forget("History.AutoRefresh"));
     }
 
-    /// <summary>Loads the history index and rebuilds the (filtered) bound collection.</summary>
+    /// <summary>
+    /// Loads the history index into the panel. Entries already shown keep their view model and thumbnail, so a new
+    /// capture adds one card instead of rebuilding, and re-decoding, all of them.
+    /// </summary>
     public async Task LoadHistoryAsync()
     {
-        var items = await CaptureHistory.GetItemsAsync();
-        foreach (var old in _allHistoryItems)
-        {
-            old.Dispose();
-        }
-        _allHistoryItems = items.Select(i => new HistoryItemViewModel(
-            i,
+        var entries = await CaptureHistory.GetItemsAsync();
+        var (items, created, removed) = MergeHistoryItems(_allHistoryItems, entries, entry => new HistoryItemViewModel(
+            entry,
             OpenHistoryItemCommand,
             CopyHistoryItemCommand,
             RevealHistoryItemCommand,
-            RemoveHistoryItemCommand)).ToList();
+            RemoveHistoryItemCommand));
+        _allHistoryItems = items;
         ApplyHistoryFilter();
+        foreach (var gone in removed)
+        {
+            gone.Dispose();
+        }
+
+        foreach (var added in created)
+        {
+            added.LoadThumbnailAsync().Forget("History.Thumbnail");
+        }
+    }
+
+    /// <summary>
+    /// Pairs the history just read with the view models already shown: an entry keeps its view model, a new one gets
+    /// one from <paramref name="create"/>. Returns the list in index order, the view models created, and the ones no
+    /// longer listed, which the caller disposes once they are off screen.
+    /// </summary>
+    internal static (List<HistoryItemViewModel> Items, List<HistoryItemViewModel> Created, List<HistoryItemViewModel> Removed)
+        MergeHistoryItems(
+            IReadOnlyList<HistoryItemViewModel> current,
+            IReadOnlyList<CaptureHistoryItem> entries,
+            Func<CaptureHistoryItem, HistoryItemViewModel> create)
+    {
+        var shown = new Dictionary<string, HistoryItemViewModel>(current.Count);
+        foreach (var item in current)
+        {
+            shown.TryAdd(item.Id, item);
+        }
+
+        var items = new List<HistoryItemViewModel>(entries.Count);
+        var created = new List<HistoryItemViewModel>();
+        foreach (var entry in entries)
+        {
+            if (shown.Remove(entry.Id, out var kept))
+            {
+                items.Add(kept);
+                continue;
+            }
+
+            var added = create(entry);
+            items.Add(added);
+            created.Add(added);
+        }
+
+        return (items, created, shown.Values.ToList());
     }
 
     private void ApplyHistoryFilter()
     {
-        HistoryItems.Clear();
         bool wantVideo = HistoryKindFilter == CaptureHistoryKind.Video;
         IEnumerable<HistoryItemViewModel> query = _allHistoryItems.Where(i => i.IsVideo == wantVideo);
         if (!string.IsNullOrWhiteSpace(HistorySearchText))
@@ -187,10 +231,8 @@ public partial class MainWindowViewModel
             query = query.Where(i => i.FileName.Contains(term, StringComparison.OrdinalIgnoreCase));
         }
 
-        foreach (var item in SortHistory(query))
-        {
-            HistoryItems.Add(item);
-        }
+        // Only what changed: a new capture inserts one card, a sort moves them, instead of rebuilding every card.
+        ObservableListReconciler.Apply(HistoryItems, SortHistory(query).ToList());
         IsHistoryEmpty = HistoryItems.Count == 0;
     }
 
@@ -240,7 +282,7 @@ public partial class MainWindowViewModel
         if (item == null || item.IsVideo || !System.IO.File.Exists(item.FilePath)) return;
         try
         {
-            using var bitmap = new Bitmap(item.FilePath);
+            using var bitmap = await Task.Run(() => new Bitmap(item.FilePath));
             // A write that loses the race for the clipboard leaves the previous content in place — report that
             // rather than a copy that never landed.
             bool copied = await _clipboardService.CopyImageAsync(bitmap);

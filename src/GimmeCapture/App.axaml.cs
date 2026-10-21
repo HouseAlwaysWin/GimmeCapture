@@ -4,7 +4,6 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using GimmeCapture.Composition;
 using GimmeCapture.Services.Core.Infrastructure;
-using System.Diagnostics;
 
 namespace GimmeCapture;
 
@@ -22,7 +21,14 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var currentExePath = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+            StartupTrace.Mark("avalonia");
+
+            // The one failure the log could never show: the UI thread blocked long enough that a hotkey press
+            // only reaches the app seconds later, so "nothing happens" when the user asks for a capture. Started
+            // first so it also reports a slow start-up.
+            UiThreadStallMonitor.Start();
+
+            var currentExePath = Environment.ProcessPath ?? string.Empty;
             if (UpdateService.TryRedirectToPendingUpdatedInstance(AppVersionInfo.CurrentVersion, currentExePath))
             {
                 desktop.Shutdown();
@@ -39,30 +45,35 @@ public partial class App : Application
                 return;
             }
 
+            StartupTrace.Mark("pendingUpdate");
+
             _bootstrapper = new AppBootstrapper();
+            StartupTrace.Mark("bootstrapper");
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
             desktop.Exit += (_, _) =>
                 _bootstrapper.DisposeAsync().AsTask().GetAwaiter().GetResult();
             var hotkeyHost = _bootstrapper.CreateTrayHostWindow();
+            StartupTrace.Mark("viewModel");
+            TraceSettingsAppliedAsync(_bootstrapper.InitialSettingsLoadTask).Forget("Startup.Trace");
 
             var launchToTrayOnly = StartupService.ShouldLaunchToTrayOnly(Program.CommandLineArgs);
             if (!launchToTrayOnly)
             {
-                desktop.MainWindow = _bootstrapper.CreateMainWindow();
+                var mainWindow = _bootstrapper.CreateMainWindow();
+                StartupTrace.Mark("mainWindow");
+                mainWindow.Opened += OnMainWindowFirstOpened;
+                desktop.MainWindow = mainWindow;
                 hotkeyHost.Show();
             }
             else
             {
+                StartupTrace.LaunchedToTray();
                 desktop.MainWindow = hotkeyHost;
             }
 
             // Tray icon + native menu lifecycle lives in TrayController.
             _trayController = new TrayController(this, _bootstrapper, desktop);
             _trayController.Install();
-
-            // The one failure the log could never show: the UI thread blocked long enough that a hotkey press
-            // only reaches the app seconds later, so "nothing happens" when the user asks for a capture.
-            UiThreadStallMonitor.Start();
 
             // The first capture of a run used to load the overlay's code on the spot, on the UI thread.
             _bootstrapper.ScheduleCaptureOverlayWarmUp();
@@ -84,5 +95,30 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static void OnMainWindowFirstOpened(object? sender, EventArgs e)
+    {
+        if (sender is not Avalonia.Controls.Window window)
+        {
+            return;
+        }
+
+        window.Opened -= OnMainWindowFirstOpened;
+        StartupTrace.Mark("show");
+        // The first callback comes as the first frame starts; the second once that frame has been drawn.
+        window.RequestAnimationFrame(_ => window.RequestAnimationFrame(_ => StartupTrace.MarkFirstFrame()));
+    }
+
+    private static async System.Threading.Tasks.Task TraceSettingsAppliedAsync(System.Threading.Tasks.Task settingsLoad)
+    {
+        try
+        {
+            await settingsLoad;
+        }
+        finally
+        {
+            StartupTrace.MarkSettingsApplied();
+        }
     }
 }

@@ -11,8 +11,20 @@ namespace GimmeCapture.ViewModels.Main;
 
 public class RecordingSettingsViewModel : ViewModelBase
 {
+    private readonly Func<bool?> _hardwareAv1Answer;
+
     public RecordingSettingsViewModel()
+        : this(() => LibavRecordingEncoder.KnownHardwareAv1Usable)
     {
+    }
+
+    /// <param name="hardwareAv1Answer">
+    /// The hardware AV1 probe's answer so far, null until it has run. The real one is process-wide, so tests pass their
+    /// own rather than race every other test that starts the probe.
+    /// </param>
+    internal RecordingSettingsViewModel(Func<bool?> hardwareAv1Answer)
+    {
+        _hardwareAv1Answer = hardwareAv1Answer;
         RefreshWebcamDevicesCommand = ReactiveCommand.Create(RefreshWebcamDevices);
     }
 
@@ -123,7 +135,7 @@ public class RecordingSettingsViewModel : ViewModelBase
             new() { Value = VideoCodec.H265 },
         };
 
-        bool? av1Usable = LibavRecordingEncoder.KnownHardwareAv1Usable;
+        bool? av1Usable = _hardwareAv1Answer();
         if (av1Usable == true || (av1Usable is null && _offerAv1UntilProbed))
         {
             options.Add(new VideoCodecOption { Value = VideoCodec.Av1 });
@@ -138,7 +150,7 @@ public class RecordingSettingsViewModel : ViewModelBase
     /// </summary>
     public void SelectVideoCodec(VideoCodec codec)
     {
-        if (codec == VideoCodec.Av1 && LibavRecordingEncoder.KnownHardwareAv1Usable is null && !_offerAv1UntilProbed)
+        if (codec == VideoCodec.Av1 && _hardwareAv1Answer() is null && !_offerAv1UntilProbed)
         {
             _offerAv1UntilProbed = true;
             _videoCodecOptions = null;

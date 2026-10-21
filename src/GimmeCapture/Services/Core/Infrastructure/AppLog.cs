@@ -61,6 +61,15 @@ public static class AppLog
         Log.Information("{EventName}", SanitizeLabel(eventName));
     }
 
+    /// <summary>
+    /// Log an event that carries a message, such as a line of timings. Unlike <see cref="Information(string)"/>, whose
+    /// event name is cut at 120 characters, the message is written whole.
+    /// </summary>
+    public static void Information(string operation, string message)
+    {
+        Log.Information("{Operation}: {Message}", SanitizeLabel(operation), message ?? "(none)");
+    }
+
     public static void Warning(string operation, Exception exception)
     {
         Record(LogEventLevel.Warning, operation, exception);

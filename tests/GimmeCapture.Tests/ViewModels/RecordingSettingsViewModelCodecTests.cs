@@ -1,7 +1,5 @@
-using System;
 using System.Linq;
 using GimmeCapture.Models;
-using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.ViewModels.Main;
 using Xunit;
 
@@ -9,33 +7,29 @@ namespace GimmeCapture.Tests.ViewModels;
 
 /// <summary>
 /// The codec list used to run the hardware AV1 probe — loading FFmpeg first — the moment settings touched it, on the
-/// UI thread at startup (1.75 s measured). The probe now runs on the pool and reports back; these pin down what the
-/// list does before and after it answers, above all that a saved AV1 choice survives the wait. The probe's cached
-/// answer is process-wide, so every test sets it and puts it back.
+/// UI thread at startup (1.75 s measured). Now it only reads the probe's answer, and the probe runs on the pool and
+/// reports back. These pin down what the list does before and after the answer, above all that a saved AV1 choice
+/// survives the wait. Each test hands the view model its own answer: the real one is process-wide, and any test that
+/// builds the main view model starts the real probe, which overwrote it mid-test.
 /// </summary>
-public sealed class RecordingSettingsViewModelCodecTests : IDisposable
+public sealed class RecordingSettingsViewModelCodecTests
 {
-    private readonly bool? _originalAnswer = LibavRecordingEncoder.KnownHardwareAv1Usable;
+    private bool? _answer;
 
-    public void Dispose() => LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(_originalAnswer);
+    private RecordingSettingsViewModel NewViewModel() => new(() => _answer);
 
     [Fact]
-    public void ReadingTheCodecList_DoesNotRunTheProbe()
+    public void BeforeTheProbeAnswers_TheListOffersH264AndH265()
     {
-        LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(null);
-        var vm = new RecordingSettingsViewModel();
+        var vm = NewViewModel();
 
-        var options = vm.VideoCodecOptions;
-
-        Assert.Null(LibavRecordingEncoder.KnownHardwareAv1Usable);
-        Assert.Equal(new[] { VideoCodec.H264, VideoCodec.H265 }, options.Select(o => o.Value));
+        Assert.Equal(new[] { VideoCodec.H264, VideoCodec.H265 }, vm.VideoCodecOptions.Select(o => o.Value));
     }
 
     [Fact]
     public void SavedAv1_StaysSelected_WhileTheProbeHasNotAnswered()
     {
-        LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(null);
-        var vm = new RecordingSettingsViewModel();
+        var vm = NewViewModel();
 
         vm.SelectVideoCodec(VideoCodec.Av1);
 
@@ -47,11 +41,10 @@ public sealed class RecordingSettingsViewModelCodecTests : IDisposable
     [Fact]
     public void SavedAv1_IsKept_WhenTheProbeConfirmsIt()
     {
-        LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(null);
-        var vm = new RecordingSettingsViewModel();
+        var vm = NewViewModel();
         vm.SelectVideoCodec(VideoCodec.Av1);
 
-        LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(true);
+        _answer = true;
         vm.ApplyHardwareAv1ProbeResult();
 
         Assert.Contains(vm.VideoCodecOptions, o => o.Value == VideoCodec.Av1);
@@ -61,11 +54,10 @@ public sealed class RecordingSettingsViewModelCodecTests : IDisposable
     [Fact]
     public void SavedAv1_FallsBackToTheFirstCodec_WhenTheProbeRulesItOut()
     {
-        LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(null);
-        var vm = new RecordingSettingsViewModel();
+        var vm = NewViewModel();
         vm.SelectVideoCodec(VideoCodec.Av1);
 
-        LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(false);
+        _answer = false;
         vm.ApplyHardwareAv1ProbeResult();
 
         Assert.DoesNotContain(vm.VideoCodecOptions, o => o.Value == VideoCodec.Av1);
@@ -76,8 +68,8 @@ public sealed class RecordingSettingsViewModelCodecTests : IDisposable
     [Fact]
     public void ProbeAnsweringBeforeSettingsLoad_StillGivesTheRightSelection()
     {
-        LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(false);
-        var vm = new RecordingSettingsViewModel();
+        _answer = false;
+        var vm = NewViewModel();
         vm.ApplyHardwareAv1ProbeResult();
 
         vm.SelectVideoCodec(VideoCodec.Av1);
@@ -89,11 +81,10 @@ public sealed class RecordingSettingsViewModelCodecTests : IDisposable
     [Fact]
     public void OtherCodecs_AreUntouchedByTheProbe()
     {
-        LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(null);
-        var vm = new RecordingSettingsViewModel();
+        var vm = NewViewModel();
         vm.SelectVideoCodec(VideoCodec.H265);
 
-        LibavRecordingEncoder.SetKnownHardwareAv1UsableForTest(true);
+        _answer = true;
         vm.ApplyHardwareAv1ProbeResult();
 
         Assert.Equal(VideoCodec.H265, vm.VideoCodec);

@@ -45,10 +45,6 @@ internal static unsafe class LibavRecordingEncoder
         _ => null
     };
 
-    /// <summary>Test seam: pretends the probe has answered (or not yet run), without loading FFmpeg.</summary>
-    internal static void SetKnownHardwareAv1UsableForTest(bool? usable) =>
-        System.Threading.Volatile.Write(ref _hardwareAv1State, usable switch { true => 1, false => 2, null => 0 });
-
     public static bool HasUsableHardwareAv1Encoder()
     {
         int cached = System.Threading.Volatile.Read(ref _hardwareAv1State);

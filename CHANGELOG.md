@@ -47,6 +47,19 @@
 
 ### ⚡ Performance
 
+- **The app opens faster.** From launch to the main window's first frame took 2.4–2.6 s, 2.1–2.2 s of it with the
+  UI thread held; it now takes 1.9–2.0 s, with 1.6 s held (3 launches each in English and Chinese).
+  - The window is built in the saved language from the start. It used to be laid out in English and then again,
+    CJK font included, once the settings loaded.
+  - The Snip, Compress, Hotkeys and History tabs are built the first time they are opened, and the Compress tab's
+    queue and settings are restored then too.
+  - Start-up no longer searches the whole data folder for a pending update.
+  - The 1.7 MB window icon is no longer decoded four times; smaller copies are used.
+  - Each launch now logs `Startup.Timings`, so a slow start shows where the time went.
+- **The History tab opens without a freeze.** With 78 captures, opening it held the UI thread for 0.8–1.4 s, and
+  would have held it about 3 s at the 300 captures kept. Each new capture while it was open froze it again for about
+  0.4 s, while every card and thumbnail was rebuilt. Now thumbnails load in the background, a refresh keeps the
+  cards it already has, and only the rows on screen are built. The tab opens in 0.16–0.19 s.
 - **Opening a capture no longer waits for a settings write**, memory is only handed back to Windows after five
   minutes of inactivity instead of seconds after every capture (the next capture had to page it all back in),
   and OCR models stay loaded for two minutes between captures instead of five seconds.

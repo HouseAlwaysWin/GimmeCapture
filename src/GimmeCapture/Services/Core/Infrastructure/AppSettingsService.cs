@@ -213,39 +213,93 @@ public class AppSettingsService : IAppSettingsService
 
     public async Task LoadAsync()
     {
-        if (BaseDataDirectory != RuntimeExecutableDirectory && File.Exists(ConfigPath))
+        ConfigSource? source = FindConfigSource();
+        if (source is not { } found)
         {
-            await LoadFromPathAsync(ConfigPath);
+            DebugLog("Loading phase. No saved config: DEFAULT");
             return;
         }
 
-        bool appDataExists = File.Exists(RuntimeVersionedAppDataConfigPath);
-        bool localExists = File.Exists(RuntimeLocalConfigPath);
-        bool legacyAppDataExists = File.Exists(LegacyAppDataConfigPath);
-        string? targetPath = null;
-        string? saveDirectoryOverride = null;
+        DebugLog($"Loading phase. Choosing: {found.Path}");
+        UseConfigSource(found);
+        await LoadFromPathAsync(found.Path, found.SaveDirectoryOverride);
+    }
 
-        if (appDataExists)
+    /// <summary>
+    /// The saved UI language, read without loading or migrating the rest of the settings. The windows are built
+    /// before the settings load, and building them in the wrong language costs the main window a second full
+    /// layout once the saved one is applied. Null on a first run or when the config cannot be read.
+    /// </summary>
+    public Language? PeekSavedLanguage()
+    {
+        if (FindConfigSource() is not { } source)
         {
-            targetPath = RuntimeVersionedAppDataConfigPath;
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllBytes(source.Path));
+            if (!document.RootElement.TryGetProperty(nameof(AppSettings.Language), out JsonElement value))
+            {
+                return null;
+            }
+
+            if (value.ValueKind == JsonValueKind.String && Enum.TryParse(value.GetString(), out Language named))
+            {
+                return named;
+            }
+
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int number) && Enum.IsDefined(typeof(Language), number))
+            {
+                return (Language)number;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            AppLog.Warning("Settings.PeekLanguage", ex);
+        }
+
+        return null;
+    }
+
+    // The config file a load reads, in order: one in an explicitly chosen data directory, this version's AppData
+    // config, a config next to the executable, then the config from before configs were versioned. Null on a first
+    // run. Only reads; UseConfigSource applies the choice.
+    private ConfigSource? FindConfigSource()
+    {
+        if (BaseDataDirectory != RuntimeExecutableDirectory && File.Exists(ConfigPath))
+        {
+            return new ConfigSource(ConfigPath, UsesVersionedAppData: false, SaveDirectoryOverride: null);
+        }
+
+        if (File.Exists(RuntimeVersionedAppDataConfigPath))
+        {
+            return new ConfigSource(RuntimeVersionedAppDataConfigPath, UsesVersionedAppData: true, SaveDirectoryOverride: null);
+        }
+
+        if (File.Exists(RuntimeLocalConfigPath))
+        {
+            return new ConfigSource(RuntimeLocalConfigPath, UsesVersionedAppData: false, RuntimeVersionedAppDataPath);
+        }
+
+        if (File.Exists(LegacyAppDataConfigPath))
+        {
+            return new ConfigSource(LegacyAppDataConfigPath, UsesVersionedAppData: false, RuntimeVersionedAppDataPath);
+        }
+
+        return null;
+    }
+
+    private void UseConfigSource(ConfigSource source)
+    {
+        if (source.UsesVersionedAppData)
+        {
             BaseDataDirectory = RuntimeVersionedAppDataPath;
         }
-        else if (localExists)
-        {
-            targetPath = RuntimeLocalConfigPath;
-            saveDirectoryOverride = RuntimeVersionedAppDataPath;
-        }
-        else if (legacyAppDataExists)
-        {
-            targetPath = LegacyAppDataConfigPath;
-            saveDirectoryOverride = RuntimeVersionedAppDataPath;
-        }
-
-        DebugLog($"Loading phase. Versioned AppData exists: {appDataExists}, Local exists: {localExists}, Legacy AppData exists: {legacyAppDataExists}. Choosing: {targetPath ?? "DEFAULT"}");
-
-        if (targetPath != null)
-            await LoadFromPathAsync(targetPath, saveDirectoryOverride);
     }
+
+    private readonly record struct ConfigSource(string Path, bool UsesVersionedAppData, string? SaveDirectoryOverride);
 
     /// <summary>
     /// Copies a freshly loaded <see cref="AppSettings"/> into the live instance. EVERY persisted property needs a
@@ -402,36 +456,13 @@ public class AppSettingsService : IAppSettingsService
 
     public void LoadSync()
     {
-        if (BaseDataDirectory != RuntimeExecutableDirectory && File.Exists(ConfigPath))
+        if (FindConfigSource() is not { } source)
         {
-            LoadFromPathSync(ConfigPath);
             return;
         }
 
-        bool appDataExists = File.Exists(RuntimeVersionedAppDataConfigPath);
-        bool localExists = File.Exists(RuntimeLocalConfigPath);
-        bool legacyAppDataExists = File.Exists(LegacyAppDataConfigPath);
-        string? targetPath = null;
-        string? saveDirectoryOverride = null;
-
-        if (appDataExists)
-        {
-            targetPath = RuntimeVersionedAppDataConfigPath;
-            BaseDataDirectory = RuntimeVersionedAppDataPath;
-        }
-        else if (localExists)
-        {
-            targetPath = RuntimeLocalConfigPath;
-            saveDirectoryOverride = RuntimeVersionedAppDataPath;
-        }
-        else if (legacyAppDataExists)
-        {
-            targetPath = LegacyAppDataConfigPath;
-            saveDirectoryOverride = RuntimeVersionedAppDataPath;
-        }
-
-        if (targetPath != null)
-            LoadFromPathSync(targetPath, saveDirectoryOverride);
+        UseConfigSource(source);
+        LoadFromPathSync(source.Path, source.SaveDirectoryOverride);
     }
 
     private async Task LoadFromPathAsync(string path, string? saveDirectoryOverride = null)

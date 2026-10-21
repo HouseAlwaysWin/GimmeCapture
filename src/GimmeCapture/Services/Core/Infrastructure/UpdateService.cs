@@ -884,21 +884,8 @@ exit /b 1
 
     private static IEnumerable<PendingUpdateState> EnumeratePendingUpdateStates()
     {
-        var rootDirectory = AppStoragePaths.GetRootDirectory();
-        if (!Directory.Exists(rootDirectory))
+        foreach (var path in FindPendingUpdateStatePaths(AppStoragePaths.GetRootDirectory()))
         {
-            yield break;
-        }
-
-        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in Directory.EnumerateFiles(rootDirectory, "pending-update.json", SearchOption.AllDirectories))
-        {
-            var normalizedPath = Path.GetFullPath(path);
-            if (!seenPaths.Add(normalizedPath))
-            {
-                continue;
-            }
-
             PendingUpdateState? state;
             try
             {
@@ -912,6 +899,36 @@ exit /b 1
             if (state != null)
             {
                 yield return state;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every pending-update state file: one per install in its instance folder, plus the one older builds kept at
+    /// the root. Those are the only places they are written, so start-up looks there instead of walking the whole
+    /// data folder (every version's config, history and AI models) before any window shows.
+    /// </summary>
+    internal static IEnumerable<string> FindPendingUpdateStatePaths(string rootDirectory)
+    {
+        string fileName = Path.GetFileName(AppStoragePaths.GetLegacyPendingUpdateStatePath());
+        string legacyPath = Path.Combine(rootDirectory, fileName);
+        if (File.Exists(legacyPath))
+        {
+            yield return legacyPath;
+        }
+
+        string instancesDirectory = Path.Combine(rootDirectory, "instances");
+        if (!Directory.Exists(instancesDirectory))
+        {
+            yield break;
+        }
+
+        foreach (string instanceDirectory in Directory.EnumerateDirectories(instancesDirectory))
+        {
+            string path = Path.Combine(instanceDirectory, fileName);
+            if (File.Exists(path))
+            {
+                yield return path;
             }
         }
     }

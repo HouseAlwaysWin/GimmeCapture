@@ -9,7 +9,7 @@
         x:Class="GimmeCapture.Views.Main.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="GimmeCapture!!"
-        Icon="avares://GimmeCapture/Assets/kitsune_icon.png"
+        Icon="avares://GimmeCapture/Assets/kitsune_icon_256.png"
         Background="{DynamicResource GothicBlackBrush}"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
         xmlns:c="using:GimmeCapture.Views.Controls"
@@ -60,7 +60,7 @@
         <!-- Title drag area only (caption buttons are a sibling overlay so resize strips never steal clicks) -->
         <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Background="Transparent" Height="36"
               PointerPressed="TitleBar_PointerPressed">
-            <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Width="18" Height="18" Margin="12,0,0,0" VerticalAlignment="Center"/>
+            <Image Source="avares://GimmeCapture/Assets/kitsune_icon_64.png" Width="18" Height="18" Margin="12,0,0,0" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" Text="GimmeCapture!!"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        FontWeight="SemiBold" FontSize="13" Foreground="White" LetterSpacing="1"/>
@@ -75,7 +75,7 @@
             
             <!-- 擷圖 (Snip) -->
             <TabItem Header="{Binding [TabSnip], Source={x:Static services:LocalizationService.Instance}}">
-                <tabs:SettingsSnipTab/>
+                <ContentControl x:Name="SnipTabHost"/>
             </TabItem>
 
             <!-- 錄影 (Recording) -->
@@ -85,7 +85,7 @@
 
             <!-- 壓縮 (Compress) -->
             <TabItem Header="{Binding [TabCompress], Source={x:Static services:LocalizationService.Instance}}">
-                <tabs:SettingsCompressTab/>
+                <ContentControl x:Name="CompressTabHost"/>
             </TabItem>
 
             <!-- 翻譯設定 (Translation) -->
@@ -95,7 +95,7 @@
 
             <!-- 控制 (Control/Hotkeys) -->
             <TabItem Header="{Binding [TabControl], Source={x:Static services:LocalizationService.Instance}}">
-                <tabs:SettingsHotkeysTab/>
+                <ContentControl x:Name="HotkeysTabHost"/>
             </TabItem>
             
             <!-- 模組管理 (Modules) -->
@@ -105,7 +105,7 @@
             
             <!-- 歷史 (History) -->
             <TabItem Header="{Binding [TabHistory], Source={x:Static services:LocalizationService.Instance}}">
-                <tabs:SettingsHistoryTab/>
+                <ContentControl x:Name="HistoryTabHost"/>
             </TabItem>
 
             <!-- 關於 (About) -->

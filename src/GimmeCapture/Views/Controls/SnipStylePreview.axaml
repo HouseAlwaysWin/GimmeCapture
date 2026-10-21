@@ -22,7 +22,7 @@
                 BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
             <Grid>
                 <!-- Mock Background -->
-                <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
+                <Image Source="avares://GimmeCapture/Assets/kitsune_icon_256.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
                 
                 <!-- Selection Preview -->
                 <Grid Margin="15" VerticalAlignment="Center" HorizontalAlignment="Center" ClipToBounds="False">
