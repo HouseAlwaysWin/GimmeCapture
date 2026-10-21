@@ -192,6 +192,10 @@ pushing again).
   `HotkeyIds`, `HotkeyRouterService`, `HotkeyMappingService`, `HotkeyTagNames`.
   Mapping is auto-generated via expression trees (no reflection). Register new
   hotkeys through these helpers, not ad hoc Win32 calls.
+- `WindowsGlobalHotkeyService` keeps its keyboard hook, message window and raw-input sink on its own
+  message-loop thread (`Win32HotkeyThread`) and posts presses to the UI thread. Windows holds every key typed
+  anywhere until that hook returns, and silently removes a hook that is too slow, so nothing on that thread may
+  wait for the UI thread. The match logic is the pure `LowLevelHotkeyMatcher`.
 
 ### Media / FFmpeg
 - Recording is split across `RecordingService.*` partials and `NativeFFmpeg/`

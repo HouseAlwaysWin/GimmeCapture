@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Windows;
 using Moq;
@@ -15,6 +17,12 @@ public class HotkeyServiceTests
         public int RegCallCount = 0;
         public int UnregCallCount = 0;
         public List<(int id, uint mods, uint vkey)> RegHistory = new();
+
+        // Presses reach the "UI thread" through postToUi; by default they run at once.
+        public TestableHotkeyService(Action<Action>? postToUi = null)
+            : base(postToUi ?? (action => action()))
+        {
+        }
 
         public void SetHandle(IntPtr handle)
         {
@@ -240,5 +248,48 @@ public class HotkeyServiceTests
         service.Register(HotkeyIds.Snip, "PrintScreen");
 
         Assert.Equal("PrintScreen", service.FirstHookOnlyHotkey());
+    }
+
+    private const int VkF1 = 0x70;
+
+    [Fact]
+    public void AHotkeyPress_IsSwallowed_AndHandedToTheUiThreadWithItsPressTime()
+    {
+        // The hook gives the key back to Windows at once; the press itself runs later, on the UI thread.
+        var posted = new List<Action>();
+        var service = new TestableHotkeyService(posted.Add);
+        service.SetHandle(new IntPtr(1234));
+        service.Register(1, "F1");
+        HotkeyPress? received = null;
+        service.OnHotkeyPressed = press => received = press;
+
+        long before = Stopwatch.GetTimestamp();
+        bool swallowed = service.ProcessKeyEventForTest(VkF1, isKeyDown: true, isKeyUp: false);
+
+        Assert.True(swallowed);
+        Assert.Null(received);
+        Assert.Single(posted)();
+        Assert.Equal(1, received?.Id);
+        Assert.InRange(received!.Value.PressedAtTimestamp, before, Stopwatch.GetTimestamp());
+    }
+
+    [Fact]
+    public void WhileSuspended_TheHookLetsAnExistingHotkeyThrough_AndMatchesAgainAfterResume()
+    {
+        // The hotkeys page suspends every hotkey while it records a new combo. The hook kept matching them anyway, so
+        // pressing an existing hotkey there fired it and swallowed the key the page was trying to record.
+        var posted = new List<Action>();
+        var service = new TestableHotkeyService(posted.Add);
+        service.SetHandle(new IntPtr(1234));
+        service.Register(1, "F1");
+
+        service.SuspendAll();
+        Assert.False(service.ProcessKeyEventForTest(VkF1, isKeyDown: true, isKeyUp: false));
+        service.ProcessKeyEventForTest(VkF1, isKeyDown: false, isKeyUp: true);
+        Assert.Empty(posted);
+
+        service.ResumeAll();
+        Assert.True(service.ProcessKeyEventForTest(VkF1, isKeyDown: true, isKeyUp: false));
+        Assert.Single(posted);
     }
 }

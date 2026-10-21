@@ -13,6 +13,14 @@
 
 ### 🛡️ Reliability
 
+- **A busy app no longer slows down typing everywhere else, and its hotkeys keep working.** The keyboard hook that
+  serves the hotkeys ran on the app's UI thread, and Windows holds every key typed anywhere until that hook returns.
+  So whenever the UI was busy, typing in every program stalled: a key was held up about 0.6 s, and other programs'
+  keyboard hooks missed it. Windows also quietly removes a hook that keeps it waiting, which switched off the
+  hotkeys only the hook can serve (a PrintScreen owned by the Snipping Tool, a combo another app holds) until the
+  next launch. The hook now has its own thread, and with the UI blocked a key is held up 1–2 ms.
+- **Recording a new hotkey no longer triggers the old ones.** While the hotkeys page waits for a new combo, an
+  existing hotkey pressed there fired its action and swallowed the key, so it could not be recorded.
 - **Settings you change now survive a restart.** 24 settings and hotkeys were written to the config correctly but
   never read back, so every launch quietly reset them to their defaults — and the next save wrote the defaults
   over your choice. Affected, among others: *Freeze screen on screenshot*, *Don't steal focus when capturing*,

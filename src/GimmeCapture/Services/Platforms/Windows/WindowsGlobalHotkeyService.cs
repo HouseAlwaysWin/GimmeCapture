@@ -1,15 +1,28 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using Avalonia.Controls;
-using Avalonia.Platform;
+using Avalonia.Threading;
 
 namespace GimmeCapture.Services.Platforms.Windows;
 
+/// <summary>
+/// Global hotkeys on Windows, from three sources: RegisterHotKey (WM_HOTKEY), a low-level keyboard hook that also
+/// covers combos another app has registered, and a raw-input sink. All three, and the foreground monitor behind the
+/// elevated-window notice, live on a <see cref="Win32HotkeyThread"/> and so does every field they touch: public
+/// calls hand their work to that thread, and presses go to the UI thread by posting. Before
+/// <see cref="Initialize"/> and after <see cref="Dispose"/> there is no thread, and calls run where they are made.
+/// </summary>
 public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 {
+    // A public call waits this long for the hotkey thread, which only ever runs short native calls.
+    private static readonly TimeSpan HotkeyThreadCallTimeout = TimeSpan.FromMilliseconds(500);
+    private const uint HookLateThresholdMs = 100;
+
     private const int WM_HOTKEY = 0x0312;
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
@@ -24,23 +37,22 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private readonly HashSet<int> _registeredIds = new();
     private readonly Dictionary<int, string> _pendingRegistrations = new();
     private readonly Dictionary<int, (uint Mods, uint Key)> _registeredCombos = new();
-    private readonly HashSet<int> _pressedVirtualKeys = new();
-    private readonly Dictionary<int, long> _lastHotkeyInvokeTicks = new();
+    private readonly LowLevelHotkeyMatcher _matcher = new();
     private bool _isSuspended;
-    private bool _llShiftDown;
-    private bool _llCtrlDown;
-    private bool _llAltDown;
     private readonly string _messageWindowClassName = $"GimmeCaptureHotkeyMessageWindow_{Environment.ProcessId}_{Guid.NewGuid():N}";
     private ushort _messageWindowClassAtom;
     private IntPtr _messageWindowInstance = IntPtr.Zero;
-    
-    // Action to fire when hotkey is pressed, passing the ID
-    public Action<int>? OnHotkeyPressed { get; set; }
+
+    private readonly Action<Action> _postToUi;
+    private Win32HotkeyThread? _hotkeyThread;
+    private long _lowLevelHookCalls;
+    private long _lastHookLateLogTicks;
+
+    public Action<HotkeyPress>? OnHotkeyPressed { get; set; }
     public Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
     public Action<string>? OnElevatedWindowFocused { get; set; }
-    
-    private IntPtr _oldWndProc = IntPtr.Zero;
-    private WndProc? _newWndProc; // Keep reference to prevent GC
+
+    // The delegates native code calls back are kept in fields so they live as long as the service.
     private WndProc? _messageWndProc;
     private IntPtr _llKeyboardHook = IntPtr.Zero;
     private LowLevelKeyboardProc? _llKeyboardDelegate;
@@ -184,8 +196,8 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string lpModuleName);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vKey);
@@ -235,51 +247,89 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern IntPtr GetSidSubAuthorityCount(IntPtr pSid);
 
+    public WindowsGlobalHotkeyService()
+        : this(action => Dispatcher.UIThread.Post(action))
+    {
+    }
+
+    /// <param name="postToUi">How a press reaches the UI thread; tests pass their own.</param>
+    internal WindowsGlobalHotkeyService(Action<Action> postToUi)
+    {
+        _postToUi = postToUi;
+    }
+
     public void Initialize(Window window)
     {
         if (!OperatingSystem.IsWindows()) return;
 
+        if (_hotkeyThread == null)
+        {
+            var thread = new Win32HotkeyThread("GimmeCapture.Hotkeys");
+            if (!thread.Start(InstallNativeHooks, TimeSpan.FromSeconds(5)))
+            {
+                AppLog.Warning("GlobalHotkey.ThreadStart", "The hotkey thread did not finish starting within 5 s.");
+            }
+
+            _hotkeyThread = thread;
+        }
+
+        foreach (var kvp in RunOnHotkeyThread(TakePendingRegistrations, new List<KeyValuePair<int, string>>()))
+        {
+            Register(kvp.Key, kvp.Value);
+        }
+    }
+
+    // Runs on the hotkey thread as it starts.
+    private void InstallNativeHooks()
+    {
         EnsureMessageWindow();
         InstallLowLevelKeyboardHook();
         InstallForegroundMonitor();
+    }
 
+    private List<KeyValuePair<int, string>> TakePendingRegistrations()
+    {
+        // Taken as a snapshot because Register mutates the pending dictionary.
+        var pending = new List<KeyValuePair<int, string>>();
         if (_handle != IntPtr.Zero)
         {
-            if (_pendingRegistrations.Count == 0)
-            {
-                return;
-            }
-
-            // Register from a snapshot because Register/Unregister mutates the pending dictionary.
-            var pending = new List<KeyValuePair<int, string>>(_pendingRegistrations);
+            pending.AddRange(_pendingRegistrations);
             _pendingRegistrations.Clear();
-            foreach (var kvp in pending)
-            {
-                Register(kvp.Key, kvp.Value);
-            }
         }
+
+        return pending;
     }
 
     public void Register(int id, string hotkey)
     {
         if (!OperatingSystem.IsWindows()) return;
-        
+
+        int? failure = RunOnHotkeyThread(() => RegisterCore(id, hotkey), (int?)null);
+        if (failure is int win32Error)
+        {
+            OnHotkeyRegistrationFailed?.Invoke(id, hotkey, win32Error);
+        }
+    }
+
+    // The Win32 error when RegisterHotKey refused the combo (the hook still serves it), otherwise null.
+    private int? RegisterCore(int id, string hotkey)
+    {
         _hotkeyStrings[id] = hotkey;
 
         if (_isSuspended)
         {
             _suspendedHotkeys[id] = hotkey;
             System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Queueing registration for ID {id} while suspended: {hotkey}");
-            return;
+            return null;
         }
 
         if (_handle == IntPtr.Zero)
         {
             _pendingRegistrations[id] = hotkey;
-            return;
+            return null;
         }
-        
-        Unregister(id);
+
+        UnregisterCore(id);
 
         (uint modifiers, uint vkey) = ParseHotkey(hotkey);
 
@@ -287,27 +337,27 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         {
             _registeredCombos.Remove(id);
             System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Unsupported hotkey '{hotkey}' for ID {id}.");
-            return;
+            return null;
         }
 
         _registeredCombos[id] = (modifiers, vkey);
 
-        bool success = NativeRegisterHotKey(_handle, id, modifiers, vkey);
-        if (success)
+        if (NativeRegisterHotKey(_handle, id, modifiers, vkey))
         {
             _registeredIds.Add(id);
             WriteDebugLog($"registered id={id} hotkey='{hotkey}' mods={modifiers} vk={vkey} handle=0x{_handle.ToInt64():X}");
+            return null;
         }
-        else
-        {
-            int error = Marshal.GetLastWin32Error();
-            System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Failed to register ID {id} as '{hotkey}' (mods={modifiers}, vk={vkey}, win32={error}).");
-            WriteDebugLog($"register failed id={id} hotkey='{hotkey}' mods={modifiers} vk={vkey} win32={error} handle=0x{_handle.ToInt64():X}");
-            OnHotkeyRegistrationFailed?.Invoke(id, hotkey, error);
-        }
+
+        int error = Marshal.GetLastWin32Error();
+        System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Failed to register ID {id} as '{hotkey}' (mods={modifiers}, vk={vkey}, win32={error}).");
+        WriteDebugLog($"register failed id={id} hotkey='{hotkey}' mods={modifiers} vk={vkey} win32={error} handle=0x{_handle.ToInt64():X}");
+        return error;
     }
-    
-    public void Unregister(int id)
+
+    public void Unregister(int id) => RunOnHotkeyThread(() => UnregisterCore(id));
+
+    private void UnregisterCore(int id)
     {
         if (_handle != IntPtr.Zero && _registeredIds.Contains(id))
         {
@@ -315,7 +365,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             _registeredIds.Remove(id);
         }
         _registeredCombos.Remove(id);
-        _lastHotkeyInvokeTicks.Remove(id);
+        _matcher.Forget(id);
         _pendingRegistrations.Remove(id);
         if (_isSuspended)
         {
@@ -326,7 +376,9 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private readonly Dictionary<int, string> _hotkeyStrings = new();
     private readonly Dictionary<int, string> _suspendedHotkeys = new();
 
-    public void SuspendAll()
+    public void SuspendAll() => RunOnHotkeyThread(SuspendCore);
+
+    private void SuspendCore()
     {
         if (_handle == IntPtr.Zero) return;
         _isSuspended = true;
@@ -344,20 +396,29 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     public void ResumeAll()
     {
-        if (_handle == IntPtr.Zero) return;
-        
-        _isSuspended = false;
-        var toResume = new Dictionary<int, string>(_suspendedHotkeys);
-        _suspendedHotkeys.Clear();
+        // Re-registered through Register, so a combo refused now still raises OnHotkeyRegistrationFailed.
+        foreach (var kvp in RunOnHotkeyThread(TakeSuspendedHotkeys, new List<KeyValuePair<int, string>>()))
+        {
+            Register(kvp.Key, kvp.Value);
+        }
+    }
 
-        foreach (var kvp in toResume)
+    private List<KeyValuePair<int, string>> TakeSuspendedHotkeys()
+    {
+        var toResume = new List<KeyValuePair<int, string>>();
+        if (_handle == IntPtr.Zero) return toResume;
+
+        _isSuspended = false;
+        foreach (var kvp in _suspendedHotkeys)
         {
             // Always use the latest value from _hotkeyStrings if it exists
             string valueToRegister = _hotkeyStrings.TryGetValue(kvp.Key, out var current) ? current : kvp.Value;
-            Register(kvp.Key, valueToRegister);
+            toResume.Add(new KeyValuePair<int, string>(kvp.Key, valueToRegister));
         }
-        
+        _suspendedHotkeys.Clear();
+
         System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Resumed {toResume.Count} hotkeys");
+        return toResume;
     }
 
     private void UnregisterAll()
@@ -369,8 +430,32 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
         _registeredIds.Clear();
         _registeredCombos.Clear();
-        _lastHotkeyInvokeTicks.Clear();
+        _matcher.Reset();
         _pendingRegistrations.Clear();
+    }
+
+    private void RunOnHotkeyThread(Action work)
+    {
+        var thread = _hotkeyThread;
+        if (thread == null)
+        {
+            work();
+            return;
+        }
+
+        thread.TryInvoke(work, HotkeyThreadCallTimeout);
+    }
+
+    // On timeout the work still runs once the thread gets to it; the caller gets the fallback.
+    private T RunOnHotkeyThread<T>(Func<T> work, T fallback)
+    {
+        var thread = _hotkeyThread;
+        if (thread == null)
+        {
+            return work();
+        }
+
+        return thread.TryInvoke(work, HotkeyThreadCallTimeout, out T result) ? result : fallback;
     }
 
     private (uint mods, uint vkey) ParseHotkey(string hk)
@@ -379,57 +464,6 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         return (mods, vkey);
     }
     
-    // --- Window Subclassing ---
-    
-    [DllImport("user32.dll", SetLastError = true, EntryPoint = "SetWindowLongPtr")]
-    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll", SetLastError = true, EntryPoint = "SetWindowLong")]
-    private static extern IntPtr SetWindowLong32(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll", CallingConvention = CallingConvention.StdCall)]
-    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    private const int GWLP_WNDPROC = -4;
-
-    private static IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong)
-    {
-        if (IntPtr.Size == 8)
-            return SetWindowLongPtr64(hWnd, nIndex, dwNewLong);
-        else
-            return SetWindowLong32(hWnd, nIndex, dwNewLong);
-    }
-
-    private void InstallWndProcHook()
-    {
-        _newWndProc = new WndProc(CustomWndProc);
-        IntPtr newWndProcPtr = Marshal.GetFunctionPointerForDelegate(_newWndProc);
-        _oldWndProc = SetWindowLongPtr(_handle, GWLP_WNDPROC, newWndProcPtr);
-    }
-    
-    private void RemoveWndProcHook()
-    {
-        if (_oldWndProc != IntPtr.Zero && _handle != IntPtr.Zero)
-        {
-            SetWindowLongPtr(_handle, GWLP_WNDPROC, _oldWndProc);
-            _oldWndProc = IntPtr.Zero;
-        }
-    }
-
-    private IntPtr CustomWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
-    {
-        if (msg == WM_HOTKEY)
-        {
-            int id = wParam.ToInt32();
-            if (_registeredIds.Contains(id))
-            {
-                InvokeHotkey(id, "wm_hotkey");
-            }
-        }
-        
-        return CallWindowProc(_oldWndProc, hWnd, msg, wParam, lParam);
-    }
-
     private void EnsureMessageWindow()
     {
         if (_handle != IntPtr.Zero)
@@ -438,14 +472,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
 
         _messageWndProc = MessageWindowProc;
-        using var curProcess = System.Diagnostics.Process.GetCurrentProcess();
-        using var curModule = curProcess.MainModule;
-        if (curModule?.ModuleName == null)
-        {
-            return;
-        }
-
-        _messageWindowInstance = GetModuleHandle(curModule.ModuleName);
+        _messageWindowInstance = GetModuleHandle(null);
         var wndClass = new WNDCLASSEX
         {
             cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
@@ -490,17 +517,25 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     private IntPtr MessageWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
-        if (msg == WM_HOTKEY)
+        // Called from native code: an exception escaping here would end the process.
+        try
         {
-            int id = wParam.ToInt32();
-            if (_registeredIds.Contains(id))
+            if (msg == WM_HOTKEY)
             {
-                InvokeHotkey(id, "message_window");
+                int id = wParam.ToInt32();
+                if (_registeredIds.Contains(id) && _matcher.TryFire(id, Environment.TickCount64))
+                {
+                    FireHotkey(id, "message_window");
+                }
+            }
+            else if (msg == WM_INPUT)
+            {
+                HandleRawKeyboardInput(lParam);
             }
         }
-        else if (msg == WM_INPUT)
+        catch (Exception ex)
         {
-            HandleRawKeyboardInput(lParam);
+            AppLog.Error("GlobalHotkey.MessageWindow", ex);
         }
 
         return DefWindowProc(hWnd, msg, wParam, lParam);
@@ -559,7 +594,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             int msg = unchecked((int)input.Keyboard.Message);
             bool isKeyDown = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
             bool isKeyUp = msg == WM_KEYUP || msg == WM_SYSKEYUP;
-            ProcessFallbackKeyboardEvent(vkCode, isKeyDown, isKeyUp, "raw_input");
+            ProcessKeyboardEvent(vkCode, isKeyDown, isKeyUp, "raw_input");
         }
         finally
         {
@@ -575,14 +610,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
 
         _llKeyboardDelegate = LowLevelKeyboardHookCallback;
-        using var curProcess = System.Diagnostics.Process.GetCurrentProcess();
-        using var curModule = curProcess.MainModule;
-        if (curModule?.ModuleName == null)
-        {
-            return;
-        }
-
-        var moduleHandle = GetModuleHandle(curModule.ModuleName);
+        var moduleHandle = GetModuleHandle(null);
         _llKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, _llKeyboardDelegate, moduleHandle, 0);
         if (_llKeyboardHook == IntPtr.Zero)
         {
@@ -641,6 +669,19 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     private void ForegroundEventCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
     {
+        // Called from native code: an exception escaping here would end the process.
+        try
+        {
+            HandleForegroundChange(eventType, hwnd);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("GlobalHotkey.ForegroundMonitor", ex);
+        }
+    }
+
+    private void HandleForegroundChange(uint eventType, IntPtr hwnd)
+    {
         if (eventType != EVENT_SYSTEM_FOREGROUND || hwnd == IntPtr.Zero)
         {
             return;
@@ -685,15 +726,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         _notifiedElevatedPids.Add(pid);
         _lastElevationNoticeTicks = now;
         WriteDebugLog($"elevated foreground pid={pid} detected; raising hotkey-blocked notice for {blockedHotkey}");
-
-        try
-        {
-            OnElevatedWindowFocused?.Invoke(blockedHotkey);
-        }
-        catch (Exception ex)
-        {
-            WriteDebugLog($"elevated notice callback error={ex}");
-        }
+        PostToUi(() => OnElevatedWindowFocused?.Invoke(blockedHotkey), "GlobalHotkey.ElevatedNotice");
     }
 
     /// <summary>
@@ -840,10 +873,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         UnhookWindowsHookEx(_llKeyboardHook);
         _llKeyboardHook = IntPtr.Zero;
         _llKeyboardDelegate = null;
-        _pressedVirtualKeys.Clear();
-        _llShiftDown = false;
-        _llCtrlDown = false;
-        _llAltDown = false;
+        _matcher.Reset();
     }
 
     private IntPtr LowLevelKeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -868,12 +898,15 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
         }
 
+        Interlocked.Increment(ref _lowLevelHookCalls);
         int msg = wParam.ToInt32();
         int vkCode = Marshal.ReadInt32(lParam);
+        // KBDLLHOOKSTRUCT is vkCode, scanCode, flags, then time: when the key was pressed, in GetTickCount terms.
+        ReportIfLate(unchecked((uint)Marshal.ReadInt32(lParam, 12)));
         bool isKeyDown = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
         bool isKeyUp = msg == WM_KEYUP || msg == WM_SYSKEYUP;
 
-        if (ProcessFallbackKeyboardEvent(vkCode, isKeyDown, isKeyUp, "ll_hook"))
+        if (ProcessKeyboardEvent(vkCode, isKeyDown, isKeyUp, "ll_hook"))
         {
             return new IntPtr(1);
         }
@@ -881,135 +914,88 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
     }
 
-    private bool ProcessFallbackKeyboardEvent(int vkCode, bool isKeyDown, bool isKeyUp, string source)
+    // True when the key completes a hotkey: the hotkey fires and the hook swallows the key.
+    private bool ProcessKeyboardEvent(int vkCode, bool isKeyDown, bool isKeyUp, string source)
     {
-        if (UpdateModifierState(vkCode, isKeyDown, isKeyUp))
+        int? id = _matcher.OnKey(
+            vkCode, isKeyDown, isKeyUp, GetAsyncModifierMask, _registeredCombos, _isSuspended, Environment.TickCount64);
+        if (id is not int hotkeyId)
         {
             return false;
         }
 
-        if (isKeyUp)
-        {
-            _pressedVirtualKeys.Remove(vkCode);
-            return false;
-        }
-
-        if (!isKeyDown || IsModifierVirtualKey(vkCode))
-        {
-            return false;
-        }
-
-        if (!_pressedVirtualKeys.Add(vkCode))
-        {
-            return false;
-        }
-
-        uint modifiers = GetCurrentModifierMask();
-        bool isInterestingKey = IsRegisteredVirtualKey((uint)vkCode);
-        if (isInterestingKey)
-        {
-            WriteDebugLog($"{source} keydown vk={vkCode} mods={modifiers} registered={_registeredCombos.Count} shift={_llShiftDown} ctrl={_llCtrlDown} alt={_llAltDown}");
-        }
-
-        foreach (var kvp in _registeredCombos)
-        {
-            if (kvp.Value.Key != (uint)vkCode || kvp.Value.Mods != modifiers)
-            {
-                continue;
-            }
-
-            if (InvokeHotkey(kvp.Key, source))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private bool IsRegisteredVirtualKey(uint vkCode)
-    {
-        foreach (var combo in _registeredCombos.Values)
-        {
-            if (combo.Key == vkCode)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool IsModifierVirtualKey(int vkCode)
-    {
-        return vkCode is 0x10 or 0xA0 or 0xA1
-            or 0x11 or 0xA2 or 0xA3
-            or 0x12 or 0xA4 or 0xA5;
-    }
-
-    private bool UpdateModifierState(int vkCode, bool isKeyDown, bool isKeyUp)
-    {
-        if (!IsModifierVirtualKey(vkCode))
-        {
-            return false;
-        }
-
-        bool isDown = isKeyDown && !isKeyUp;
-        switch (vkCode)
-        {
-            case 0x10:
-            case 0xA0:
-            case 0xA1:
-                _llShiftDown = isDown;
-                break;
-            case 0x11:
-            case 0xA2:
-            case 0xA3:
-                _llCtrlDown = isDown;
-                break;
-            case 0x12:
-            case 0xA4:
-            case 0xA5:
-                _llAltDown = isDown;
-                break;
-        }
-
+        FireHotkey(hotkeyId, source);
         return true;
     }
 
-    private uint GetCurrentModifierMask()
+    // Modifiers held down that the hook never saw go down, e.g. ones pressed before it was installed.
+    private static uint GetAsyncModifierMask()
     {
         uint modifiers = 0;
-        if (_llShiftDown || (GetAsyncKeyState(0x10) & 0x8000) != 0) modifiers |= 0x0004;
-        if (_llCtrlDown || (GetAsyncKeyState(0x11) & 0x8000) != 0) modifiers |= 0x0002;
-        if (_llAltDown || (GetAsyncKeyState(0x12) & 0x8000) != 0) modifiers |= 0x0001;
+        if ((GetAsyncKeyState(0x10) & 0x8000) != 0) modifiers |= LowLevelHotkeyMatcher.ModShift;
+        if ((GetAsyncKeyState(0x11) & 0x8000) != 0) modifiers |= LowLevelHotkeyMatcher.ModControl;
+        if ((GetAsyncKeyState(0x12) & 0x8000) != 0) modifiers |= LowLevelHotkeyMatcher.ModAlt;
         return modifiers;
     }
 
-    private bool InvokeHotkey(int id, string source)
+    // The hook must give the key back to Windows at once, so the press is posted to the UI thread with its time.
+    private void FireHotkey(int id, string source)
     {
-        long now = Environment.TickCount64;
-        if (_lastHotkeyInvokeTicks.TryGetValue(id, out long lastTick) && now - lastTick < 150)
-        {
-            return false;
-        }
-
-        _lastHotkeyInvokeTicks[id] = now;
+        long pressedAt = Stopwatch.GetTimestamp();
         System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Triggered ID {id} via {source}");
         WriteDebugLog($"triggered id={id} source={source}");
+        PostToUi(() => OnHotkeyPressed?.Invoke(new HotkeyPress(id, pressedAt)), "Hotkey.Callback");
+    }
 
+    private void PostToUi(Action action, string operation)
+    {
         try
         {
-            OnHotkeyPressed?.Invoke(id);
-            return true;
+            _postToUi(() =>
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Error(operation, ex);
+                }
+            });
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
-            AppLog.Error("Hotkey.Callback", ex);
-            WriteDebugLog($"callback error id={id} source={source}");
-            return false;
+            // The dispatcher is already gone: the app is shutting down.
+            AppLog.Warning("GlobalHotkey.PostToUi", ex);
         }
     }
+
+    // Checks in the field that the hook keeps up: Windows stamps each key with when it was pressed. Logs at most
+    // once per 10 s.
+    private void ReportIfLate(uint keyTime)
+    {
+        uint lateMs = unchecked((uint)Environment.TickCount - keyTime);
+        if (lateMs <= HookLateThresholdMs || lateMs > 60_000)
+        {
+            return;
+        }
+
+        long now = Environment.TickCount64;
+        if (now - _lastHookLateLogTicks < 10_000)
+        {
+            return;
+        }
+
+        _lastHookLateLogTicks = now;
+        AppLog.Warning("Hotkey.HookLate", $"The keyboard hook got a key {lateMs} ms after it was pressed.");
+    }
+
+    /// <summary>How many key events the low-level hook has handled; a stalled or removed hook stops counting.</summary>
+    internal long LowLevelHookCalls => Interlocked.Read(ref _lowLevelHookCalls);
+
+    /// <summary>Feeds a key event down the hook's path; true when the hook would swallow the key.</summary>
+    internal bool ProcessKeyEventForTest(int virtualKey, bool isKeyDown, bool isKeyUp) =>
+        ProcessKeyboardEvent(virtualKey, isKeyDown, isKeyUp, "test");
 
     private void WriteDebugLog(string message)
     {
@@ -1018,8 +1004,31 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     public void Dispose()
     {
+        var thread = _hotkeyThread;
+        if (thread == null)
+        {
+            ReleaseNativeState();
+            return;
+        }
+
+        // Unhooked and destroyed on the thread that created them; then its loop ends.
+        try
+        {
+            if (!thread.TryInvoke(ReleaseNativeState, TimeSpan.FromSeconds(2)))
+            {
+                AppLog.Warning("GlobalHotkey.Dispose", "The hotkey thread did not release its hooks within 2 s.");
+            }
+        }
+        finally
+        {
+            _hotkeyThread = null;
+            thread.Dispose();
+        }
+    }
+
+    private void ReleaseNativeState()
+    {
         UnregisterAll();
-        RemoveWndProcHook();
         RemoveLowLevelKeyboardHook();
         RemoveForegroundMonitor();
         if (_handle != IntPtr.Zero)

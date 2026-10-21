@@ -51,7 +51,7 @@ public partial class MainWindowViewModel
 
     private sealed class NoOpGlobalHotkeyService : IGlobalHotkeyService
     {
-        public Action<int>? OnHotkeyPressed { get; set; }
+        public Action<HotkeyPress>? OnHotkeyPressed { get; set; }
         public Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
         public Action<string>? OnElevatedWindowFocused { get; set; }
         public void Initialize(Avalonia.Controls.Window window) { }

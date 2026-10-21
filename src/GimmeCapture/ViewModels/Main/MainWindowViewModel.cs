@@ -481,20 +481,20 @@ public partial class MainWindowViewModel : ViewModelBase
         });
         InitializeAboutCommands();
 
-        HotkeyService.OnHotkeyPressed = id =>
+        HotkeyService.OnHotkeyPressed = press =>
         {
             var snipVm = GetActiveSnipViewModelAction?.Invoke();
             if (snipVm != null)
             {
-                snipVm.HandleGlobalHotkey(id);
+                snipVm.HandleGlobalHotkey(press.Id);
                 return;
             }
 
-            if (HotkeyRouterService.TryMapGlobalHotkeyToCaptureMode(id, out var mode))
+            if (HotkeyRouterService.TryMapGlobalHotkeyToCaptureMode(press.Id, out var mode))
             {
-                // Stamped before the dispatcher hop: how long this post waits is the difference between "the
-                // capture was slow" and "the UI thread was busy and never saw the key press" (see CaptureOpenTrace).
-                CaptureOpenTrace.Requested();
+                // Stamped with the key press itself: how long it then waited is the difference between "the capture
+                // was slow" and "the UI thread was busy and never saw the key press" (see CaptureOpenTrace).
+                CaptureOpenTrace.Requested(press.PressedAtTimestamp);
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode).SubscribeLoggingErrors());
             }
         };
