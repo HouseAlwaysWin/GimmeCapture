@@ -37,8 +37,8 @@ jobs:
         fi
         echo "Release metadata OK: v$version"
 
-  # Linux (net10.0 head) self-contained single-file build. Runs first; the Windows job below
-  # downloads its artifact and publishes everything to one GitHub Release.
+  # Linux (net10.0 head) self-contained single-file build, alongside the Windows one; the release job at the end
+  # collects both artifacts and publishes everything to one GitHub Release.
   build-linux:
     needs: verify-release-metadata
     runs-on: ubuntu-latest
@@ -123,14 +123,14 @@ jobs:
         path: GimmeCapture_linux-x64.tar.gz
         retention-days: 1
 
-  release:
-    needs: build-linux
+  # Windows: verify, then the self-contained folder, its zip and the installer. Runs alongside build-linux; it used to
+  # wait for it.
+  build-windows:
+    needs: verify-release-metadata
     runs-on: windows-latest
-    # A whole release takes 7-9 minutes. This only stops a hung one (a stuck choco install, say) from holding the
+    # A Windows build takes about 6 minutes. This only stops a hung one (a stuck choco install, say) from holding the
     # runner for the 6-hour default.
     timeout-minutes: 45
-    permissions:
-      contents: write
 
     steps:
     - name: Checkout code
@@ -162,9 +162,10 @@ jobs:
         restore-keys: |
           nuget-${{ runner.os }}-
 
+    # -SkipPublish: verify's publish smokes would only repeat what this job publishes next, and what build-linux builds.
     - name: Verify
       shell: powershell
-      run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
+      run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 -SkipPublish
 
     # Properties/PublishProfiles/win-x64.pubxml: a self-contained folder, which needs no .NET install. Not a single
     # file: that unpacked all of itself into %TEMP% on the first launch of every version.
@@ -222,7 +223,8 @@ jobs:
     - name: Build Windows installer (Inno Setup)
       shell: powershell
       run: |
-        choco install innosetup --no-progress -y
+        # Pinned: an installer built by whatever Inno Setup is newest that day could change without a commit.
+        choco install innosetup --version 6.7.1 --no-progress -y
         if ($LASTEXITCODE -ne 0) { throw "Inno Setup install failed ($LASTEXITCODE)" }
         $version = "${{ github.ref_name }}".TrimStart('v')
         $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
@@ -232,29 +234,48 @@ jobs:
         if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
         Get-ChildItem installer\output
 
-    # Pull in the Linux tarball built by the build-linux job so both platforms ship in one release.
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: windows-release
+        path: |
+          GimmeCapture_win-x64.zip
+          installer/output/GimmeCapture_Setup_*.exe
+        if-no-files-found: error
+        retention-days: 1
+
+  # Both builds done: checksums over everything, then one GitHub Release.
+  release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
     - name: Download Linux artifact
       uses: actions/download-artifact@v8
       with:
         name: linux-release
         path: .
 
+    # Keeps the paths it was uploaded with: the zip at the top, the installer under installer/output.
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v8
+      with:
+        name: windows-release
+        path: .
+
+    # One "<sha256>  <asset name>" line per asset, which the updater's ParseChecksum reads.
     - name: Generate checksum manifest
-      shell: powershell
+      shell: bash
       run: |
-        $lines = @()
-        $zipHash = (Get-FileHash GimmeCapture_win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-        $lines += "$zipHash  GimmeCapture_win-x64.zip"
-        if (Test-Path GimmeCapture_linux-x64.tar.gz) {
-          $lxHash = (Get-FileHash GimmeCapture_linux-x64.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
-          $lines += "$lxHash  GimmeCapture_linux-x64.tar.gz"
-        }
-        $setup = Get-ChildItem installer\output\GimmeCapture_Setup_*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($setup) {
-          $setupHash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          $lines += "$setupHash  $($setup.Name)"
-        }
-        $lines | Set-Content -Encoding ascii SHA256SUMS.txt
+        set -euo pipefail
+        {
+          sha256sum GimmeCapture_win-x64.zip GimmeCapture_linux-x64.tar.gz
+          (cd installer/output && sha256sum GimmeCapture_Setup_*.exe)
+        } > SHA256SUMS.txt
+        cat SHA256SUMS.txt
 
     # The only third-party action in any workflow, and it runs with write access to releases, so it is pinned to a
     # full commit SHA: a moved or hijacked tag cannot change what publishes the release. Dependabot updates the SHA
