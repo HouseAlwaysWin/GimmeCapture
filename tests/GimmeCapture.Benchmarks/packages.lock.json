@@ -158,11 +158,6 @@
         "resolved": "0.15.8",
         "contentHash": "hfucY0ycAsB0SsoaZcaAp9oq5wlWBJcylvEJb9pmvdYUx6PD6S4mDiYnZWjdjAlLhIpe/xtGCwzORfzAzPqvzA=="
       },
-      "CliWrap": {
-        "type": "Transitive",
-        "resolved": "3.10.0",
-        "contentHash": "Igph39WNImUFqQrpTeBDPafcCnM1u/8IooZHqMRF/5JdV5H78p+AbZkeYY1Nkz1WlbI/Gt2Hq/3rYh55jxRF9Q=="
-      },
       "CommandLineParser": {
         "type": "Transitive",
         "resolved": "2.9.1",
@@ -190,11 +185,6 @@
         "type": "Transitive",
         "resolved": "2.3.0",
         "contentHash": "2ap/rYmjtzCOT8hxrnEW/QeiOt+paD8iRrIcdKX0cxVwWLFa1e+JDBNeECakmccXrSFeBQuu5AV8SNkipFMMMw=="
-      },
-      "Google.Protobuf": {
-        "type": "Transitive",
-        "resolved": "3.30.2",
-        "contentHash": "Y2aOVLIt75yeeEWigg9V9YnjsEm53sADtLGq0gLhwaXpk3iu8tYSoauolyhenagA2sWno2TQ2WujI0HQd6s1Vw=="
       },
       "HarfBuzzSharp": {
         "type": "Transitive",
@@ -379,14 +369,6 @@
         "type": "Transitive",
         "resolved": "1.20.1",
         "contentHash": "+EVcEcKdq3gkw6iu8TYl2coJxfPnMi1YQc6eZ80BGNlw6mbBCxNGe6h4udDCwENYWsXFvYjoBc6412t40tl4ew=="
-      },
-      "Microsoft.ML.Tokenizers": {
-        "type": "Transitive",
-        "resolved": "2.0.0",
-        "contentHash": "+b8lT4cLLO/sBR2hjvE/qG6qrZG15h7/PBvnIrzTh4xDaAxdHUY6449rC+1pHzQUsBiCHZVbj+VMn+xS0sL7TA==",
-        "dependencies": {
-          "Google.Protobuf": "3.30.2"
-        }
       },
       "NAudio": {
         "type": "Transitive",
@@ -578,8 +560,8 @@
       },
       "System.Reactive": {
         "type": "Transitive",
-        "resolved": "6.1.0",
-        "contentHash": "M5cCC1ZMkZr9jbSQGTHnVkb5TDN67qWCV7AP8TAHdGkvDlu0puT5NzemESNn9+HkYIDpWpocP68/i+/ame2/2w=="
+        "resolved": "7.0.0",
+        "contentHash": "VYaSP2Kt+45GFnr3q7c/b4awT48VvueOJV4jPjdUXi5MxC9mSUy+HkJYtm8rGZ6fC3tNHG9gBu/YwNAR/FYqhg=="
       },
       "System.Reflection.TypeExtensions": {
         "type": "Transitive",
@@ -604,17 +586,16 @@
           "Avalonia.Desktop": "[12.0.4, )",
           "Avalonia.Fonts.Inter": "[12.0.4, )",
           "Avalonia.Themes.Fluent": "[12.0.4, )",
-          "CliWrap": "[3.10.0, )",
           "FFmpeg.AutoGen": "[8.0.0.1, )",
           "LLamaSharp": "[0.27.0, )",
           "LLamaSharp.Backend.Cpu": "[0.27.0, )",
           "Microsoft.ML.OnnxRuntime.DirectML": "[1.20.1, )",
-          "Microsoft.ML.Tokenizers": "[2.0.0, )",
           "NAudio": "[2.2.1, )",
           "ReactiveUI.Avalonia": "[12.0.3, )",
           "Serilog": "[4.3.1, )",
           "Serilog.Sinks.File": "[7.0.0, )",
           "SkiaSharp": "[3.119.4, )",
+          "System.Reactive": "[7.0.0, )",
           "ZLinq": "[1.5.5, )"
         }
       }
