@@ -1,6 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:behaviors="using:GimmeCapture.Behaviors">
+        xmlns:behaviors="using:GimmeCapture.Behaviors"
+        xmlns:services="using:GimmeCapture.Services.Core.Infrastructure">
 
     <!-- App-wide fix for Avalonia NumericUpDown: clearing the field no longer crashes a non-nullable binding,
          and Enter commits + blurs the field. See Behaviors/NumericUpDownFix.cs. -->
@@ -169,7 +170,9 @@
                 <Setter Property="Padding" Value="8,2"/>
                 <Setter Property="FontWeight" Value="Normal"/>
                 <Setter Property="FontSize" Value="11"/>
-                <Setter Property="FontFamily" Value="avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel, avares://GimmeCapture/Assets/Fonts/Noto_Serif_JP/NotoSerifJP-VariableFont_wght.ttf#Noto Serif JP, avares://GimmeCapture/Assets/Fonts/Noto_Serif_TC/NotoSerifTC-VariableFont_wght.ttf#Noto Serif TC"/>
+                <!-- Cinzel, then the current language's CJK font: a fixed Japanese-first chain drew Chinese labels in
+                     Japanese glyph forms. -->
+                <Setter Property="FontFamily" Value="{Binding CurrentButtonFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
                 <Setter Property="HorizontalContentAlignment" Value="Center"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="TextBlock.LetterSpacing" Value="1"/>

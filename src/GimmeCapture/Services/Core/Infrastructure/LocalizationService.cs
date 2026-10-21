@@ -46,16 +46,31 @@ namespace GimmeCapture.Services.Core.Infrastructure;
             private set => this.RaiseAndSetIfChanged(ref _currentFontFamily, value);
         }
 
+        private FontFamily _currentButtonFontFamily;
+        /// <summary>
+        /// The gothic buttons' face: Cinzel for Latin letters, then the current language's CJK font. A fixed Cinzel,
+        /// Japanese, Chinese chain drew Chinese labels in Japanese glyph forms and loaded both CJK fonts.
+        /// </summary>
+        public FontFamily CurrentButtonFontFamily
+        {
+            get => _currentButtonFontFamily;
+            private set => this.RaiseAndSetIfChanged(ref _currentButtonFontFamily, value);
+        }
+
         // Font Paths
-        private readonly FontFamily _fontEnglish = new FontFamily("avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel");
-        private readonly FontFamily _fontChinese = new FontFamily("avares://GimmeCapture/Assets/Fonts/Noto_Serif_TC/NotoSerifTC-VariableFont_wght.ttf#Noto Serif TC");
-        private readonly FontFamily _fontJapanese = new FontFamily("avares://GimmeCapture/Assets/Fonts/Noto_Serif_JP/NotoSerifJP-VariableFont_wght.ttf#Noto Serif JP");
+        private const string CinzelSource = "avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel";
+        private const string ChineseSource = "avares://GimmeCapture/Assets/Fonts/Noto_Serif_TC/NotoSerifTC-VariableFont_wght.ttf#Noto Serif TC";
+        private const string JapaneseSource = "avares://GimmeCapture/Assets/Fonts/Noto_Serif_JP/NotoSerifJP-VariableFont_wght.ttf#Noto Serif JP";
+        private readonly FontFamily _fontEnglish = new FontFamily(CinzelSource);
+        private readonly FontFamily _fontChinese = new FontFamily(ChineseSource);
+        private readonly FontFamily _fontJapanese = new FontFamily(JapaneseSource);
 
         private readonly Dictionary<Language, Dictionary<string, string>> _translations = new();
 
         private LocalizationService()
         {
             _currentFontFamily = _fontEnglish;
+            _currentButtonFontFamily = FontFamily.Parse(ButtonFontSources(Language.English));
             LoadAllTranslations();
             UpdateFont(Language.English);
         }
@@ -88,8 +103,17 @@ namespace GimmeCapture.Services.Core.Infrastructure;
             }
         }
 
+        /// <summary>The font sources behind <see cref="CurrentButtonFontFamily"/>, first choice first.</summary>
+        internal static string ButtonFontSources(Language lang) => lang switch
+        {
+            Language.Chinese => $"{CinzelSource}, {ChineseSource}",
+            Language.Japanese => $"{CinzelSource}, {JapaneseSource}",
+            _ => $"{CinzelSource}, {JapaneseSource}, {ChineseSource}",
+        };
+
         private void UpdateFont(Language lang)
         {
+            CurrentButtonFontFamily = FontFamily.Parse(ButtonFontSources(lang));
             switch (lang)
             {
                 case Language.English:
