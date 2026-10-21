@@ -51,7 +51,7 @@
   file unpacked all 478 MB of itself into `%TEMP%\.net\GimmeCapture` the first time each version ran: 2.7 s here
   before anything started, so the first frame came 6.1 s after launch instead of 2.3 s. Every earlier version's
   copy stayed there.
-  - The `.zip` and the installer now hold the app's folder (495 MB). Keep its files together: `GimmeCapture.exe`
+  - The `.zip` and the installer now hold the app's folder. Keep its files together: `GimmeCapture.exe`
     no longer runs on its own. The in-app updater moves an existing install over by itself.
   - The copies earlier versions unpacked are deleted a few seconds after start-up, except one that another running
     copy still uses. The Linux build is still a single file, and it now removes its own earlier copies the same way.
@@ -64,6 +64,10 @@
   - Start-up no longer searches the whole data folder for a pending update.
   - The 1.7 MB window icon is no longer decoded four times; smaller copies are used.
   - Each launch now logs `Startup.Timings`, so a slow start shows where the time went.
+- **On Windows the main window appears 0.85 s sooner.** The app and its libraries are compiled ahead of time
+  (ReadyToRun) instead of when first used. From launch to the main window's first frame took 2.1–2.4 s and now
+  takes 1.3–1.5 s; the app stops responding for 1.1 s at start-up instead of 1.8 s. The capture overlay loads its
+  code about 60 ms faster as well. The download is about 23 MB (11%) larger.
 - **The History tab opens without a freeze.** With 78 captures, opening it held the UI thread for 0.8–1.4 s, and
   would have held it about 3 s at the 300 captures kept. Each new capture while it was open froze it again for about
   0.4 s, while every card and thumbnail was rebuilt. Now thumbnails load in the background, a refresh keeps the
