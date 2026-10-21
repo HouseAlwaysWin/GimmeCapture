@@ -114,24 +114,6 @@ public class AIModelDownloader : ReactiveObject
         }
     }
 
-    [Obsolete("Use the ArtifactDescriptor overload so downloads are integrity checked.")]
-    public virtual Task DownloadFileAsync(
-        string url,
-        string destination,
-        double progressOffset,
-        double progressWeight,
-        CancellationToken cancellationToken) =>
-        throw new InvalidOperationException("Unverified URL downloads are disabled.");
-
-    [Obsolete("Use the ArtifactDescriptor overload so downloads are integrity checked.")]
-    public virtual Task DownloadAndExtractZipAsync(
-        string url,
-        string outputDirectory,
-        double progressOffset,
-        double progressWeight,
-        CancellationToken cancellationToken) =>
-        throw new InvalidOperationException("Unverified URL downloads are disabled.");
-
     private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);

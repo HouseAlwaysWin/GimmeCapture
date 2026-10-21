@@ -59,7 +59,7 @@ src/GimmeCapture/
     Shared/                    # cross-cutting VM helpers
   Views/
     Main/                      # MainWindow, SnipWindow (partial code-behind)
-    Main/Tabs/                 # Settings tabs (General/Snip/Record/AI/Modules/…)
+    Main/Tabs/                 # Settings tabs (General/Snip/Record/Translation/Modules/…)
     Floating/                  # floating image/video/translation windows
   Services/
     Abstractions/              # I*-prefixed service interfaces

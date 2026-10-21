@@ -57,9 +57,8 @@ public partial class AnnotationControl : UserControl
                 ann.WhenAnyValue(a => a.DrawingModeReferenceSize),
                 ann.WhenAnyValue(a => a.EffectSettings.MosaicCellSize),
                 ann.WhenAnyValue(a => a.EffectSettings.BlurRadius),
-                ann.WhenAnyValue(a => a.EffectSettings.Feather),
                 this.GetObservable(BoundsProperty),
-                (start, end, snapshot, referenceSize, _, _, _, bounds) => (start, end, snapshot, referenceSize, bounds))
+                (start, end, snapshot, referenceSize, _, _, bounds) => (start, end, snapshot, referenceSize, bounds))
                 .Throttle(TimeSpan.FromMilliseconds(16))
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ => RegenerateEffectPreview(ann));

@@ -30,7 +30,6 @@ public sealed class CompressAnnotationState
     public int StepNumber { get; set; }
     public int MosaicCellSize { get; set; } = 12;
     public float BlurRadius { get; set; } = 16f;
-    public float Feather { get; set; }
 }
 
 public sealed class CompressRedactionKeyframeState
@@ -78,7 +77,6 @@ internal static class CompressEditStateMapper
             StepNumber = a.StepNumber,
             MosaicCellSize = a.EffectSettings.MosaicCellSize,
             BlurRadius = a.EffectSettings.BlurRadius,
-            Feather = a.EffectSettings.Feather,
         }).ToList();
 
     public static List<Annotation> FromState(IEnumerable<CompressAnnotationState> states)
@@ -119,7 +117,6 @@ internal static class CompressEditStateMapper
                 {
                     MosaicCellSize = s.MosaicCellSize,
                     BlurRadius = s.BlurRadius,
-                    Feather = s.Feather,
                 },
             };
 

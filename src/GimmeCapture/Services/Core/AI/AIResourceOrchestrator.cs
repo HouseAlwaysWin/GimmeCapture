@@ -172,11 +172,6 @@ public sealed class AIResourceOrchestrator
 
     public bool RemoveOCRResources() => _installer.RemoveOCRResources();
 
-    public void RemoveResources()
-    {
-        RemoveAICoreResources();
-    }
-
     public void UnloadAllSessions()
     {
         _unloadSam2Runtime();
