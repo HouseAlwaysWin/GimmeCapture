@@ -34,9 +34,9 @@ public partial class SnipWindow : Window
     private AnnotationSnapshot? _annotationEditBefore;
     private AnnotationHitZone _annotationHitZone;
     private Point _annotationDragStart;
-    private RecordingProgressWindow? _progressWindow;
+    private ProcessingWindow? _progressWindow;
     // Standalone spinner shown while a long background task runs with the snip overlay hidden (Quick-OCR).
-    private RecordingProgressWindow? _processingWindow;
+    private ProcessingWindow? _processingWindow;
     private bool _activeActionHotkeyHeld;
     
     // Pointer Interaction State (replaces multiple _is* booleans)

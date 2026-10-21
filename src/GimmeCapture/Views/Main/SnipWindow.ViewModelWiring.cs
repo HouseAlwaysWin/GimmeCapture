@@ -268,9 +268,11 @@ public partial class SnipWindow : Window
             {
                 if (_progressWindow != null) return;
                 
-                _progressWindow = new RecordingProgressWindow
+                // The winged bar that downloads and pin exports show, rather than a look of its own.
+                _progressWindow = new ProcessingWindow
                 {
                     DataContext = _viewModel,
+                    Title = LocalizationService.Instance["WindowTitleProcessingRecording"],
                     WindowStartupLocation = WindowStartupLocation.CenterScreen
                 };
                 _progressWindow.Show();
@@ -307,15 +309,16 @@ public partial class SnipWindow : Window
 
             // Standalone processing spinner for flows that hide the snip overlay to grab a clean capture and then
             // run a long background task (Quick-OCR text copy). Unlike the recording progress window, the caller
-            // already hid the snip window and manages its own show/close, so this only shows/closes the themed
-            // spinner — no capture-affinity or Hide()/Show() bookkeeping. Reuses the same generic spinner view.
+            // already hid the snip window and manages its own show/close, so this only shows/closes the winged
+            // bar — no capture-affinity or Hide()/Show() bookkeeping.
             _viewModel.ShowProcessingWindowAction = () =>
             {
                 if (_processingWindow != null) return;
 
-                _processingWindow = new RecordingProgressWindow
+                _processingWindow = new ProcessingWindow
                 {
                     DataContext = _viewModel,
+                    Title = LocalizationService.Instance["WindowTitleProcessingRecording"],
                     WindowStartupLocation = WindowStartupLocation.CenterScreen
                 };
                 _processingWindow.Show();

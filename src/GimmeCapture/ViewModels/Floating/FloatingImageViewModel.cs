@@ -151,7 +151,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public AIPathService AIPathService => _pathService;
     public IAppSettingsService AppSettingsService => _appSettingsService;
     public IResourceQueueService ResourceQueue => _resourceQueue;
-    public Func<string, Task<bool>>? ConfirmDialogAction { get; set; }
+    /// <summary>Asks a yes/no question (title, message); true for yes.</summary>
+    public Func<string, string, Task<bool>>? ConfirmDialogAction { get; set; }
     public Action<string, string>? ShowDialogAction { get; set; }
 
     private readonly IClipboardService _clipboardService;

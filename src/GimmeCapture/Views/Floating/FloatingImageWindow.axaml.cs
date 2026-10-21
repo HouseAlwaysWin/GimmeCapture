@@ -134,22 +134,21 @@ public partial class FloatingImageWindow : FloatingWindowBase
         if (DataContext is FloatingImageViewModel vm)
         {
             // Specific Image VM Setup
-            vm.ConfirmDialogAction ??= async message =>
+            // The app's own confirmation dialog. The question used to borrow the update dialog, titled "GIMME UPDATE!!"
+            // with an "update now" button, and messages showed Yes/No buttons whose answer nothing read.
+            vm.ConfirmDialogAction ??= async (title, message) =>
             {
                 var owner = TopLevel.GetTopLevel(this) as Window ?? this;
-                return await GimmeCapture.Views.Dialogs.UpdateDialog.ShowDialog(owner, message, isUpdateAvailable: true);
+                return await GimmeCapture.Views.Dialogs.ConfirmationDialog.ShowConfirmation(
+                    owner, title, message, GimmeCapture.Views.Dialogs.ConfirmationMode.YesNo)
+                    == GimmeCapture.Views.Dialogs.ConfirmationResult.Yes;
             };
 
             vm.ShowDialogAction ??= (title, message) =>
             {
                 var owner = TopLevel.GetTopLevel(this) as Window ?? this;
-                var dialogVm = new GimmeCapture.ViewModels.Shared.GothicDialogViewModel
-                {
-                    Title = title,
-                    Message = message
-                };
-                var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                dialog.ShowDialog<bool>(owner);
+                GimmeCapture.Views.Dialogs.ConfirmationDialog.ShowConfirmation(
+                    owner, title, message, GimmeCapture.Views.Dialogs.ConfirmationMode.OkOnly).Forget("FloatingImage.Message");
             };
             
             vm.OpenPinWindowAction ??= (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize, scrollableContentSize) =>
