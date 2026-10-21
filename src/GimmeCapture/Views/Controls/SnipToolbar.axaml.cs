@@ -17,7 +17,7 @@ public partial class SnipToolbar : UserControl
         {
             translateBtn.Click += (s, e) =>
             {
-                System.Diagnostics.Debug.WriteLine("[SnipToolbar] TranslateAllButton physically CLICKED");
+                AppLog.Debug("SnipToolbar", "[SnipToolbar] TranslateAllButton physically CLICKED");
             };
         }
 

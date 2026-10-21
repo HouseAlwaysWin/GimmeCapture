@@ -240,6 +240,8 @@ pushing again).
   Use `AppLog.Warning(operation, ex)` for a failure the user would notice, and `AppLog.Debug` for an
   expected one (no CUDA, cleanup a later sweep retries), written only when `GIMMECAPTURE_DEBUG_LOG=1`.
   The exception overloads record type, HResult and stack, never the message.
+- Traces go through `AppLog.Debug(operation, $"...")` too, not `Debug.WriteLine`. With debug
+  logging off, an interpolated message is neither evaluated nor formatted, so it is fine on hot paths.
 
 ## Localization (IMPORTANT)
 

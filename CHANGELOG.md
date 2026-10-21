@@ -177,6 +177,9 @@
 
 ### 🧹 Maintenance
 
+- The app's 144 diagnostic traces (hotkey registration, translation, recording and capture steps) used
+  `Debug.WriteLine`, which a release build leaves out. They go through `AppLog.Debug` now, so a release build
+  writes them when `GIMMECAPTURE_DEBUG_LOG=1` is set; otherwise they are not even formatted.
 - Dead code is gone: the unused download-progress window and AI settings tab, the throwing URL-download
   overloads, `RemoveResources`, the unimplemented annotation `Feather` setting, and two helpers only their own
   tests still called (`TranslationExecutionHelper`, `VideoAnnotationFilterBuilder`).

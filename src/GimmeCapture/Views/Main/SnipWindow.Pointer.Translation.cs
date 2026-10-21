@@ -56,7 +56,7 @@ public partial class SnipWindow
     {
         if (_viewModel == null) return false;
 
-        System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] PointerPressed at {point}. Source: {sourceControl?.GetType().Name}, Name: {sourceControl?.Name}, DataContext: {sourceControl?.DataContext?.GetType().Name}");
+        AppLog.Debug("SnipWindow.Pointer.Translation", $"[TranslationRightClick] PointerPressed at {point}. Source: {sourceControl?.GetType().Name}, Name: {sourceControl?.Name}, DataContext: {sourceControl?.DataContext?.GetType().Name}");
 
         var selRect = ResolveTranslationSelectionFromVisualTree(sourceControl);
 
@@ -67,14 +67,14 @@ public partial class SnipWindow
                 var box = _viewModel.UserSelections[i];
                 if (box.Bounds.Contains(point))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Coordinate hit test succeeded for box {i}.");
+                    AppLog.Debug("SnipWindow.Pointer.Translation", $"[TranslationRightClick] Coordinate hit test succeeded for box {i}.");
                     selRect = box;
                     break;
                 }
             }
         }
 
-        System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Final selRect resolved: {selRect != null}");
+        AppLog.Debug("SnipWindow.Pointer.Translation", $"[TranslationRightClick] Final selRect resolved: {selRect != null}");
 
         var vm = _viewModel;
         if (selRect != null && vm != null) return false;

@@ -38,7 +38,7 @@ public static class VideoInputDevices
                 AVInputFormat* ifmt = ffmpeg.av_find_input_format("dshow");
                 if (ifmt == null)
                 {
-                    Debug.WriteLine("[Webcam] dshow demuxer unavailable for enumeration.");
+                    AppLog.Debug("VideoInputDevices", "[Webcam] dshow demuxer unavailable for enumeration.");
                     return devices;
                 }
 
@@ -46,7 +46,7 @@ public static class VideoInputDevices
                 int rc = ffmpeg.avdevice_list_input_sources(ifmt, null, null, &list);
                 if (rc < 0 || list == null)
                 {
-                    Debug.WriteLine($"[Webcam] avdevice_list_input_sources failed ({rc}).");
+                    AppLog.Debug("VideoInputDevices", $"[Webcam] avdevice_list_input_sources failed ({rc}).");
                     return devices;
                 }
 

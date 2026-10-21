@@ -32,7 +32,7 @@ public class NativeResolverService
                     
                     if (File.Exists(dllPath))
                     {
-                        System.Diagnostics.Debug.WriteLine($"[AI] Custom Resolver loading: {dllPath}");
+                        AppLog.Debug("NativeResolverService", $"[AI] Custom Resolver loading: {dllPath}");
                         return NativeLibrary.Load(dllPath);
                     }
                 }

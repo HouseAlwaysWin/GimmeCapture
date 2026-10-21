@@ -105,7 +105,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
             catch (Exception ex)
             {
                 LastErrorMessage = ex.Message;
-                Debug.WriteLine($"[LibavWgcComposite] {ex}");
+                AppLog.Debug("LibavWgcCompositeMkvSession", $"[LibavWgcComposite] {ex}");
                 AppLog.Warning("RecordingNative.Worker", ex);
                 firstFrameTcs.TrySetException(ex);
                 return false;
@@ -407,7 +407,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
             }
 
             AppLog.Information($"Wgc.Composite.Stop windows={sources.Count} frames={frameCounter} packets={packetCounter}");
-            Debug.WriteLine($"[LibavWgcComposite] segment done: frames={frameCounter}, packets={packetCounter}, output='{outputPath}'");
+            AppLog.Debug("LibavWgcCompositeMkvSession", $"[LibavWgcComposite] segment done: frames={frameCounter}, packets={packetCounter}, output='{outputPath}'");
         }
         finally
         {

@@ -378,7 +378,7 @@ public partial class SnipWindowViewModel
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;
                     _mainVm?.SetStatus("StatusSaved");
-                    System.Diagnostics.Debug.WriteLine($"Auto-saved to {path}");
+                    AppLog.Debug("SnipWindowViewModel.Capture", $"Auto-saved to {path}");
                 }
                 else if (PickSaveFileAction != null)
                 {
@@ -389,7 +389,7 @@ public partial class SnipWindowViewModel
                         savedPath = path;
                         _mainVm?.SetStatus("StatusSaved");
                     }
-                    System.Diagnostics.Debug.WriteLine($"Saved to {path}");
+                    AppLog.Debug("SnipWindowViewModel.Capture", $"Saved to {path}");
                 }
                 else
                 {
@@ -421,7 +421,7 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Pin() called. runAI={runAI}, SelectionRect={SelectionRect}");
+        AppLog.Debug("SnipWindowViewModel.Capture", $"[SnipWindowViewModel] Pin() called. runAI={runAI}, SelectionRect={SelectionRect}");
         // Guard: If AI is disabled globally, prevent running it
         if (runAI && (_mainVm == null || !_mainVm.EnableAI))
         {

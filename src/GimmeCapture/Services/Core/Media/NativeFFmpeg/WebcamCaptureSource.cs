@@ -187,7 +187,7 @@ internal sealed class WebcamCaptureSource : IDisposable
 
             if (ifmt == null)
             {
-                Debug.WriteLine($"[Webcam] {(onWindows ? "dshow" : "v4l2")} demuxer unavailable.");
+                AppLog.Debug("WebcamCaptureSource", $"[Webcam] {(onWindows ? "dshow" : "v4l2")} demuxer unavailable.");
                 return;
             }
 
@@ -204,7 +204,7 @@ internal sealed class WebcamCaptureSource : IDisposable
 
             if (ffmpeg.avformat_open_input(&fmt, url, ifmt, &opts) < 0)
             {
-                Debug.WriteLine($"[Webcam] Failed to open '{url}'.");
+                AppLog.Debug("WebcamCaptureSource", $"[Webcam] Failed to open '{url}'.");
                 return;
             }
 

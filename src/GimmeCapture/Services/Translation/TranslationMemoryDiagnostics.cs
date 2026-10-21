@@ -56,7 +56,7 @@ internal static class TranslationMemoryDiagnostics
                 message += $" bounds={bounds.Width:F0}x{bounds.Height:F0}@({bounds.X:F0},{bounds.Y:F0})";
             }
 
-            Debug.WriteLine(message);
+            AppLog.Debug("TranslationMemoryDiagnostics", message);
         }
         catch
         {

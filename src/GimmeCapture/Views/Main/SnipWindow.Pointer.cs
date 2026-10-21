@@ -142,11 +142,11 @@ public partial class SnipWindow : Window
              || sourceControl.Name?.Contains("InnerCorner") == true
              || HasClassInAncestors(sourceControl, "TranslationItem"));
         
-        System.Diagnostics.Debug.WriteLine($"[PointerPressed] isResize: {isResizeHandle}, isMove: {isMoveHandle}");
+        AppLog.Debug("SnipWindow.Pointer", $"[PointerPressed] isResize: {isResizeHandle}, isMove: {isMoveHandle}");
 
         if (sourceControl != null && props.IsLeftButtonPressed && !isResizeHandle && (isMoveHandle || ResolveTranslationSelectionFromVisualTree(sourceControl) != null))
         {
-            System.Diagnostics.Debug.WriteLine($"[PointerPressed] Entered MoveHandle block");
+            AppLog.Debug("SnipWindow.Pointer", $"[PointerPressed] Entered MoveHandle block");
             var sel = ResolveTranslationSelectionFromVisualTree(sourceControl);
 
             if (sel != null)
@@ -173,7 +173,7 @@ public partial class SnipWindow : Window
 
         if (sourceControl != null && props.IsLeftButtonPressed && isResizeHandle)
         {
-            System.Diagnostics.Debug.WriteLine($"[PointerPressed] Entered ResizeHandle block");
+            AppLog.Debug("SnipWindow.Pointer", $"[PointerPressed] Entered ResizeHandle block");
             var sel = ResolveTranslationSelectionFromVisualTree(sourceControl);
 
             if (sel != null)

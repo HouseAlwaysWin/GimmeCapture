@@ -118,7 +118,7 @@ public sealed class OcrRuntimeService : IDisposable
         lock (_leaseLock)
         {
             _activeLeases.Add(leaseId);
-            Debug.WriteLine($"[OcrRuntime] AcquireLease {leaseId}; count={_activeLeases.Count}");
+            AppLog.Debug("OcrRuntimeService", $"[OcrRuntime] AcquireLease {leaseId}; count={_activeLeases.Count}");
         }
 
         return leaseId;
@@ -134,7 +134,7 @@ public sealed class OcrRuntimeService : IDisposable
         {
             _activeLeases.Remove(leaseId);
             shouldUnload = unloadWhenIdle && _activeLeases.Count == 0;
-            Debug.WriteLine($"[OcrRuntime] ReleaseLease {leaseId}; count={_activeLeases.Count}; unloadWhenIdle={unloadWhenIdle}");
+            AppLog.Debug("OcrRuntimeService", $"[OcrRuntime] ReleaseLease {leaseId}; count={_activeLeases.Count}; unloadWhenIdle={unloadWhenIdle}");
         }
 
         if (shouldUnload)

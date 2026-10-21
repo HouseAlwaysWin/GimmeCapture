@@ -24,7 +24,7 @@ public partial class RecordingService
 
         if (validSegments.Count == 0)
         {
-            Debug.WriteLine("No valid segments to finalize!");
+            AppLog.Debug("RecordingService.Finalize", "No valid segments to finalize!");
             return;
         }
 
@@ -102,7 +102,7 @@ public partial class RecordingService
 
                 if (validSegments.Count == 0)
                 {
-                    Debug.WriteLine($"[Finalize] Track {i} has no valid segments; skipping.");
+                    AppLog.Debug("RecordingService.Finalize", $"[Finalize] Track {i} has no valid segments; skipping.");
                     track.OutputFile = string.Empty;
                     continue;
                 }
@@ -428,7 +428,7 @@ public partial class RecordingService
                 catch (Exception ex)
                 {
                     // Audio mux failed — keep the video by writing a video-only file in the same container.
-                    Debug.WriteLine($"[Finalize] Audio mux ({format}) failed, video-only fallback: {ex.Message}");
+                    AppLog.Debug("RecordingService.Finalize", $"[Finalize] Audio mux ({format}) failed, video-only fallback: {ex.Message}");
                     LogToFile($"[Finalize] Audio mux ({format}) failed, video-only fallback: {ex}");
                 }
             }
@@ -452,7 +452,7 @@ public partial class RecordingService
         {
             // Video remux/move itself failed -> this container is not usable for the captured stream.
             LogToFile($"[Finalize] Finalize as '{format}' failed: {ex}");
-            Debug.WriteLine($"[Finalize] Finalize as '{format}' failed: {ex.Message}");
+            AppLog.Debug("RecordingService.Finalize", $"[Finalize] Finalize as '{format}' failed: {ex.Message}");
             if (throwOnFailure)
             {
                 throw;
