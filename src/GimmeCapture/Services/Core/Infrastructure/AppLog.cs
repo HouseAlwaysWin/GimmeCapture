@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Serilog;
 using Serilog.Events;
@@ -83,10 +84,52 @@ public static class AppLog
         Log.Debug("{Operation}: {Message}", SanitizeLabel(operation), message ?? "(none)");
     }
 
+    /// <summary>
+    /// <see cref="Debug(string, string)"/> for an interpolated message: with debug logging off, nothing in the message is
+    /// evaluated or formatted, as with the Debug.WriteLine it replaces in a release build, so it is cheap on hot paths.
+    /// </summary>
+    public static void Debug(string operation, ref DebugMessageHandler message)
+    {
+        if (message.Enabled)
+        {
+            Debug(operation, message.ToStringAndClear());
+        }
+    }
+
     /// <inheritdoc cref="Debug(string, string)"/>
     public static void Debug(string operation, Exception exception)
     {
         Record(LogEventLevel.Debug, operation, exception);
+    }
+
+    /// <summary>Builds a debug message only when debug logging is on; see <see cref="Debug(string, ref DebugMessageHandler)"/>.</summary>
+    [InterpolatedStringHandler]
+    public ref struct DebugMessageHandler
+    {
+        private DefaultInterpolatedStringHandler _builder;
+
+        public DebugMessageHandler(int literalLength, int formattedCount, out bool enabled)
+        {
+            enabled = Log.IsEnabled(LogEventLevel.Debug);
+            Enabled = enabled;
+            _builder = enabled ? new DefaultInterpolatedStringHandler(literalLength, formattedCount) : default;
+        }
+
+        internal bool Enabled { get; }
+
+        public void AppendLiteral(string value) => _builder.AppendLiteral(value);
+
+        public void AppendFormatted<T>(T value) => _builder.AppendFormatted(value);
+
+        public void AppendFormatted<T>(T value, string? format) => _builder.AppendFormatted(value, format);
+
+        public void AppendFormatted<T>(T value, int alignment) => _builder.AppendFormatted(value, alignment);
+
+        public void AppendFormatted<T>(T value, int alignment, string? format) => _builder.AppendFormatted(value, alignment, format);
+
+        public void AppendFormatted(string? value) => _builder.AppendFormatted(value);
+
+        internal string ToStringAndClear() => _builder.ToStringAndClear();
     }
 
     public static void Warning(string operation, Exception exception)

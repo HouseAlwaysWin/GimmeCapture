@@ -25,13 +25,13 @@ public partial class SnipWindow
         // Key-repeat also produces additional key-down events on some systems.
         if (_translationSelectionModifierHeld == isKeyDown)
         {
-            System.Diagnostics.Debug.WriteLine(
+            AppLog.Debug("SnipWindow.TranslationModifiers", 
                 $"[TranslationOCR] Ignored duplicate selection modifier state: down={isKeyDown}");
             return;
         }
 
         _translationSelectionModifierHeld = isKeyDown;
-        System.Diagnostics.Debug.WriteLine(
+        AppLog.Debug("SnipWindow.TranslationModifiers", 
             $"[TranslationOCR] Selection modifier transition: down={isKeyDown}");
 
         if (isKeyDown)

@@ -60,10 +60,10 @@ public partial class SnipWindowViewModel
     private void InitializeCaptureScopeCommands()
     {
         RefreshCaptureTargetsCommand = ReactiveCommand.Create(RefreshCaptureTargets);
-        RefreshCaptureTargetsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"RefreshCaptureTargets error: {ex}"));
+        RefreshCaptureTargetsCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.CaptureScope", $"RefreshCaptureTargets error: {ex}"));
 
         SelectCaptureTargetCommand = ReactiveCommand.Create<CaptureTargetItem>(SelectCaptureTarget);
-        SelectCaptureTargetCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SelectCaptureTarget error: {ex}"));
+        SelectCaptureTargetCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.CaptureScope", $"SelectCaptureTarget error: {ex}"));
     }
 
     /// <summary>Rebuilds the monitor + window list. Called when the picker flyout opens.</summary>

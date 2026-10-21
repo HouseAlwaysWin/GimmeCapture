@@ -46,7 +46,7 @@ public class PaddleOCREngine : IOCREngine
 
         if (_currentOCRLanguage != lang)
         {
-            Debug.WriteLine($"[OCR] Switching language to {lang}");
+            AppLog.Debug("PaddleOCREngine", $"[OCR] Switching language to {lang}");
         }
 
         await _ocrRuntimeService.EnsureLoadedAsync(lang, ct);

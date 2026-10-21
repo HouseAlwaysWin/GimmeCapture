@@ -25,11 +25,11 @@ public partial class SnipWindowViewModel
     {
         try
         {
-            System.Diagnostics.Debug.WriteLine("[TranslationMode] TranslateAllSelectionsAsync triggered");
+            AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] TranslateAllSelectionsAsync triggered");
             
             if (IsTranslating)
             {
-                System.Diagnostics.Debug.WriteLine("[TranslationMode] Cancelling active translation...");
+                AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] Cancelling active translation...");
                 _translationCts?.Cancel();
                 // Do not set IsTranslating = false here, let the finally block handle it
                 return;
@@ -44,12 +44,12 @@ public partial class SnipWindowViewModel
             {
                 // UX rule: translate button should only process explicit user selections.
                 // If no selection exists, do nothing instead of scanning full screen.
-                System.Diagnostics.Debug.WriteLine("[TranslationMode] No selections found. Skip translation.");
+                AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] No selections found. Skip translation.");
                 _mainVm?.SetStatus("StatusTranslateNoSelection");
                 return;
             }
 
-        System.Diagnostics.Debug.WriteLine($"[TranslationMode] Proceeding to translate {UserSelections.Count} regions");
+        AppLog.Debug("SnipWindowViewModel.Selection.Translation", $"[TranslationMode] Proceeding to translate {UserSelections.Count} regions");
         IsTranslating = true;
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
@@ -70,7 +70,7 @@ public partial class SnipWindowViewModel
             bool ready = await translationSession.EnsureOcrReadyAsync(mainVm.SourceLanguage, token);
             if (!ready)
             {
-                System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready");
+                AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] OCR not ready");
                 return;
             }
 
@@ -346,7 +346,7 @@ public partial class SnipWindowViewModel
     /// </summary>
     private async Task ScanAllTextAsync()
     {
-        System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText triggered");
+        AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] ScanAllText triggered");
 
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
@@ -357,7 +357,7 @@ public partial class SnipWindowViewModel
 
             if (_mainVm?.AIResourceService == null || _translationSession == null)
             {
-                System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: translation dependencies are NULL");
+                AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] ScanAllText: translation dependencies are NULL");
                 return;
             }
 
@@ -365,17 +365,17 @@ public partial class SnipWindowViewModel
             bool ready = await _translationSession.EnsureOcrReadyAsync(_mainVm.SourceLanguage);
             if (!ready)
             {
-                System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready for scan");
+                AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] OCR not ready for scan");
                 return;
             }
 
-            System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: Capturing full screen...");
+            AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] ScanAllText: Capturing full screen...");
             // 擷取全螢幕
             var fullScreenRect = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
             using var bitmap = await _captureService.CaptureScreenAsync(fullScreenRect, ScreenOffset, VisualScaling, false);
             if (bitmap == null) 
             {
-                System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: FAILED to capture screen");
+                AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] ScanAllText: FAILED to capture screen");
                 return;
             }
             using var resizedBitmap = CreateOptimizedTranslationBitmap(
@@ -384,7 +384,7 @@ public partial class SnipWindowViewModel
                 TranslationSearchCaptureMaxLongSide,
                 out _);
             var detectionBitmap = resizedBitmap ?? bitmap;
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ScanAllText: Captured bitmap {detectionBitmap.Width}x{detectionBitmap.Height}");
+            AppLog.Debug("SnipWindowViewModel.Selection.Translation", $"[TranslationMode] ScanAllText: Captured bitmap {detectionBitmap.Width}x{detectionBitmap.Height}");
             LogTranslationMemoryState("translation-scan-all-capture", bitmap: detectionBitmap);
 
             // 使用 PaddleOCR 偵測文字區域
@@ -394,7 +394,7 @@ public partial class SnipWindowViewModel
             
             var textBoxes = await Task.Run(() => ocrEngine.DetectText(detectionBitmap));
 
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] Found {textBoxes.Count} text regions");
+            AppLog.Debug("SnipWindowViewModel.Selection.Translation", $"[TranslationMode] Found {textBoxes.Count} text regions");
 
             // 將偵測到的文字區域轉換為 UserSelectionRect
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
@@ -427,7 +427,7 @@ public partial class SnipWindowViewModel
                         UserSelections.Add(new UserSelectionRect { Bounds = bounds });
                     }
                 }
-                System.Diagnostics.Debug.WriteLine($"[TranslationMode] Added {UserSelections.Count} valid selections (excluded toolbar area)");
+                AppLog.Debug("SnipWindowViewModel.Selection.Translation", $"[TranslationMode] Added {UserSelections.Count} valid selections (excluded toolbar area)");
             });
         }
         catch (Exception ex)
@@ -446,7 +446,7 @@ public partial class SnipWindowViewModel
     /// </summary>
     private async Task ScanAllDetectedTranslationParagraphsAsync()
     {
-        System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllDetectedTranslationParagraphs triggered");
+        AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] ScanAllDetectedTranslationParagraphs triggered");
 
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
@@ -457,7 +457,7 @@ public partial class SnipWindowViewModel
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
                 MaterializeAllTranslationOcrCandidates();
-                System.Diagnostics.Debug.WriteLine($"[TranslationMode] Materialized {_translationOcrParagraphCandidates.Count} paragraph candidates");
+                AppLog.Debug("SnipWindowViewModel.Selection.Translation", $"[TranslationMode] Materialized {_translationOcrParagraphCandidates.Count} paragraph candidates");
             });
         }
         catch (Exception ex)
@@ -510,7 +510,7 @@ public partial class SnipWindowViewModel
         if (Math.Abs(metrics.Bounds.Width - sel.Bounds.Width) > 1 || Math.Abs(metrics.Bounds.Height - sel.Bounds.Height) > 1)
         {
             sel.Bounds = metrics.Bounds;
-            System.Diagnostics.Debug.WriteLine($"[AutoFit] Expanded to {metrics.Bounds.Width:F0}x{metrics.Bounds.Height:F0}, font={metrics.FontSize:F1}.");
+            AppLog.Debug("SnipWindowViewModel.Selection.Translation", $"[AutoFit] Expanded to {metrics.Bounds.Width:F0}x{metrics.Bounds.Height:F0}, font={metrics.FontSize:F1}.");
         }
     }
 

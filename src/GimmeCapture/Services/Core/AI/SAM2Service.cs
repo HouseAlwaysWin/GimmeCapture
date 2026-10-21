@@ -486,7 +486,7 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
                 decCoords[0, i, 0] = aiX;
                 decCoords[0, i, 1] = aiY;
                 decLabels[0, i] = p.IsPositive ? 1f : 0f;
-                System.Diagnostics.Debug.WriteLine($"[AI MATH] Click({p.X:F0},{p.Y:F0}) -> AI_StretchGrid({aiX:F0},{aiY:F0}) Size=(1024x1024) BGR=1 Normal=0-1");
+                AppLog.Debug("SAM2Service", $"[AI MATH] Click({p.X:F0},{p.Y:F0}) -> AI_StretchGrid({aiX:F0},{aiY:F0}) Size=(1024x1024) BGR=1 Normal=0-1");
             }
 
             var maskInput = new DenseTensor<float>(new[] { 1, 1, 256, 256 });
@@ -605,7 +605,7 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 
                 // NOTE: Corner check moved outside loop
 
-                System.Diagnostics.Debug.WriteLine($"[AI BRAIN] Mask {i}: IOU={iou:F2} D={density:F2} Err={pointErrors} Score={currentScore:F2} {pointStats}");
+                AppLog.Debug("SAM2Service", $"[AI BRAIN] Mask {i}: IOU={iou:F2} D={density:F2} Err={pointErrors} Score={currentScore:F2} {pointStats}");
 
                 if (currentScore > maxScore) {
                     maxScore = currentScore; bestIdx = i; bestIou = iou; bestDensity = density; bestPointStats = pointStats;
@@ -633,7 +633,7 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
             bool invertMask = isAllSelect && bestDensity > 0.7f;
             string invTag = invertMask ? "[INV!]" : "";
 
-            System.Diagnostics.Debug.WriteLine($"[AI FINAL] Mask {bestIdx}: Min={finalMinVal:F1} Max={finalMaxVal:F1} Thresh={finalThreshold} Inv={invertMask}");
+            AppLog.Debug("SAM2Service", $"[AI FINAL] Mask {bestIdx}: Min={finalMinVal:F1} Max={finalMaxVal:F1} Thresh={finalThreshold} Inv={invertMask}");
 
             _lastIouInfo = $"REV:{_buildRev} {invTag}{bestPointStats} | D={bestDensity:F1}";
 

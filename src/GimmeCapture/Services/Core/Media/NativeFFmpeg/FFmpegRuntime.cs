@@ -69,7 +69,7 @@ public static class FFmpegRuntime
 
                 _initialized = true;
                 errorMessage = null;
-                Debug.WriteLine($"[FFmpegRuntime] Initialized. avutil: {LibraryVersion}");
+                AppLog.Debug("FFmpegRuntime", $"[FFmpegRuntime] Initialized. avutil: {LibraryVersion}");
                 return true;
             }
             catch (Exception ex)

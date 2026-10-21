@@ -319,7 +319,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         if (_isSuspended)
         {
             _suspendedHotkeys[id] = hotkey;
-            System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Queueing registration for ID {id} while suspended: {hotkey}");
+            AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] Queueing registration for ID {id} while suspended: {hotkey}");
             return null;
         }
 
@@ -336,7 +336,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         if (vkey == 0)
         {
             _registeredCombos.Remove(id);
-            System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Unsupported hotkey '{hotkey}' for ID {id}.");
+            AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] Unsupported hotkey '{hotkey}' for ID {id}.");
             return null;
         }
 
@@ -350,7 +350,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
 
         int error = Marshal.GetLastWin32Error();
-        System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Failed to register ID {id} as '{hotkey}' (mods={modifiers}, vk={vkey}, win32={error}).");
+        AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] Failed to register ID {id} as '{hotkey}' (mods={modifiers}, vk={vkey}, win32={error}).");
         WriteDebugLog($"register failed id={id} hotkey='{hotkey}' mods={modifiers} vk={vkey} win32={error} handle=0x{_handle.ToInt64():X}");
         return error;
     }
@@ -391,7 +391,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             NativeUnregisterHotKey(_handle, id);
         }
         _registeredIds.Clear();
-        System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Suspended {_suspendedHotkeys.Count} hotkeys");
+        AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] Suspended {_suspendedHotkeys.Count} hotkeys");
     }
 
     public void ResumeAll()
@@ -417,7 +417,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
         _suspendedHotkeys.Clear();
 
-        System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Resumed {toResume.Count} hotkeys");
+        AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] Resumed {toResume.Count} hotkeys");
         return toResume;
     }
 
@@ -484,7 +484,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         _messageWindowClassAtom = RegisterClassEx(ref wndClass);
         if (_messageWindowClassAtom == 0)
         {
-            System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] RegisterClassEx failed: {Marshal.GetLastWin32Error()}");
+            AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] RegisterClassEx failed: {Marshal.GetLastWin32Error()}");
             return;
         }
 
@@ -504,12 +504,12 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
         if (_handle == IntPtr.Zero)
         {
-            System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Create message window failed: {Marshal.GetLastWin32Error()}");
+            AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] Create message window failed: {Marshal.GetLastWin32Error()}");
             WriteDebugLog($"message window create failed win32={Marshal.GetLastWin32Error()}");
         }
         else
         {
-            System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Message window created: 0x{_handle.ToInt64():X}");
+            AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] Message window created: 0x{_handle.ToInt64():X}");
             WriteDebugLog($"message window created handle=0x{_handle.ToInt64():X}");
             RegisterRawKeyboardSink();
         }
@@ -942,7 +942,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private void FireHotkey(int id, string source)
     {
         long pressedAt = Stopwatch.GetTimestamp();
-        System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Triggered ID {id} via {source}");
+        AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] Triggered ID {id} via {source}");
         WriteDebugLog($"triggered id={id} source={source}");
         PostToUi(() => OnHotkeyPressed?.Invoke(new HotkeyPress(id, pressedAt)), "Hotkey.Callback");
     }

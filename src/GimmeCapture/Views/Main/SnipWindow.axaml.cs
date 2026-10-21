@@ -503,7 +503,7 @@ public partial class SnipWindow : Window
             && !_viewModel.IsEnteringText
             && !textOrListInputFocused)
         {
-            System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] OnKeyDown: Key={e.Key}, Mods={e.KeyModifiers}, ActiveAction={_viewModel.ActiveActionHotkey}, IsInputFocused={_viewModel.IsInputFocused}");
+            AppLog.Debug("SnipWindow", $"[SnipWindow.axaml.cs] OnKeyDown: Key={e.Key}, Mods={e.KeyModifiers}, ActiveAction={_viewModel.ActiveActionHotkey}, IsInputFocused={_viewModel.IsInputFocused}");
 
             bool IsMatch(string hotkey)
             {
@@ -553,23 +553,23 @@ public partial class SnipWindow : Window
                         e.Handled = true;
                         break;
                     }
-                    System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched ActiveActionHotkey! Firing HandleActiveActionHotkeyCommand.");
+                    AppLog.Debug("SnipWindow", "[SnipWindow.axaml.cs] Matched ActiveActionHotkey! Firing HandleActiveActionHotkeyCommand.");
                     _activeActionHotkeyHeld = true;
                     _viewModel.HandleActiveActionHotkeyCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                     break;
                 case HotkeyRouterService.WindowHotkeyAction.ToggleToolbar:
-                    System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched ActiveToolbarHotkey! Firing ToggleToolbarCommand.");
+                    AppLog.Debug("SnipWindow", "[SnipWindow.axaml.cs] Matched ActiveToolbarHotkey! Firing ToggleToolbarCommand.");
                     _viewModel.ToggleToolbarCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                     break;
                 case HotkeyRouterService.WindowHotkeyAction.Save:
-                    System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched SaveHotkey! Firing SaveCommand.");
+                    AppLog.Debug("SnipWindow", "[SnipWindow.axaml.cs] Matched SaveHotkey! Firing SaveCommand.");
                     _viewModel.SaveCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                     break;
                 case HotkeyRouterService.WindowHotkeyAction.Copy:
-                    System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched CopyHotkey! Firing CopyCommand.");
+                    AppLog.Debug("SnipWindow", "[SnipWindow.axaml.cs] Matched CopyHotkey! Firing CopyCommand.");
                     _viewModel.CopyCommand?.Execute().SubscribeLoggingErrors();
                     e.Handled = true;
                     break;

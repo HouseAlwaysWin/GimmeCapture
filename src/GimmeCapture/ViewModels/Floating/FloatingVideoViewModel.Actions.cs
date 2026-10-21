@@ -88,7 +88,7 @@ public partial class FloatingVideoViewModel
             string? exported = await ExportCroppedRegionAsync(crop, Path.GetExtension(VideoPath));
             if (string.IsNullOrEmpty(exported) || !File.Exists(exported))
             {
-                System.Diagnostics.Debug.WriteLine("[Crop] Export produced no output.");
+                AppLog.Debug("FloatingVideoViewModel.Actions", "[Crop] Export produced no output.");
                 return;
             }
 

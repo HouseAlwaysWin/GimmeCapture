@@ -412,7 +412,7 @@ public partial class SnipWindowViewModel
             TranslateHotkey,
             TextCopyHotkey);
 
-        System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleGlobalHotkey ID={id}, Pressed={pressedHotkey}, ActiveAction={ActiveActionHotkey}, ActiveToolbar={ActiveToolbarHotkey}, Mode={CurrentMode}");
+        AppLog.Debug("SnipWindowViewModel.ModeRouting", $"[SnipWindowViewModel] HandleGlobalHotkey ID={id}, Pressed={pressedHotkey}, ActiveAction={ActiveActionHotkey}, ActiveToolbar={ActiveToolbarHotkey}, Mode={CurrentMode}");
 
         if (TryHandleModeSwitchHotkey(pressedHotkey)) return;
 
@@ -425,11 +425,11 @@ public partial class SnipWindowViewModel
         switch (routeAction)
         {
             case HotkeyRouterService.SnipGlobalHotkeyAction.ActiveAction:
-                System.Diagnostics.Debug.WriteLine("[SnipWindowViewModel] Routed to ActiveAction hotkey.");
+                AppLog.Debug("SnipWindowViewModel.ModeRouting", "[SnipWindowViewModel] Routed to ActiveAction hotkey.");
                 HandleActiveActionHotkeyCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case HotkeyRouterService.SnipGlobalHotkeyAction.ToggleToolbar:
-                System.Diagnostics.Debug.WriteLine("[SnipWindowViewModel] Routed to ToggleToolbar hotkey.");
+                AppLog.Debug("SnipWindowViewModel.ModeRouting", "[SnipWindowViewModel] Routed to ToggleToolbar hotkey.");
                 ToggleToolbarCommand?.Execute().SubscribeLoggingErrors();
                 break;
             case HotkeyRouterService.SnipGlobalHotkeyAction.ScreenshotMode:
@@ -670,7 +670,7 @@ public partial class SnipWindowViewModel
         ToggleTopmostCommand = CreateCommand(() =>
         {
             IsTopmost = !IsTopmost;
-            System.Diagnostics.Debug.WriteLine($"[SnipWindow] Topmost toggled to: {IsTopmost}");
+            AppLog.Debug("SnipWindowViewModel.ModeRouting", $"[SnipWindow] Topmost toggled to: {IsTopmost}");
             _mainVm?.SetStatus(IsTopmost ? "Topmost ON" : "Topmost OFF");
         }, nameof(ToggleTopmostCommand));
         
@@ -752,10 +752,10 @@ public partial class SnipWindowViewModel
         }
         _lastActiveActionHotkeyUtc = now;
 
-        System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleActiveActionHotkeyCommand invoked. Mode: {CurrentMode}, RecState: {RecState}");
+        AppLog.Debug("SnipWindowViewModel.ModeRouting", $"[SnipWindowViewModel] HandleActiveActionHotkeyCommand invoked. Mode: {CurrentMode}, RecState: {RecState}");
         if (CurrentMode == SnipMode.Translation)
         {
-            System.Diagnostics.Debug.WriteLine("[ActiveAction] Translation: toggle results");
+            AppLog.Debug("SnipWindowViewModel.ModeRouting", "[ActiveAction] Translation: toggle results");
             // 翻譯模式：切換結果顯示
             ShowTranslationResults = !ShowTranslationResults;
             return;
@@ -769,11 +769,11 @@ public partial class SnipWindowViewModel
             if (RecState == RecordingState.Recording &&
                 (DateTime.UtcNow - _recordingActiveStartUtc) < TimeSpan.FromMilliseconds(900))
             {
-                System.Diagnostics.Debug.WriteLine("[ActiveAction] Recording: ignored immediate stop guard");
+                AppLog.Debug("SnipWindowViewModel.ModeRouting", "[ActiveAction] Recording: ignored immediate stop guard");
                 return;
             }
 
-            System.Diagnostics.Debug.WriteLine("[ActiveAction] Recording: stop/pin");
+            AppLog.Debug("SnipWindowViewModel.ModeRouting", "[ActiveAction] Recording: stop/pin");
             PinCommand?.Execute().SubscribeLoggingErrors();
             return;
         }
@@ -781,13 +781,13 @@ public partial class SnipWindowViewModel
         // 錄影模式（空閒且已選取）：開始錄影
         if (CurrentMode == SnipMode.Recording && CurrentState == SnipState.Selected)
         {
-            System.Diagnostics.Debug.WriteLine("[ActiveAction] Recording: start");
+            AppLog.Debug("SnipWindowViewModel.ModeRouting", "[ActiveAction] Recording: start");
             StartRecordingCommand?.Execute().SubscribeLoggingErrors();
             return;
         }
 
         // 截圖模式或未進入錄影：釘選
-        System.Diagnostics.Debug.WriteLine("[SnipWindowViewModel] Invoking PinCommand.");
+        AppLog.Debug("SnipWindowViewModel.ModeRouting", "[SnipWindowViewModel] Invoking PinCommand.");
         PinCommand?.Execute().SubscribeLoggingErrors();
     }
 

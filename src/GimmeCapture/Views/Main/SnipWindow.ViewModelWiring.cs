@@ -570,7 +570,7 @@ public partial class SnipWindow : Window
                 if (aiService == null)
                 {
                      // Fallback check (shouldn't happen if MainVm is set)
-                     System.Diagnostics.Debug.WriteLine("AIResourceService is null!");
+                     AppLog.Debug("SnipWindow.ViewModelWiring", "AIResourceService is null!");
                      return;
                 }
                 
@@ -730,7 +730,7 @@ public partial class SnipWindow : Window
                                     }
                                     else
                                     {
-                                        System.Diagnostics.Debug.WriteLine($"Failed to encode pinned image: {encErr}");
+                                        AppLog.Debug("SnipWindow.ViewModelWiring", $"Failed to encode pinned image: {encErr}");
                                     }
                                 }
                             }

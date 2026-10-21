@@ -521,10 +521,10 @@ public partial class SnipWindowViewModel
             CurrentAnnotationTool = CurrentAnnotationTool == t ? AnnotationType.None : t;
             IsDrawingMode = CurrentAnnotationTool != AnnotationType.None;
         }, canExecuteNonTranslation);
-        SelectToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        SelectToolCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(_editorState.ApplySelectedColor);
-        ChangeColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        ChangeColorCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         
         IncreaseThicknessCommand = ReactiveCommand.Create(() => _editorState.ApplySelectedThickness(Math.Min(CurrentThickness + 1, 30)));
         DecreaseThicknessCommand = ReactiveCommand.Create(() => _editorState.ApplySelectedThickness(Math.Max(CurrentThickness - 1, 1)));
@@ -540,9 +540,9 @@ public partial class SnipWindowViewModel
             x => x.IsEnteringText,
             (redo, textFocus, enteringText) => redo && !textFocus && !enteringText);
         UndoCommand = ReactiveCommand.Create(Undo, canUndo);
-        UndoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        UndoCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
-        RedoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        RedoCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
 
         var canReorder = this.WhenAnyValue(
             x => x.SelectedAnnotation,
@@ -550,14 +550,14 @@ public partial class SnipWindowViewModel
             x => x.IsEnteringText,
             (annotation, textFocus, enteringText) => annotation != null && !textFocus && !enteringText);
         BringToFrontCommand = ReactiveCommand.Create(() => { _editorState.BringSelectedToFront(); }, canReorder);
-        BringToFrontCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        BringToFrontCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         SendToBackCommand = ReactiveCommand.Create(() => { _editorState.SendSelectedToBack(); }, canReorder);
-        SendToBackCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        SendToBackCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
 
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 72) CurrentFontSize += 2; }, canExecuteHotkeys);
-        IncreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        IncreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 8) CurrentFontSize -= 2; }, canExecuteHotkeys);
-        DecreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        DecreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         
         ApplyHexColorCommand = ReactiveCommand.Create(() => 
         {
@@ -574,35 +574,35 @@ public partial class SnipWindowViewModel
             }
             catch (Exception ex) { AppLog.Warning("SnipToolbar.ApplyHexColor", ex); }
         });
-        ApplyHexColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        ApplyHexColorCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
 
         ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
-        ChangeLanguageCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        ChangeLanguageCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         
         ToggleBoldCommand = ReactiveCommand.Create(() => 
         {
             IsBold = !IsBold;
             return Unit.Default;
         });
-        ToggleBoldCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        ToggleBoldCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         
         ToggleItalicCommand = ReactiveCommand.Create(() => 
         {
             IsItalic = !IsItalic;
             return Unit.Default;
         });
-        ToggleItalicCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        ToggleItalicCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
 
         IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
-        IncreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        IncreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
-        DecreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        DecreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
 
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
-        ToggleToolbarCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        ToggleToolbarCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
 
         ToggleTranslationResultsCommand = ReactiveCommand.Create(() => { ShowTranslationResults = !ShowTranslationResults; });
-        ToggleTranslationResultsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        ToggleTranslationResultsCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
 
         SelectFullscreenCommand = ReactiveCommand.Create(() =>
         {
@@ -615,7 +615,7 @@ public partial class SnipWindowViewModel
             SelectionRect = ResolveFullscreenSelectionRect();
             CurrentState = SnipState.Selected;
         }, canExecuteNonTranslation);
-        SelectFullscreenCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        SelectFullscreenCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
     }
 
     private Rect ResolveFullscreenSelectionRect()

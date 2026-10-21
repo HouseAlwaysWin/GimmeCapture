@@ -57,7 +57,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to start loopback capture: {ex.Message}");
+            AppLog.Debug("RecordingService.Audio", $"Failed to start loopback capture: {ex.Message}");
             LogToFile($"[Audio] Start loopback capture failed: {ex.Message}");
             StopAudioCapture();
             return false;
@@ -78,7 +78,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Stop loopback capture failed: {ex.Message}");
+            AppLog.Debug("RecordingService.Audio", $"Stop loopback capture failed: {ex.Message}");
             LogToFile($"[Audio] Stop loopback capture failed: {ex.Message}");
         }
         finally
@@ -115,7 +115,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to start mic capture: {ex.Message}");
+            AppLog.Debug("RecordingService.Audio", $"Failed to start mic capture: {ex.Message}");
             LogToFile($"[Audio] Start mic capture failed: {ex.Message}");
             StopMicCapture();
             return false;
@@ -163,7 +163,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Stop mic capture failed: {ex.Message}");
+            AppLog.Debug("RecordingService.Audio", $"Stop mic capture failed: {ex.Message}");
             LogToFile($"[Audio] Stop mic capture failed: {ex.Message}");
         }
         finally
@@ -216,7 +216,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Write mic audio buffer failed: {ex.Message}");
+            AppLog.Debug("RecordingService.Audio", $"Write mic audio buffer failed: {ex.Message}");
             LogToFile($"[Audio] Write mic buffer failed: {ex.Message}");
         }
     }
@@ -233,7 +233,7 @@ public partial class RecordingService
 
         if (firstException != null)
         {
-            Debug.WriteLine($"Audio cleanup completed with errors: {firstException.Message}");
+            AppLog.Debug("RecordingService.Audio", $"Audio cleanup completed with errors: {firstException.Message}");
             LogToFile($"[Audio] Cleanup completed with errors: {firstException.Message}");
         }
         else
@@ -294,7 +294,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Write loopback audio buffer failed: {ex.Message}");
+            AppLog.Debug("RecordingService.Audio", $"Write loopback audio buffer failed: {ex.Message}");
             LogToFile($"[Audio] Write buffer failed: {ex.Message}");
         }
     }

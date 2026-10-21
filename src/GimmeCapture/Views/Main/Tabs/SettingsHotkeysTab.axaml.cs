@@ -40,7 +40,7 @@ public partial class SettingsHotkeysTab : UserControl
         var unknown = vm.HotkeyMappingService.ValidateTags(tags, vm);
         if (unknown.Count > 0)
         {
-            System.Diagnostics.Debug.WriteLine($"[SettingsHotkeysTab] Unknown hotkey tags: {string.Join(", ", unknown)}");
+            AppLog.Debug("SettingsHotkeysTab", $"[SettingsHotkeysTab] Unknown hotkey tags: {string.Join(", ", unknown)}");
         }
     }
 
@@ -127,7 +127,7 @@ public partial class SettingsHotkeysTab : UserControl
             {
                 var conflictName = GimmeCapture.Services.Core.Infrastructure.LocalizationService.Instance[conflict] ?? conflict;
                 vm.StatusText = $"[Conflict] {hotkeyStr} -> {conflictName}";
-                System.Diagnostics.Debug.WriteLine($"[HotkeyConflict] {hotkeyStr} conflicts with {conflict} for tag {tag}");
+                AppLog.Debug("SettingsHotkeysTab", $"[HotkeyConflict] {hotkeyStr} conflicts with {conflict} for tag {tag}");
 
                 if (TopLevel.GetTopLevel(this) is Window owner)
                 {

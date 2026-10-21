@@ -585,7 +585,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             var timeoutTask = Task.Delay(timeout);
             if (await Task.WhenAny(task, timeoutTask).ConfigureAwait(false) != task)
             {
-                System.Diagnostics.Debug.WriteLine($"{operation} did not finish within {timeout.TotalMilliseconds:0} ms; continuing disposal.");
+                AppLog.Debug("FloatingVideoViewModel", $"{operation} did not finish within {timeout.TotalMilliseconds:0} ms; continuing disposal.");
                 return false;
             }
 

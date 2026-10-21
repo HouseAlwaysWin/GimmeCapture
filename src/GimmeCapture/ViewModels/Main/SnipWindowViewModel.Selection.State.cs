@@ -27,7 +27,7 @@ public partial class SnipWindowViewModel
         {
             var previousState = _currentState;
             bool enteringSelected = previousState != SnipState.Selected && value == SnipState.Selected;
-            System.Diagnostics.Debug.WriteLine($"[SnipState] {previousState} -> {value}");
+            AppLog.Debug("SnipWindowViewModel.Selection.State", $"[SnipState] {previousState} -> {value}");
             this.RaiseAndSetIfChanged(ref _currentState, value);
             this.RaisePropertyChanged(nameof(SelectionShadowColor));
             this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
@@ -237,7 +237,7 @@ public partial class SnipWindowViewModel
         get => _isTranslationActive;
         set
         {
-            System.Diagnostics.Debug.WriteLine($"[Translation] IsTranslationActive -> {value}");
+            AppLog.Debug("SnipWindowViewModel.Selection.State", $"[Translation] IsTranslationActive -> {value}");
             this.RaiseAndSetIfChanged(ref _isTranslationActive, value);
 
         }
@@ -249,7 +249,7 @@ public partial class SnipWindowViewModel
         get => _isTranslating;
         set
         {
-            System.Diagnostics.Debug.WriteLine($"[Translation] IsTranslating -> {value}");
+            AppLog.Debug("SnipWindowViewModel.Selection.State", $"[Translation] IsTranslating -> {value}");
             this.RaiseAndSetIfChanged(ref _isTranslating, value);
         }
     }

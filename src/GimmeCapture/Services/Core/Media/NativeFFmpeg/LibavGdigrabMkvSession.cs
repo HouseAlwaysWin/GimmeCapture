@@ -122,7 +122,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             catch (Exception ex)
             {
                 LastErrorMessage = ex.Message;
-                Debug.WriteLine($"[LibavGdigrab] {ex}");
+                AppLog.Debug("LibavGdigrabMkvSession", $"[LibavGdigrab] {ex}");
                 AppLog.Warning("RecordingNative.Worker", ex);
                 firstFrameTcs.TrySetException(ex);
                 return false;
@@ -410,7 +410,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 // ignore telemetry failure
             }
 
-            Debug.WriteLine($"[LibavGdigrab] segment done: frames={frameCounter}, packets={packetCounter}, output='{outputPath}', bytes={outputBytes}");
+            AppLog.Debug("LibavGdigrabMkvSession", $"[LibavGdigrab] segment done: frames={frameCounter}, packets={packetCounter}, output='{outputPath}', bytes={outputBytes}");
         }
         finally
         {

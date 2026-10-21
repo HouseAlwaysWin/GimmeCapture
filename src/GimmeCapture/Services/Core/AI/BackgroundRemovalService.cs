@@ -137,18 +137,18 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
             // Try edge-based solid background detection first
             if (IsSolidBackground(targetBmp, out bgColor))
             {
-                System.Diagnostics.Debug.WriteLine($"Solid background detected via edges ({bgColor}). Using Manual Removal.");
+                AppLog.Debug("BackgroundRemovalService", $"Solid background detected via edges ({bgColor}). Using Manual Removal.");
                 processedBytes = RemoveSolidBackground(targetBmp, bgColor);
             }
             // Try corner-based detection as fallback (better for cropped regions where logo touches edges)
             else if (TryGetCornerBackgroundColor(targetBmp, out bgColor))
             {
-                System.Diagnostics.Debug.WriteLine($"Solid background detected via corners ({bgColor}). Using Manual Removal.");
+                AppLog.Debug("BackgroundRemovalService", $"Solid background detected via corners ({bgColor}). Using Manual Removal.");
                 processedBytes = RemoveSolidBackground(targetBmp, bgColor);
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("Complex background detected. Using AI Removal.");
+                AppLog.Debug("BackgroundRemovalService", "Complex background detected. Using AI Removal.");
                 var session = _session;
                 processedBytes = RunAIInference(targetBmp, session!);
             }
@@ -238,7 +238,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         double meanSqDiff = sumSqDiff / accumulator.Count;
         double stdDev = Math.Sqrt(meanSqDiff);
 
-        System.Diagnostics.Debug.WriteLine($"[BgDetection] Edge StdDev: {stdDev:F2} (Threshold: 15.0)");
+        AppLog.Debug("BackgroundRemovalService", $"[BgDetection] Edge StdDev: {stdDev:F2} (Threshold: 15.0)");
 
         // Thresholds:
         // A truly solid digital image (mspaint) has StdDev ~ 0.
@@ -248,7 +248,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         if (stdDev < 15.0) 
         {
             bgColor = new SKColor((byte)avgR, (byte)avgG, (byte)avgB);
-            System.Diagnostics.Debug.WriteLine($"[BgDetection] Solid background confirmed. Color: {bgColor}");
+            AppLog.Debug("BackgroundRemovalService", $"[BgDetection] Solid background confirmed. Color: {bgColor}");
             return true;
         }
 
@@ -323,12 +323,12 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         }
 
         double ratio = (double)groupCounts[dominantIndex] / opaqueCount;
-        System.Diagnostics.Debug.WriteLine($"[CornerBg] Dominant color ratio: {ratio:P0}, Count: {groupCounts[dominantIndex]}/{opaqueCount}");
+        AppLog.Debug("BackgroundRemovalService", $"[CornerBg] Dominant color ratio: {ratio:P0}, Count: {groupCounts[dominantIndex]}/{opaqueCount}");
 
         if (ratio >= 0.6)
         {
             bgColor = groupColors[dominantIndex];
-            System.Diagnostics.Debug.WriteLine($"[CornerBg] Background detected: {bgColor}");
+            AppLog.Debug("BackgroundRemovalService", $"[CornerBg] Background detected: {bgColor}");
             return true;
         }
 
@@ -431,7 +431,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
                 }
             }
 
-            System.Diagnostics.Debug.WriteLine($"AI Mask Prob Range: Min={minProb}, Max={maxProb}");
+            AppLog.Debug("BackgroundRemovalService", $"AI Mask Prob Range: Min={minProb}, Max={maxProb}");
             minOut = minProb;
             maxOut = maxProb;
 

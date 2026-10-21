@@ -161,7 +161,7 @@ public partial class SnipWindowViewModel
                     long currentBytes = _recordingService.GetCurrentRecordingSizeBytes();
                     if (currentBytes > maxMb * 1024 * 1024)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Recording size limit reached: {currentBytes / 1024.0 / 1024.0:F2} MB > {maxMb} MB. Pinning...");
+                        AppLog.Debug("SnipWindowViewModel.Recording", $"Recording size limit reached: {currentBytes / 1024.0 / 1024.0:F2} MB > {maxMb} MB. Pinning...");
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                             ExecutePinRecordingAsync().Forget("Recording.ExecutePin"));
                     }
@@ -184,7 +184,7 @@ public partial class SnipWindowViewModel
                 if (!_lowDiskStopTriggered && _recordingService.GetTempDriveAvailableBytes() < MinFreeDiskBytes)
                 {
                     _lowDiskStopTriggered = true;
-                    System.Diagnostics.Debug.WriteLine("Low disk space — stopping recording to preserve the capture.");
+                    AppLog.Debug("SnipWindowViewModel.Recording", "Low disk space — stopping recording to preserve the capture.");
                     _mainVm.SetStatus("RecordLowDiskSpace");
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         ExecutePinRecordingAsync().Forget("Recording.LowDiskStop"));
@@ -512,7 +512,7 @@ public partial class SnipWindowViewModel
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"Recording output not found, save dialog had target but source missing: {actualOutputPath}");
+                    AppLog.Debug("SnipWindowViewModel.Recording", $"Recording output not found, save dialog had target but source missing: {actualOutputPath}");
                 }
             }
             else
@@ -523,7 +523,7 @@ public partial class SnipWindowViewModel
                     if (!string.IsNullOrEmpty(actualOutputPath) && System.IO.File.Exists(actualOutputPath))
                     {
                         System.IO.File.Delete(actualOutputPath);
-                        System.Diagnostics.Debug.WriteLine($"Deleted cancelled recording: {actualOutputPath}");
+                        AppLog.Debug("SnipWindowViewModel.Recording", $"Deleted cancelled recording: {actualOutputPath}");
                     }
                 }
                 catch (Exception ex)
@@ -740,7 +740,7 @@ public partial class SnipWindowViewModel
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"Video file not found at: {actualOutputPath}");
+                AppLog.Debug("SnipWindowViewModel.Recording", $"Video file not found at: {actualOutputPath}");
             }
 
             CloseAction?.Invoke();
@@ -783,13 +783,13 @@ public partial class SnipWindowViewModel
                 string? recordingPath = await ResolveRecordingFilePathAsync(
                     _recordingService.OutputFilePath ?? _currentRecordingPath);
 
-                System.Diagnostics.Debug.WriteLine($"[Pin] OutputFilePath={_recordingService.OutputFilePath}");
-                System.Diagnostics.Debug.WriteLine($"[Pin] LastRecordingPath={_recordingService.LastRecordingPath}");
-                System.Diagnostics.Debug.WriteLine($"[Pin] _currentRecordingPath={_currentRecordingPath}");
-                System.Diagnostics.Debug.WriteLine($"[Pin] Resolved recordingPath={recordingPath}");
-                System.Diagnostics.Debug.WriteLine($"[Pin] File.Exists={(!string.IsNullOrEmpty(recordingPath) && System.IO.File.Exists(recordingPath))}");
+                AppLog.Debug("SnipWindowViewModel.Recording", $"[Pin] OutputFilePath={_recordingService.OutputFilePath}");
+                AppLog.Debug("SnipWindowViewModel.Recording", $"[Pin] LastRecordingPath={_recordingService.LastRecordingPath}");
+                AppLog.Debug("SnipWindowViewModel.Recording", $"[Pin] _currentRecordingPath={_currentRecordingPath}");
+                AppLog.Debug("SnipWindowViewModel.Recording", $"[Pin] Resolved recordingPath={recordingPath}");
+                AppLog.Debug("SnipWindowViewModel.Recording", $"[Pin] File.Exists={(!string.IsNullOrEmpty(recordingPath) && System.IO.File.Exists(recordingPath))}");
                 if (!string.IsNullOrEmpty(recordingPath) && System.IO.File.Exists(recordingPath))
-                    System.Diagnostics.Debug.WriteLine($"[Pin] FileSize={new System.IO.FileInfo(recordingPath).Length}");
+                    AppLog.Debug("SnipWindowViewModel.Recording", $"[Pin] FileSize={new System.IO.FileInfo(recordingPath).Length}");
 
                 if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath))
                 {

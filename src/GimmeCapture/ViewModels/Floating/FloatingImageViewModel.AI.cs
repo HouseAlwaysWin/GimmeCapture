@@ -310,7 +310,7 @@ public partial class FloatingImageViewModel
         _interactiveSession.ResetPoints();
         InteractiveMask = null;
         DiagnosticText = "AI: Points Reset";
-        System.Diagnostics.Debug.WriteLine("FloatingVM: Resetting interactive points");
+        AppLog.Debug("FloatingImageViewModel.AI", "FloatingVM: Resetting interactive points");
         RaiseInteractiveStateChanged();
     }
 
@@ -442,7 +442,7 @@ public partial class FloatingImageViewModel
         if (IsProcessing || !CanInteractiveClick) return;
         
         // LOG PHYSICAL PIXEL COORDINATES FOR USER VERIFICATION
-        System.Diagnostics.Debug.WriteLine($"[AI DEBUG] Click Pixel: ({x:F0}, {y:F0}) Type: {(isPositive ? "Positive" : "Negative")}");
+        AppLog.Debug("FloatingImageViewModel.AI", $"[AI DEBUG] Click Pixel: ({x:F0}, {y:F0}) Type: {(isPositive ? "Positive" : "Negative")}");
         
         var physicalX = x;
         var physicalY = y;
@@ -455,7 +455,7 @@ public partial class FloatingImageViewModel
             _interactiveSession.AddPoint(physicalX, physicalY, isPositive);
             if (_interactiveSession.PointCount == 1)
             {
-                System.Diagnostics.Debug.WriteLine($"[AI MODE] First point. Keep selected mode = {_interactiveSession.IsKeepSelectedMode}");
+                AppLog.Debug("FloatingImageViewModel.AI", $"[AI MODE] First point. Keep selected mode = {_interactiveSession.IsKeepSelectedMode}");
             }
             if (wasFirstPoint)
                 RaiseInteractiveStateChanged();
@@ -809,7 +809,7 @@ public partial class FloatingImageViewModel
         {
             if (ShowDialogAction == null)
             {
-                System.Diagnostics.Debug.WriteLine($"[Dialog] Owner not found. Title={title}, Message={message}");
+                AppLog.Debug("FloatingImageViewModel.AI", $"[Dialog] Owner not found. Title={title}, Message={message}");
                 return;
             }
 

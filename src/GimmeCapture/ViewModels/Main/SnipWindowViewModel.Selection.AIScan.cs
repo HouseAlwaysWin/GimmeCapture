@@ -438,7 +438,7 @@ public partial class SnipWindowViewModel
         // new scan each time, which appeared as continuous flickering.
         if (IsTranslationOcrSearchActive)
         {
-            System.Diagnostics.Debug.WriteLine("[TranslationOCR] Ignored duplicate OCR search entry.");
+            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[TranslationOCR] Ignored duplicate OCR search entry.");
             return;
         }
 
@@ -690,37 +690,37 @@ public partial class SnipWindowViewModel
 
     private async Task RunOCRScanAsync()
     {
-        System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] RunOCRScanAsync started");
+        AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] RunOCRScanAsync started");
 
         if (RecState != RecordingState.Idle)
         {
-            System.Diagnostics.Debug.WriteLine($"[AI Scan][OCR] Abort: RecState is {RecState}");
+            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", $"[AI Scan][OCR] Abort: RecState is {RecState}");
             return;
         }
 
         if (_mainVm == null || !_mainVm.EnableAI)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: EnableAI is false or MainVm is null");
+            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Abort: EnableAI is false or MainVm is null");
             AppLog.Information("Snip.OCRAutoScan: skipped — master EnableAI is off (Settings > AI).");
             return;
         }
 
         if (!_mainVm.EnableAIScan)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: EnableAIScan is false");
+            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Abort: EnableAIScan is false");
             AppLog.Information("Snip.OCRAutoScan: skipped — EnableAIScan (OCR selection detection) is off.");
             return;
         }
 
         if (CurrentMode == SnipMode.Translation)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: Translation mode");
+            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Abort: Translation mode");
             return;
         }
 
         if (_aiScanSessionService == null)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: AI scan session service is null");
+            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Abort: AI scan session service is null");
             AppLog.Information("Snip.OCRAutoScan: skipped — AI scan session service is null (service not wired).");
             return;
         }
@@ -750,7 +750,7 @@ public partial class SnipWindowViewModel
             var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(frozenLease), progress, token);
             if (!result.IsReady)
             {
-                System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] OCR resources are not ready");
+                AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] OCR resources are not ready");
                 // Most common reason OCR "does nothing" with no visible error: the OCR model module is not
                 // installed (or a download failed/was cancelled). Log it to the file sink so it is
                 // diagnosable without a debugger; the user installs it from the Modules tab.
@@ -762,7 +762,7 @@ public partial class SnipWindowViewModel
         }
         catch (OperationCanceledException)
         {
-            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] CANCELLED");
+            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] CANCELLED");
         }
         catch (Exception ex)
         {

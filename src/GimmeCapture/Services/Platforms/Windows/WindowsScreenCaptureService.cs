@@ -583,11 +583,11 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                  {
                      await global::Avalonia.Input.Platform.ClipboardExtensions.SetFilesAsync(clipboard, new[] { file });
                  }
-                 System.Diagnostics.Debug.WriteLine($"Avalonia Clipboard: Copied file {filePath}");
+                 AppLog.Debug("WindowsScreenCaptureService", $"Avalonia Clipboard: Copied file {filePath}");
             }
             else
             {
-                 System.Diagnostics.Debug.WriteLine("Avalonia Clipboard: Clipboard not available");
+                 AppLog.Debug("WindowsScreenCaptureService", "Avalonia Clipboard: Clipboard not available");
             }
         });
     }
