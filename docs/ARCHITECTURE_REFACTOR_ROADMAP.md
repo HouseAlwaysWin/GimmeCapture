@@ -1,6 +1,7 @@
 # GimmeCapture Architecture Refactor Roadmap
 
-Snapshot date: 2026-05-14
+Snapshot date: 2026-05-14. A record of that day's state, kept as written: line counts and hotspots below have
+moved since. `REFACTOR_PLAN.md` tracks what has been done and what is next.
 
 ## Purpose
 This document captures the current architecture refactor recommendations for the repository so the next implementation pass can start from a concrete, code-aware roadmap instead of re-analyzing the codebase.
