@@ -44,7 +44,6 @@ Current version: see `<Version>` in `src/GimmeCapture/GimmeCapture.csproj` and
 ```
 GimmeCapture.slnx              # solution (XML slnx format)
 Directory.Build.props          # shared MSBuild props (lock files, RID win-x64)
-config.json                    # sample/dev runtime config (NOT copied to output)
 src/GimmeCapture/
   Program.cs                   # entry point; AppLog init, Avalonia bootstrap
   App.axaml(.cs)               # Avalonia Application, lifecycle
@@ -188,8 +187,8 @@ pushing again).
 ### Settings & storage
 - `AppSettings` (model) is persisted as JSON by `AppSettingsService`.
 - Storage lives under `%LOCALAPPDATA%\GimmeCapture` with per-install-instance,
-  per-version config directories (`AppStoragePaths`). The repo-root `config.json`
-  is a dev/sample file and is **not** copied to build output.
+  per-version config directories (`AppStoragePaths`). A first run writes a fresh
+  config there; the repository carries no sample.
 
 ### Hotkeys
 - Global hotkeys go through `WindowsGlobalHotkeyService` and the routing layer:
