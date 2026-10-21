@@ -126,6 +126,11 @@
 
 ### 🖼️ Interface
 
+- **A pinned image's questions and messages use the app's own dialog.** Asking whether to download AI modules
+  borrowed the update dialog, so it was titled "GIMME UPDATE!!" with an "update now" button; background removal
+  also asked interactive selection's question (about 100 MB) instead of its own (about 300 MB). Messages such as
+  "AI is disabled" showed Yes and No buttons whose answer nothing read; they now have one OK button. Recording and
+  Quick OCR progress use the same winged bar as downloads.
 - **Exporting from a pinned video shows the same winged progress bar as downloads.** Copying, saving or cropping
   an edited clip used to dim the whole video behind a plain bar that never moved off 0.0%. The winged bar now
   appears in its own small window over the video, so a small pin can't clip it, and it doesn't take focus. An

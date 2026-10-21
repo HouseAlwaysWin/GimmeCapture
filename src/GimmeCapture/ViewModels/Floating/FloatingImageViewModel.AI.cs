@@ -243,7 +243,7 @@ public partial class FloatingImageViewModel
             DiagnosticText = LocalizationService.Instance["AIDisabled"];
             CurrentTool = FloatingTool.None;
 
-            ShowGothicDialog("AIDisabledTitle", "AIDisabledMessage");
+            ShowMessageDialog("AIDisabledTitle", "AIDisabledMessage");
             return;
         }
 
@@ -297,7 +297,7 @@ public partial class FloatingImageViewModel
             DiagnosticText = LocalizationService.Instance["StatusError"]; // Or specify a new one
             CurrentTool = FloatingTool.None;
 
-            ShowGothicDialog("AIInitErrorTitle", "AIInitErrorMessage", ex.Message);
+            ShowMessageDialog("AIInitErrorTitle", "AIInitErrorMessage", ex.Message);
         }
         finally
         {
@@ -471,14 +471,15 @@ public partial class FloatingImageViewModel
 
     private async Task<bool> ShowDownloadConfirmationAsync()
     {
-        var msg = LocalizationService.Instance["AIDownloadConfirm"] ?? "Interactive AI Selection requires additional modules. Download now?";
+        var title = LocalizationService.Instance["AIDownloadTitle"];
+        var msg = LocalizationService.Instance["AIDownloadConfirm"];
         bool confirmed = false;
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
             if (ConfirmDialogAction != null)
             {
-                confirmed = await ConfirmDialogAction(msg);
+                confirmed = await ConfirmDialogAction(title, msg);
             }
         });
         
@@ -495,7 +496,7 @@ public partial class FloatingImageViewModel
         var currentStatus = _resourceQueue.GetSnapshot("AI")?.Status;
         if (currentStatus is ResourceQueueStatus.Pending or ResourceQueueStatus.Running)
         {
-            ShowGothicDialog("StatusProcessing", "ComponentDownloadingProgress");
+            ShowMessageDialog("StatusProcessing", "ComponentDownloadingProgress");
             return false;
         }
 
@@ -535,19 +536,22 @@ public partial class FloatingImageViewModel
         var currentStatus = _resourceQueue.GetSnapshot("AI Core")?.Status;
         if (currentStatus is ResourceQueueStatus.Pending or ResourceQueueStatus.Running)
         {
-            ShowGothicDialog("StatusProcessing", "ComponentDownloadingProgress");
+            ShowMessageDialog("StatusProcessing", "ComponentDownloadingProgress");
             return false;
         }
 
         // 3. Not ready, Not downloading -> Ask for permission
-        var msg = LocalizationService.Instance["AIDownloadConfirm"] ?? "Background Removal requires additional modules. Download now?";
+        // Background removal's own question (~300 MB of ONNX Runtime and U2Net); it used to ask interactive
+        // selection's (~100 MB).
+        var title = LocalizationService.Instance["AIDownloadTitle"];
+        var msg = LocalizationService.Instance["AIDownloadPrompt"];
         bool confirmed = false;
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
             if (ConfirmDialogAction != null)
             {
-                confirmed = await ConfirmDialogAction(msg);
+                confirmed = await ConfirmDialogAction(title, msg);
             }
         });
         
@@ -569,7 +573,7 @@ public partial class FloatingImageViewModel
         // Check if AI is enabled
         if (!_appSettingsService.Settings.EnableAI)
         {
-            ShowGothicDialog("AIDisabledTitle", "AIDisabledMessage");
+            ShowMessageDialog("AIDisabledTitle", "AIDisabledMessage");
             return;
         }
         
@@ -776,10 +780,10 @@ public partial class FloatingImageViewModel
 
     private void ShowErrorDialog(string message)
     {
-        ShowGothicDialog("StatusError", message);
+        ShowMessageDialog("StatusError", message);
     }
 
-    private void ShowGothicDialog(string titleKey, string messageKeyOrText, params object[] formatArgs)
+    private void ShowMessageDialog(string titleKey, string messageKeyOrText, params object[] formatArgs)
     {
         var title = LocalizeKeyOrText(titleKey);
         var messageTemplate = LocalizeKeyOrText(messageKeyOrText);
@@ -787,7 +791,7 @@ public partial class FloatingImageViewModel
             ? string.Format(messageTemplate, formatArgs)
             : messageTemplate;
 
-        ShowGothicDialogOnUiThread(title, message);
+        ShowMessageDialogOnUiThread(title, message);
     }
 
     private string LocalizeKeyOrText(string keyOrText)
@@ -799,7 +803,7 @@ public partial class FloatingImageViewModel
         return string.IsNullOrWhiteSpace(localized) ? keyOrText : localized;
     }
 
-    private void ShowGothicDialogOnUiThread(string title, string message)
+    private void ShowMessageDialogOnUiThread(string title, string message)
     {
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
