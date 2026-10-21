@@ -177,6 +177,27 @@ public partial class MainWindowViewModel
         AddCompressCategoryCommand = ReactiveCommand.Create(AddCompressCategory, canAddCategory);
         AddCompressCategoryCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.AddCategory", ex));
 
+        RefreshCategoryChoices(); // seed the row category dropdown (just the default until an area is active)
+    }
+
+    private bool _compressInitialized;
+
+    /// <summary>
+    /// Sets the Compress tab up the first time it is shown: its commands, presets and last-used settings, then the
+    /// queue saved last session (per-file edit/done state, working directories, the active directory's videos).
+    /// Nothing outside that tab reaches any of it, and doing it at start-up cost every launch about a quarter of a
+    /// second on the UI thread.
+    /// </summary>
+    internal void EnsureCompressInitialized()
+    {
+        if (_compressInitialized)
+        {
+            return;
+        }
+
+        _compressInitialized = true;
+        InitializeVideoCompress();
+
         // Restore the persisted per-file edit/done state BEFORE any queue items are created below.
         _itemStates = CompressItemStateService.Load();
         CompressSegmentStore.PruneOrphans(); // drop abandoned resume chunks from crashed/old sessions
@@ -187,7 +208,7 @@ public partial class MainWindowViewModel
         {
             CompressWorkingDirectories.Add(dir);
         }
-        RefreshCategoryChoices(); // seed the row category dropdown (just the default until an area is active)
+        RefreshCategoryChoices();
 
         string? startupDir = dirState.Directories
             .FirstOrDefault(d => string.Equals(d, dirState.Active, StringComparison.OrdinalIgnoreCase))

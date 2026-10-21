@@ -47,6 +47,7 @@ class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        StartupTrace.MainStarted();
         CommandLineArgs = args ?? [];
         AppLog.Initialize();
         try

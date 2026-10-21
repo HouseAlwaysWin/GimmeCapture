@@ -212,6 +212,9 @@ pushing again).
   thread before blocking work — native/COM initialization, model loads, large file I/O — with `Task.Run` or
   `ConfigureAwaitOptions.ForceYielding`. Missing this caused the OCR-session, history-thumbnail and recording-start
   freezes. `UiStall` warnings in the log (any freeze over ~0.35 s, with its length) are where these show up.
+- Every settings tab except General is built the first time it is shown (`EnsureLazyTabContent` in
+  `MainWindow.Tabs.cs`), and set-up only one tab needs belongs there too (`EnsureCompressInitialized`).
+  `Startup.Timings` in the log breaks a launch down by stage.
 
 ### Accessibility
 - A screen reader names a button after its content, which for an icon is the icon's type name.

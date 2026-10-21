@@ -43,7 +43,7 @@ public sealed class TrayController
         try
         {
             var loc = LocalizationService.Instance;
-            var assets = Avalonia.Platform.AssetLoader.Open(new Uri("avares://GimmeCapture/Assets/kitsune_icon.png"));
+            var assets = Avalonia.Platform.AssetLoader.Open(new Uri("avares://GimmeCapture/Assets/kitsune_icon_64.png"));
             var icon = new WindowIcon(assets);
 
             var trayIcon = new TrayIcon

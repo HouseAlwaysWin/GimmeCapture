@@ -20,9 +20,14 @@ using GimmeCapture.Views.Main.Tabs;
 namespace GimmeCapture.Views.Main;
 
 // Settings tab lazy-loading + modules-tab navigation for MainWindow.
-// Split out of MainWindow.axaml.cs by concern — no behavior change.
+// Every tab but General (selected at start) is built the first time it is shown: building them all up front was
+// over half a second of the start-up's UI-thread time.
 public partial class MainWindow
 {
+    private ContentControl? _snipTabHost;
+    private ContentControl? _compressTabHost;
+    private ContentControl? _hotkeysTabHost;
+    private ContentControl? _historyTabHost;
     private ContentControl? _recordTabHost;
     private ContentControl? _translationTabHost;
     private ContentControl? _modulesTabHost;
@@ -50,11 +55,23 @@ public partial class MainWindow
     {
         switch (selectedIndex)
         {
+            case 1:
+                _snipTabHost ??= this.FindControl<ContentControl>("SnipTabHost");
+                _snipTabHost!.Content ??= new SettingsSnipTab();
+                break;
             case 2:
                 _recordTabHost ??= this.FindControl<ContentControl>("RecordTabHost");
                 _recordTabHost!.Content ??= new SettingsRecordTab();
                 break;
-            // index 3 = Compress tab (SettingsCompressTab) — non-lazy, declared inline in MainWindow.axaml.
+            case 3:
+                if (DataContext is MainWindowViewModel compressVm)
+                {
+                    compressVm.EnsureCompressInitialized();
+                }
+
+                _compressTabHost ??= this.FindControl<ContentControl>("CompressTabHost");
+                _compressTabHost!.Content ??= new SettingsCompressTab();
+                break;
             case 4:
                 if (DataContext is MainWindowViewModel translationVm)
                 {
@@ -64,6 +81,10 @@ public partial class MainWindow
                 _translationTabHost ??= this.FindControl<ContentControl>("TranslationTabHost");
                 _translationTabHost!.Content ??= new SettingsTranslationTab();
                 break;
+            case 5:
+                _hotkeysTabHost ??= this.FindControl<ContentControl>("HotkeysTabHost");
+                _hotkeysTabHost!.Content ??= new SettingsHotkeysTab();
+                break;
             case 6:
                 if (DataContext is MainWindowViewModel vm)
                 {
@@ -72,6 +93,10 @@ public partial class MainWindow
 
                 _modulesTabHost ??= this.FindControl<ContentControl>("ModulesTabHost");
                 _modulesTabHost!.Content ??= new SettingsModulesTab();
+                break;
+            case 7:
+                _historyTabHost ??= this.FindControl<ContentControl>("HistoryTabHost");
+                _historyTabHost!.Content ??= new SettingsHistoryTab();
                 break;
             case 8:
                 if (DataContext is MainWindowViewModel aboutVm)

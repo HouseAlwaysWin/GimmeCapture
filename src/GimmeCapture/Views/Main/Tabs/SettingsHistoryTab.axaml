@@ -61,48 +61,60 @@
                    IsVisible="{Binding IsHistoryEmpty}"
                    Opacity="0.55" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
-        <!-- Thumbnail grid -->
-        <ScrollViewer Grid.Row="2" Margin="0,8,0,0" IsVisible="{Binding !IsHistoryEmpty}">
-            <ItemsControl ItemsSource="{Binding HistoryItems}">
+        <!-- Thumbnail grid: rows of cards, filled from HistoryItems by the code-behind. A virtualizing list of rows
+             builds cards only for the rows on screen. -->
+        <ScrollViewer x:Name="HistoryScroller" Grid.Row="2" Margin="0,8,0,0" IsVisible="{Binding !IsHistoryEmpty}">
+            <ItemsControl x:Name="HistoryRowsHost">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <WrapPanel/>
+                        <VirtualizingStackPanel/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:HistoryItemViewModel">
-                        <Border Width="210" Margin="6" Background="#1A1A1A" CornerRadius="6" Padding="8">
-                            <StackPanel Spacing="6">
-                                <Panel Height="110" Background="#0D0D0D">
-                                    <Image Source="{Binding Thumbnail}" Stretch="Uniform" IsVisible="{Binding HasThumbnail}"/>
-                                    <TextBlock Text="🎞" FontSize="40" Opacity="0.5"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                               IsVisible="{Binding !HasThumbnail}"/>
-                                    <Border Background="#AA000000" CornerRadius="3" Padding="5,1"
-                                            HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4"
-                                            IsVisible="{Binding IsVideo}">
-                                        <TextBlock Text="▶" FontSize="10" Foreground="White"/>
+                    <DataTemplate x:DataType="vm:HistoryRow">
+                        <ItemsControl ItemsSource="{Binding Items}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:HistoryItemViewModel">
+                                    <Border Width="210" Margin="6" Background="#1A1A1A" CornerRadius="6" Padding="8">
+                                        <StackPanel Spacing="6">
+                                            <Panel Height="110" Background="#0D0D0D">
+                                                <Image Source="{Binding Thumbnail}" Stretch="Uniform" IsVisible="{Binding HasThumbnail}"/>
+                                                <TextBlock Text="🎞" FontSize="40" Opacity="0.5"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           IsVisible="{Binding !HasThumbnail}"/>
+                                                <Border Background="#AA000000" CornerRadius="3" Padding="5,1"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4"
+                                                        IsVisible="{Binding IsVideo}">
+                                                    <TextBlock Text="▶" FontSize="10" Foreground="White"/>
+                                                </Border>
+                                            </Panel>
+                                            <TextBlock Text="{Binding FileName}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding CapturedAtLocal}" FontSize="10" Opacity="0.6"/>
+                                            <WrapPanel>
+                                                <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
+                                                        Content="{Binding [HistoryOpen], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Command="{Binding OpenCommand}" CommandParameter="{Binding}"/>
+                                                <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
+                                                        IsVisible="{Binding IsImage}"
+                                                        Content="{Binding [HistoryCopy], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Command="{Binding CopyCommand}" CommandParameter="{Binding}"/>
+                                                <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
+                                                        Content="{Binding [HistoryReveal], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Command="{Binding RevealCommand}" CommandParameter="{Binding}"/>
+                                                <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
+                                                        Content="{Binding [HistoryRemove], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Command="{Binding RemoveCommand}" CommandParameter="{Binding}"/>
+                                            </WrapPanel>
+                                        </StackPanel>
                                     </Border>
-                                </Panel>
-                                <TextBlock Text="{Binding FileName}" FontSize="11" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding CapturedAtLocal}" FontSize="10" Opacity="0.6"/>
-                                <WrapPanel>
-                                    <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
-                                            Content="{Binding [HistoryOpen], Source={x:Static services:LocalizationService.Instance}}"
-                                            Command="{Binding OpenCommand}" CommandParameter="{Binding}"/>
-                                    <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
-                                            IsVisible="{Binding IsImage}"
-                                            Content="{Binding [HistoryCopy], Source={x:Static services:LocalizationService.Instance}}"
-                                            Command="{Binding CopyCommand}" CommandParameter="{Binding}"/>
-                                    <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
-                                            Content="{Binding [HistoryReveal], Source={x:Static services:LocalizationService.Instance}}"
-                                            Command="{Binding RevealCommand}" CommandParameter="{Binding}"/>
-                                    <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
-                                            Content="{Binding [HistoryRemove], Source={x:Static services:LocalizationService.Instance}}"
-                                            Command="{Binding RemoveCommand}" CommandParameter="{Binding}"/>
-                                </WrapPanel>
-                            </StackPanel>
-                        </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
