@@ -227,6 +227,7 @@ public sealed class ArtifactDownloader(HttpClient httpClient) : IArtifactDownloa
         }
         catch
         {
+            // Best effort: a partial file left behind is replaced by the next download.
         }
     }
 }

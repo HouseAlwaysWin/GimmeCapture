@@ -715,8 +715,9 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
                 }
             }
         }
-        catch
+        catch (JsonException)
         {
+            // Not JSON: the model's reply is the translation as it stands.
         }
 
         return value;

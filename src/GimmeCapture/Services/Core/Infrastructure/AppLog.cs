@@ -12,6 +12,9 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 public static class AppLog
 {
     private const long LogFileSizeLimitBytes = 20L * 1024 * 1024;
+
+    /// <summary>Set to 1 before start-up to also write <see cref="Debug(string, string)"/> detail.</summary>
+    public const string DebugLogVariable = "GIMMECAPTURE_DEBUG_LOG";
     private static readonly ConcurrentQueue<string> RecentErrors = new();
     private static int _initialized;
 
@@ -26,7 +29,7 @@ public static class AppLog
 
         Directory.CreateDirectory(LogDirectory);
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
+            .MinimumLevel.Is(Environment.GetEnvironmentVariable(DebugLogVariable) == "1" ? LogEventLevel.Debug : LogEventLevel.Information)
             .MinimumLevel.Override("Avalonia", LogEventLevel.Warning)
             .Enrich.FromLogContext()
             .WriteTo.File(
@@ -68,6 +71,22 @@ public static class AppLog
     public static void Information(string operation, string message)
     {
         Log.Information("{Operation}: {Message}", SanitizeLabel(operation), message ?? "(none)");
+    }
+
+    /// <summary>
+    /// Detail for chasing a problem, written only when <see cref="DebugLogVariable"/> is 1: an expected failure (no CUDA,
+    /// a video with no audio) or cleanup that a later sweep retries. Debug.WriteLine, used for these before, does not
+    /// exist in a release build at all.
+    /// </summary>
+    public static void Debug(string operation, string message)
+    {
+        Log.Debug("{Operation}: {Message}", SanitizeLabel(operation), message ?? "(none)");
+    }
+
+    /// <inheritdoc cref="Debug(string, string)"/>
+    public static void Debug(string operation, Exception exception)
+    {
+        Record(LogEventLevel.Debug, operation, exception);
     }
 
     public static void Warning(string operation, Exception exception)
@@ -120,12 +139,15 @@ public static class AppLog
         ArgumentNullException.ThrowIfNull(exception);
         string safeOperation = SanitizeLabel(operation);
         string exceptionType = exception.GetType().FullName ?? exception.GetType().Name;
-        string summary = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz} | {safeOperation} | {exceptionType}";
 
-        RecentErrors.Enqueue(summary);
-        while (RecentErrors.Count > 20)
+        // Only problems go into the summary a bug report carries; expected failures logged at Debug do not.
+        if (level >= LogEventLevel.Warning)
         {
-            RecentErrors.TryDequeue(out _);
+            RecentErrors.Enqueue($"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz} | {safeOperation} | {exceptionType}");
+            while (RecentErrors.Count > 20)
+            {
+                RecentErrors.TryDequeue(out _);
+            }
         }
 
         Log.Write(

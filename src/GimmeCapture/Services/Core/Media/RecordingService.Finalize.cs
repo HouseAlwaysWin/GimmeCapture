@@ -324,7 +324,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Finalize] Audio merge failed: {ex.Message}");
+            AppLog.Warning("Recording.AudioMerge", ex); // only the first segment's audio is kept
             return validAudioSegments[0];
         }
     }
@@ -343,7 +343,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Invalid audio segment '{path}': {ex.Message}");
+            AppLog.Warning("Recording.InvalidAudioSegment", ex);
             return false;
         }
     }
@@ -759,7 +759,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to delete file '{path}': {ex.Message}");
+            AppLog.Debug("Recording.DeleteFile", ex); // TempWorkspaceCleaner sweeps what is left
         }
     }
 
@@ -773,7 +773,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to cleanup temp directory '{_tempDir}': {ex.Message}");
+            AppLog.Debug("Recording.CleanupTempDir", ex); // TempWorkspaceCleaner sweeps what is left
         }
     }
 

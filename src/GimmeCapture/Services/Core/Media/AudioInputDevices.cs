@@ -36,7 +36,7 @@ public static class AudioInputDevices
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Enumerate input devices failed: {ex.Message}");
+            AppLog.Warning("AudioInputDevices.Enumerate", ex);
         }
 
         return devices;

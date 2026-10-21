@@ -135,8 +135,9 @@ public class AppSettingsService : IAppSettingsService
                 return version;
             }
         }
-        catch
+        catch (JsonException)
         {
+            // Not JSON: version 0, and the load that follows reports the unreadable file.
         }
 
         return 0;

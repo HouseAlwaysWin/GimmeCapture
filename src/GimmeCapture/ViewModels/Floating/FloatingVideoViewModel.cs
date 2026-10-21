@@ -543,7 +543,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Video disposal wait failed: {ex}");
+            AppLog.Debug("FloatingVideo.DisposeWait", ex);
         }
 
         _audioPreview.Dispose();
@@ -598,7 +598,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"{operation} finished with error during disposal: {ex}");
+            AppLog.Debug("FloatingVideo.Dispose." + operation, ex);
             return true;
         }
     }

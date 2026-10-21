@@ -37,7 +37,7 @@ internal static class LibavGifTranscoder
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[Gif] Optimal-palette transcode failed ({ex.Message}); falling back to single-pass RGB8.");
+            AppLog.Warning("Gif.PaletteTranscode", ex); // falls back to single-pass RGB8
             TranscodeToGifRgb8(inputPath, outputPath, targetFps, maxWidth);
         }
     }

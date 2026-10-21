@@ -75,7 +75,7 @@ public static class FFmpegRuntime
             catch (Exception ex)
             {
                 errorMessage = $"FFmpeg native init failed: {ex.Message}";
-                Debug.WriteLine($"[FFmpegRuntime] {errorMessage}");
+                AppLog.Warning("FFmpegRuntime.Initialize", ex);
                 return false;
             }
         }

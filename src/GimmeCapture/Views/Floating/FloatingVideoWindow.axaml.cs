@@ -45,7 +45,7 @@ public partial class FloatingVideoWindow : FloatingWindowBase
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error snapshotting video: {ex.Message}");
+                AppLog.Warning("FloatingVideo.Snapshot", ex);
                 return null;
             }
         }

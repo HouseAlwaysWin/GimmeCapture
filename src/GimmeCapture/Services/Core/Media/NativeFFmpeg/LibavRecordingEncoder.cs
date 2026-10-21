@@ -367,6 +367,6 @@ internal static unsafe class LibavRecordingEncoder
 
     private static void LogNative(string message)
     {
-        System.Diagnostics.Debug.WriteLine($"[RecordingNative] {message}");
+        AppLog.Information("RecordingNative", message); // was Debug.WriteLine, which a release build leaves out
     }
 }

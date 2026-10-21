@@ -83,7 +83,7 @@ public partial class RecordingService
     {
         if (!FFmpegRuntime.IsInitialized)
         {
-            Debug.WriteLine("[RecordingService] FFmpeg native runtime not initialized.");
+            AppLog.Warning("Recording.Start", "FFmpeg native runtime not initialized.");
             LastStartError = "FFmpeg native runtime not initialized.";
             return false;
         }
@@ -105,7 +105,7 @@ public partial class RecordingService
                     }
 
                     // WGC produced no frames (e.g. dual-monitor repro) — warn once; subsequent recordings skip WGC.
-                    Debug.WriteLine($"[RecordingService] Separate WGC failed; per-window region capture. {LastStartError}");
+                    AppLog.Warning("Recording.Fallback", $"Separate WGC failed; per-window region capture. {LastStartError}");
                     LastStartWarning = "Window capture unavailable — recording each window's screen region instead.";
                 }
 
@@ -117,7 +117,7 @@ public partial class RecordingService
 
                 // Even per-window region capture failed: drop separate-files mode and record one region that will
                 // finalize (clearing _tracks routes stop to the single-file finalize path).
-                Debug.WriteLine($"[RecordingService] Per-window region fallback failed; single region. {LastStartError}");
+                AppLog.Warning("Recording.Fallback", $"Per-window region fallback failed; single region. {LastStartError}");
                 _tracks.Clear();
                 LastStartWarning = "Multi-window capture unavailable — recording the screen region instead.";
                 return await StartGdigrabSegmentAsync(segmentFile).ConfigureAwait(false);
@@ -130,7 +130,7 @@ public partial class RecordingService
                     return true;
                 }
 
-                Debug.WriteLine($"[RecordingService] Composite WGC capture failed; region. {LastStartError}");
+                AppLog.Warning("Recording.Fallback", $"Composite WGC capture failed; region. {LastStartError}");
                 LastStartWarning = "Multi-window capture unavailable — recording the screen region instead.";
             }
 
@@ -146,7 +146,7 @@ public partial class RecordingService
                 return true;
             }
 
-            Debug.WriteLine($"[RecordingService] WGC window capture failed; falling back to region. {LastStartError}");
+            AppLog.Warning("Recording.Fallback", $"WGC window capture failed; falling back to region. {LastStartError}");
             LastStartWarning = "Window capture unavailable — recording the window's current screen region instead.";
         }
 
@@ -197,7 +197,7 @@ public partial class RecordingService
             }
 
             LastStartError = ex.Message;
-            Debug.WriteLine($"[RecordingService] Composite recorder start failed: {ex.Message}");
+            AppLog.Warning("Recording.StartWgcComposite", ex);
             _nativeWgcCompositeRecorder?.Dispose();
             _nativeWgcCompositeRecorder = null;
             return false;
@@ -248,7 +248,7 @@ public partial class RecordingService
             }
 
             LastStartError = ex.Message;
-            Debug.WriteLine($"[RecordingService] WGC recorder start failed: {ex.Message}");
+            AppLog.Warning("Recording.StartWgc", ex);
             _nativeWgcRecorder?.Dispose();
             _nativeWgcRecorder = null;
             return false;
@@ -290,7 +290,7 @@ public partial class RecordingService
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[RecordingService] Track {p.Index} start threw: {ex.Message}");
+                AppLog.Warning("Recording.StartWgcTrack", ex);
                 ok = false;
             }
 
@@ -308,7 +308,7 @@ public partial class RecordingService
                     MarkWgcUnusableThisSession();
                 }
 
-                Debug.WriteLine($"[RecordingService] Track {p.Index} (hwnd {p.Track.Hwnd}) failed to start: {p.Session.LastErrorMessage}");
+                AppLog.Warning("Recording.StartWgcTrack", $"Track {p.Index} failed to start: {p.Session.LastErrorMessage}");
                 p.Session.Dispose();
             }
         }
@@ -349,7 +349,7 @@ public partial class RecordingService
 
             if (!TryGetWindowCaptureRect(track.Hwnd, out int x, out int y, out int w, out int h))
             {
-                Debug.WriteLine($"[RecordingService] Track {i} (hwnd {track.Hwnd}) window rect unavailable; skipping.");
+                AppLog.Warning("Recording.StartGdigrabTrack", $"Track {i}: window rect unavailable; skipping.");
                 continue;
             }
 
@@ -383,7 +383,7 @@ public partial class RecordingService
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[RecordingService] Track {p.Index} gdigrab start threw: {ex.Message}");
+                AppLog.Warning("Recording.StartGdigrabTrack", ex);
                 ok = false;
             }
 
@@ -396,7 +396,7 @@ public partial class RecordingService
             }
             else
             {
-                Debug.WriteLine($"[RecordingService] Track {p.Index} gdigrab failed: {p.Session.LastErrorMessage}");
+                AppLog.Warning("Recording.StartGdigrabTrack", $"Track {p.Index} failed: {p.Session.LastErrorMessage}");
                 p.Session.Dispose();
             }
         }
@@ -518,7 +518,7 @@ public partial class RecordingService
             if (!ok)
             {
                 LastStartError = _nativeRecorder.LastErrorMessage ?? "Native gdigrab session reported failure.";
-                Debug.WriteLine($"[RecordingService] Native gdigrab session reported failure: {LastStartError}");
+                AppLog.Warning("Recording.StartNative", $"Native gdigrab session reported failure: {LastStartError}");
                 _nativeRecorder.Dispose();
                 _nativeRecorder = null;
                 State = RecordingState.Idle;
@@ -531,7 +531,7 @@ public partial class RecordingService
         catch (Exception ex)
         {
             LastStartError = ex.Message;
-            Debug.WriteLine($"[RecordingService] Native recorder start failed: {ex.Message}");
+            AppLog.Warning("Recording.StartNative", ex);
             _nativeRecorder?.Dispose();
             _nativeRecorder = null;
             State = RecordingState.Idle;
@@ -582,7 +582,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error stopping native recorder: {ex.Message}");
+            AppLog.Warning("Recording.StopNative", ex);
         }
         finally
         {

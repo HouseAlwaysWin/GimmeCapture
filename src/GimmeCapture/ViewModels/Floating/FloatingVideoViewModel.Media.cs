@@ -354,7 +354,7 @@ public partial class FloatingVideoViewModel
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Playback Error: {ex.Message}");
+            AppLog.Warning("FloatingVideo.Playback", ex);
         }
         finally
         {

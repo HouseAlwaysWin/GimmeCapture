@@ -123,7 +123,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             {
                 LastErrorMessage = ex.Message;
                 Debug.WriteLine($"[LibavGdigrab] {ex}");
-                LogNative($"Worker exception: {ex}");
+                AppLog.Warning("RecordingNative.Worker", ex);
                 firstFrameTcs.TrySetException(ex);
                 return false;
             }
@@ -910,6 +910,6 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
     private static void LogNative(string message)
     {
-        System.Diagnostics.Debug.WriteLine($"[RecordingNative] {message}");
+        AppLog.Information("RecordingNative", message); // was Debug.WriteLine, which a release build leaves out
     }
 }
