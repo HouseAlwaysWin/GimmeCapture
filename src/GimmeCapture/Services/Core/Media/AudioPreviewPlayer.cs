@@ -97,7 +97,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
                 return;
             }
 
-            Debug.WriteLine($"[PinAudio] primary output failed: {ex.Message}");
+            AppLog.Warning("PinAudio.PrimaryOutput", ex);
             Stop();
 
             try
@@ -106,7 +106,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
             }
             catch (Exception fallbackEx)
             {
-                Debug.WriteLine($"[PinAudio] FFmpeg fallback failed: {fallbackEx.Message}");
+                AppLog.Warning("PinAudio.FfmpegFallback", fallbackEx);
                 Stop();
             }
         }
@@ -231,7 +231,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
             catch (Exception ex)
             {
                 // "No audio stream", device init failure, etc. Preview audio is best-effort: log and stay silent.
-                Debug.WriteLine($"[PinAudio] streaming decode failed: {ex.Message}");
+                AppLog.Debug("PinAudio.StreamingDecode", ex);
             }
         }, token);
     }

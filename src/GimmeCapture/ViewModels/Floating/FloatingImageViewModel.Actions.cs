@@ -393,7 +393,7 @@ public partial class FloatingImageViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Crop failed: {ex}");
+            AppLog.Warning("FloatingImage.Crop", ex);
             return null;
         }
     }
@@ -434,7 +434,7 @@ public partial class FloatingImageViewModel
             }
             catch (Exception ex)
             {
-                 System.Diagnostics.Debug.WriteLine(ex);
+                 AppLog.Warning("FloatingImage.Flatten", ex);
                  return null;
             }
         });

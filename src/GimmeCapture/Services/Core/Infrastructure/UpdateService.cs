@@ -289,6 +289,7 @@ public sealed class UpdateService : ReactiveObject
                 }
                 catch
                 {
+                    // Best effort: a failed download's folder is only clutter in the temp folder.
                 }
             }
         }
@@ -851,6 +852,7 @@ exit /b 1
         }
         catch
         {
+            // Best effort: a record left behind is ignored once its zip is gone (LoadCachedDownload checks).
         }
     }
 

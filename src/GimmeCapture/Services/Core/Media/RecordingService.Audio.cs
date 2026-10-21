@@ -144,7 +144,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Resolve mic device failed: {ex.Message}");
+            AppLog.Warning("Recording.ResolveMic", ex);
             return null;
         }
     }
@@ -250,7 +250,7 @@ public partial class RecordingService
             catch (Exception ex)
             {
                 firstException ??= ex;
-                Debug.WriteLine($"{action} failed: {ex.Message}");
+                AppLog.Debug("Recording.AudioCleanup", ex); // the first failure is logged below
             }
         }
     }

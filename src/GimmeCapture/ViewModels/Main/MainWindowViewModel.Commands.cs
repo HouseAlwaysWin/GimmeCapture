@@ -280,7 +280,7 @@ public partial class MainWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to open project URL: {ex.Message}");
+            AppLog.Warning("About.OpenProjectUrl", ex);
         }
     }
 }

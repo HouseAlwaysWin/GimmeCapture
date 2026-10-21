@@ -120,7 +120,7 @@ public partial class FloatingVideoViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[Crop] Failed: {ex}");
+            AppLog.Warning("FloatingVideo.Crop", ex);
         }
         finally
         {
@@ -663,7 +663,7 @@ public partial class FloatingVideoViewModel
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error flattening video frame: {ex}");
+                AppLog.Warning("FloatingVideo.Flatten", ex);
                 return null;
             }
         });

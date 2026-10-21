@@ -13,6 +13,12 @@
 
 ### 🛡️ Reliability
 
+- **Failures that went nowhere now reach the log.** About 40 error paths reported only through `Debug.WriteLine`, which
+  a release build leaves out. Among them were a recording's audio merge (which then keeps only the first
+  segment's audio), FFmpeg failing to start, recording start and stop, device lists, a pin's crop and playback.
+  Also logged now: which capture method a recording fell back to, which encoder it chose, and its worker's
+  errors. Expected failures, such as no CUDA or a video with no audio, are logged only when
+  `GIMMECAPTURE_DEBUG_LOG=1` is set.
 - **A busy app no longer slows down typing everywhere else, and its hotkeys keep working.** The keyboard hook that
   serves the hotkeys ran on the app's UI thread, and Windows holds every key typed anywhere until that hook returns.
   So whenever the UI was busy, typing in every program stalled: a key was held up about 0.6 s, and other programs'

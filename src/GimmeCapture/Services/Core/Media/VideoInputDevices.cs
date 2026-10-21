@@ -100,7 +100,7 @@ public static class VideoInputDevices
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Enumerate video devices failed: {ex.Message}");
+            AppLog.Warning("VideoInputDevices.Enumerate", ex);
         }
 
         return devices;

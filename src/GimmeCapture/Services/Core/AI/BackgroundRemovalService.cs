@@ -69,7 +69,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"CUDA not available, falling back to CPU: {ex.Message}");
+                    AppLog.Debug("BackgroundRemoval.Cuda", ex); // no CUDA is the usual case: CPU it is
                 }
                 
                 try
@@ -79,7 +79,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
                 catch (Exception ex) when (cudaSuccess)
                 {
                     // If CUDA was appended but session creation failed (e.g. missing cuDNN), try again with CPU
-                     System.Diagnostics.Debug.WriteLine($"Session creation with CUDA failed: {ex.Message}. Retrying with CPU.");
+                     AppLog.Warning("BackgroundRemoval.CudaSession", ex);
                      options = new SessionOptions(); // Reset options
                      _session = new InferenceSession(modelPath, options);
                 }

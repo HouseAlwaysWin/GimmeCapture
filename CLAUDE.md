@@ -236,6 +236,10 @@ pushing again).
 - Use `AppLog` (Serilog wrapper). `AppLog.Initialize()`/`Shutdown()` bracket the
   app lifetime in `Program.cs`. Log with stable category strings, e.g.
   `AppLog.Error("Program.Startup", ex)`.
+- `Debug.WriteLine` does not exist in a release build, so a failure reported only there is invisible.
+  Use `AppLog.Warning(operation, ex)` for a failure the user would notice, and `AppLog.Debug` for an
+  expected one (no CUDA, cleanup a later sweep retries), written only when `GIMMECAPTURE_DEBUG_LOG=1`.
+  The exception overloads record type, HResult and stack, never the message.
 
 ## Localization (IMPORTANT)
 

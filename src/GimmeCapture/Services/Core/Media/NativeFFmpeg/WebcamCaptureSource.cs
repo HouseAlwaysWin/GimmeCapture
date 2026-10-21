@@ -334,7 +334,7 @@ internal sealed class WebcamCaptureSource : IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Webcam] Decode loop error: {ex.Message}");
+            AppLog.Warning("Webcam.DecodeLoop", ex);
         }
         finally
         {

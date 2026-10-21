@@ -135,7 +135,7 @@ public partial class RecordingService : ReactiveObject
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to retrieve recording segment size: {ex.Message}");
+            AppLog.Debug("Recording.SegmentSize", ex);
         }
 
         // Apply estimation multiplier because intermediate MKV H.264 segments
@@ -303,7 +303,7 @@ public partial class RecordingService : ReactiveObject
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to clear temp dir '{_tempDir}': {ex.Message}");
+            AppLog.Warning("Recording.ClearTempDir", ex);
         }
         Directory.CreateDirectory(_tempDir);
 
