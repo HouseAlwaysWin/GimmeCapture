@@ -137,6 +137,9 @@
 
 ### 🌐 Localization
 
+- **Chinese labels on the small gothic buttons use the Chinese font.** Their font chain put the Japanese font ahead of
+  the Chinese one for every language, so Chinese text took Japanese glyph forms, and a Chinese UI loaded both CJK
+  fonts (12.9 MB and 16.8 MB). The chain now follows the app language.
 - **No more Chinese-only or English-only text.** The folder picker (titled "select the recording folder" in Chinese
   for all four folder settings), the hotkey-registration failure and the Enter-hotkey warning were Chinese in every
   language; the pin dialogs' YES/NO, the pinned video's seek tooltips, the update-failure message, the blur
