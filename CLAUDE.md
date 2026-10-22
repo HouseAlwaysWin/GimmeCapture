@@ -132,7 +132,7 @@ dotnet build GimmeCapture.slnx -c Debug
 dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj -c Release
 
 # Full local verification (mirrors CI): localization parity + restore + build +
-# test w/ coverage gate (>=25%) + publish smoke test of both release shapes
+# test w/ coverage gate (>=30%) + publish smoke test of both release shapes
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 # Publish a release shape (Properties/PublishProfiles): win-x64 is a self-contained folder,
@@ -265,12 +265,15 @@ Three locales are kept in **strict key parity**:
 
 - xUnit + Moq; one test class per unit, named `<Subject>Tests.cs` in
   `tests/GimmeCapture.Tests/` (ViewModel tests under `ViewModels/`).
-- Coverage gate is **25% line coverage** (enforced by `verify.ps1`). Add tests for
+- Coverage gate is **30% line coverage** (enforced by `verify.ps1`). It leaves out the code
+  the XAML compiler generates from `.axaml` files (`tests/GimmeCapture.Tests/coverage.runsettings`),
+  which no unit test reaches. Add tests for
   new service/VM logic; favor testing services and orchestration that don't require
   a live UI thread. `ReactiveUITestInitializer` sets up ReactiveUI scheduling.
 - A test that cannot run everywhere says so in its attribute, so it is reported as **skipped**:
   `[WindowsFact]` for Windows-only behaviour, `[OptInFact("ENV_VAR", "OTHER=1")]` for tests that
-  need a local clip, an output folder or a probe switch. Never gate with an early `return` — that
+  need a local clip or a probe switch. A test that only needs somewhere to write uses its own
+  temporary folder and runs everywhere. Never gate with an early `return` — that
   counts as a pass for something that was never checked.
 - Benchmarks live in `tests/GimmeCapture.Benchmarks/` (run manually, not in CI).
 

@@ -202,6 +202,10 @@
 - Tests that need a local video clip or a render-probe switch are reported as **skipped** while those are not set,
   instead of counting as passes for work they never did, and `scripts/test-compress.ps1` now also runs the
   crop+rotate export checks it said it ran. The empty placeholder test is gone.
+- Coverage no longer counts the code the XAML compiler generates from `.axaml` files, which no unit test reaches,
+  and its gate rises from 25% to 30%. The six audio-transcoder tests run on every CI job: they never needed a
+  video clip, only a folder to write to. The Linux key map, the X11 capture's clamp to the screen and the autostart
+  command line are tested. Coverage reads 32%, up from 28%.
 - Workflows cancel superseded PR runs, time out instead of hanging for six hours, and ask only for the token
   permissions they use. The release job's one third-party action is pinned to a commit SHA, Dependabot keeps the
   workflow actions current, and CodeQL scans the C# code and the workflows.

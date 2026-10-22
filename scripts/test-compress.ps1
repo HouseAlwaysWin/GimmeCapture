@@ -9,9 +9,10 @@
        self-verifies resolution downscale, CRF size ordering, H.265, drop-audio, MKV-has-audio, and the
        ~5 MB target-size landing — all via the project's own libav probes (no ffprobe needed) — plus the
        exporter's crop+rotate composite checks (LibavClipExporterCompositeTests) on the same clip.
-    4. Runs the opt-in audio-transcoder characterization tests (LibavAudioTranscoderTests) which synthesize
-       a WAV in-process and exercise LibavAacTranscoder / LibavOpusTranscoder / LibavPinAudioPcmDecoder.
-       All three opt-in suites key off COMPRESS_IT_OUTDIR, so CI / Linux report them as skipped.
+    4. Runs the audio-transcoder characterization tests (LibavAudioTranscoderTests) with COMPRESS_IT_OUTDIR
+       set, which keeps the encoded AAC / Opus / MP3 files there to listen to. They synthesize a WAV
+       in-process, so every normal test run (CI included) runs them too and deletes their files afterwards.
+       The two clip suites need COMPRESS_IT_SOURCE and COMPRESS_IT_OUTDIR, so CI reports them as skipped.
 
     Provide a real clip with -Source (e.g. your 4K file). If omitted, a short 4K test clip is generated
     with ffmpeg.exe when it is available on PATH.
@@ -40,7 +41,7 @@ if (-not $SkipBuild) {
     dotnet build GimmeCapture.slnx -c Debug
 }
 
-Write-Host '== [3/5] Unit tests (excluding the opt-in encode/transcoder suites) ==' -ForegroundColor Cyan
+Write-Host '== [3/5] Unit tests (except the suites step 5 runs) ==' -ForegroundColor Cyan
 dotnet test $testProj -c Debug --filter 'FullyQualifiedName!~CompressIntegration&FullyQualifiedName!~LibavClipExporterComposite&FullyQualifiedName!~LibavAudioTranscoder'
 
 # --- Resolve a source clip -------------------------------------------------
