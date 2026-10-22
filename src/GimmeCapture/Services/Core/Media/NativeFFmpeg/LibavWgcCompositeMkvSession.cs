@@ -23,7 +23,7 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// unchanged.
 /// </summary>
 [SupportedOSPlatform("windows10.0.19041.0")]
-internal sealed class LibavWgcCompositeMkvSession : IDisposable
+internal sealed class LibavWgcCompositeMkvSession : LibavRecordingSession
 {
     /// <summary>
     /// If no captured window has delivered a frame within this window, the start is treated as failed so the
@@ -40,130 +40,31 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
     /// </summary>
     private const int BringupTimeoutMs = 1500;
 
-    private CancellationTokenSource? _cts;
-    private Task<bool>? _worker;
-
-    public Task<bool>? Worker => _worker;
-    public string? LastErrorMessage { get; private set; }
-    public string? LastWarningMessage { get; private set; }
-    public string? SelectedEncoderName { get; private set; }
-    public bool PreferHardwareEncoder { get; set; } = true;
-
-    /// <summary>Software-encoder CRF override (1-51); 0 keeps the default 23.</summary>
-    public int VideoCrf { get; set; }
-
-    /// <summary>Hardware-encoder target bitrate in bits/sec; 0 uses the automatic clamp.</summary>
-    public long VideoBitrate { get; set; }
-
     /// <summary>True when no captured window delivered a first frame — the "no frames" repro. See
     /// <see cref="LibavWgcMkvSession.TimedOutWaitingForFrame"/>.</summary>
     public bool TimedOutWaitingForFrame { get; private set; }
 
-    public Task<bool> StartAsync(string outputPath, IReadOnlyList<IntPtr> hwnds, int fps, bool drawMouse, VideoCodec codec)
+    protected override TimeSpan StartupGateTimeout =>
+        TimeSpan.FromMilliseconds(BringupTimeoutMs + FirstFrameTimeoutMs + 2000);
+
+    // See LibavWgcMkvSession: the worker ends promptly, this only lets it close its file before a fallback.
+    protected override TimeSpan DisposeWait => TimeSpan.FromSeconds(3);
+
+    protected override bool OnStartupGateTimedOut()
     {
-        FFmpegRuntime.EnsureInitialized();
-        AppLog.Information($"Wgc.Build sessionType=composite windows={hwnds.Count} bringupTimeoutMs={BringupTimeoutMs} firstFrameTimeoutMs={FirstFrameTimeoutMs}");
-        LogNative($"StartAsync requested: out={outputPath}, windows={hwnds.Count}, fps={fps}, drawMouse={drawMouse}, codec={codec}");
-        LastErrorMessage = null;
-        LastWarningMessage = null;
-        SelectedEncoderName = null;
-
-        try
-        {
-            _cts?.Cancel();
-            _worker?.Wait(TimeSpan.FromMilliseconds(500));
-        }
-        catch
-        {
-            // ignore; replacing the session
-        }
-        finally
-        {
-            _cts?.Dispose();
-            _cts = null;
-            _worker = null;
-        }
-
-        _cts = new CancellationTokenSource();
-        var ct = _cts.Token;
-        var firstFrameTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var hwndList = new List<IntPtr>(hwnds);
-
-        _worker = Task.Run(() =>
-        {
-            try
-            {
-                RunTranscode(outputPath, hwndList, fps, drawMouse, codec, ct, firstFrameTcs);
-                LogNative("Worker completed successfully.");
-                return true;
-            }
-            catch (OperationCanceledException)
-            {
-                firstFrameTcs.TrySetCanceled();
-                return false;
-            }
-            catch (Exception ex)
-            {
-                LastErrorMessage = ex.Message;
-                AppLog.Debug("LibavWgcCompositeMkvSession", $"[LibavWgcComposite] {ex}");
-                AppLog.Warning("RecordingNative.Worker", ex);
-                firstFrameTcs.TrySetException(ex);
-                return false;
-            }
-        }, CancellationToken.None);
-
-        return StartupGateAsync(_worker, firstFrameTcs.Task);
-    }
-
-    private static async Task<bool> StartupGateAsync(Task<bool> worker, Task<bool> firstFrame)
-    {
-        var timeout = Task.Delay(BringupTimeoutMs + FirstFrameTimeoutMs + 2000);
-        var done = await Task.WhenAny(firstFrame, worker, timeout).ConfigureAwait(false);
-
-        // Observe firstFrame's fault on the fallback paths (it faults when the worker bails before a real frame)
-        // so it doesn't surface as an UnobservedTaskException ([ERR] noise).
-        ObserveFaultedTask(firstFrame);
-
-        if (done == firstFrame)
-        {
-            return await firstFrame.ConfigureAwait(false);
-        }
-
-        if (done == worker)
-        {
-            return await worker.ConfigureAwait(false);
-        }
-
         // Report a FAILED start (not started=true) so the caller falls back to gdigrab and the worker can't
         // hang frameless on stop. See docs/WGC_HANDOFF.md Fix A.
         AppLog.Information("Wgc.Composite.StartupGate timeout → started=false (fallback to gdigrab)");
         return false;
     }
 
-    /// <summary>Reads a faulted task's exception so it isn't surfaced as an UnobservedTaskException ([ERR] noise).</summary>
-    private static void ObserveFaultedTask(Task t) =>
-        t.ContinueWith(
-            static x => { _ = x.Exception; },
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-
-    public async Task StopAsync()
+    public Task<bool> StartAsync(string outputPath, IReadOnlyList<IntPtr> hwnds, int fps, bool drawMouse, VideoCodec codec)
     {
-        try
-        {
-            _cts?.Cancel();
-            if (_worker != null)
-            {
-                await _worker.ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            _worker = null;
-            _cts?.Dispose();
-            _cts = null;
-        }
+        FFmpegRuntime.EnsureInitialized();
+        AppLog.Information($"Wgc.Build sessionType=composite windows={hwnds.Count} bringupTimeoutMs={BringupTimeoutMs} firstFrameTimeoutMs={FirstFrameTimeoutMs}");
+        LogNative($"StartAsync requested: out={outputPath}, windows={hwnds.Count}, fps={fps}, drawMouse={drawMouse}, codec={codec}");
+        var hwndList = new List<IntPtr>(hwnds);
+        return StartWorker((ct, firstFrameTcs) => RunTranscode(outputPath, hwndList, fps, drawMouse, codec, ct, firstFrameTcs));
     }
 
     private unsafe void RunTranscode(
@@ -387,30 +288,5 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
         {
             handle.Free();
         }
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            _cts?.Cancel();
-            // The worker now self-terminates promptly (bring-up is timeout-guarded, teardown is detached), so this
-            // short wait normally returns at once; it just lets a finishing worker close its output file before the
-            // caller falls back to gdigrab on the same path. Never blocks the app on a wedged native teardown.
-            _worker?.Wait(TimeSpan.FromSeconds(3));
-        }
-        catch
-        {
-            // ignore
-        }
-
-        _cts?.Dispose();
-        _cts = null;
-        _worker = null;
-    }
-
-    private static void LogNative(string message)
-    {
-        AppLog.Information("RecordingNative", message); // was Debug.WriteLine, which a release build leaves out
     }
 }

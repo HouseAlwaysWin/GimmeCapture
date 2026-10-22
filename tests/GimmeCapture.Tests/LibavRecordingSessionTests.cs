@@ -56,42 +56,49 @@ public sealed class LibavRecordingSessionTests : IDisposable
         await AssertSegmentAsync(path, session.SelectedEncoderName, expectedSize: (320, 240));
     }
 
+    // A start that fails at once must answer false. It used to rethrow the worker's error instead whenever the
+    // startup gate saw the worker's faulted first-frame signal finish before the worker itself, about half the time
+    // on CI. Each failure case repeats so that race would show.
+
     [Fact]
     public async Task Gdigrab_ARegionOffTheScreen_FailsToStart()
     {
-        using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = false };
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = false };
 
-        bool started = await StartsAsync(session.StartAsync(
-            Path.Combine(_dir, "offscreen.mkv"), 1_000_000, 1_000_000, 320, 240, Fps, drawMouse: false, VideoCodec.H264));
-
-        Assert.False(started);
-        Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
+            Assert.False(await session.StartAsync(
+                Path.Combine(_dir, "offscreen.mkv"), 1_000_000, 1_000_000, 320, 240, Fps, drawMouse: false, VideoCodec.H264));
+            Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
+        }
     }
 
     [Fact]
     public async Task Wgc_AWindowThatDoesNotExist_FailsToStart_WithoutTurningWgcOff()
     {
-        using var session = new LibavWgcMkvSession { PreferHardwareEncoder = false };
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            using var session = new LibavWgcMkvSession { PreferHardwareEncoder = false };
 
-        bool started = await StartsAsync(session.StartAsync(
-            Path.Combine(_dir, "nowindow.mkv"), IntPtr.Zero, Fps, drawMouse: false, VideoCodec.H264));
-
-        Assert.False(started);
-        Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
-        // A quick failure is not the "WGC never delivers a frame" wedge that turns WGC off for the session.
-        Assert.False(session.TimedOutWaitingForFrame);
+            Assert.False(await session.StartAsync(
+                Path.Combine(_dir, "nowindow.mkv"), IntPtr.Zero, Fps, drawMouse: false, VideoCodec.H264));
+            Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
+            // A quick failure is not the "WGC never delivers a frame" wedge that turns WGC off for the session.
+            Assert.False(session.TimedOutWaitingForFrame);
+        }
     }
 
     [Fact]
     public async Task WgcComposite_NoWindowThatCanBeCaptured_FailsToStart()
     {
-        using var session = new LibavWgcCompositeMkvSession { PreferHardwareEncoder = false };
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            using var session = new LibavWgcCompositeMkvSession { PreferHardwareEncoder = false };
 
-        bool started = await StartsAsync(session.StartAsync(
-            Path.Combine(_dir, "nowindows.mkv"), new[] { IntPtr.Zero }, Fps, drawMouse: false, VideoCodec.H264));
-
-        Assert.False(started);
-        Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
+            Assert.False(await session.StartAsync(
+                Path.Combine(_dir, "nowindows.mkv"), new[] { IntPtr.Zero }, Fps, drawMouse: false, VideoCodec.H264));
+            Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
+        }
     }
 
     [OptInFact(ProbeSwitch)]
@@ -125,24 +132,6 @@ public sealed class LibavRecordingSessionTests : IDisposable
 
         Assert.True(string.IsNullOrEmpty(session.LastWarningMessage), session.LastWarningMessage); // none skipped
         await AssertSegmentAsync(path, session.SelectedEncoderName, expectedSize: null);
-    }
-
-    /// <summary>
-    /// Whether a start the test expects to fail at once succeeded after all. Such a start either returns false or
-    /// rethrows the worker's error: the worker faults its first-frame signal just before it returns false, the
-    /// startup gate takes whichever of the two it sees complete first, and either can win. RecordingService treats
-    /// both as a failed start.
-    /// </summary>
-    private static async Task<bool> StartsAsync(Task<bool> start)
-    {
-        try
-        {
-            return await start;
-        }
-        catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)
-        {
-            return false;
-        }
     }
 
     private static async Task RecordAsync(Task<bool> start, Func<Task> stop, Func<string?> lastError)

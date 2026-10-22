@@ -41,7 +41,10 @@ public class Win32HotkeyThreadTests
         var elapsed = Stopwatch.StartNew();
         thread.Dispose();
 
-        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(1), $"Dispose took {elapsed.ElapsedMilliseconds} ms");
+        // Dispose gives the loop 2 s to end, then gives up on it, so a loop that never ends shows as a Dispose of 2 s or
+        // more. A loop that does end can still take over a second in a loaded run (coverage on, other classes encoding
+        // video), so the bound is the deadline itself rather than a guess below it.
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(2), $"Dispose took {elapsed.ElapsedMilliseconds} ms");
         Assert.False(thread.TryInvoke(() => { }, TimeSpan.FromMilliseconds(100)));
     }
 }
