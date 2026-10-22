@@ -11,9 +11,11 @@ namespace GimmeCapture.Services.Platforms.Windows;
 /// <summary>
 /// A thread that only runs a Win32 message loop, for native objects whose callbacks arrive on the thread that created
 /// them. The global hotkey service keeps its message-only window, raw-input sink, low-level keyboard hook and
-/// foreground WinEvent hook here rather than on the UI thread. Windows holds every key typed anywhere until that hook
-/// returns, and silently removes a hook that keeps it waiting past LowLevelHooksTimeout, so the hook's thread must
-/// never be busy. Work is handed over as thread messages, and nothing on this thread ever waits for another.
+/// foreground WinEvent hook on one, rather than on the UI thread. Windows holds every key typed anywhere until that
+/// hook returns, and silently removes a hook that keeps it waiting past LowLevelHooksTimeout, so the hook's thread
+/// must never be busy. Work is handed over as thread messages, and nothing on that thread ever waits for another.
+/// The snip overlay keeps its own keyboard hook on a second one, the only place a key waits for the UI thread, and
+/// then for a bounded time (SnipWindow.Win32, <see cref="GimmeCapture.Services.Core.Infrastructure.TimedUiRoute"/>).
 /// </summary>
 internal sealed class Win32HotkeyThread : IDisposable
 {
@@ -22,14 +24,17 @@ internal sealed class Win32HotkeyThread : IDisposable
     private const uint PM_NOREMOVE = 0x0000;
 
     private readonly ConcurrentQueue<Action> _queue = new();
+    private readonly string _logCategory;
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _started = new();
     private Action? _setup;
     private uint _nativeThreadId;
     private int _stopRequested;
 
-    internal Win32HotkeyThread(string name)
+    /// <param name="logCategory">Prefixes this thread's log entries, e.g. "GlobalHotkey" for GlobalHotkey.ThreadStop.</param>
+    internal Win32HotkeyThread(string name, string logCategory = "GlobalHotkey")
     {
+        _logCategory = logCategory;
         _thread = new Thread(Run)
         {
             Name = name,
@@ -90,7 +95,7 @@ internal sealed class Win32HotkeyThread : IDisposable
 
         if (!PostThreadMessage(_nativeThreadId, WM_RUN_QUEUED, IntPtr.Zero, IntPtr.Zero))
         {
-            AppLog.Warning("GlobalHotkey.ThreadPost", $"PostThreadMessage failed (win32={Marshal.GetLastWin32Error()}).");
+            AppLog.Warning($"{_logCategory}.ThreadPost", $"PostThreadMessage failed (win32={Marshal.GetLastWin32Error()}).");
             return false;
         }
 
@@ -98,8 +103,8 @@ internal sealed class Win32HotkeyThread : IDisposable
         {
             if (!done.Task.Wait(timeout))
             {
-                AppLog.Warning("GlobalHotkey.ThreadUnresponsive",
-                    $"The hotkey thread did not run a call within {timeout.TotalMilliseconds:F0} ms.");
+                AppLog.Warning($"{_logCategory}.ThreadUnresponsive",
+                    $"The {_thread.Name} thread did not run a call within {timeout.TotalMilliseconds:F0} ms.");
                 return false;
             }
         }
@@ -123,7 +128,7 @@ internal sealed class Win32HotkeyThread : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Error("GlobalHotkey.ThreadSetup", ex);
+            AppLog.Error($"{_logCategory}.ThreadSetup", ex);
         }
         finally
         {
@@ -141,7 +146,7 @@ internal sealed class Win32HotkeyThread : IDisposable
 
             if (got == -1)
             {
-                AppLog.Warning("GlobalHotkey.ThreadLoop", $"GetMessage failed (win32={Marshal.GetLastWin32Error()}).");
+                AppLog.Warning($"{_logCategory}.ThreadLoop", $"GetMessage failed (win32={Marshal.GetLastWin32Error()}).");
                 break;
             }
 
@@ -179,7 +184,7 @@ internal sealed class Win32HotkeyThread : IDisposable
         PostThreadMessage(_nativeThreadId, WM_RUN_QUEUED, IntPtr.Zero, IntPtr.Zero);
         if (!IsCurrentThread && !_thread.Join(TimeSpan.FromSeconds(2)))
         {
-            AppLog.Warning("GlobalHotkey.ThreadStop", "The hotkey thread did not exit within 2 s.");
+            AppLog.Warning($"{_logCategory}.ThreadStop", $"The {_thread.Name} thread did not exit within 2 s.");
         }
     }
 

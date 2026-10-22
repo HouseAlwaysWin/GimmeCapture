@@ -198,6 +198,11 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
   message-loop thread (`Win32HotkeyThread`) and posts presses to the UI thread. Windows holds every key typed
   anywhere until that hook returns, and silently removes a hook that is too slow, so nothing on that thread may
   wait for the UI thread. The match logic is the pure `LowLevelHotkeyMatcher`.
+- The snip overlay has a low-level hook of its own (`SnipWindow.Win32.cs`) on a second `Win32HotkeyThread`. Its
+  routing (`HandleGlobalKeyboardEvent`) reads the view model, so it runs on the UI thread. `SnipOverlayKeyFilter`
+  lets every key that routing cannot act on straight through, and the rest wait for the UI thread through
+  `TimedUiRoute` (100 ms, 50 ms more once it has started). Teach the routing a new key and the filter must list it,
+  or the key stops working while the overlay is open; `SnipOverlayKeyFilterTests` pin the defaults.
 
 ### Media / FFmpeg
 - Recording is split across `RecordingService.*` partials and `NativeFFmpeg/`

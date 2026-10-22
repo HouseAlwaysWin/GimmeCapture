@@ -25,6 +25,11 @@
   keyboard hooks missed it. Windows also quietly removes a hook that keeps it waiting, which switched off the
   hotkeys only the hook can serve (a PrintScreen owned by the Snipping Tool, a combo another app holds) until the
   next launch. The hook now has its own thread, and with the UI blocked a key is held up 1–2 ms.
+- **An open capture overlay no longer slows typing in other programs either.** The overlay, which stays open through
+  a whole recording, had a keyboard hook of its own on the UI thread, so every key typed anywhere waited for the app,
+  and a long stall could get that hook removed, switching off the overlay's shortcuts until it was reopened. The hook
+  now runs on its own thread and lets every key the overlay cannot use straight through. The few it can use (Esc,
+  its F-keys, pause and stop, Copy and Save) wait for the app 0.15 s at most, then go to the program in front.
 - **Recording a new hotkey no longer triggers the old ones.** While the hotkeys page waits for a new combo, an
   existing hotkey pressed there fired its action and swallowed the key, so it could not be recorded.
 - **Settings you change now survive a restart.** 24 settings and hotkeys were written to the config correctly but

@@ -32,7 +32,7 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
 
 ### Phase 5 - October 2026 optimisation pass ✅
 1. ✅ UI stalls and hotkeys: the keyboard hook on its own thread (#172), start-up and the History tab (#173), pin
-   pixel work off the UI thread (#174)
+   pixel work off the UI thread (#174), the snip overlay's keyboard hook on a thread of its own (A2)
 2. ✅ Start-up and size: Windows ships as a folder (#175), WPF and unused packages dropped (#176), CJK font chain per
    language (#177), ReadyToRun (#178, #180)
 3. ✅ Cleanup: dead code (#179), one confirmation dialog and progress bar (#181), failures and traces reaching the
@@ -48,7 +48,6 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
   each), once a recording test covers them: nothing exercises them today
 - The snip view model's `_mainVm` service locator → injected settings snapshot, state interfaces and services;
   `ILocalizationService` for the ~300 static `LocalizationService.Instance` uses; one home for P/Invoke structs
-- The snip overlay's own keyboard hook onto the hotkey thread (A2)
 
 ## Remaining `Application.Current` Usage
 In sanctioned locations (platform impls / composition root / view code-behind):
