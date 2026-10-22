@@ -74,17 +74,6 @@ public partial class SnipWindow : Window
         ResizingTranslationBox
     }
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
-    public static extern bool GetCursorPos(out POINT lpPoint);
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    public struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
     public SnipWindow() : this(new NoOpScreenLayoutService(), new NoOpWindowLayerService())
     {
     }
@@ -182,7 +171,7 @@ public partial class SnipWindow : Window
                 _viewModel.AllScreenBounds = new System.Collections.ObjectModel.ObservableCollection<ScreenBoundsViewModel>(screenBoundsList);
                 
                 // Initial Active Screen Update
-                if (OperatingSystem.IsWindows() && GetCursorPos(out POINT p))
+                if (OperatingSystem.IsWindows() && User32.GetCursorPos(out User32.POINT p))
                 {
                      var clientPoint = this.PointToClient(new PixelPoint(p.X, p.Y));
                      UpdateActiveScreenBounds(clientPoint);

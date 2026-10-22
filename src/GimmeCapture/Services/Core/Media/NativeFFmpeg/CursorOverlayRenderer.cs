@@ -1,5 +1,5 @@
 using System;
-using System.Runtime.InteropServices;
+using GimmeCapture.Services.Interop;
 using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -99,26 +99,13 @@ internal sealed class CursorOverlayRenderer : IDisposable
     }
 
     // ── Win32 cursor / button state ──
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
-
     private const int VK_LBUTTON = 0x01;
 
     private static bool TryGetCursorPos(out int x, out int y)
     {
         try
         {
-            if (GetCursorPos(out POINT p))
+            if (User32.GetCursorPos(out User32.POINT p))
             {
                 x = p.X;
                 y = p.Y;
@@ -139,7 +126,7 @@ internal sealed class CursorOverlayRenderer : IDisposable
     {
         try
         {
-            return (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+            return (User32.GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
         }
         catch
         {

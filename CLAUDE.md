@@ -177,6 +177,10 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
 
 ### Platform isolation
 - Win32-specific code lives in `Services/Platforms/Windows/` and `Services/Interop/`.
+- A P/Invoke function, struct or callback type used in more than one place is declared once: `User32`, `Kernel32`
+  and `Gdi32` in `Services/Interop/`, `LibX11` in `Services/Platforms/Linux/`. One used in a single place stays
+  next to it. Bind the Unicode (`W`) entry points: an ANSI window subclass turned typed emoji into '?'. To let clicks
+  through parts of a window, use `Win32HitTestPassThrough`.
 - Avalonia/UI-thread concerns live in `Services/Platforms/Avalonia/`.
 - **Do not reference `Application.Current` from ViewModels.** Route UI/window/theme
   operations through `IWindowManager`, `IThemeResourceService`, `IScreenLayoutService`,

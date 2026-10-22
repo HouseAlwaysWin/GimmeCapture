@@ -5,6 +5,7 @@ using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Interaction;
+using GimmeCapture.Services.Interop;
 using Microsoft.Win32;
 
 namespace GimmeCapture.Services.Platforms.Windows;
@@ -14,7 +15,6 @@ public class WindowDetectionService : IWindowDetectionService
     private const double ChildCandidateMinimumSize = 24.0;
     private const int SyntheticTaskbarHandleBase = unchecked((int)0x70000000);
     private const int SyntheticTaskbarChildHandleBase = unchecked((int)0x71000000);
-    private const int GWL_EXSTYLE = -20;
     private const int GWL_STYLE = -16;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     private const int WS_EX_APPWINDOW = 0x00040000;
@@ -22,53 +22,11 @@ public class WindowDetectionService : IWindowDetectionService
     private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     private const int DWMWA_CLOAKED = 14;
     private const uint GW_OWNER = 4;
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
 
-        public Rect ToAvaloniaRect() => new(Left, Top, Math.Max(0, Right - Left), Math.Max(0, Bottom - Top));
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-    private struct MONITORINFOEX
-    {
-        public int cbSize;
-        public RECT rcMonitor;
-        public RECT rcWork;
-        public uint dwFlags;
-
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
-        public string szDevice;
-    }
-
-    private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
-
-    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref User32.RECT lprcMonitor, IntPtr dwData);
 
     [DllImport("user32.dll")]
-    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern void GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+    private static extern bool EnumChildWindows(IntPtr hWndParent, User32.EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetParent(IntPtr hWnd);
@@ -85,14 +43,11 @@ public class WindowDetectionService : IWindowDetectionService
     [DllImport("user32.dll")]
     private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc lpfnEnum, IntPtr dwData);
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX lpmi);
-
     [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
     private static extern int DwmGetWindowAttributeInt(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
     [DllImport("dwmapi.dll")]
-    private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
+    private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out User32.RECT pvAttribute, int cbAttribute);
 
     public IReadOnlyList<WindowCandidate> GetVisibleWindowCandidates(IntPtr? excludeHWnd = null)
     {
@@ -102,7 +57,7 @@ public class WindowDetectionService : IWindowDetectionService
         IntPtr desktopWindow = GetDesktopWindow();
         int nextZOrder = 0;
 
-        EnumWindows((hWnd, _) =>
+        User32.EnumWindows((hWnd, _) =>
         {
             if (ShouldSkipEnumeratedTopLevelWindow(hWnd, excludeHWnd, shellWindow, desktopWindow))
             {
@@ -312,15 +267,15 @@ public class WindowDetectionService : IWindowDetectionService
     {
         int monitorIndex = 0;
         int stripZOrder = nextZOrder;
-        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMonitor, IntPtr hdcMonitor, ref RECT monitorRect, IntPtr dwData) =>
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMonitor, IntPtr hdcMonitor, ref User32.RECT monitorRect, IntPtr dwData) =>
         {
-            var monitorInfo = new MONITORINFOEX
+            var monitorInfo = new User32.MONITORINFOEX
             {
-                cbSize = Marshal.SizeOf<MONITORINFOEX>(),
+                cbSize = Marshal.SizeOf<User32.MONITORINFOEX>(),
                 szDevice = string.Empty
             };
 
-            if (!GetMonitorInfo(hMonitor, ref monitorInfo))
+            if (!User32.GetMonitorInfo(hMonitor, ref monitorInfo))
             {
                 monitorIndex++;
                 return true;
@@ -440,7 +395,7 @@ public class WindowDetectionService : IWindowDetectionService
     {
         candidate = null;
 
-        if (!IsWindowVisible(hWnd))
+        if (!User32.IsWindowVisible(hWnd))
         {
             return false;
         }
@@ -450,7 +405,7 @@ public class WindowDetectionService : IWindowDetectionService
             return false;
         }
 
-        int exStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
+        int exStyle = User32.GetWindowLong(hWnd, User32.GWL_EXSTYLE);
         if ((exStyle & WS_EX_TOOLWINDOW) != 0)
         {
             return false;
@@ -469,7 +424,7 @@ public class WindowDetectionService : IWindowDetectionService
             return false;
         }
 
-        int style = GetWindowLong(hWnd, GWL_STYLE);
+        int style = User32.GetWindowLong(hWnd, GWL_STYLE);
         bool hasCaption = (style & WS_CAPTION) == WS_CAPTION;
         bool isAppWindow = (exStyle & WS_EX_APPWINDOW) != 0;
         if (!hasCaption && !isAppWindow && !isTaskbarWindow)
@@ -502,12 +457,12 @@ public class WindowDetectionService : IWindowDetectionService
     {
         candidate = null;
 
-        if (!IsWindowVisible(childHwnd))
+        if (!User32.IsWindowVisible(childHwnd))
         {
             return false;
         }
 
-        int exStyle = GetWindowLong(childHwnd, GWL_EXSTYLE);
+        int exStyle = User32.GetWindowLong(childHwnd, User32.GWL_EXSTYLE);
         if ((exStyle & WS_EX_TOOLWINDOW) != 0)
         {
             return false;
@@ -537,8 +492,8 @@ public class WindowDetectionService : IWindowDetectionService
 
     private Rect GetWindowBounds(IntPtr hWnd)
     {
-        RECT dwmRect;
-        int result = DwmGetWindowAttribute(hWnd, DWMWA_EXTENDED_FRAME_BOUNDS, out dwmRect, Marshal.SizeOf(typeof(RECT)));
+        User32.RECT dwmRect;
+        int result = DwmGetWindowAttribute(hWnd, DWMWA_EXTENDED_FRAME_BOUNDS, out dwmRect, Marshal.SizeOf(typeof(User32.RECT)));
         return result == 0 ? dwmRect.ToAvaloniaRect() : winRectNoDwm(hWnd);
     }
 
@@ -574,14 +529,14 @@ public class WindowDetectionService : IWindowDetectionService
     private static string GetWindowTitle(IntPtr hWnd)
     {
         var buffer = new System.Text.StringBuilder(256);
-        GetWindowText(hWnd, buffer, buffer.Capacity);
+        User32.GetWindowText(hWnd, buffer, buffer.Capacity);
         return buffer.ToString();
     }
 
     private static string GetWindowClassName(IntPtr hWnd)
     {
         var buffer = new System.Text.StringBuilder(256);
-        GetClassName(hWnd, buffer, buffer.Capacity);
+        User32.GetClassName(hWnd, buffer, buffer.Capacity);
         return buffer.ToString();
     }
 
@@ -594,7 +549,7 @@ public class WindowDetectionService : IWindowDetectionService
 
     private Rect winRectNoDwm(IntPtr hWnd)
     {
-        GetWindowRect(hWnd, out RECT winRect);
+        User32.GetWindowRect(hWnd, out User32.RECT winRect);
         return winRect.ToAvaloniaRect();
     }
 

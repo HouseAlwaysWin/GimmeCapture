@@ -106,7 +106,7 @@ public sealed class LinuxGlobalHotkeyService : IGlobalHotkeyService
     {
         try
         {
-            _display = XOpenDisplay(null);
+            _display = LibX11.XOpenDisplay(null);
             if (_display == IntPtr.Zero)
             {
                 AppLog.Information("LinuxGlobalHotkey.NoDisplay (no X11 display; hotkeys disabled — Wayland-only session?)");
@@ -114,7 +114,7 @@ public sealed class LinuxGlobalHotkeyService : IGlobalHotkeyService
             }
 
             _eventBuffer = Marshal.AllocHGlobal(256); // XEvent union is ~192 bytes on 64-bit
-            _root = XDefaultRootWindow(_display);
+            _root = LibX11.XDefaultRootWindow(_display);
 
             // Swallow errors from OUR display (e.g. BadAccess when a combo is already grabbed) so a grab
             // conflict can't reach the default Xlib handler, which calls exit(). Other displays chain.
@@ -283,7 +283,7 @@ public sealed class LinuxGlobalHotkeyService : IGlobalHotkeyService
                 _installedErrorHandler = IntPtr.Zero;
             }
 
-            XCloseDisplay(_display);
+            LibX11.XCloseDisplay(_display);
             _display = IntPtr.Zero;
         }
 
@@ -328,15 +328,6 @@ public sealed class LinuxGlobalHotkeyService : IGlobalHotkeyService
 
     [DllImport("libc", SetLastError = true)]
     private static extern int poll([In, Out] Pollfd[] fds, uint nfds, int timeout);
-
-    [DllImport("libX11.so.6")]
-    private static extern IntPtr XOpenDisplay(string? displayName);
-
-    [DllImport("libX11.so.6")]
-    private static extern int XCloseDisplay(IntPtr display);
-
-    [DllImport("libX11.so.6")]
-    private static extern IntPtr XDefaultRootWindow(IntPtr display);
 
     [DllImport("libX11.so.6")]
     private static extern int XConnectionNumber(IntPtr display);

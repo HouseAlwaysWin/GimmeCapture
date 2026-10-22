@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using GimmeCapture.Services.Interop;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX.Direct3D11;
 using Windows.Graphics.Imaging;
@@ -165,8 +166,8 @@ internal static class WgcInterop
         {
             const uint MONITOR_DEFAULTTONEAREST = 2;
             IntPtr mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-            var info = new MonitorInfoEx { cbSize = Marshal.SizeOf<MonitorInfoEx>() };
-            if (!GetMonitorInfo(mon, ref info))
+            var info = new User32.MONITORINFOEX { cbSize = Marshal.SizeOf<User32.MONITORINFOEX>() };
+            if (!User32.GetMonitorInfo(mon, ref info))
             {
                 return $"mon=0x{mon.ToInt64():X} (GetMonitorInfo failed)";
             }
@@ -231,30 +232,6 @@ internal static class WgcInterop
 
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfoEx lpmi);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Rect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-    private struct MonitorInfoEx
-    {
-        public int cbSize;
-        public Rect rcMonitor;
-        public Rect rcWork;
-        public uint dwFlags;
-
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
-        public string szDevice;
-    }
 
     // Minimal DXGI projections — only the vtable slots up to the method we call are declared, in order.
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

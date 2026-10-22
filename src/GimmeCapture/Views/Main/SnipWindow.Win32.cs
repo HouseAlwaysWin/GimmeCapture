@@ -26,38 +26,8 @@ namespace GimmeCapture.Views.Main;
 
 public partial class SnipWindow : Window
 {
-    // Win32 Interop for click-through
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
-    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
-    private static extern IntPtr SetWindowLongPtr32(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
-    private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
-    private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
-
-    private const int GWLP_WNDPROC = -4;
-    private const int GWL_EXSTYLE = -20;
-    private const long WS_EX_TRANSPARENT = 0x20;
-    private const long WS_EX_NOACTIVATE = 0x08000000;
-    private const uint WM_NCHITTEST = 0x0084;
-    private const int HTTRANSPARENT = -1;
-
-    private WndProcDelegate? _wndProcDelegate;
-    private IntPtr _oldWndProc;
+    // Click-through outside the hit-test regions (IsHitTestPassThrough), installed once the window has a handle.
+    private Win32HitTestPassThrough? _hitTestPassThrough;
     private bool _translationClickThroughExStyleActive;
     private bool _overlayNoActivateExStyleActive;
 
@@ -88,17 +58,7 @@ public partial class SnipWindow : Window
 
         try
         {
-            long ex = IntPtr.Size == 8
-                ? GetWindowLongPtr64(hwnd, GWL_EXSTYLE).ToInt64()
-                : GetWindowLong32(hwnd, GWL_EXSTYLE);
-            long updated = want ? (ex | WS_EX_TRANSPARENT) : (ex & ~WS_EX_TRANSPARENT);
-            if (updated != ex)
-            {
-                if (IntPtr.Size == 8)
-                    SetWindowLongPtr64(hwnd, GWL_EXSTYLE, new IntPtr(updated));
-                else
-                    SetWindowLongPtr32(hwnd, GWL_EXSTYLE, new IntPtr((int)updated));
-            }
+            User32.SetExStyleFlags(hwnd, User32.WS_EX_TRANSPARENT, want);
             _translationClickThroughExStyleActive = want;
         }
         catch (Exception e)
@@ -128,17 +88,7 @@ public partial class SnipWindow : Window
 
         try
         {
-            long ex = IntPtr.Size == 8
-                ? GetWindowLongPtr64(hwnd, GWL_EXSTYLE).ToInt64()
-                : GetWindowLong32(hwnd, GWL_EXSTYLE);
-            long updated = want ? (ex | WS_EX_NOACTIVATE) : (ex & ~WS_EX_NOACTIVATE);
-            if (updated != ex)
-            {
-                if (IntPtr.Size == 8)
-                    SetWindowLongPtr64(hwnd, GWL_EXSTYLE, new IntPtr(updated));
-                else
-                    SetWindowLongPtr32(hwnd, GWL_EXSTYLE, new IntPtr((int)updated));
-            }
+            User32.SetExStyleFlags(hwnd, User32.WS_EX_NOACTIVATE, want);
             _overlayNoActivateExStyleActive = want;
         }
         catch (Exception e)
@@ -166,7 +116,6 @@ public partial class SnipWindow : Window
     // so whenever the UI was busy all typing waited, in every app, for as long as the overlay was open (a whole
     // recording included). It now runs on a thread of its own: a key the overlay cannot act on (SnipOverlayKeyFilter)
     // passes straight through, and the rest are routed on the UI thread, which gets UiRouteTimeout to answer.
-    private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
     private const int WM_KEYUP = 0x0101;
     private const int WM_SYSKEYDOWN = 0x0104;
@@ -174,26 +123,10 @@ public partial class SnipWindow : Window
     private static readonly TimeSpan UiRouteTimeout = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan UiRouteGrace = TimeSpan.FromMilliseconds(50);
 
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string? lpModuleName);
-
     // The hook handle and the timeout-log throttle are touched on the hook thread only, and the delegate is kept
     // alive while the hook is installed. The filter is written on the UI thread and read on the hook thread.
     private IntPtr _llKeyboardHook = IntPtr.Zero;
-    private LowLevelKeyboardProc? _llKeyboardDelegate;
+    private User32.LowLevelKeyboardProc? _llKeyboardDelegate;
     private IntPtr _llKeyboardOverlayHandle;
     private SnipOverlayKeyFilter _llKeyboardFilter = SnipOverlayKeyFilter.None;
     private SnipOverlayHotkeys? _llKeyboardFilterInputs;
@@ -222,10 +155,10 @@ public partial class SnipWindow : Window
         var thread = new Win32HotkeyThread("GimmeCapture.SnipKeyboardHook", "SnipHook");
         bool started = thread.Start(() =>
         {
-            _llKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, _llKeyboardDelegate, GetModuleHandle(null), 0);
+            _llKeyboardHook = User32.SetWindowsHookEx(User32.WH_KEYBOARD_LL, _llKeyboardDelegate, Kernel32.GetModuleHandle(null), 0);
             if (_llKeyboardHook == IntPtr.Zero)
             {
-                _llKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, _llKeyboardDelegate, IntPtr.Zero, 0);
+                _llKeyboardHook = User32.SetWindowsHookEx(User32.WH_KEYBOARD_LL, _llKeyboardDelegate, IntPtr.Zero, 0);
             }
 
             if (_llKeyboardHook == IntPtr.Zero)
@@ -265,7 +198,7 @@ public partial class SnipWindow : Window
             {
                 if (_llKeyboardHook != IntPtr.Zero)
                 {
-                    UnhookWindowsHookEx(_llKeyboardHook);
+                    User32.UnhookWindowsHookEx(_llKeyboardHook);
                     _llKeyboardHook = IntPtr.Zero;
                 }
             }, TimeSpan.FromMilliseconds(500));
@@ -362,9 +295,6 @@ public partial class SnipWindow : Window
     private const uint RDW_UPDATENOW = 0x0100;
 
     [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
-
-    [DllImport("user32.dll")]
     private static extern uint MapVirtualKey(uint uCode, uint uMapType);
     private const uint MAPVK_VSC_TO_VK_EX = 3;
 
@@ -409,7 +339,7 @@ public partial class SnipWindow : Window
         catch (Exception ex)
         {
             AppLog.Error("SnipWindow.KeyboardHook", ex);
-            return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
+            return User32.CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
         }
     }
 
@@ -440,9 +370,9 @@ public partial class SnipWindow : Window
 
             if ((isKeyDown || isKeyUp) && keyStr != "Unknown")
             {
-                bool modifierDown = (GetAsyncKeyState(0x10) & 0x8000) != 0 // Shift
-                    || (GetAsyncKeyState(0x11) & 0x8000) != 0             // Ctrl
-                    || (GetAsyncKeyState(0x12) & 0x8000) != 0;            // Alt
+                bool modifierDown = (User32.GetAsyncKeyState(0x10) & 0x8000) != 0 // Shift
+                    || (User32.GetAsyncKeyState(0x11) & 0x8000) != 0             // Ctrl
+                    || (User32.GetAsyncKeyState(0x12) & 0x8000) != 0;            // Alt
                 var filter = Volatile.Read(ref _llKeyboardFilter);
 
                 // Route the parsed key through the low-level hotkey dispatcher, unless it is one the dispatcher
@@ -457,7 +387,7 @@ public partial class SnipWindow : Window
                 }
             }
         }
-        return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
+        return User32.CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
     }
 
     // On the hook thread. The routing runs on the UI thread, which owns the view model; a key it does not get to
@@ -595,9 +525,9 @@ public partial class SnipWindow : Window
             return false; // only a safe single key (e.g. F4) toggles globally; combos would risk swallowing typing
         }
 
-        bool noModifiers = (GetAsyncKeyState(0x10) & 0x8000) == 0 // Shift
-            && (GetAsyncKeyState(0x11) & 0x8000) == 0             // Ctrl
-            && (GetAsyncKeyState(0x12) & 0x8000) == 0;            // Alt
+        bool noModifiers = (User32.GetAsyncKeyState(0x10) & 0x8000) == 0 // Shift
+            && (User32.GetAsyncKeyState(0x11) & 0x8000) == 0             // Ctrl
+            && (User32.GetAsyncKeyState(0x12) & 0x8000) == 0;            // Alt
         ReadOnlySpan<char> keyPart = HotkeyParsingHelper.GetKeyPart(hotkey.AsSpan().Trim());
         return noModifiers && keyPart.Equals(keyStr.AsSpan(), StringComparison.OrdinalIgnoreCase);
     }
@@ -618,9 +548,9 @@ public partial class SnipWindow : Window
     private bool MatchesDismissOrCloseKeyNow(string keyStr)
     {
         // Never hijack a physical modifier combo (e.g. Ctrl+W in the target app) — only a bare press dismisses.
-        bool noModifiers = (GetAsyncKeyState(0x10) & 0x8000) == 0 // Shift
-            && (GetAsyncKeyState(0x11) & 0x8000) == 0             // Ctrl
-            && (GetAsyncKeyState(0x12) & 0x8000) == 0;            // Alt
+        bool noModifiers = (User32.GetAsyncKeyState(0x10) & 0x8000) == 0 // Shift
+            && (User32.GetAsyncKeyState(0x11) & 0x8000) == 0             // Ctrl
+            && (User32.GetAsyncKeyState(0x12) & 0x8000) == 0;            // Alt
         if (!noModifiers)
         {
             return false;
@@ -766,9 +696,9 @@ public partial class SnipWindow : Window
             return false;
         }
 
-        bool shiftDown = (GetAsyncKeyState(0x10) & 0x8000) != 0;
-        bool ctrlDown = (GetAsyncKeyState(0x11) & 0x8000) != 0;
-        bool altDown = (GetAsyncKeyState(0x12) & 0x8000) != 0;
+        bool shiftDown = (User32.GetAsyncKeyState(0x10) & 0x8000) != 0;
+        bool ctrlDown = (User32.GetAsyncKeyState(0x11) & 0x8000) != 0;
+        bool altDown = (User32.GetAsyncKeyState(0x12) & 0x8000) != 0;
 
         // Manual scrolling capture owns the keyboard and must be handled BEFORE the generic
         // Escape/dismiss handler below — otherwise Esc would dismiss the (hidden) overlay

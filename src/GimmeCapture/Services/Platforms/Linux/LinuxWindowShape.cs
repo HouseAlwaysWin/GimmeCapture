@@ -27,7 +27,7 @@ internal static class LinuxWindowShape
     {
         if (_display == IntPtr.Zero)
         {
-            _display = XOpenDisplay(null);
+            _display = LibX11.XOpenDisplay(null);
         }
 
         return _display;
@@ -100,7 +100,7 @@ internal static class LinuxWindowShape
 
         try
         {
-            XCloseDisplay(_display);
+            LibX11.XCloseDisplay(_display);
         }
         catch (Exception ex)
         {
@@ -122,13 +122,7 @@ internal static class LinuxWindowShape
     }
 
     [DllImport("libX11.so.6")]
-    private static extern IntPtr XOpenDisplay(string? name);
-
-    [DllImport("libX11.so.6")]
     private static extern int XFlush(IntPtr dpy);
-
-    [DllImport("libX11.so.6")]
-    private static extern int XCloseDisplay(IntPtr dpy);
 
     [DllImport("libXext.so.6")]
     private static extern void XShapeCombineRectangles(IntPtr dpy, IntPtr dest, int kind, int xOff, int yOff, [In] XRectangle[] rects, int nRects, int op, int ordering);
