@@ -20,7 +20,7 @@ public partial class SnipWindowViewModel
 
     private async Task ExecuteTextCopyAsync()
     {
-        if (_quickOcrService == null || _mainVm == null
+        if (_quickOcrService == null || _settings == null
             || SelectionRect.Width <= 0 || SelectionRect.Height <= 0)
         {
             return;
@@ -60,8 +60,8 @@ public partial class SnipWindowViewModel
 
             var result = await _quickOcrService.RecognizeAsync(
                 bitmap,
-                _mainVm.SourceLanguage,
-                _mainVm.OcrTextLayout,
+                _settings.SourceLanguage,
+                _settings.OcrTextLayout,
                 cts.Token);
 
             switch (result.Status)
@@ -69,11 +69,11 @@ public partial class SnipWindowViewModel
                 case QuickOcrStatus.Success:
                     bool copied = await _captureService.CopyToClipboardAsync(result.Text);
                     string statusKey = copied ? "QuickOcrCopied" : "QuickOcrCopyFailed";
-                    if (copied && _mainVm.SaveOcrTextToFile)
+                    if (copied && _settings.SaveOcrTextToFile)
                     {
                         // Best-effort side channel: also persist the text as a .txt in the save directory
                         // (same fallback as screenshot auto-save when no directory is configured).
-                        var exportDir = _mainVm.SaveDirectory;
+                        var exportDir = _settings.SaveDirectory;
                         if (string.IsNullOrEmpty(exportDir))
                         {
                             exportDir = System.IO.Path.Combine(
@@ -82,7 +82,7 @@ public partial class SnipWindowViewModel
                         }
 
                         string? exportedPath = await OcrTextExportService.WriteAsync(
-                            result.Text, exportDir, _mainVm.FileNameTemplate);
+                            result.Text, exportDir, _settings.FileNameTemplate);
                         statusKey = exportedPath != null ? "QuickOcrSavedToFile" : "QuickOcrSaveFailed";
                     }
                     _host.SetOcrStatus(statusKey, result.Language);
@@ -336,7 +336,7 @@ public partial class SnipWindowViewModel
 
         // Copies are clipboard-only by default; when history is on, persist a managed copy so it
         // shows up in the history panel (and is cleaned up on remove/prune).
-        if (_mainVm != null && _mainVm.EnableHistory && _services != null)
+        if (_settings != null && _settings.EnableHistory && _services != null)
         {
             var copyPath = _services.CaptureHistory.CreateManagedCapturePath("png");
             await _captureService.SaveToFileAsync(bitmap, copyPath);
@@ -364,16 +364,16 @@ public partial class SnipWindowViewModel
             {
                 string? savedPath = null;
 
-                if (_mainVm != null && _mainVm.AutoSave)
+                if (_settings != null && _settings.AutoSave)
                 {
-                    var dir = _mainVm.SaveDirectory;
+                    var dir = _settings.SaveDirectory;
                     if (string.IsNullOrEmpty(dir))
                     {
                         dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), "GimmeCapture");
                     }
                     FileLocationService.EnsureDirectory(dir, "SnipCapture.EnsureSaveDirectory");
 
-                    var fileName = CaptureFileNameService.BuildFileName("png", _mainVm.FileNameTemplate);
+                    var fileName = CaptureFileNameService.BuildFileName("png", _settings.FileNameTemplate);
                     var path = System.IO.Path.Combine(dir, fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;
@@ -394,7 +394,7 @@ public partial class SnipWindowViewModel
                 else
                 {
                     // Fallback
-                    var fileName = CaptureFileNameService.BuildFileName("png", _mainVm?.FileNameTemplate);
+                    var fileName = CaptureFileNameService.BuildFileName("png", _settings?.FileNameTemplate);
                     var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;
@@ -403,7 +403,7 @@ public partial class SnipWindowViewModel
                 if (!string.IsNullOrWhiteSpace(savedPath))
                 {
                     _services?.CaptureHistory.AddImageAsync(savedPath).Forget("CaptureHistory.AddImage");
-                    if (_mainVm?.RevealAfterSave ?? true)
+                    if (_settings?.RevealAfterSave ?? true)
                     {
                         FileLocationService.RevealInFileExplorer(savedPath);
                     }
@@ -423,7 +423,7 @@ public partial class SnipWindowViewModel
 
         AppLog.Debug("SnipWindowViewModel.Capture", $"[SnipWindowViewModel] Pin() called. runAI={runAI}, SelectionRect={SelectionRect}");
         // Guard: If AI is disabled globally, prevent running it
-        if (runAI && (_mainVm == null || !_mainVm.EnableAI))
+        if (runAI && (_settings == null || !_settings.EnableAI))
         {
             runAI = false;
         }

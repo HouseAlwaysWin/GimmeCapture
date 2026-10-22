@@ -155,7 +155,7 @@ public partial class SnipWindowViewModel
         }
 
         // Common updates
-        SelectionBorderColor = _mainVm?.BorderColor ?? Colors.Yellow;
+        SelectionBorderColor = _settings?.BorderColor ?? Colors.Yellow;
         if (value == SnipMode.Screenshot || value == SnipMode.Recording)
         {
             LogTranslationMemoryState(value == SnipMode.Screenshot ? "snip-mode-enter" : "record-mode-enter");
@@ -235,7 +235,7 @@ public partial class SnipWindowViewModel
     public bool IsRecordingActive => _recordingService?.State == RecordingState.Recording;
 
     // Current recording format (gif, mp4, webm, etc.)
-    public string RecordFormat => _mainVm?.RecordingSettings.RecordFormat ?? "mp4";
+    public string RecordFormat => _settings?.RecordingSettings.RecordFormat ?? "mp4";
 
     private TimeSpan _recordingDuration = TimeSpan.Zero;
     public TimeSpan RecordingDuration
@@ -280,9 +280,9 @@ public partial class SnipWindowViewModel
             // variant was gated to the active-recording phase, which made toggling it look like it did nothing.)
             if (CurrentMode == SnipMode.Recording)
             {
-                return _mainVm?.HideRecordSelectionDecoration ?? false;
+                return _settings?.HideRecordSelectionDecoration ?? false;
             }
-            return _mainVm?.HideSnipSelectionDecoration ?? false;
+            return _settings?.HideSnipSelectionDecoration ?? false;
         }
     }
 
@@ -372,7 +372,7 @@ public partial class SnipWindowViewModel
 
     public void HandleGlobalHotkey(int id)
     {
-        if (_mainVm == null || _services == null) return;
+        if (_settings == null || _services == null) return;
 
         // While a manual scrolling-capture session is active: pressing the trigger (Shift+F5)
         // again finishes it, and the temporary global hotkeys registered for the session finish
@@ -455,7 +455,7 @@ public partial class SnipWindowViewModel
 
     private bool TryHandleModeSwitchHotkey(string pressedHotkey)
     {
-        if (string.IsNullOrWhiteSpace(pressedHotkey) || _mainVm == null || RecState != RecordingState.Idle)
+        if (string.IsNullOrWhiteSpace(pressedHotkey) || _settings == null || RecState != RecordingState.Idle)
             return false;
 
         switch (CurrentMode)

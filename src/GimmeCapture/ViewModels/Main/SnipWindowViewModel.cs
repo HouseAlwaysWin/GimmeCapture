@@ -85,6 +85,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly ISnipWindowHost _host;
     private readonly SnipWindowServices? _services;
 
+    // The settings it reads and the few its toolbar changes; none when opened on its own, which uses the defaults.
+    private readonly ISnipOverlaySettings? _settings;
+
     /// <summary>
     /// True when the capture overlay should open / stay WITHOUT stealing foreground focus (the
     /// CaptureWithoutStealingFocus setting is on, and we are not in Translation mode — translation needs real
@@ -92,7 +95,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     /// annotation text editor is active. Drives ShowActivated + WS_EX_NOACTIVATE on the overlay.
     /// </summary>
     public bool ShouldAvoidStealingFocus =>
-        _mainVm?.CaptureWithoutStealingFocus == true && CurrentMode != SnipMode.Translation
+        _settings?.CaptureWithoutStealingFocus == true && CurrentMode != SnipMode.Translation
         && Surface.AllowsNoActivateOverlay;
 
     // --- Freeze-frame capture: a still of the WHOLE desktop grabbed BEFORE the overlay was shown, so shell
@@ -121,7 +124,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         Annotations,
         GetTranslationSelectionsForCapture(),
         TranslatedBlocks,
-        _mainVm?.ShowSnipCursor ?? false);
+        _settings?.ShowSnipCursor ?? false);
 
     /// <summary>Maps the overlay's mode plus the manual-scroll flag onto the surface's activity gate.</summary>
     private OverlayActivity CurrentOverlayActivity => _manualScrollActive
@@ -137,8 +140,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     /// never survive into an overlay whose mode is inherently live.</summary>
     internal void SyncSurfaceActivity() => _surface.ConstrainTo(CurrentOverlayActivity);
 
-    /// <summary>The app-wide translation-overlay layer (null in design-time when there is no MainVm).</summary>
-    public ITranslationResultLayerService? TranslationResultLayer => _mainVm?.TranslationResultLayer;
+    /// <summary>The app-wide translation-overlay layer (null for an overlay opened without services).</summary>
+    public ITranslationResultLayerService? TranslationResultLayer => _services?.TranslationResultLayer;
     private readonly IScreenCaptureService _captureService;
     private readonly ITranslationSessionService? _translationSession;
     private readonly ITranslationSelectionMonitor? _translationSelectionMonitor;
@@ -166,10 +169,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private TranslateHotkeys? TranslateKeys => _services?.SettingsService.Settings.Translate;
 
     // Hotkeys / Tooltips (Dynamic by Mode)
-    public string SnipHotkey => _mainVm?.SnipHotkey ?? "Shift+F1";
-    public string RecordHotkey => _mainVm?.RecordHotkey ?? "Shift+F2";
-    public string TranslateHotkey => _mainVm?.TranslateHotkey ?? "Shift+F3";
-    public string TextCopyHotkey => _mainVm?.TextCopyHotkey ?? "Shift+F4";
+    public string SnipHotkey => _settings?.SnipHotkey ?? "Shift+F1";
+    public string RecordHotkey => _settings?.RecordHotkey ?? "Shift+F2";
+    public string TranslateHotkey => _settings?.TranslateHotkey ?? "Shift+F3";
+    public string TextCopyHotkey => _settings?.TextCopyHotkey ?? "Shift+F4";
     
     public string CopyHotkey => CurrentMode == SnipMode.Recording ? (RecordKeys?.Copy ?? "Ctrl+C") : (SnipKeys?.Copy ?? "Ctrl+C");
     public string UndoHotkey => CurrentMode == SnipMode.Recording ? (RecordKeys?.Undo ?? "Ctrl+Z") : (SnipKeys?.Undo ?? "Ctrl+Z");
@@ -250,7 +253,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string SaveTooltip => $"{LocalizationService.Instance["TipSave"]} ({SaveHotkey})";
     public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
     public string PinTooltip => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? $"{LocalizationService.Instance["ActionStartPin"]} ({ActiveActionHotkey})" : $"{LocalizationService.Instance["TipPin"]} ({ActiveActionHotkey})");
-    public string ScrollingCaptureTooltip => $"{LocalizationService.Instance["ScrollingCapture"]} ({_mainVm?.ScrollingCaptureHotkey ?? "Shift+F5"})";
+    public string ScrollingCaptureTooltip => $"{LocalizationService.Instance["ScrollingCapture"]} ({_settings?.ScrollingCaptureHotkey ?? "Shift+F5"})";
     public string RectangleTooltip => $"{LocalizationService.Instance["TipRectangle"]} ({RectangleHotkey})";
     public string EllipseTooltip => $"{LocalizationService.Instance["TipEllipse"]} ({EllipseHotkey})";
     public string ArrowTooltip => $"{LocalizationService.Instance["TipArrow"]} ({ArrowHotkey})";
@@ -288,8 +291,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string MenuPinTranslation => LocalizationService.Instance["MenuPinTranslation"];
     public string MenuCopyTranslation => LocalizationService.Instance["CopyTranslation"] ?? "Copy Translation";
 
-    public Color ThemeColor => _mainVm?.ThemeColor ?? Colors.Red;
-    public Color OcrHighlightColor => _mainVm?.ThemeColor ?? SelectionBorderColor;
+    public Color ThemeColor => _settings?.ThemeColor ?? Colors.Red;
+    public Color OcrHighlightColor => _settings?.ThemeColor ?? SelectionBorderColor;
     public Color TranslationOcrHighlightColor => ResolveTranslationOcrHighlightColor(ThemeColor, SelectionBorderColor);
     public Color ThemeDeepColor 
     {
@@ -407,29 +410,30 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     public OCRLanguage SourceLanguage
     {
-        get => _mainVm?.SourceLanguage ?? OCRLanguage.Auto;
-        set { if (_mainVm != null) _mainVm.SourceLanguage = value; this.RaisePropertyChanged(); }
+        get => _settings?.SourceLanguage ?? OCRLanguage.Auto;
+        set { if (_settings != null) _settings.SourceLanguage = value; this.RaisePropertyChanged(); }
     }
 
     public TranslationLanguage TargetLanguage
     {
-        get => _mainVm?.TargetLanguage ?? TranslationLanguage.TraditionalChinese;
-        set { if (_mainVm != null) _mainVm.TargetLanguage = value; this.RaisePropertyChanged(); }
+        get => _settings?.TargetLanguage ?? TranslationLanguage.TraditionalChinese;
+        set { if (_settings != null) _settings.TargetLanguage = value; this.RaisePropertyChanged(); }
     }
 
     public ScrollingCaptureDirection ScrollingCaptureDirection
     {
-        get => _mainVm?.ScrollingCaptureDirection ?? ScrollingCaptureDirection.Auto;
-        set { if (_mainVm != null) _mainVm.ScrollingCaptureDirection = value; this.RaisePropertyChanged(); }
+        get => _settings?.ScrollingCaptureDirection ?? ScrollingCaptureDirection.Auto;
+        set { if (_settings != null) _settings.ScrollingCaptureDirection = value; this.RaisePropertyChanged(); }
     }
 
-    public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
-    public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
+    public List<OCRLanguage> AvailableOCRLanguages => _settings?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
+    public List<TranslationLanguage> AvailableTranslationLanguages => _settings?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
     public SnipWindowViewModel() : this(Colors.Red, 2.0, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), null, null, null, null, null, null, null) { }
 
+    // An overlay opened from this main window, without its services.
     public SnipWindowViewModel(Color borderColor, double borderThickness, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
-        : this(borderColor, borderThickness, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), recService, mainVm, null, null, null, null, null)
+        : this(borderColor, borderThickness, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), recService, mainVm, null, null, null, null, null, host: mainVm, settings: mainVm)
     {
     }
 
@@ -447,7 +451,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         ICaptureVisibilityCoordinator? captureVisibilityCoordinator = null,
         IOcrEngineFactory? ocrEngineFactory = null,
         ISnipWindowHost? host = null,
-        SnipWindowServices? services = null)
+        SnipWindowServices? services = null,
+        ISnipOverlaySettings? settings = null)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _detectionService = detectionService ?? CreateDesignWindowDetectionService();
@@ -463,6 +468,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _mainVm = mainVm;
         _host = host ?? NullSnipWindowHost.Instance;
         _services = services;
+        _settings = settings;
         _surface = new OverlaySurface(_captureService, _captureVisibilityCoordinator, BuildSelectionCommit);
         // ShouldAvoidStealingFocus derives from the surface, so the View's WS_EX_NOACTIVATE re-apply stream has to
         // see freeze transitions too — before, a mid-session freeze flipped the value and never re-applied the style.
@@ -498,7 +504,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             });
         _audioMeterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
 
-        ApplyInitialMainVmVisualSettings();
+        ApplyInitialVisualSettings();
         InitializeRecordingBindingsIfNeeded();
 
         _audioMeterTimer.Tick += (_, _) => RefreshAudioLevels();
@@ -508,7 +514,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         InitializeToolbarCommands();
         InitializeSelectionCommands();
         InitializeCaptureScopeCommands();
-        InitializeMainViewModelBindingsIfNeeded();
+        InitializeHostBindings();
+        InitializeSettingsBindingsIfNeeded();
         _editorState.Changed.Subscribe(_ =>
         {
             this.RaisePropertyChanged(nameof(CurrentAnnotationTool));
@@ -545,20 +552,20 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     }
 
-    private void ApplyInitialMainVmVisualSettings()
+    private void ApplyInitialVisualSettings()
     {
-        if (_mainVm == null)
+        if (_settings == null)
         {
             return;
         }
 
-        _selectionBorderColor = _mainVm.BorderColor;
-        _selectionBorderThickness = _mainVm.BorderThickness;
+        _selectionBorderColor = _settings.BorderColor;
+        _selectionBorderThickness = _settings.BorderThickness;
     }
 
     private void ApplyDefaultToolbarVisibilityForMode(SnipMode mode)
     {
-        if (_mainVm == null
+        if (_settings == null
             || mode == SnipMode.Translation
             || CurrentState != SnipState.Selected
             || IsRecordingFinalizing)
@@ -567,8 +574,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
 
         bool shouldShowToolbar = mode == SnipMode.Recording
-            ? !_mainVm.DefaultHideRecordToolbar
-            : !_mainVm.DefaultHideSnipToolbar;
+            ? !_settings.DefaultHideRecordToolbar
+            : !_settings.DefaultHideSnipToolbar;
 
         ShowToolbar = shouldShowToolbar;
         if (!shouldShowToolbar)
@@ -585,11 +592,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
     }
 
-    private void InitializeMainViewModelBindingsIfNeeded()
+    private void InitializeSettingsBindingsIfNeeded()
     {
-        if (_mainVm != null)
+        if (_settings != null)
         {
-            InitializeMainViewModelBindings(_mainVm);
+            InitializeSettingsBindings(_settings);
         }
     }
 
@@ -647,23 +654,19 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             .DisposeWith(_disposables);
     }
 
-    private void InitializeMainViewModelBindings(MainWindowViewModel mainVm)
+    // The main window's progress, mirrored while the overlay is open. A NullSnipWindowHost reports the overlay's own
+    // defaults (nothing in progress), so binding to it changes nothing.
+    private void InitializeHostBindings()
     {
-        BindDistinct(mainVm.WhenAnyValue(x => x.ShowAIScanBox), val => ShowAIScanBox = val)
+        BindDistinct(_host.WhenAnyValue(x => x.ProgressValue), val => ProgressValue = val)
             .DisposeWith(_disposables);
 
-        BindDistinct(mainVm.WhenAnyValue(x => x.EnableAIScan), val => EnableAIScan = val)
+        BindDistinct(_host.WhenAnyValue(x => x.IsIndeterminate), val => IsIndeterminate = val)
             .DisposeWith(_disposables);
 
-        BindDistinct(mainVm.WhenAnyValue(x => x.ProgressValue), val => ProgressValue = val)
-            .DisposeWith(_disposables);
-
-        BindDistinct(mainVm.WhenAnyValue(x => x.IsIndeterminate), val => IsIndeterminate = val)
-            .DisposeWith(_disposables);
-
-        // Sync ShowProcessingOverlay — only propagate 'true' from MainVM.
-        // When MainVM goes false, only clear overlay if no local operation is active.
-        BindDistinct(mainVm.WhenAnyValue(x => x.ShowProcessingOverlay), val =>
+        // Sync ShowProcessingOverlay — only propagate 'true' from the host.
+        // When the host goes false, only clear overlay if no local operation is active.
+        BindDistinct(_host.WhenAnyValue(x => x.ShowProcessingOverlay), val =>
             {
                 if (val)
                     ShowProcessingOverlay = true;
@@ -671,12 +674,21 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                     ShowProcessingOverlay = false;
             })
             .DisposeWith(_disposables);
+    }
 
-        BindDistinct(mainVm.WhenAnyValue(x => x.ThemeColor), _ =>
+    private void InitializeSettingsBindings(ISnipOverlaySettings settings)
+    {
+        BindDistinct(settings.WhenAnyValue(x => x.ShowAIScanBox), val => ShowAIScanBox = val)
+            .DisposeWith(_disposables);
+
+        BindDistinct(settings.WhenAnyValue(x => x.EnableAIScan), val => EnableAIScan = val)
+            .DisposeWith(_disposables);
+
+        BindDistinct(settings.WhenAnyValue(x => x.ThemeColor), _ =>
             RaiseProperties(nameof(ThemeColor), nameof(OcrHighlightColor), nameof(TranslationOcrHighlightColor), nameof(ThemeDeepColor)))
             .DisposeWith(_disposables);
 
-        BindDistinct(mainVm.WhenAnyValue(x => x.BorderColor), val =>
+        BindDistinct(settings.WhenAnyValue(x => x.BorderColor), val =>
             {
                 SelectionBorderColor = val;
                 this.RaisePropertyChanged(nameof(OcrHighlightColor));
@@ -684,11 +696,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             })
             .DisposeWith(_disposables);
 
-        BindDistinct(mainVm.WhenAnyValue(x => x.BorderThickness), val => SelectionBorderThickness = val)
+        BindDistinct(settings.WhenAnyValue(x => x.BorderThickness), val => SelectionBorderThickness = val)
             .DisposeWith(_disposables);
 
-        // Real-time sync for decoration scales from MainVM
-        BindDistinct(mainVm.WhenAnyValue(x => x.WingScale), _ =>
+        // Real-time sync for decoration scales from the settings
+        BindDistinct(settings.WhenAnyValue(x => x.WingScale), _ =>
             {
                 RaiseProperties(
                     nameof(WingScale),
@@ -699,7 +711,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             })
             .DisposeWith(_disposables);
 
-        BindDistinct(mainVm.WhenAnyValue(x => x.Translate_SelectionHoldModifier), _ =>
+        BindDistinct(settings.WhenAnyValue(x => x.Translate_SelectionHoldModifier), _ =>
             this.RaisePropertyChanged(nameof(TranslationSelectionHoldModifier)))
             .DisposeWith(_disposables);
     }
@@ -762,7 +774,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public bool IsInputAudioActive => InputAudioLevel >= 0.01;
     public bool IsOutputAudioActive => OutputAudioLevel >= 0.01;
     // Whether the recording captures the mic — drives the mic level meter's visibility in the toolbar.
-    public bool IsMicrophoneEnabled => _mainVm?.RecordingSettings.RecordMicrophone ?? false;
+    public bool IsMicrophoneEnabled => _settings?.RecordingSettings.RecordMicrophone ?? false;
 
     // Live mute toggles for the active recording (session-only; reset to unmuted on each Start). When muted
     // the capture writes silence so the audio timeline stays in sync — see RecordingService.Audio.cs.
@@ -808,7 +820,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
 
         // Meter the mic the recording will actually use (not just the system default input).
-        _audioLevelMonitor.MicDeviceId = _mainVm?.RecordingSettings.SelectedMicDeviceId;
+        _audioLevelMonitor.MicDeviceId = _settings?.RecordingSettings.SelectedMicDeviceId;
         if (_audioLevelMonitor.TryRefresh())
         {
             InputAudioLevel = QuantizeAudioLevel(_audioLevelMonitor.InputPeak);

@@ -53,7 +53,7 @@ public partial class SnipWindowViewModel
     /// Screenshot/recording AI candidate boxes, plus OCR raw rect debug overlay in translation mode.
     /// </summary>
     public bool IsAiScanCandidateLayerVisible =>
-        _mainVm?.ShowAIScanBox == true &&
+        _settings?.ShowAIScanBox == true &&
         ((CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation)
          || (CurrentMode == SnipMode.Translation && ShowOcrResult));
 
@@ -164,7 +164,7 @@ public partial class SnipWindowViewModel
 
     private async Task EnsureTranslationOcrSearchCandidatesAsync(bool forceRefresh = false)
     {
-        if (CurrentMode != SnipMode.Translation || _mainVm == null || _services == null || _translationSession == null)
+        if (CurrentMode != SnipMode.Translation || _settings == null || _services == null || _translationSession == null)
         {
             return;
         }
@@ -191,7 +191,7 @@ public partial class SnipWindowViewModel
                 return;
             }
 
-            bool ready = await _translationSession.EnsureOcrReadyAsync(_mainVm.SourceLanguage);
+            bool ready = await _translationSession.EnsureOcrReadyAsync(_settings.SourceLanguage);
             if (!ready)
             {
                 return;
@@ -631,7 +631,7 @@ public partial class SnipWindowViewModel
     {
         AIScanRects.Clear();
 
-        if (_mainVm?.ShowAIScanBox != true)
+        if (_settings?.ShowAIScanBox != true)
         {
             return;
         }
@@ -698,14 +698,14 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        if (_mainVm == null || !_mainVm.EnableAI)
+        if (_settings == null || !_settings.EnableAI)
         {
-            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Abort: EnableAI is false or MainVm is null");
+            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Abort: EnableAI is false or there are no settings");
             AppLog.Information("Snip.OCRAutoScan: skipped — master EnableAI is off (Settings > AI).");
             return;
         }
 
-        if (!_mainVm.EnableAIScan)
+        if (!_settings.EnableAIScan)
         {
             AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Abort: EnableAIScan is false");
             AppLog.Information("Snip.OCRAutoScan: skipped — EnableAIScan (OCR selection detection) is off.");
@@ -828,7 +828,7 @@ public partial class SnipWindowViewModel
             // were asymmetric).
             bool stateAllowsOcr = CurrentState == SnipState.Detecting
                 || (CurrentState == SnipState.Selecting && !HasSelectionArea);
-            if (!stateAllowsOcr || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
+            if (!stateAllowsOcr || _settings?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
 
             _ocrRawRects = result.RawDetectedRects.AsValueEnumerable().ToList();
             _ocrParagraphCandidates = result.Candidates.AsValueEnumerable()
@@ -891,7 +891,7 @@ public partial class SnipWindowViewModel
     /// ReactiveCommand isExecuting gate that used to silently drop this trigger, and logs the reason whenever it
     /// is intentionally skipped — so a "OCR does nothing on entry" report is diagnosable from the log file
     /// (%LOCALAPPDATA%\GimmeCapture\...\logs) instead of needing an attached debugger.
-    /// Reads _mainVm.ShowAIScanBox (the source of truth used by IsAiScanCandidateLayerVisible /
+    /// Reads _settings.ShowAIScanBox (the source of truth used by IsAiScanCandidateLayerVisible /
     /// RefreshProjectedOcrRects) rather than the local mirror, to avoid a first-frame binding race.
     /// </summary>
     public void RequestOcrAutoScanOnEntry(string reason)
@@ -901,7 +901,7 @@ public partial class SnipWindowViewModel
             AppLog.Information($"Snip.OcrAutoScanOnEntry[{reason}]: skipped — translation mode.");
             return;
         }
-        if (_mainVm?.ShowAIScanBox != true)
+        if (_settings?.ShowAIScanBox != true)
         {
             AppLog.Information($"Snip.OcrAutoScanOnEntry[{reason}]: skipped — scan box (ShowAIScanBox) is off.");
             return;

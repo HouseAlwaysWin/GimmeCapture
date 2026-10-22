@@ -19,7 +19,7 @@ using GimmeCapture.Services.Translation;
 
 namespace GimmeCapture.ViewModels.Main;
 
-public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost
+public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnipOverlaySettings
 {
     private string _statusText = "";
     public string StatusText

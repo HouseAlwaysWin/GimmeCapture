@@ -194,10 +194,10 @@ public partial class SnipWindowViewModel
         set
         {
             this.RaiseAndSetIfChanged(ref _showAIScanBox, value);
-            if (_mainVm != null)
+            if (_settings != null)
             {
-                _mainVm.ShowAIScanBox = value;
-                // IsAiScanCandidateLayerVisible reads _mainVm.ShowAIScanBox but is only re-raised by the
+                _settings.ShowAIScanBox = value;
+                // IsAiScanCandidateLayerVisible reads _settings.ShowAIScanBox but is only re-raised by the
                 // CurrentState/SelectionRect setters — raise it here too so toggling the box updates the
                 // overlay immediately instead of waiting for the next state change.
                 this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
@@ -226,7 +226,7 @@ public partial class SnipWindowViewModel
         set 
         {
             this.RaiseAndSetIfChanged(ref _enableAIScan, value);
-            if (_mainVm != null) _mainVm.EnableAIScan = value;
+            if (_settings != null) _settings.EnableAIScan = value;
         }
     }
 
@@ -307,12 +307,12 @@ public partial class SnipWindowViewModel
 
     private void StartTranslationWarmup()
     {
-        if (_mainVm == null || _translationSession == null || CurrentMode != SnipMode.Translation)
+        if (_settings == null || _translationSession == null || CurrentMode != SnipMode.Translation)
         {
             return;
         }
 
-        _translationSession.StartWarmup(_mainVm.SourceLanguage, _mainVm.TargetLanguage);
+        _translationSession.StartWarmup(_settings.SourceLanguage, _settings.TargetLanguage);
     }
 
     private void CancelTranslationWarmup()
@@ -335,9 +335,9 @@ public partial class SnipWindowViewModel
 
                 var activeSections = UserSelections.AsValueEnumerable().Where(s => s.IsAutoDetectEnabled).ToList();
                 if (activeSections.Count == 0) continue;
-                var mainVm = _mainVm;
+                var settings = _settings;
                 var translationSelectionMonitor = _translationSelectionMonitor;
-                if (mainVm == null || translationSelectionMonitor == null || CurrentMode != SnipMode.Translation) continue;
+                if (settings == null || translationSelectionMonitor == null || CurrentMode != SnipMode.Translation) continue;
 
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => IsCapturing = true);
                 await Task.Delay(40, token);
@@ -350,8 +350,8 @@ public partial class SnipWindowViewModel
                             activeSections,
                             ScreenOffset,
                             VisualScaling,
-                            mainVm.SourceLanguage,
-                            mainVm.TargetLanguage),
+                            settings.SourceLanguage,
+                            settings.TargetLanguage),
                         token);
                 }
                 finally
@@ -767,7 +767,7 @@ public partial class SnipWindowViewModel
             ? ToolbarWidth
             : Math.Min(1080, Math.Max(200, bounds.Width - margin * 2));
 
-        var toolbarPos = _mainVm?.SnipToolbarPosition ?? SnipToolbarPosition.TopCenter;
+        var toolbarPos = _settings?.SnipToolbarPosition ?? SnipToolbarPosition.TopCenter;
         double left = ComputeToolbarLeft(bounds, tw, margin, toolbarPos);
 
         TranslationToolbarLeft = left;

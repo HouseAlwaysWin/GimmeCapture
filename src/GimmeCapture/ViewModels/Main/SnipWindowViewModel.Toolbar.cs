@@ -641,12 +641,12 @@ public partial class SnipWindowViewModel
 
     public double WingScale
     {
-        get => _mainVm?.WingScale ?? 1.0;
+        get => _settings?.WingScale ?? 1.0;
         set 
         {
-            if (_mainVm != null)
+            if (_settings != null)
             {
-                _mainVm.WingScale = value;
+                _settings.WingScale = value;
                 this.RaisePropertyChanged();
                 this.RaisePropertyChanged(nameof(WingWidth));
                 this.RaisePropertyChanged(nameof(WingHeight));

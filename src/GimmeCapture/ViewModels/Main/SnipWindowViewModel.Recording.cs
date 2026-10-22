@@ -46,9 +46,9 @@ public partial class SnipWindowViewModel
     private Rect GetRecordingCaptureRegionExcludingVisibleChrome()
     {
         var r = SelectionRect;
-        if (_mainVm == null) return r;
+        if (_settings == null) return r;
 
-        bool hideDeco = _mainVm.HideRecordSelectionDecoration;
+        bool hideDeco = _settings.HideRecordSelectionDecoration;
 
         const double cornerMarginPad = 1.5;
         const double edgePad = 2.0;
@@ -153,9 +153,9 @@ public partial class SnipWindowViewModel
             }
 
             // Size limit check
-            if (_mainVm != null && _recordingService != null)
+            if (_settings != null && _recordingService != null)
             {
-                double maxMb = _mainVm.RecordingSettings.MaxRecordingSizeMB;
+                double maxMb = _settings.RecordingSettings.MaxRecordingSizeMB;
                 if (maxMb > 0)
                 {
                     long currentBytes = _recordingService.GetCurrentRecordingSizeBytes();
@@ -169,11 +169,11 @@ public partial class SnipWindowViewModel
 
                 // Auto-stop at the configured max recorded length (pause time excluded — `duration`
                 // accumulates only Recording segments). Latched like the disk guard below.
-                int maxSeconds = _mainVm.RecordingSettings.MaxRecordingSeconds;
+                int maxSeconds = _settings.RecordingSettings.MaxRecordingSeconds;
                 if (maxSeconds > 0 && !_autoStopLengthTriggered && duration >= TimeSpan.FromSeconds(maxSeconds))
                 {
                     _autoStopLengthTriggered = true;
-                    bool pin = _mainVm.RecordingSettings.AutoStopAction == RecordingAutoStopAction.Pin;
+                    bool pin = _settings.RecordingSettings.AutoStopAction == RecordingAutoStopAction.Pin;
                     _host.SetStatus("RecordAutoStopReached");
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         (pin ? ExecutePinRecordingAsync() : ExecuteStopRecordingAsync(suppressSaveDialog: true))
@@ -217,7 +217,7 @@ public partial class SnipWindowViewModel
         _recordStartInFlight = true;
         try
         {
-            if (_recordingService == null || _mainVm == null || _services == null)
+            if (_recordingService == null || _settings == null || _services == null)
             {
                 return;
             }
@@ -241,7 +241,7 @@ public partial class SnipWindowViewModel
                 return;
             }
 
-            string format = _mainVm.RecordingSettings.RecordFormat?.ToLowerInvariant() ?? "mp4";
+            string format = _settings.RecordingSettings.RecordFormat?.ToLowerInvariant() ?? "mp4";
             if (format == "gif" && !RecordingFormatCapabilities.IsGifAvailable())
             {
                 _host.SetStatus("GifUnavailableReason");
@@ -271,10 +271,10 @@ public partial class SnipWindowViewModel
         ShowProcessingOverlay = false;
         ProcessingText = string.Empty;
 
-        if (_recordingService == null || _mainVm == null || _services == null) return;
+        if (_recordingService == null || _settings == null || _services == null) return;
 
         // Use TempFolder setting if available, otherwise local Temp folder in app directory
-        string tempDir = _mainVm.TempDirectory;
+        string tempDir = _settings.TempDirectory;
         if (string.IsNullOrEmpty(tempDir))
         {
             tempDir = System.IO.Path.Combine(_services.SettingsService.BaseDataDirectory, "Temp");
@@ -282,12 +282,12 @@ public partial class SnipWindowViewModel
 
         FileLocationService.EnsureDirectory(tempDir, "SnipRecording.EnsureTempDirectory");
 
-        if (_mainVm.RecordingSettings.UseFixedRecordPath && !string.IsNullOrEmpty(_mainVm.RecordingSettings.VideoSaveDirectory))
+        if (_settings.RecordingSettings.UseFixedRecordPath && !string.IsNullOrEmpty(_settings.RecordingSettings.VideoSaveDirectory))
         {
             // Ensure directory exists
-            FileLocationService.EnsureDirectory(_mainVm.RecordingSettings.VideoSaveDirectory, "SnipRecording.EnsureVideoDirectory");
-            string fileName = CaptureFileNameService.BuildFileName(format, _mainVm.FileNameTemplate);
-            _currentRecordingPath = System.IO.Path.Combine(_mainVm.RecordingSettings.VideoSaveDirectory, fileName);
+            FileLocationService.EnsureDirectory(_settings.RecordingSettings.VideoSaveDirectory, "SnipRecording.EnsureVideoDirectory");
+            string fileName = CaptureFileNameService.BuildFileName(format, _settings.FileNameTemplate);
+            _currentRecordingPath = System.IO.Path.Combine(_settings.RecordingSettings.VideoSaveDirectory, fileName);
         }
         else
         {
@@ -309,7 +309,7 @@ public partial class SnipWindowViewModel
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
 
         ResetRecordingDurationTracking();
-        bool enableSystemAudio = _mainVm.RecordSystemAudio;
+        bool enableSystemAudio = _settings.RecordSystemAudio;
 
         // Windows picked from the capture-scope picker record via WGC (follows the windows): 1 window =
         // single capture, 2+ = composite/separate per RecordMultiWindowMode. Region/monitor pass an empty
@@ -344,7 +344,7 @@ public partial class SnipWindowViewModel
             _separateOutputLogicalBounds = boundsSnapshot;
         }
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordingSettings.RecordMicrophone, _mainVm.RecordingSettings.SelectedMicDeviceId, _mainVm.RecordingSettings.MicVolume, windowHandle: default, windowHandles: windowHandles, multiWindowMode: RecordMultiWindowMode, separateOutputFiles: separateOutputFiles))
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _settings.ShowRecordCursor, ScreenOffset, VisualScaling, _settings.RecordingSettings.RecordFPS, enableSystemAudio, _settings.RecordingSettings.RecordMicrophone, _settings.RecordingSettings.SelectedMicDeviceId, _settings.RecordingSettings.MicVolume, windowHandle: default, windowHandles: windowHandles, multiWindowMode: RecordMultiWindowMode, separateOutputFiles: separateOutputFiles))
         {
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();
@@ -444,7 +444,7 @@ public partial class SnipWindowViewModel
     /// video save folder instead.</param>
     private async Task ExecuteStopRecordingAsync(bool suppressSaveDialog = false)
     {
-        if (_recordingService == null || _mainVm == null) return;
+        if (_recordingService == null || _settings == null) return;
 
         _recordTimer?.Stop();
         // Clear the selection border BEFORE StopAsync: finalize hides the capture-excluded overlay, and hiding it
@@ -464,14 +464,14 @@ public partial class SnipWindowViewModel
         string? revealPath = null;
 
         // Check if we need to prompt
-        if (suppressSaveDialog && !_mainVm.RecordingSettings.UseFixedRecordPath
+        if (suppressSaveDialog && !_settings.RecordingSettings.UseFixedRecordPath
             && !string.IsNullOrEmpty(actualOutputPath) && System.IO.File.Exists(actualOutputPath))
         {
             // Unattended finish: move the temp file into the configured video folder (or MyVideos)
             // with a template-generated name — mirrors the dialog branch's move, minus the dialog.
             try
             {
-                string dir = _mainVm.RecordingSettings.VideoSaveDirectory;
+                string dir = _settings.RecordingSettings.VideoSaveDirectory;
                 if (string.IsNullOrEmpty(dir))
                 {
                     dir = System.IO.Path.Combine(
@@ -480,7 +480,7 @@ public partial class SnipWindowViewModel
                 }
                 FileLocationService.EnsureDirectory(dir, "SnipRecording.EnsureAutoStopDirectory");
                 string ext = System.IO.Path.GetExtension(actualOutputPath).TrimStart('.');
-                string fileName = CaptureFileNameService.BuildFileName(ext, _mainVm.FileNameTemplate);
+                string fileName = CaptureFileNameService.BuildFileName(ext, _settings.FileNameTemplate);
                 string targetPath = System.IO.Path.Combine(dir, fileName);
                 if (System.IO.File.Exists(targetPath)) System.IO.File.Delete(targetPath);
                 System.IO.File.Move(actualOutputPath, targetPath);
@@ -492,7 +492,7 @@ public partial class SnipWindowViewModel
                 revealPath = actualOutputPath; // keep the capture reachable even if the move failed
             }
         }
-        else if (!_mainVm.RecordingSettings.UseFixedRecordPath && PickSaveFileAction != null)
+        else if (!_settings.RecordingSettings.UseFixedRecordPath && PickSaveFileAction != null)
         {
             var targetPath = await PickSaveFileAction();
             if (!string.IsNullOrEmpty(targetPath))
@@ -543,7 +543,7 @@ public partial class SnipWindowViewModel
             int pw = Math.Max(2, (int)Math.Round(baseRect.Width > 1 ? baseRect.Width : 640.0));
             int ph = Math.Max(2, (int)Math.Round(baseRect.Height > 1 ? baseRect.Height : 360.0));
             _services?.CaptureHistory.AddVideoAsync(revealPath, pw, ph).Forget("CaptureHistory.AddVideo");
-            if (_mainVm?.RevealAfterSave ?? true)
+            if (_settings?.RevealAfterSave ?? true)
             {
                 FileLocationService.RevealInFileExplorer(revealPath);
             }
@@ -571,8 +571,8 @@ public partial class SnipWindowViewModel
             return false;
         }
 
-        bool hideDecoration = _mainVm?.HideRecordPinDecoration ?? false;
-        bool hideBorder = _mainVm?.HideRecordPinBorder ?? false;
+        bool hideDecoration = _settings?.HideRecordPinDecoration ?? false;
+        bool hideBorder = _settings?.HideRecordPinBorder ?? false;
 
         for (int i = 0; i < outputs.Count; i++)
         {
@@ -603,7 +603,7 @@ public partial class SnipWindowViewModel
             _services?.CaptureHistory.AddVideoAsync(file, pw, ph).Forget("CaptureHistory.AddVideo");
         }
 
-        if (!pin && (_mainVm?.RevealAfterSave ?? true) && !string.IsNullOrEmpty(_separateRecordingFolder))
+        if (!pin && (_settings?.RevealAfterSave ?? true) && !string.IsNullOrEmpty(_separateRecordingFolder))
         {
             FileLocationService.RevealInFileExplorer(_separateRecordingFolder!);
         }
@@ -640,8 +640,8 @@ public partial class SnipWindowViewModel
 
     private System.Collections.Generic.List<string> BuildSeparateOutputPaths(System.Collections.Generic.List<IntPtr> handles, string format)
     {
-        string baseDir = _mainVm != null && !string.IsNullOrEmpty(_mainVm.RecordingSettings.VideoSaveDirectory)
-            ? _mainVm.RecordingSettings.VideoSaveDirectory
+        string baseDir = _settings != null && !string.IsNullOrEmpty(_settings.RecordingSettings.VideoSaveDirectory)
+            ? _settings.RecordingSettings.VideoSaveDirectory
             : System.IO.Path.Combine(_services?.SettingsService.BaseDataDirectory ?? AppContext.BaseDirectory, "Recordings");
 
         string folder = System.IO.Path.Combine(baseDir, $"GimmeCapture_Windows_{DateTime.Now:yyyyMMdd_HHmmss}");
@@ -696,7 +696,7 @@ public partial class SnipWindowViewModel
 
     private async Task ExecuteCopyRecordingAsync()
     {
-        if (_isProcessingRecording || _recordingService == null || _mainVm == null) return;
+        if (_isProcessingRecording || _recordingService == null || _settings == null) return;
 
         _isProcessingRecording = true;
         try
@@ -813,8 +813,8 @@ public partial class SnipWindowViewModel
                 var originalHeight = Math.Max(2.0, baseRect.Height > 1 ? baseRect.Height : 360.0);
                 int pixelWidth = Math.Max(2, (int)Math.Round(originalWidth));
                 int pixelHeight = Math.Max(2, (int)Math.Round(originalHeight));
-                bool hideDecoration = _mainVm?.HideRecordPinDecoration ?? false;
-                bool hideBorder = _mainVm?.HideRecordPinBorder ?? false;
+                bool hideDecoration = _settings?.HideRecordPinDecoration ?? false;
+                bool hideBorder = _settings?.HideRecordPinBorder ?? false;
 
                 if (OpenPinnedVideoWindowAction != null)
                 {

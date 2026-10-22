@@ -198,7 +198,7 @@ public partial class SnipWindowViewModel
         // Direction is read once here (before the background tasks start) from the user's persisted
         // choice. Auto leaves _manualHorizontal undecided so DetectAxisAndGrow picks the axis from
         // the first real scroll; Vertical/Horizontal lock the axis up front.
-        ScrollingCaptureDirection chosenDirection = _mainVm?.ScrollingCaptureDirection ?? ScrollingCaptureDirection.Auto;
+        ScrollingCaptureDirection chosenDirection = _settings?.ScrollingCaptureDirection ?? ScrollingCaptureDirection.Auto;
         switch (chosenDirection)
         {
             case ScrollingCaptureDirection.Vertical:
