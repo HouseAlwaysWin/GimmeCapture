@@ -13,16 +13,8 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// <summary>
 /// Captures screen via libavdevice gdigrab and writes H.264/x265-in-Matroska segment.
 /// </summary>
-internal sealed class LibavGdigrabMkvSession : IDisposable
+internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
 {
-    private CancellationTokenSource? _cts;
-    private Task<bool>? _worker;
-
-    public Task<bool>? Worker => _worker;
-    public string? LastErrorMessage { get; private set; }
-    public string? LastWarningMessage { get; private set; }
-    public string? SelectedEncoderName { get; private set; }
-
     /// <summary>Composite a webcam picture-in-picture into each frame.</summary>
     public bool EnableWebcam { get; set; }
 
@@ -48,12 +40,6 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     public bool ShowKeystrokes { get; set; }
 
     /// <summary>
-    /// When true (default) GPU / Media-Foundation encoders (NVENC/QSV/AMF/MF) are tried before the
-    /// software libx264/265 fallback. Set false to force software encoding.
-    /// </summary>
-    public bool PreferHardwareEncoder { get; set; } = true;
-
-    /// <summary>
     /// Experimental: run capture/composite and encoding on separate threads (producer/consumer) so they
     /// overlap, reducing dropped frames at high resolution/fps with overlays. Default false keeps the
     /// proven single-threaded loop. Drops frames under sustained back-pressure rather than stalling capture.
@@ -73,106 +59,24 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// </remarks>
     public bool UseWallClockPts { get; set; }
 
-    /// <summary>Software-encoder CRF override (1-51); 0 keeps the default 23.</summary>
-    public int VideoCrf { get; set; }
+    protected override TimeSpan StartupGateTimeout => TimeSpan.FromSeconds(4);
 
-    /// <summary>Hardware-encoder target bitrate in bits/sec; 0 uses the automatic clamp.</summary>
-    public long VideoBitrate { get; set; }
+    protected override TimeSpan DisposeWait => TimeSpan.FromSeconds(8);
 
-    public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, VideoCodec codec)
+    protected override bool OnStartupGateTimedOut()
     {
-        FFmpegRuntime.EnsureInitialized();
-        LogNative($"StartAsync requested: out={outputPath}, x={offsetX}, y={offsetY}, w={width}, h={height}, fps={fps}, drawMouse={drawMouse}, codec={codec}");
-        LastErrorMessage = null;
-        LastWarningMessage = null;
-        SelectedEncoderName = null;
-        try
-        {
-            _cts?.Cancel();
-            _worker?.Wait(TimeSpan.FromMilliseconds(500));
-        }
-        catch
-        {
-            // ignore; we are replacing the session
-        }
-        finally
-        {
-            _cts?.Dispose();
-            _cts = null;
-            _worker = null;
-        }
-        _cts = new CancellationTokenSource();
-        var ct = _cts.Token;
-        var firstFrameTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        _worker = Task.Run(() =>
-        {
-            try
-            {
-                RunTranscode(outputPath, offsetX, offsetY, width, height, fps, drawMouse, codec, ct, firstFrameTcs);
-                LogNative("Worker completed successfully.");
-                return true;
-            }
-            catch (OperationCanceledException)
-            {
-                firstFrameTcs.TrySetCanceled();
-                LogNative("Worker canceled.");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                LastErrorMessage = ex.Message;
-                AppLog.Debug("LibavGdigrabMkvSession", $"[LibavGdigrab] {ex}");
-                AppLog.Warning("RecordingNative.Worker", ex);
-                firstFrameTcs.TrySetException(ex);
-                return false;
-            }
-        }, CancellationToken.None);
-
-        return StartupGateAsync(_worker, firstFrameTcs.Task);
-    }
-
-    private static async Task<bool> StartupGateAsync(Task<bool> worker, Task<bool> firstFrame)
-    {
-        // Consider recording started only after first encoded frame is observed.
-        // This avoids false "started" states that later produce a 1-frame output.
-        var timeout = Task.Delay(4000);
-        var done = await Task.WhenAny(firstFrame, worker, timeout).ConfigureAwait(false);
-        if (done == firstFrame)
-        {
-            LogNative("StartupGate: first frame observed.");
-            return await firstFrame.ConfigureAwait(false);
-        }
-
-        if (done == worker)
-        {
-            LogNative("StartupGate: worker completed before first frame.");
-            return await worker.ConfigureAwait(false);
-        }
-
         // Live capture may need longer than startup window before first frame is encoded.
         // Keep session running and report started; runtime errors are still surfaced by worker completion.
         LogNative("StartupGate: timeout, return started=true.");
         return true;
     }
 
-    public async Task StopAsync()
+    public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, VideoCodec codec)
     {
-        try
-        {
-            LogNative("StopAsync requested.");
-            _cts?.Cancel();
-            if (_worker != null)
-            {
-                await _worker.ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            _worker = null;
-            _cts?.Dispose();
-            _cts = null;
-        }
+        FFmpegRuntime.EnsureInitialized();
+        LogNative($"StartAsync requested: out={outputPath}, x={offsetX}, y={offsetY}, w={width}, h={height}, fps={fps}, drawMouse={drawMouse}, codec={codec}");
+        return StartWorker((ct, firstFrameTcs) =>
+            RunTranscode(outputPath, offsetX, offsetY, width, height, fps, drawMouse, codec, ct, firstFrameTcs));
     }
 
     private unsafe void RunTranscode(
@@ -785,27 +689,5 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         {
             throw FFmpegErrors.ToException(err, ctx);
         }
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            _cts?.Cancel();
-            _worker?.Wait(TimeSpan.FromSeconds(8));
-        }
-        catch
-        {
-            // ignore
-        }
-
-        _cts?.Dispose();
-        _cts = null;
-        _worker = null;
-    }
-
-    private static void LogNative(string message)
-    {
-        AppLog.Information("RecordingNative", message); // was Debug.WriteLine, which a release build leaves out
     }
 }

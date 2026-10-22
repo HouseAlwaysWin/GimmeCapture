@@ -189,8 +189,8 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            // The first-frame/bring-up timeout surfaces here as a thrown task (the gate re-throws the faulted
-            // firstFrame), so the no-frames cache must also be checked on this path — not just the !ok branch.
+            // A failed start, the first-frame and bring-up timeouts included, comes back as false (the !ok branch).
+            // This catch is for anything else that throws, and checks the no-frames cache all the same.
             if (_nativeWgcCompositeRecorder?.TimedOutWaitingForFrame == true)
             {
                 MarkWgcUnusableThisSession();
@@ -240,8 +240,8 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            // First-frame/bring-up timeout surfaces as a thrown task here; check the no-frames cache on this path
-            // too (the !ok branch is only reached on the rarer worker-completes-false race).
+            // A failed start, the first-frame and bring-up timeouts included, comes back as false (the !ok branch).
+            // This catch is for anything else that throws, and checks the no-frames cache all the same.
             if (_nativeWgcRecorder?.TimedOutWaitingForFrame == true)
             {
                 MarkWgcUnusableThisSession();

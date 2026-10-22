@@ -198,6 +198,8 @@
 - The three recorders (a screen region, a window, several windows) share one encoder-and-file writer instead of a
   copy each, and tests now record with every one of them: the region ones in every test run, the window ones on
   request (`RECORDING_PROBE=1`, since they put windows on screen).
+- They also share their start, stop and startup check. A recorder that fails as it starts now always reports a
+  failed start; it used to throw its error instead about half the time, which the app caught and treated the same.
 - The two Linux workflows are one, in one job: it compiles both heads, then runs the Linux test suite. It runs on
   `main` too, so a `main` that no longer builds on Linux shows up at once. Its NuGet cache lives on `main` and
   branches reuse it; before, each branch saved its own 1.7 GB copy, twice. A `claude/**` branch with an open PR
