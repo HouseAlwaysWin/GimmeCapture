@@ -10,11 +10,17 @@ using GimmeCapture.Services.Interop;
 using GimmeCapture.ViewModels.Main;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
 using GimmeCapture.Services.Platforms.Avalonia;
+#if WINDOWS
+using GimmeCapture.Services.Platforms.Windows;
+#endif
 
 namespace GimmeCapture.Views.Main;
 
@@ -156,11 +162,17 @@ public partial class SnipWindow : Window
     }
 
     // --- Low-Level Keyboard Hook ---
+    // Windows holds every key typed anywhere until a low-level hook returns. This hook used to run on the UI thread,
+    // so whenever the UI was busy all typing waited, in every app, for as long as the overlay was open (a whole
+    // recording included). It now runs on a thread of its own: a key the overlay cannot act on (SnipOverlayKeyFilter)
+    // passes straight through, and the rest are routed on the UI thread, which gets UiRouteTimeout to answer.
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
     private const int WM_KEYUP = 0x0101;
     private const int WM_SYSKEYDOWN = 0x0104;
     private const int WM_SYSKEYUP = 0x0105;
+    private static readonly TimeSpan UiRouteTimeout = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan UiRouteGrace = TimeSpan.FromMilliseconds(50);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
@@ -176,33 +188,135 @@ public partial class SnipWindow : Window
     private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string lpModuleName);
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
+    // The hook handle and the timeout-log throttle are touched on the hook thread only, and the delegate is kept
+    // alive while the hook is installed. The filter is written on the UI thread and read on the hook thread.
     private IntPtr _llKeyboardHook = IntPtr.Zero;
     private LowLevelKeyboardProc? _llKeyboardDelegate;
+    private IntPtr _llKeyboardOverlayHandle;
+    private SnipOverlayKeyFilter _llKeyboardFilter = SnipOverlayKeyFilter.None;
+    private SnipOverlayHotkeys? _llKeyboardFilterInputs;
+    private SnipWindowViewModel? _llKeyboardFilterSource;
+    private long _lastUiRouteTimeoutLogTicks;
+#if WINDOWS
+    private Win32HotkeyThread? _llKeyboardThread;
+#endif
 
     private void InstallLLKeyboardHook()
     {
-        if (_llKeyboardHook != IntPtr.Zero) return;
-        _llKeyboardDelegate = LLKeyboardHookCallback;
-        using (var curProcess = System.Diagnostics.Process.GetCurrentProcess())
-        using (var curModule = curProcess.MainModule)
+        // The delegate lives exactly as long as the hook.
+        if (_llKeyboardDelegate != null) return;
+
+        _llKeyboardOverlayHandle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        _llKeyboardFilterSource = _viewModel;
+        if (_llKeyboardFilterSource != null)
         {
-            if (curModule?.ModuleName != null)
-            {
-                _llKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, _llKeyboardDelegate, GetModuleHandle(curModule.ModuleName), 0);
-            }
+            _llKeyboardFilterSource.PropertyChanged += OnViewModelChangedForKeyFilter;
         }
+
+        RefreshLLKeyboardFilter();
+
+        _llKeyboardDelegate = LLKeyboardHookCallback;
+#if WINDOWS
+        var thread = new Win32HotkeyThread("GimmeCapture.SnipKeyboardHook", "SnipHook");
+        bool started = thread.Start(() =>
+        {
+            _llKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, _llKeyboardDelegate, GetModuleHandle(null), 0);
+            if (_llKeyboardHook == IntPtr.Zero)
+            {
+                _llKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, _llKeyboardDelegate, IntPtr.Zero, 0);
+            }
+
+            if (_llKeyboardHook == IntPtr.Zero)
+            {
+                AppLog.Warning("SnipHook.Install", $"SetWindowsHookEx failed (win32={Marshal.GetLastWin32Error()}).");
+            }
+        }, TimeSpan.FromSeconds(2));
+
+        if (!started)
+        {
+            AppLog.Warning("SnipHook.Install", "The overlay keyboard hook thread did not start within 2 s.");
+        }
+
+        _llKeyboardThread = thread;
+#endif
     }
 
     private void UninstallLLKeyboardHook()
     {
-        if (_llKeyboardHook != IntPtr.Zero)
+        if (_llKeyboardFilterSource != null)
         {
-            UnhookWindowsHookEx(_llKeyboardHook);
-            _llKeyboardHook = IntPtr.Zero;
-            _llKeyboardDelegate = null;
+            _llKeyboardFilterSource.PropertyChanged -= OnViewModelChangedForKeyFilter;
+            _llKeyboardFilterSource = null;
         }
+
+        _llKeyboardFilterInputs = null;
+        Volatile.Write(ref _llKeyboardFilter, SnipOverlayKeyFilter.None);
+
+#if WINDOWS
+        var thread = _llKeyboardThread;
+        _llKeyboardThread = null;
+        if (thread != null)
+        {
+            // The hook thread may be waiting for this thread to route a key. It gives up after UiRouteTimeout and
+            // then runs the unhook, so this waits about that long at most.
+            thread.TryInvoke(() =>
+            {
+                if (_llKeyboardHook != IntPtr.Zero)
+                {
+                    UnhookWindowsHookEx(_llKeyboardHook);
+                    _llKeyboardHook = IntPtr.Zero;
+                }
+            }, TimeSpan.FromMilliseconds(500));
+            thread.Dispose();
+        }
+#endif
+        _llKeyboardDelegate = null;
+    }
+
+    private void OnViewModelChangedForKeyFilter(object? sender, PropertyChangedEventArgs e) => RefreshLLKeyboardFilter();
+
+    // The overlay's hotkeys follow its mode and the app settings without change notifications of their own, so they
+    // are read again on every view model change; the filter is rebuilt only when one of them differs.
+    private void RefreshLLKeyboardFilter()
+    {
+        var vm = _llKeyboardFilterSource;
+        if (vm == null) return;
+
+        var inputs = new SnipOverlayHotkeys(
+            IsTranslationMode: vm.IsTranslationMode,
+            SelectionHoldModifier: vm.TranslationSelectionHoldModifier,
+            Close: vm.CloseHotkey,
+            Toolbar: vm.ActiveToolbarHotkey,
+            Action: vm.ActiveActionHotkey,
+            FullscreenSelect: vm.FullscreenSelectHotkey,
+            SwitchToSnip: vm.SwitchToSnipHotkey,
+            SwitchToRecord: vm.SwitchToRecordHotkey,
+            SwitchToTranslate: vm.SwitchToTranslateHotkey,
+            Playback: vm.ActivePlaybackHotkey,
+            Stop: vm.ActiveStopHotkey,
+            Copy: vm.CopyHotkey,
+            Save: vm.SaveHotkey,
+            Undo: vm.UndoHotkey,
+            Redo: vm.RedoHotkey,
+            Clear: vm.ClearHotkey,
+            Rectangle: vm.RectangleHotkey,
+            Ellipse: vm.EllipseHotkey,
+            Arrow: vm.ArrowHotkey,
+            Line: vm.LineHotkey,
+            Mosaic: vm.MosaicHotkey,
+            Blur: vm.BlurHotkey,
+            Pen: vm.PenHotkey,
+            Text: vm.TextHotkey,
+            TranslateAll: vm.TranslateAllHotkey,
+            TranslatePin: vm.TranslatePinHotkey,
+            ScanAll: vm.ScanAllHotkey,
+            ClearAll: vm.ClearAllHotkey);
+        if (inputs == _llKeyboardFilterInputs) return;
+
+        _llKeyboardFilterInputs = inputs;
+        Volatile.Write(ref _llKeyboardFilter, SnipOverlayKeyFilter.Build(inputs));
     }
 
     protected override void OnClosed(EventArgs e)
@@ -270,9 +384,12 @@ public partial class SnipWindow : Window
     /// Low-level keyboard hook is process-global. Foreground ownership is still the default gate.
     /// A separate, narrower unfocused path is used for capture-flow shortcuts while the overlay is active.
     /// </summary>
-    private bool ShouldRouteLowLevelHotkeysForForegroundWindow()
+    private bool ShouldRouteLowLevelHotkeysForForegroundWindow() =>
+        IsForegroundWithin(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+
+    // Callable from any thread, so the hook thread asks it too, with the handle read once on the UI thread.
+    private static bool IsForegroundWithin(IntPtr mine)
     {
-        IntPtr mine = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (mine == IntPtr.Zero) return false;
         IntPtr fg = GetForegroundWindow();
         if (fg == IntPtr.Zero) return false;
@@ -296,9 +413,10 @@ public partial class SnipWindow : Window
         }
     }
 
+    // Runs on the hook thread.
     private IntPtr HandleLLKeyboardHook(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && _viewModel != null)
+        if (nCode >= 0)
         {
             int msg = wParam.ToInt32();
             int vkCode = Marshal.ReadInt32(lParam);
@@ -322,18 +440,73 @@ public partial class SnipWindow : Window
 
             if ((isKeyDown || isKeyUp) && keyStr != "Unknown")
             {
-                // Route the parsed key through the low-level hotkey dispatcher.
-                bool handled = HandleGlobalKeyboardEvent(keyStr, vkCode, isKeyDown);
-                
-                // If the key is a modifier (Shift/Ctrl/Alt), we NEVER swallow it globally to avoid breaking typing elsewhere.
-                // If it matched one of our global capture handlers, we swallow it so it does not trigger apps underneath.
-                if (handled && !IsPureModifierKey(keyStr))
+                bool modifierDown = (GetAsyncKeyState(0x10) & 0x8000) != 0 // Shift
+                    || (GetAsyncKeyState(0x11) & 0x8000) != 0             // Ctrl
+                    || (GetAsyncKeyState(0x12) & 0x8000) != 0;            // Alt
+                var filter = Volatile.Read(ref _llKeyboardFilter);
+
+                // Route the parsed key through the low-level hotkey dispatcher, unless it is one the dispatcher
+                // cannot act on. If the key is a modifier (Shift/Ctrl/Alt), we NEVER swallow it globally to avoid
+                // breaking typing elsewhere. If it matched one of our global capture handlers, we swallow it so it
+                // does not trigger apps underneath.
+                if (filter.ShouldRoute(keyStr, isKeyDown, IsForegroundWithin(_llKeyboardOverlayHandle), modifierDown)
+                    && RouteKeyOnUiThread(keyStr, vkCode, isKeyDown)
+                    && !IsPureModifierKey(keyStr))
                 {
                     return new IntPtr(1); // Consume the key
                 }
             }
         }
         return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
+    }
+
+    // On the hook thread. The routing runs on the UI thread, which owns the view model; a key it does not get to
+    // within UiRouteTimeout goes to the focused app, and the routing will not act on it later.
+    private bool RouteKeyOnUiThread(string keyStr, int vkCode, bool isKeyDown)
+    {
+        bool handled = TimedUiRoute.Ask(
+            PostToUiThread,
+            () => HandleGlobalKeyboardEvent(keyStr, vkCode, isKeyDown),
+            UiRouteTimeout,
+            UiRouteGrace,
+            out bool timedOut);
+
+        if (timedOut)
+        {
+            ReportUiRouteTimeout();
+        }
+
+        return handled;
+    }
+
+    private static Task<bool> PostToUiThread(Func<bool> call)
+    {
+        var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                answer.SetResult(call());
+            }
+            catch (Exception ex)
+            {
+                answer.SetException(ex);
+            }
+        }, Avalonia.Threading.DispatcherPriority.Send);
+        return answer.Task;
+    }
+
+    private void ReportUiRouteTimeout()
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastUiRouteTimeoutLogTicks < 10_000)
+        {
+            return;
+        }
+
+        _lastUiRouteTimeoutLogTicks = now;
+        AppLog.Warning("SnipHook.UiTimeout",
+            $"The UI thread did not route an overlay hotkey within {UiRouteTimeout.TotalMilliseconds:F0} ms; the key went to the focused app.");
     }
     
     private bool IsPureModifierKey(string keyStr)
@@ -538,6 +711,7 @@ public partial class SnipWindow : Window
         return false;
     }
 
+    // On the UI thread. Every key this can act on must be one SnipOverlayKeyFilter lets through to it.
     private bool HandleGlobalKeyboardEvent(string keyStr, int vkCode, bool isKeyDown)
     {
         if (_viewModel == null) return false;
