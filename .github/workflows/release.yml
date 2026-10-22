@@ -52,7 +52,7 @@ jobs:
       with:
         dotnet-version: '10.0.x'
 
-    # Same cache shape as linux-tests.yml: the bundled build is pinned inside the script,
+    # Same cache shape as linux.yml: the bundled build is pinned inside the script,
     # so keying on the script hash invalidates exactly when the pinned build changes.
     - name: Cache FFmpeg .so bundle
       id: cache-ffmpeg

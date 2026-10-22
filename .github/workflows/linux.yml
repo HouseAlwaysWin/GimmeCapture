@@ -1,16 +1,17 @@
-# Linux behavioral test gate: EXECUTE the cross-platform test suite against the app's
-# net10.0 (Linux) head on ubuntu. The Linux build has shipped since v0.51 with zero
-# automated behavioral coverage — the Windows CI only ever runs tests on the Windows
-# head. Windows-only test files are fenced in GimmeCapture.Tests.csproj.
+# The Linux gate, in one job: compile both TFMs on ubuntu (EnableWindowsTargeting), then run the cross-platform test
+# suite against the app's net10.0 (Linux) head. Windows-only test files are fenced in GimmeCapture.Tests.csproj.
 #
-# Run #1 (spike) result: compiled clean, 782 tests, 775 passed — the 7 failures were
-# Windows-centric test inputs (fixed) plus missing native FFmpeg .so (provisioned below).
-name: Linux Tests
+# It replaces two workflows (Linux Compile Check, Linux Tests). They restored the same packages separately, both ran
+# twice for a claude/** branch with an open PR (push and pull_request), and they never ran on main. So no branch could
+# reuse a cache (each saved its own 1.7 GB copy; nine such copies had piled up), and a main that no longer compiled on
+# Linux went unnoticed until the next branch.
+name: Linux
 
 on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - "claude/**"
   pull_request:
     branches: [main]
@@ -19,16 +20,19 @@ permissions:
   contents: write # lock-file auto-commit (push events on claude/** only)
 
 # A newer push to the same branch (or PR) supersedes the run in progress. Cancelling one mid-way is safe for the
-# lock-file commit as well: the newer run restores and commits whatever is still stale.
+# lock-file commit as well: the newer run restores and commits whatever is still stale. Runs on main are never
+# cancelled: every merge gets its own verdict.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  test:
+  linux:
+    # A claude/** branch is already checked by its push run, which the PR shows; its pull_request run would repeat it.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'claude/')
     runs-on: ubuntu-latest
-    # A normal run takes a minute or two; the hang detector below fires at 8 minutes. This is only the backstop.
-    timeout-minutes: 20
+    # A normal run takes a few minutes; the hang detector below fires at 8 minutes. This is only the backstop.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
 
@@ -50,13 +54,15 @@ jobs:
         if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
         run: bash scripts/ensure-ffmpeg-libs-linux.sh
 
+      # Saved by the runs on main, so a branch restores the same entry instead of saving a copy of its own; caches are
+      # scoped to the branch that saved them, plus the default branch.
       - name: Cache NuGet packages
         uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
-          key: nuget-linuxtest-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
+          key: nuget-linux-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: |
-            nuget-linuxtest-${{ runner.os }}-
+            nuget-linux-
 
       # Non-locked restore (EnableWindowsTargeting packs aren't in the lock file; the
       # Windows CI still enforces locked mode). --force-evaluate refreshes the lock
@@ -67,12 +73,12 @@ jobs:
         run: dotnet restore GimmeCapture.slnx -p:EnableWindowsTargeting=true -p:RestoreLockedMode=false --force-evaluate
 
       # This cloud/Linux dev flow has no local dotnet to regenerate lock files, so the CI
-      # commits refreshed locks back to the working branch (push events only, never PRs).
+      # commits refreshed locks back to the working branch (claude/** pushes only, never main or PRs).
       # No skip-ci marker: a skip-ci head commit would also suppress ALL of a PR's checks
       # when it sits at the branch tip. The re-trigger self-terminates instead — the next
       # run's restore finds the locks already current and commits nothing.
       - name: Commit refreshed lock files (claude/** pushes only)
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && startsWith(github.ref_name, 'claude/')
         run: |
           if git diff --quiet -- '**/packages.lock.json'; then
             echo "Lock files unchanged."
@@ -83,6 +89,11 @@ jobs:
           git add -- '**/packages.lock.json'
           git commit -m "chore(ci): refresh packages.lock.json after restore"
           git push origin HEAD:${GITHUB_REF_NAME}
+
+      # Both TFMs, so code written in a Linux session gets compiler feedback for the Windows head too. Debug: a Release
+      # build of the Windows head insists on the bundled Windows FFmpeg DLLs (FailIfBundledFfmpegMissing).
+      - name: Compile both heads
+        run: dotnet build GimmeCapture.slnx -c Debug --no-restore -p:EnableWindowsTargeting=true -maxcpucount
 
       - name: Run tests on the net10.0 head
         run: >

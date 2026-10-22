@@ -182,6 +182,10 @@
 
 ### 🧹 Maintenance
 
+- The two Linux workflows are one, in one job: it compiles both heads, then runs the Linux test suite. It runs on
+  `main` too, so a `main` that no longer builds on Linux shows up at once. Its NuGet cache lives on `main` and
+  branches reuse it; before, each branch saved its own 1.7 GB copy, twice. A `claude/**` branch with an open PR
+  no longer runs it twice.
 - The app's 144 diagnostic traces (hotkey registration, translation, recording and capture steps) used
   `Debug.WriteLine`, which a release build leaves out. They go through `AppLog.Debug` now, so a release build
   writes them when `GIMMECAPTURE_DEBUG_LOG=1` is set; otherwise they are not even formatted.
