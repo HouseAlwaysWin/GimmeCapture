@@ -86,7 +86,7 @@ docs/                          # architecture roadmap, refactor plan, release ca
 scripts/                       # verify.ps1, check-localization.ps1, ensure-ffmpeg-libs.ps1,
                                # ensure-ffmpeg-libs-linux.sh, test-compress.ps1, build-installer.ps1
 .github/workflows/             # ci.yml, linux.yml, release.yml, codeql.yml
-.github/dependabot.yml         # weekly GitHub Actions version bumps
+.github/dependabot.yml         # weekly GitHub Actions and NuGet version bumps
 release.ps1 / release.bat      # release automation (main branch only)
 ```
 
@@ -291,6 +291,8 @@ Three locales are kept in **strict key parity**:
 - **Localization parity is non-negotiable** — touch one locale JSON, touch all three.
 - **Keep package lock files in sync** (`packages.lock.json`); CI restores in locked
   mode. If you change `PackageReference`s, restore so the lock file updates.
+  Dependabot's weekly NuGet PRs (`.github/dependabot.yml`) arrive with their lock files
+  regenerated; packages that must move together, such as all of Avalonia, come in one PR.
 - **Don't commit native FFmpeg DLLs** — they are produced by script and gitignored.
 - **Non-Windows environments: compile and the cross-platform tests yes, `verify.ps1` no.**
   Use `dotnet build GimmeCapture.slnx -p:EnableWindowsTargeting=true` for compiler feedback

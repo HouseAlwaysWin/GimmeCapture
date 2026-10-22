@@ -3,9 +3,12 @@
 # bump gets a PR of its own: a major can change behaviour, and release.yml only runs on a tag push, so CI on the
 # PR cannot vouch for anything that workflow uses.
 #
-# NuGet is not listed yet. Every project restores in locked mode from packages.lock.json, and Dependabot's
-# documentation does not say it regenerates those lock files — a bump that did not would fail every locked restore.
-# Vulnerable NuGet packages are still reported by Dependabot alerts, which is a repository setting.
+# NuGet packages get weekly PRs too. Every project restores in locked mode from packages.lock.json, and the NuGet
+# updater regenerates those lock files in the same PR: after writing the new versions it restores again, which
+# rewrites the lock file of every project involved, including a project that only gets the package through a
+# ProjectReference, as Tests and Benchmarks get the app's. dependabot-core's end-to-end test
+# LockFilesAreRegeneratedThroughProjectReferences covers that case. Its restore runs on Linux with
+# EnableWindowsTargeting, like linux.yml's, and the PR's own CI restores in locked mode, so a stale lock file fails it.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -19,3 +22,57 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  - package-ecosystem: "nuget"
+    # GimmeCapture.slnx lists all three projects.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    # Only versions released at least a week ago: a broken release is usually replaced by then. Security updates
+    # are not delayed.
+    cooldown:
+      default-days: 7
+    # Packages that have to move together arrive in one PR; every other package gets a PR of its own.
+    groups:
+      # The app's and the tests' Avalonia packages must share one version, and ReactiveUI.Avalonia tracks it.
+      avalonia:
+        patterns:
+          - "Avalonia"
+          - "Avalonia.*"
+          - "ReactiveUI.Avalonia"
+      # LLamaSharp and its CPU backend are built from the same llama.cpp. CI loads no model, so try a translation
+      # by hand before merging one of these.
+      llamasharp:
+        patterns:
+          - "LLamaSharp"
+          - "LLamaSharp.*"
+      onnxruntime:
+        patterns:
+          - "Microsoft.ML.OnnxRuntime"
+          - "Microsoft.ML.OnnxRuntime.*"
+      serilog:
+        patterns:
+          - "Serilog"
+          - "Serilog.*"
+      test-tooling:
+        patterns:
+          - "xunit"
+          - "xunit.*"
+          - "Microsoft.NET.Test.Sdk"
+          - "coverlet.*"
+          - "Moq"
+          - "BenchmarkDotNet"
+    ignore:
+      # FFmpeg.AutoGen's major follows FFmpeg's and has to match the native build the ensure-ffmpeg-libs scripts pin,
+      # so a new major is an FFmpeg upgrade (see CLAUDE.md), not a package bump.
+      - dependency-name: "FFmpeg.AutoGen"
+        update-types: ["version-update:semver-major"]
+      # A SkiaSharp major has to be the one Avalonia.Skia is built against.
+      - dependency-name: "SkiaSharp"
+        update-types: ["version-update:semver-major"]
+      # The DirectML package the Windows head uses stops at 1.24, while the CPU package the Linux head uses moves
+      # on. Leaving 1.20 needs a plan of its own, so only patch releases come.
+      - dependency-name: "Microsoft.ML.OnnxRuntime*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
