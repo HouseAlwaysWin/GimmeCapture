@@ -77,8 +77,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     private readonly RecordingService? _recordingService;
     public RecordingService? RecordingService => _recordingService;
-    private readonly MainWindowViewModel? _mainVm;
-    public MainWindowViewModel? MainVm => _mainVm;
 
     // What the overlay tells the window that opened it, and the app services it uses; no services when it was opened
     // on its own (a test or the designer).
@@ -87,6 +85,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     // The settings it reads and the few its toolbar changes; none when opened on its own, which uses the defaults.
     private readonly ISnipOverlaySettings? _settings;
+
+    // For the overlay's view, which also reports to the host, saves and pins with the services, and reads settings.
+    public ISnipWindowHost Host => _host;
+    public SnipWindowServices? Services => _services;
+    public ISnipOverlaySettings? Settings => _settings;
 
     /// <summary>
     /// True when the capture overlay should open / stay WITHOUT stealing foreground focus (the
@@ -429,13 +432,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public List<OCRLanguage> AvailableOCRLanguages => _settings?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
     public List<TranslationLanguage> AvailableTranslationLanguages => _settings?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
-    public SnipWindowViewModel() : this(Colors.Red, 2.0, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), null, null, null, null, null, null, null) { }
-
-    // An overlay opened from this main window, without its services.
-    public SnipWindowViewModel(Color borderColor, double borderThickness, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
-        : this(borderColor, borderThickness, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), recService, mainVm, null, null, null, null, null, host: mainVm, settings: mainVm)
-    {
-    }
+    public SnipWindowViewModel() : this(Colors.Red, 2.0, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService()) { }
 
     public SnipWindowViewModel(
         Color borderColor,
@@ -443,7 +440,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         IScreenCaptureService captureService,
         IWindowDetectionService? detectionService = null,
         RecordingService? recService = null,
-        MainWindowViewModel? mainVm = null,
         ITranslationSessionService? translationSession = null,
         ITranslationSelectionMonitor? translationSelectionMonitor = null,
         IAIScanSessionService? aiScanSessionService = null,
@@ -465,7 +461,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _selectionBorderColor = borderColor;
         _selectionBorderThickness = borderThickness;
         _recordingService = recService;
-        _mainVm = mainVm;
         _host = host ?? NullSnipWindowHost.Instance;
         _services = services;
         _settings = settings;

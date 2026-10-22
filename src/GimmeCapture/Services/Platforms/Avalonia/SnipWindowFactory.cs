@@ -104,7 +104,6 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             _screenCaptureService,
             _windowDetectionService,
             vm.RecordingService,
-            vm,
             translationSession,
             translationSelectionMonitor,
             aiScanSessionService,
@@ -120,6 +119,9 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
                 vm.AIResourceService,
                 vm.OcrRuntimeService,
                 vm.TranslationResultLayer,
+                vm.SAM2RuntimeService,
+                vm.AIPathService,
+                vm.ResourceQueue,
                 () => vm.FfmpegDownloader),
             settings: vm);
 

@@ -463,7 +463,7 @@ public partial class SnipWindow : Window
         }
 
         await _clipboardService.CopyTextAsync(text);
-        _viewModel?.MainVm?.SetStatus("StatusCopied");
+        _viewModel?.Host.SetStatus("StatusCopied");
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)

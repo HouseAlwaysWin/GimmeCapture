@@ -523,7 +523,7 @@ public partial class SnipWindow : Window
                  Title = isRecording ? "Save Recording" : "Save Screenshot",
                  DefaultExtension = defaultExt,
                  ShowOverwritePrompt = true,
-                SuggestedFileName = CaptureFileNameService.SuggestedBaseName(_viewModel.MainVm?.FileNameTemplate),
+                SuggestedFileName = CaptureFileNameService.SuggestedBaseName(_viewModel.Settings?.FileNameTemplate),
                  FileTypeChoices = fileChoices
              });
              
@@ -549,17 +549,17 @@ public partial class SnipWindow : Window
                 hideDecoration,
                 hideBorder,
                 _clipboardService,
-                _viewModel.MainVm?.AppSettingsService);
+                _viewModel.Services?.SettingsService);
 
             // Copying a clip from the pin persists a managed copy into History (like image copy),
             // so the copied/trimmed video shows up in the history panel.
-            var captureHistory = _viewModel.MainVm?.CaptureHistory;
+            var captureHistory = _viewModel.Services?.CaptureHistory;
             vm.AddClipToHistoryAsync = async (clipPath, w, h) =>
             {
                 try
                 {
                     if (captureHistory == null
-                        || !(_viewModel.MainVm?.EnableHistory ?? false)
+                        || !(_viewModel.Settings?.EnableHistory ?? false)
                         || string.IsNullOrEmpty(clipPath)
                         || !System.IO.File.Exists(clipPath))
                     {
@@ -609,24 +609,21 @@ public partial class SnipWindow : Window
 
         _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize, scrollableContentSize) =>
         {
-            // Use settings directly from MainVm to ensure consistency
-            bool hideDecoration = _viewModel.MainVm?.HideSnipPinDecoration ?? false;
-            bool hideBorder = _viewModel.MainVm?.HideSnipPinBorder ?? false;
-            var aiService = _viewModel.MainVm?.AIResourceService;
-            
-            if (aiService == null)
+            // A pin needs the app's services, which an overlay opened from the main window always has.
+            var services = _viewModel.Services;
+            if (services == null)
             {
-                 // Fallback check (shouldn't happen if MainVm is set)
-                 AppLog.Debug("SnipWindow.ViewModelWiring", "AIResourceService is null!");
+                 AppLog.Debug("SnipWindow.ViewModelWiring", "No services to pin with: the overlay was opened on its own.");
                  return;
             }
-            
-            if (_viewModel.MainVm == null) return;
+
+            bool hideDecoration = _viewModel.Settings?.HideSnipPinDecoration ?? false;
+            bool hideBorder = _viewModel.Settings?.HideSnipPinBorder ?? false;
             // The window (DisplayWidth/Height) is `rect` in both cases. For a long scrolling-capture pin the
             // rect is the original selection and `scrollableContentSize` (the full stitch) only sets the
             // fit-to-width scrolling content — the window still resizes freely like any other pin.
             bool scrolling = scrollableContentSize.HasValue;
-            var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.SAM2RuntimeService, _viewModel.MainVm.AppSettingsService, _viewModel.MainVm.AIPathService, _viewModel.MainVm.ResourceQueue, pinnedText, inferredFontSize);
+            var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, services.AIResources, services.Sam2Runtime, services.SettingsService, services.AIPaths, services.ResourceQueue, pinnedText, inferredFontSize);
             vm.WingScale = _viewModel.WingScale;
             if (scrolling)
             {
@@ -747,7 +744,7 @@ public partial class SnipWindow : Window
                                 Title = "Save Pinned Image",
                                 DefaultExtension = defaultExt,
                                 ShowOverwritePrompt = true,
-                                SuggestedFileName = $"{CaptureFileNameService.SuggestedBaseName(_viewModel.MainVm?.FileNameTemplate)}.{defaultExt}",
+                                SuggestedFileName = $"{CaptureFileNameService.SuggestedBaseName(_viewModel.Settings?.FileNameTemplate)}.{defaultExt}",
                                 FileTypeChoices = choices
                             });
 
