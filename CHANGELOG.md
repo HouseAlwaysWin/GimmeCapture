@@ -30,6 +30,10 @@
   and a long stall could get that hook removed, switching off the overlay's shortcuts until it was reopened. The hook
   now runs on its own thread and lets every key the overlay cannot use straight through. The few it can use (Esc,
   its F-keys, pause and stop, Copy and Save) wait for the app 0.15 s at most, then go to the program in front.
+- **An emoji typed into a text annotation no longer turns into '?'.** The capture overlay and pinned images let clicks
+  through parts of themselves with a hook in their window procedure, and that hook was an ANSI one. Windows converted
+  every typed character to the system's code page and back on its way through, so an emoji, or any character that
+  code page lacks (Thai on a Chinese system, say), arrived as '?'.
 - **Recording a new hotkey no longer triggers the old ones.** While the hotkeys page waits for a new combo, an
   existing hotkey pressed there fired its action and swallowed the key, so it could not be recorded.
 - **Settings you change now survive a restart.** 24 settings and hotkeys were written to the config correctly but
@@ -203,6 +207,9 @@
 - The region recorder's two loops, the usual one and *Pipelined encoding*, share how a captured frame is converted
   for the encoder (overlays drawn on the way) and how it is timestamped, instead of a copy each. A test now records
   with *Pipelined encoding* as the app runs it: wall-clock timestamps, overlays on.
+- Each Windows function and struct that more than one part of the app calls is declared once (`POINT` had six
+  definitions, `RECT` four), and the capture overlay and pinned images share one click-through hook, now tested on a
+  real window. The three X11 calls the Linux capture, hotkey and window-shape code share are declared once too.
 - The two Linux workflows are one, in one job: it compiles both heads, then runs the Linux test suite. It runs on
   `main` too, so a `main` that no longer builds on Linux shows up at once. Its NuGet cache lives on `main` and
   branches reuse it; before, each branch saved its own 1.7 GB copy, twice. A `claude/**` branch with an open PR

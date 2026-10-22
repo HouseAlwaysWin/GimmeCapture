@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Interop;
 using Avalonia.Controls;
 using Avalonia.Threading;
 
@@ -24,7 +25,6 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private const uint HookLateThresholdMs = 100;
 
     private const int WM_HOTKEY = 0x0312;
-    private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
     private const int WM_KEYUP = 0x0101;
     private const int WM_SYSKEYDOWN = 0x0104;
@@ -53,9 +53,9 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     public Action<string>? OnElevatedWindowFocused { get; set; }
 
     // The delegates native code calls back are kept in fields so they live as long as the service.
-    private WndProc? _messageWndProc;
+    private User32.WndProc? _messageWndProc;
     private IntPtr _llKeyboardHook = IntPtr.Zero;
-    private LowLevelKeyboardProc? _llKeyboardDelegate;
+    private User32.LowLevelKeyboardProc? _llKeyboardDelegate;
 
     // Foreground monitoring used to warn when an elevated window blocks our hotkeys.
     private IntPtr _foregroundEventHook = IntPtr.Zero;
@@ -183,25 +183,6 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         return UnregisterHotKey(hWnd, id);
     }
 
-    private delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-    private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string? lpModuleName);
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
-
     private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
     private const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
@@ -219,9 +200,6 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(uint dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, uint dwProcessId);
@@ -472,7 +450,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
 
         _messageWndProc = MessageWindowProc;
-        _messageWindowInstance = GetModuleHandle(null);
+        _messageWindowInstance = Kernel32.GetModuleHandle(null);
         var wndClass = new WNDCLASSEX
         {
             cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
@@ -610,12 +588,12 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
 
         _llKeyboardDelegate = LowLevelKeyboardHookCallback;
-        var moduleHandle = GetModuleHandle(null);
-        _llKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, _llKeyboardDelegate, moduleHandle, 0);
+        var moduleHandle = Kernel32.GetModuleHandle(null);
+        _llKeyboardHook = User32.SetWindowsHookEx(User32.WH_KEYBOARD_LL, _llKeyboardDelegate, moduleHandle, 0);
         if (_llKeyboardHook == IntPtr.Zero)
         {
             int firstError = Marshal.GetLastWin32Error();
-            _llKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, _llKeyboardDelegate, IntPtr.Zero, 0);
+            _llKeyboardHook = User32.SetWindowsHookEx(User32.WH_KEYBOARD_LL, _llKeyboardDelegate, IntPtr.Zero, 0);
             WriteDebugLog($"ll hook install retry firstWin32={firstError} retryHandle=0x{_llKeyboardHook.ToInt64():X} retryWin32={Marshal.GetLastWin32Error()} module=0x{moduleHandle.ToInt64():X}");
         }
         else
@@ -687,7 +665,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             return;
         }
 
-        if (GetWindowThreadProcessId(hwnd, out uint pid) == 0 || pid == 0)
+        if (User32.GetWindowThreadProcessId(hwnd, out uint pid) == 0 || pid == 0)
         {
             return;
         }
@@ -870,7 +848,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             return;
         }
 
-        UnhookWindowsHookEx(_llKeyboardHook);
+        User32.UnhookWindowsHookEx(_llKeyboardHook);
         _llKeyboardHook = IntPtr.Zero;
         _llKeyboardDelegate = null;
         _matcher.Reset();
@@ -887,7 +865,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         catch (Exception ex)
         {
             AppLog.Error("GlobalHotkey.KeyboardHook", ex);
-            return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
+            return User32.CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
         }
     }
 
@@ -895,7 +873,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     {
         if (nCode < 0)
         {
-            return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
+            return User32.CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
         }
 
         Interlocked.Increment(ref _lowLevelHookCalls);
@@ -911,7 +889,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             return new IntPtr(1);
         }
 
-        return CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
+        return User32.CallNextHookEx(_llKeyboardHook, nCode, wParam, lParam);
     }
 
     // True when the key completes a hotkey: the hotkey fires and the hook swallows the key.
@@ -932,9 +910,9 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private static uint GetAsyncModifierMask()
     {
         uint modifiers = 0;
-        if ((GetAsyncKeyState(0x10) & 0x8000) != 0) modifiers |= LowLevelHotkeyMatcher.ModShift;
-        if ((GetAsyncKeyState(0x11) & 0x8000) != 0) modifiers |= LowLevelHotkeyMatcher.ModControl;
-        if ((GetAsyncKeyState(0x12) & 0x8000) != 0) modifiers |= LowLevelHotkeyMatcher.ModAlt;
+        if ((User32.GetAsyncKeyState(0x10) & 0x8000) != 0) modifiers |= LowLevelHotkeyMatcher.ModShift;
+        if ((User32.GetAsyncKeyState(0x11) & 0x8000) != 0) modifiers |= LowLevelHotkeyMatcher.ModControl;
+        if ((User32.GetAsyncKeyState(0x12) & 0x8000) != 0) modifiers |= LowLevelHotkeyMatcher.ModAlt;
         return modifiers;
     }
 

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
+using GimmeCapture.Services.Interop;
 #if WINDOWS
 using GimmeCapture.Services.Platforms.Windows;
 #endif
@@ -426,7 +427,7 @@ public partial class RecordingService
     private static bool TryGetWindowCaptureRect(IntPtr hwnd, out int x, out int y, out int width, out int height)
     {
         x = y = width = height = 0;
-        if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out RECT r))
+        if (hwnd == IntPtr.Zero || !User32.GetWindowRect(hwnd, out User32.RECT r))
         {
             return false;
         }
@@ -455,19 +456,6 @@ public partial class RecordingService
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
 
     private async Task<bool> StartGdigrabSegmentAsync(string segmentFile)
     {

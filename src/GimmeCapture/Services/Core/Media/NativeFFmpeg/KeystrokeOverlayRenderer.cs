@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using System.Text;
+using GimmeCapture.Services.Interop;
 using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -145,14 +145,11 @@ internal sealed class KeystrokeOverlayRenderer : IDisposable
     }
 
     // ── Win32 key state ──
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
-
     private static bool Down(int vk)
     {
         try
         {
-            return (GetAsyncKeyState(vk) & 0x8000) != 0;
+            return (User32.GetAsyncKeyState(vk) & 0x8000) != 0;
         }
         catch
         {

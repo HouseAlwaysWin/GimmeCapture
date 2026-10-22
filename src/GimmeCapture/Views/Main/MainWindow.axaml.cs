@@ -5,7 +5,6 @@ using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Dialogs;
 using GimmeCapture.Views.Main;
-using System.Runtime.InteropServices;
 using Avalonia.Platform;
 using Avalonia.Media;
 using GimmeCapture.Services.Abstractions;
@@ -24,17 +23,6 @@ public partial class MainWindow : Window
     private readonly IDownloadWindowService _downloadWindowService;
     private readonly IToastService _toastService;
     private readonly ISnipWindowFactory _snipWindowFactory;
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool GetCursorPos(out POINT lpPoint);
 
     public MainWindow() : this(new MainWindowViewModel(), new NoOpDownloadWindowService(), new NoOpToastService(), new NoOpSnipWindowFactory())
     {

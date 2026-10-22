@@ -11,7 +11,6 @@ using GimmeCapture.ViewModels.Main;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
 
@@ -19,22 +18,16 @@ namespace GimmeCapture.Views.Main;
 
 // WndProc hit-testing and window-region computation (translation overlay, screenshot-style rings,
 // pass-through). Split out of SnipWindow.Win32.cs (god class reduction) — no behavior change.
-// P/Invoke declarations and hit-test fields remain in SnipWindow.Win32.cs (same partial class).
+// The hit-test fields remain in SnipWindow.Win32.cs (same partial class).
 public partial class SnipWindow : Window
 {
     public void InitializeWin32Hook()
     {
         if (!OperatingSystem.IsWindows()) return;
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-        if (hwnd == IntPtr.Zero || _wndProcDelegate != null) return;
+        if (hwnd == IntPtr.Zero || _hitTestPassThrough != null) return;
 
-        _wndProcDelegate = new WndProcDelegate(WndProcHook);
-        IntPtr ptr = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate);
-
-        if (IntPtr.Size == 8)
-            _oldWndProc = SetWindowLongPtr64(hwnd, GWLP_WNDPROC, ptr);
-        else
-            _oldWndProc = SetWindowLongPtr32(hwnd, GWLP_WNDPROC, ptr);
+        _hitTestPassThrough = Win32HitTestPassThrough.Install(hwnd, IsHitTestPassThrough);
 
         // Also install the LL Keyboard hook for translation global hotkeys
         InstallLLKeyboardHook();
@@ -44,34 +37,26 @@ public partial class SnipWindow : Window
         SyncOverlayNoActivateExStyle();
     }
 
-    private IntPtr WndProcHook(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    // Clicks go through outside the hit-test regions, which are in physical client pixels like the SetWindowRgn
+    // rects, unless the overlay is drawing outside translation mode.
+    private bool IsHitTestPassThrough(PixelPoint client)
     {
         bool allowHitTestTransparent = (_viewModel?.IsTranslationMode ?? false) || !(_viewModel?.IsDrawingMode ?? false);
-        if (msg == WM_NCHITTEST && _useHitTestRegions && allowHitTestTransparent)
+        if (!_useHitTestRegions || !allowHitTestTransparent)
         {
-            // Signed screen coords (multi-monitor). Must match SetWindowRgn rects (physical client pixels).
-            int lp = lParam.ToInt32();
-            var pt = new POINT { X = (short)(lp & 0xFFFF), Y = (short)((lp >> 16) & 0xFFFF) };
-            ScreenToClient(hWnd, ref pt);
-            var point = new Point(pt.X, pt.Y);
+            return false;
+        }
 
-            bool hit = false;
-            foreach (var r in _hitTestRegions)
+        var point = new Point(client.X, client.Y);
+        foreach (var r in _hitTestRegions)
+        {
+            if (r.Contains(point))
             {
-                if (r.Contains(point))
-                {
-                    hit = true;
-                    break;
-                }
-            }
-
-            if (!hit)
-            {
-                return new IntPtr(HTTRANSPARENT);
+                return false;
             }
         }
 
-        return CallWindowProc(_oldWndProc, hWnd, msg, wParam, lParam);
+        return true;
     }
 
     /// <summary>

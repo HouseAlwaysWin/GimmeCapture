@@ -20,9 +20,6 @@ public static class Win32Helpers
     [DllImport("gdi32.dll")]
     private static extern int CombineRgn(IntPtr hrgnDest, IntPtr hrgnSrc1, IntPtr hrgnSrc2, int fnCombineMode);
 
-    [DllImport("gdi32.dll")]
-    private static extern bool DeleteObject(IntPtr hObject);
-
     [DllImport("user32.dll")]
     private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
 
@@ -91,7 +88,7 @@ public static class Win32Helpers
                 if (holeRegion != IntPtr.Zero)
                 {
                     CombineRgn(fullRegion, fullRegion, holeRegion, RGN_DIFF);
-                    DeleteObject(holeRegion);
+                    Gdi32.DeleteObject(holeRegion);
                 }
             }
 
@@ -105,7 +102,7 @@ public static class Win32Helpers
                     if (tempRegion != IntPtr.Zero)
                     {
                         CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
-                        DeleteObject(tempRegion);
+                        Gdi32.DeleteObject(tempRegion);
                         tempRegion = IntPtr.Zero;
                     }
                 }
@@ -125,7 +122,7 @@ public static class Win32Helpers
                 if (tempRegion != IntPtr.Zero)
                 {
                     CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
-                    DeleteObject(tempRegion);
+                    Gdi32.DeleteObject(tempRegion);
                     tempRegion = IntPtr.Zero;
                 }
             }
@@ -138,8 +135,8 @@ public static class Win32Helpers
         }
         finally
         {
-            if (tempRegion != IntPtr.Zero) DeleteObject(tempRegion);
-            if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
+            if (tempRegion != IntPtr.Zero) Gdi32.DeleteObject(tempRegion);
+            if (fullRegion != IntPtr.Zero) Gdi32.DeleteObject(fullRegion);
         }
     }
 
@@ -165,7 +162,7 @@ public static class Win32Helpers
             if (tempRegion != IntPtr.Zero)
             {
                 CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
-                DeleteObject(tempRegion);
+                Gdi32.DeleteObject(tempRegion);
                 tempRegion = IntPtr.Zero;
             }
 
@@ -176,7 +173,7 @@ public static class Win32Helpers
                 if (tempRegion != IntPtr.Zero)
                 {
                     CombineRgn(fullRegion, fullRegion, tempRegion, RGN_DIFF);
-                    DeleteObject(tempRegion);
+                    Gdi32.DeleteObject(tempRegion);
                     tempRegion = IntPtr.Zero;
                 }
             }
@@ -195,7 +192,7 @@ public static class Win32Helpers
                 if (tempRegion != IntPtr.Zero)
                 {
                     CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
-                    DeleteObject(tempRegion);
+                    Gdi32.DeleteObject(tempRegion);
                     tempRegion = IntPtr.Zero;
                 }
             }
@@ -206,8 +203,8 @@ public static class Win32Helpers
         }
         finally
         {
-            if (tempRegion != IntPtr.Zero) DeleteObject(tempRegion);
-            if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
+            if (tempRegion != IntPtr.Zero) Gdi32.DeleteObject(tempRegion);
+            if (fullRegion != IntPtr.Zero) Gdi32.DeleteObject(fullRegion);
         }
     }
 
@@ -242,7 +239,7 @@ public static class Win32Helpers
                     if (tempRegion != IntPtr.Zero)
                     {
                         CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
-                        DeleteObject(tempRegion);
+                        Gdi32.DeleteObject(tempRegion);
                         tempRegion = IntPtr.Zero;
                     }
 
@@ -252,7 +249,7 @@ public static class Win32Helpers
                         if (tempRegion != IntPtr.Zero)
                         {
                             CombineRgn(fullRegion, fullRegion, tempRegion, RGN_DIFF);
-                            DeleteObject(tempRegion);
+                            Gdi32.DeleteObject(tempRegion);
                             tempRegion = IntPtr.Zero;
                         }
                     }
@@ -268,7 +265,7 @@ public static class Win32Helpers
                     if (tempRegion != IntPtr.Zero)
                     {
                         CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
-                        DeleteObject(tempRegion);
+                        Gdi32.DeleteObject(tempRegion);
                         tempRegion = IntPtr.Zero;
                     }
                 }
@@ -286,7 +283,7 @@ public static class Win32Helpers
                 if (tempRegion != IntPtr.Zero)
                 {
                     CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
-                    DeleteObject(tempRegion);
+                    Gdi32.DeleteObject(tempRegion);
                     tempRegion = IntPtr.Zero;
                 }
             }
@@ -297,8 +294,8 @@ public static class Win32Helpers
         }
         finally
         {
-            if (tempRegion != IntPtr.Zero) DeleteObject(tempRegion);
-            if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
+            if (tempRegion != IntPtr.Zero) Gdi32.DeleteObject(tempRegion);
+            if (fullRegion != IntPtr.Zero) Gdi32.DeleteObject(fullRegion);
         }
     }
 
@@ -330,7 +327,7 @@ public static class Win32Helpers
                     if (tempRegion != IntPtr.Zero)
                     {
                         CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
-                        DeleteObject(tempRegion);
+                        Gdi32.DeleteObject(tempRegion);
                         tempRegion = IntPtr.Zero;
                     }
                 }
@@ -348,7 +345,7 @@ public static class Win32Helpers
                 if (tempRegion != IntPtr.Zero)
                 {
                     CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
-                    DeleteObject(tempRegion);
+                    Gdi32.DeleteObject(tempRegion);
                     tempRegion = IntPtr.Zero;
                 }
             }
@@ -359,8 +356,8 @@ public static class Win32Helpers
         }
         finally
         {
-            if (tempRegion != IntPtr.Zero) DeleteObject(tempRegion);
-            if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
+            if (tempRegion != IntPtr.Zero) Gdi32.DeleteObject(tempRegion);
+            if (fullRegion != IntPtr.Zero) Gdi32.DeleteObject(fullRegion);
         }
     }
 
@@ -395,17 +392,6 @@ public static class Win32Helpers
 
     // ---- Pointer position: which monitor the user is actually looking at ----
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Win32Point
-    {
-        public int X;
-        public int Y;
-    }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out Win32Point lpPoint);
-
     /// <summary>
     /// The mouse pointer's position in physical desktop pixels, or <c>null</c> off-Windows or when the call
     /// fails. Used to place transient notifications on the monitor the user is working on rather than on the
@@ -417,7 +403,7 @@ public static class Win32Helpers
 
         try
         {
-            return GetCursorPos(out var point) ? new PixelPoint(point.X, point.Y) : null;
+            return User32.GetCursorPos(out var point) ? new PixelPoint(point.X, point.Y) : null;
         }
         catch (Exception ex)
         {
@@ -429,25 +415,7 @@ public static class Win32Helpers
     // ---- Diagnostics: enumerate this process's top-level windows (to find what draws a lingering frame) ----
 
     [DllImport("user32.dll")]
-    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-    [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr hWnd, out DiagRect lpRect);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-    [DllImport("user32.dll")]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-    [DllImport("user32.dll")]
     private static extern int GetWindowRgn(IntPtr hWnd, IntPtr hRgn);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct DiagRect { public int Left, Top, Right, Bottom; }
 
     /// <summary>
     /// Logs every top-level window owned by the current process (handle, visibility, class, title, rect, extended
@@ -465,22 +433,22 @@ public static class Win32Helpers
         {
             uint self = (uint)System.Environment.ProcessId;
             int count = 0;
-            EnumWindows((h, _) =>
+            User32.EnumWindows((h, _) =>
             {
-                GetWindowThreadProcessId(h, out uint wp);
+                User32.GetWindowThreadProcessId(h, out uint wp);
                 if (wp != self)
                 {
                     return true;
                 }
 
                 var cn = new StringBuilder(256);
-                GetClassName(h, cn, cn.Capacity);
+                User32.GetClassName(h, cn, cn.Capacity);
                 var tt = new StringBuilder(256);
-                GetWindowTextW(h, tt, tt.Capacity);
-                GetWindowRect(h, out DiagRect r);
-                int ex = GetWindowLong(h, -20); // GWL_EXSTYLE
+                User32.GetWindowText(h, tt, tt.Capacity);
+                User32.GetWindowRect(h, out User32.RECT r);
+                int ex = User32.GetWindowLong(h, User32.GWL_EXSTYLE);
                 int rgn = GetWindowRgn(h, IntPtr.Zero); // 1=NULLREGION,2=SIMPLE,3=COMPLEX,0=ERROR
-                bool vis = IsWindowVisible(h);
+                bool vis = User32.IsWindowVisible(h);
                 AppLog.Information(
                     $"WinDiag[{context}] hwnd=0x{h.ToInt64():X} vis={vis} class='{cn}' title='{tt}' " +
                     $"rect=({r.Left},{r.Top})-({r.Right},{r.Bottom}) exStyle=0x{ex:X} rgnType={rgn}");

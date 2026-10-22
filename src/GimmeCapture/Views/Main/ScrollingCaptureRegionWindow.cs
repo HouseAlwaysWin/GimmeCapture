@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -15,11 +14,6 @@ namespace GimmeCapture.Views.Main;
 // OUTSIDE the captured rect, and here we only make the window click-through via an empty X input shape.
 public sealed class ScrollingCaptureRegionWindow : Window
 {
-    private const int GWL_EXSTYLE = -20;
-    private const long WS_EX_TRANSPARENT = 0x20;
-    private const long WS_EX_LAYERED = 0x80000;
-    private const long WS_EX_NOACTIVATE = 0x08000000;
-
     public ScrollingCaptureRegionWindow(double borderThickness, Color borderColor)
     {
         CanResize = false;
@@ -65,8 +59,7 @@ public sealed class ScrollingCaptureRegionWindow : Window
     {
         try
         {
-            long ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
-            SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE));
+            User32.SetExStyleFlags(hwnd, User32.WS_EX_TRANSPARENT | User32.WS_EX_LAYERED | User32.WS_EX_NOACTIVATE, set: true);
         }
         catch (Exception ex)
         {
@@ -78,10 +71,4 @@ public sealed class ScrollingCaptureRegionWindow : Window
     {
         GimmeCapture.Services.Core.Infrastructure.AppLog.Warning("ScrollingRegion.ClickThrough", ex);
     }
-
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
-    private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
-    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 }

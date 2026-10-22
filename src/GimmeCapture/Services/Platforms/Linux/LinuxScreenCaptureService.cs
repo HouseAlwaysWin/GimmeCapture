@@ -224,7 +224,7 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
 
     private static SKBitmap? X11Grab(int x, int y, int width, int height)
     {
-        IntPtr display = XOpenDisplay(null);
+        IntPtr display = LibX11.XOpenDisplay(null);
         if (display == IntPtr.Zero)
         {
             AppLog.Warning("LinuxScreenCapture.X11Grab", new InvalidOperationException("XOpenDisplay returned null (no X11 display; Wayland-only session?)."));
@@ -233,7 +233,7 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
 
         try
         {
-            IntPtr root = XDefaultRootWindow(display);
+            IntPtr root = LibX11.XDefaultRootWindow(display);
 
             // Clamp to the root geometry — XGetImage raises an X protocol error (which aborts the process
             // via the default Xlib handler) if the rectangle extends outside the drawable.
@@ -265,7 +265,7 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
         }
         finally
         {
-            XCloseDisplay(display);
+            LibX11.XCloseDisplay(display);
         }
     }
 
@@ -347,15 +347,6 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int XDestroyImageDelegate(IntPtr image);
-
-    [DllImport("libX11.so.6")]
-    private static extern IntPtr XOpenDisplay(string? displayName);
-
-    [DllImport("libX11.so.6")]
-    private static extern int XCloseDisplay(IntPtr display);
-
-    [DllImport("libX11.so.6")]
-    private static extern IntPtr XDefaultRootWindow(IntPtr display);
 
     [DllImport("libX11.so.6")]
     private static extern IntPtr XGetImage(IntPtr display, IntPtr drawable, int x, int y, uint width, uint height, UIntPtr planeMask, int format);

@@ -27,33 +27,6 @@ namespace GimmeCapture.Views.Floating;
 
 public partial class FloatingImageWindow : FloatingWindowBase
 {
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
-    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
-    private static extern IntPtr SetWindowLongPtr32(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
-
-    private const int GWLP_WNDPROC = -4;
-    private const uint WM_NCHITTEST = 0x0084;
-    private const int HTTRANSPARENT = -1;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
     private bool _isAIPointing;
     private IDisposable? _toolbarBoundsSubscription;
     private IDisposable? _subToolbarBoundsSubscription;
@@ -65,8 +38,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
     private PixelSize _cachedOpaqueBitmapSize;
     private List<PixelRect>? _cachedOpaquePixelRects;
     private readonly List<Rect> _interactiveHitTestRegions = new();
-    private WndProcDelegate? _wndProcDelegate;
-    private IntPtr _oldWndProc;
+    private Win32HitTestPassThrough? _hitTestPassThrough;
 
     public FloatingImageWindow()
     {
@@ -545,16 +517,12 @@ public partial class FloatingImageWindow : FloatingWindowBase
         }
 
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-        if (hwnd == IntPtr.Zero || _wndProcDelegate != null)
+        if (hwnd == IntPtr.Zero || _hitTestPassThrough != null)
         {
             return;
         }
 
-        _wndProcDelegate = new WndProcDelegate(WndProcHook);
-        IntPtr ptr = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate);
-        _oldWndProc = IntPtr.Size == 8
-            ? SetWindowLongPtr64(hwnd, GWLP_WNDPROC, ptr)
-            : SetWindowLongPtr32(hwnd, GWLP_WNDPROC, ptr);
+        _hitTestPassThrough = Win32HitTestPassThrough.Install(hwnd, IsHitTestPassThrough);
     }
 
     private void UninitializeWin32HitTestHook()
@@ -564,45 +532,27 @@ public partial class FloatingImageWindow : FloatingWindowBase
             return;
         }
 
+        // Only a window that still has its handle gets its procedure back.
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-        if (hwnd == IntPtr.Zero || _wndProcDelegate == null || _oldWndProc == IntPtr.Zero)
+        if (hwnd != IntPtr.Zero)
         {
-            _wndProcDelegate = null;
-            _oldWndProc = IntPtr.Zero;
-            return;
+            _hitTestPassThrough?.Dispose();
         }
 
-        if (IntPtr.Size == 8)
-        {
-            SetWindowLongPtr64(hwnd, GWLP_WNDPROC, _oldWndProc);
-        }
-        else
-        {
-            SetWindowLongPtr32(hwnd, GWLP_WNDPROC, _oldWndProc);
-        }
-
-        _wndProcDelegate = null;
-        _oldWndProc = IntPtr.Zero;
+        _hitTestPassThrough = null;
     }
 
-    private IntPtr WndProcHook(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    // Clicks go through outside the interactive regions (in DIPs) while there are any.
+    private bool IsHitTestPassThrough(PixelPoint client)
     {
-        if (msg == WM_NCHITTEST && _interactiveHitTestRegions.Count > 0)
+        if (_interactiveHitTestRegions.Count == 0)
         {
-            int lp = lParam.ToInt32();
-            var pt = new POINT { X = (short)(lp & 0xFFFF), Y = (short)((lp >> 16) & 0xFFFF) };
-            ScreenToClient(hWnd, ref pt);
-
-            double scaling = RenderScaling <= 0 ? 1.0 : RenderScaling;
-            var clientPoint = new Point(pt.X / scaling, pt.Y / scaling);
-            bool hitInteractive = _interactiveHitTestRegions.Any(rect => rect.Contains(clientPoint));
-            if (!hitInteractive)
-            {
-                return new IntPtr(HTTRANSPARENT);
-            }
+            return false;
         }
 
-        return CallWindowProc(_oldWndProc, hWnd, msg, wParam, lParam);
+        double scaling = RenderScaling <= 0 ? 1.0 : RenderScaling;
+        var clientPoint = new Point(client.X / scaling, client.Y / scaling);
+        return !_interactiveHitTestRegions.Any(rect => rect.Contains(clientPoint));
     }
 
     // Override OnPointerPressed to handle AI Interactions

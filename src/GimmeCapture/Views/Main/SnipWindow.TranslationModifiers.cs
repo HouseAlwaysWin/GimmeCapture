@@ -1,4 +1,5 @@
 using System;
+using GimmeCapture.Services.Interop;
 
 namespace GimmeCapture.Views.Main;
 
@@ -74,11 +75,11 @@ public partial class SnipWindow
         // Translation mode is a Linux Phase 2 item (docs/LINUX_PORT_FEASIBILITY.md).
         if (!OperatingSystem.IsWindows()) return false;
         if (string.Equals(label, "Ctrl", StringComparison.OrdinalIgnoreCase))
-            return (GetAsyncKeyState(0x11) & 0x8000) != 0;
+            return (User32.GetAsyncKeyState(0x11) & 0x8000) != 0;
         if (string.Equals(label, "Shift", StringComparison.OrdinalIgnoreCase))
-            return (GetAsyncKeyState(0x10) & 0x8000) != 0;
+            return (User32.GetAsyncKeyState(0x10) & 0x8000) != 0;
         if (string.Equals(label, "Alt", StringComparison.OrdinalIgnoreCase))
-            return (GetAsyncKeyState(0x12) & 0x8000) != 0;
+            return (User32.GetAsyncKeyState(0x12) & 0x8000) != 0;
         return false;
     }
 

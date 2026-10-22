@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Interop;
 using Avalonia.Controls;
 
 
@@ -44,23 +45,13 @@ public class WindowsScreenCaptureService : IScreenCaptureService
     [DllImport("user32.dll")]
     static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO piconinfo);
 
-    [DllImport("gdi32.dll")]
-    static extern bool DeleteObject(IntPtr hObject);
-
     [StructLayout(LayoutKind.Sequential)]
     struct CURSORINFO
     {
         public Int32 cbSize;
         public Int32 flags;
         public IntPtr hCursor;
-        public POINT ptScreenPos;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct POINT
-    {
-        public Int32 x;
-        public Int32 y;
+        public User32.POINT ptScreenPos;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -109,14 +100,14 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                                         ICONINFO ii;
                                         if (GetIconInfo(hIcon, out ii))
                                         {
-                                            int cursorX = pci.ptScreenPos.x - x - ii.xHotspot;
-                                            int cursorY = pci.ptScreenPos.y - y - ii.yHotspot;
+                                            int cursorX = pci.ptScreenPos.X - x - ii.xHotspot;
+                                            int cursorY = pci.ptScreenPos.Y - y - ii.yHotspot;
                                             
                                             using var icon = Icon.FromHandle(hIcon);
                                             g.DrawIcon(icon, cursorX, cursorY);
                                             
-                                            if (ii.hbmMask != IntPtr.Zero) DeleteObject(ii.hbmMask);
-                                            if (ii.hbmColor != IntPtr.Zero) DeleteObject(ii.hbmColor);
+                                            if (ii.hbmMask != IntPtr.Zero) Gdi32.DeleteObject(ii.hbmMask);
+                                            if (ii.hbmColor != IntPtr.Zero) Gdi32.DeleteObject(ii.hbmColor);
                                         }
                                     }
                                     finally
