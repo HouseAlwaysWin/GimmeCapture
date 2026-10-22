@@ -12,22 +12,22 @@ public partial class SnipWindowViewModel
 {
     public void RegisterLinuxSnipActionHotkeys()
     {
-        if (!OperatingSystem.IsLinux() || _mainVm?.HotkeyService == null)
+        if (!OperatingSystem.IsLinux() || _services == null)
         {
             return;
         }
 
-        _mainVm.HotkeyService.Register(HotkeyIds.Pin, ActiveActionHotkey);
+        _services.Hotkeys.Register(HotkeyIds.Pin, ActiveActionHotkey);
         AppLog.Information($"SnipWindow.RegisterLinuxSnipActionHotkeys action='{ActiveActionHotkey}'");
     }
 
     public void UnregisterLinuxSnipActionHotkeys()
     {
-        if (!OperatingSystem.IsLinux() || _mainVm?.HotkeyService == null)
+        if (!OperatingSystem.IsLinux() || _services == null)
         {
             return;
         }
 
-        _mainVm.HotkeyService.Unregister(HotkeyIds.Pin);
+        _services.Hotkeys.Unregister(HotkeyIds.Pin);
     }
 }

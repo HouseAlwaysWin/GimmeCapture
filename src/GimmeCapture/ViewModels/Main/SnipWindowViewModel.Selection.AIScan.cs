@@ -164,7 +164,7 @@ public partial class SnipWindowViewModel
 
     private async Task EnsureTranslationOcrSearchCandidatesAsync(bool forceRefresh = false)
     {
-        if (CurrentMode != SnipMode.Translation || _mainVm == null || _translationSession == null)
+        if (CurrentMode != SnipMode.Translation || _mainVm == null || _services == null || _translationSession == null)
         {
             return;
         }
@@ -220,8 +220,8 @@ public partial class SnipWindowViewModel
             var detectionBitmap = resizedBitmap ?? bitmap;
             LogTranslationMemoryState("translation-ocr-search-capture", bitmap: detectionBitmap);
 
-            using var ocrEngine = _ocrEngineFactory.Create(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
-            await ocrEngine.EnsureLoadedAsync(_mainVm.AppSettingsService.Settings.SourceLanguage);
+            using var ocrEngine = _ocrEngineFactory.Create(_services.AIResources, _services.SettingsService, _services.OcrRuntime);
+            await ocrEngine.EnsureLoadedAsync(_services.SettingsService.Settings.SourceLanguage);
             var textBoxes = await Task.Run(() => ocrEngine.DetectText(detectionBitmap));
 
             double scaleX = ViewportSize.Width / detectionBitmap.Width;
@@ -782,7 +782,7 @@ public partial class SnipWindowViewModel
             new Rect(0, 0, ViewportSize.Width, ViewportSize.Height),
             ScreenOffset,
             VisualScaling,
-            _mainVm?.AppSettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese,
+            _services?.SettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese,
             // Freeze-frame: OCR the frozen still (the overlay is opaque, so a live grab would capture our own
             // frozen image + chrome). Null in the normal live path.
             PreCapturedFrame: CopyFrozenFrameForScan(lease));
@@ -990,7 +990,7 @@ public partial class SnipWindowViewModel
                 // A lost race for the clipboard leaves the previous content in place — say so instead of
                 // reporting a copy that never landed.
                 bool copied = await _captureService.CopyToClipboardAsync(textToCopy);
-                _mainVm?.SetStatus(copied ? "StatusCopied" : "StatusCopyFailed");
+                _host.SetStatus(copied ? "StatusCopied" : "StatusCopyFailed");
             }
         });
         CopyTranslationTextCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.CopyTranslation", ex));

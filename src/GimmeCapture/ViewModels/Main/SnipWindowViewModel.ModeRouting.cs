@@ -372,7 +372,7 @@ public partial class SnipWindowViewModel
 
     public void HandleGlobalHotkey(int id)
     {
-        if (_mainVm == null) return;
+        if (_mainVm == null || _services == null) return;
 
         // While a manual scrolling-capture session is active: pressing the trigger (Shift+F5)
         // again finishes it, and the temporary global hotkeys registered for the session finish
@@ -405,7 +405,7 @@ public partial class SnipWindowViewModel
         _lastGlobalHotkeyId = id;
         _lastGlobalHotkeyUtc = now;
         
-        string pressedHotkey = _mainVm.HotkeyRouterService.GetPressedHotkeyText(
+        string pressedHotkey = _services.HotkeyRouter.GetPressedHotkeyText(
             id,
             SnipHotkey,
             RecordHotkey,
@@ -416,7 +416,7 @@ public partial class SnipWindowViewModel
 
         if (TryHandleModeSwitchHotkey(pressedHotkey)) return;
 
-        var routeAction = _mainVm.HotkeyRouterService.ResolveSnipGlobalHotkeyAction(
+        var routeAction = _services.HotkeyRouter.ResolveSnipGlobalHotkeyAction(
             id,
             pressedHotkey,
             ActiveActionHotkey,
@@ -671,7 +671,7 @@ public partial class SnipWindowViewModel
         {
             IsTopmost = !IsTopmost;
             AppLog.Debug("SnipWindowViewModel.ModeRouting", $"[SnipWindow] Topmost toggled to: {IsTopmost}");
-            _mainVm?.SetStatus(IsTopmost ? "Topmost ON" : "Topmost OFF");
+            _host.SetStatus(IsTopmost ? "Topmost ON" : "Topmost OFF");
         }, nameof(ToggleTopmostCommand));
         
     }

@@ -272,8 +272,8 @@ public partial class SnipWindowViewModel
         // focus — and even against elevated foreground windows — unlike the low-level keyboard
         // hook, which is silently blocked there. Routed via HandleGlobalHotkey. The snip key
         // hook + buttons remain as redundant fallbacks.
-        _mainVm?.HotkeyService?.Register(HotkeyIds.ScrollingCaptureFinish, ActiveActionHotkey);
-        _mainVm?.HotkeyService?.Register(HotkeyIds.ScrollingCaptureCancel, CloseHotkey);
+        _services?.Hotkeys.Register(HotkeyIds.ScrollingCaptureFinish, ActiveActionHotkey);
+        _services?.Hotkeys.Register(HotkeyIds.ScrollingCaptureCancel, CloseHotkey);
 
         ShowScrollingHintAction?.Invoke();
         UpdateScrollingHintAction?.Invoke(_manualAccumulated.Height);
@@ -703,8 +703,8 @@ public partial class SnipWindowViewModel
         }
         finally
         {
-            _mainVm?.HotkeyService?.Unregister(HotkeyIds.ScrollingCaptureFinish);
-            _mainVm?.HotkeyService?.Unregister(HotkeyIds.ScrollingCaptureCancel);
+            _services?.Hotkeys.Unregister(HotkeyIds.ScrollingCaptureFinish);
+            _services?.Hotkeys.Unregister(HotkeyIds.ScrollingCaptureCancel);
             _manualCts?.Dispose();
             _manualCts = null;
             _manualPipelineTask = null;

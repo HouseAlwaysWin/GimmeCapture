@@ -45,7 +45,7 @@ public partial class SnipWindowViewModel
                 // UX rule: translate button should only process explicit user selections.
                 // If no selection exists, do nothing instead of scanning full screen.
                 AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] No selections found. Skip translation.");
-                _mainVm?.SetStatus("StatusTranslateNoSelection");
+                _host.SetStatus("StatusTranslateNoSelection");
                 return;
             }
 
@@ -136,7 +136,7 @@ public partial class SnipWindowViewModel
                     if (isFailed)
                     {
                         var failMsgKey = string.IsNullOrEmpty(errorKey) ? "StatusTranslateFailed" : errorKey;
-                        _mainVm?.SetStatus(failMsgKey);
+                        _host.SetStatus(failMsgKey);
 
                         if (sel.IsTranslated && !string.IsNullOrWhiteSpace(sel.TranslatedText))
                         {
@@ -355,7 +355,7 @@ public partial class SnipWindowViewModel
         {
             if (!await EnsureTranslationEngineReadyAsync()) return;
 
-            if (_mainVm?.AIResourceService == null || _translationSession == null)
+            if (_mainVm == null || _services == null || _translationSession == null)
             {
                 AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] ScanAllText: translation dependencies are NULL");
                 return;
@@ -388,8 +388,8 @@ public partial class SnipWindowViewModel
             LogTranslationMemoryState("translation-scan-all-capture", bitmap: detectionBitmap);
 
             // 使用 PaddleOCR 偵測文字區域
-            using var ocrEngine = _ocrEngineFactory.Create(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
-            var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
+            using var ocrEngine = _ocrEngineFactory.Create(_services.AIResources, _services.SettingsService, _services.OcrRuntime);
+            var ocrLang = _services.SettingsService.Settings.SourceLanguage;
             await ocrEngine.EnsureLoadedAsync(ocrLang);
             
             var textBoxes = await Task.Run(() => ocrEngine.DetectText(detectionBitmap));
@@ -539,9 +539,9 @@ public partial class SnipWindowViewModel
                 {
                     await ShowOkDialogAction(title, message);
                 }
-                else if (_mainVm.ConfirmAction != null)
+                else if (_host.ConfirmAction != null)
                 {
-                    await _mainVm.ConfirmAction(title, message, true);
+                    await _host.ConfirmAction(title, message, true);
                 }
             }
         }
