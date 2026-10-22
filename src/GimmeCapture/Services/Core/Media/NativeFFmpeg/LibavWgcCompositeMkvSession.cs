@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using FFmpeg.AutoGen;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
+using GimmeCapture.Services.Interop;
 using GimmeCapture.Services.Platforms.Windows;
 using SkiaSharp;
 
@@ -91,6 +92,13 @@ internal sealed class LibavWgcCompositeMkvSession : LibavRecordingSession
             var bringups = new List<(IntPtr Hwnd, WgcWindowCaptureSource Src, Task<bool> Task)>();
             foreach (var hwnd in hwnds)
             {
+                // A window that is gone is skipped before any WGC work, not left to a bring-up to abandon.
+                if (!User32.IsWindow(hwnd))
+                {
+                    AppLog.Information($"Wgc.Composite.Start.Gone hwnd=0x{hwnd.ToInt64():X} → skipped");
+                    continue;
+                }
+
                 var src = new WgcWindowCaptureSource(hwnd, drawMouse);
                 bringups.Add((hwnd, src, Task.Run(() => src.Start())));
             }

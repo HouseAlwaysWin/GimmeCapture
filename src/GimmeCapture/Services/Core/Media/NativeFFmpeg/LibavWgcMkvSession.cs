@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FFmpeg.AutoGen;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Interop;
 using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -37,8 +38,9 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
     /// repro <c>D3D11CreateDevice</c> / frame-pool creation can block for many seconds, and the first-frame
     /// timeout cannot cover that because it only starts measuring AFTER Start() returns. If bring-up doesn't
     /// finish in time we abandon it (detached) and fail the start so the caller falls back to gdigrab.
+    /// Tests lower it to make every bring-up late.
     /// </summary>
-    private const int BringupTimeoutMs = 1500;
+    internal int BringupTimeoutMs { get; init; } = 1500;
 
     /// <summary>
     /// True when WGC brought the capture pipeline up but never delivered a first frame (or the bring-up itself
@@ -88,6 +90,14 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
         AVFrame* bgraFrame = null;
         int lastSrcW = 0;
         int lastSrcH = 0;
+
+        // A window that is gone (closed since it was picked) fails here, before any WGC work and outside the timed
+        // bring-up below. A bring-up that runs late is how a wedged WGC is recognized, and turns WGC off for the
+        // rest of the session; a cold or busy machine can make even a gone window's bring-up late.
+        if (!User32.IsWindow(hwnd))
+        {
+            throw new InvalidOperationException("The window to record no longer exists.");
+        }
 
         // NOT a `using`: WGC teardown can wedge on the dual-monitor "no frames" repro, so the source is disposed
         // on a detached background thread (see the outer finally) — that keeps THIS worker completing promptly so

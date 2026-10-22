@@ -461,21 +461,21 @@ public partial class SnipWindowViewModel
         switch (CurrentMode)
         {
             case SnipMode.Screenshot:
-                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Snip_SwitchToTranslate))
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, SnipKeys?.SwitchToTranslate))
                     { SwitchToTranslateCommand?.Execute().SubscribeLoggingErrors(); return true; }
-                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Snip_SwitchToRecord))
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, SnipKeys?.SwitchToRecord))
                     { SwitchToRecordCommand?.Execute().SubscribeLoggingErrors(); return true; }
                 break;
             case SnipMode.Recording:
-                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Record_SwitchToSnip))
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, RecordKeys?.SwitchToSnip))
                     { SwitchToSnipCommand?.Execute().SubscribeLoggingErrors(); return true; }
-                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Record_SwitchToTranslate))
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, RecordKeys?.SwitchToTranslate))
                     { SwitchToTranslateCommand?.Execute().SubscribeLoggingErrors(); return true; }
                 break;
             case SnipMode.Translation:
-                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Translate_SwitchToSnip))
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, TranslateKeys?.SwitchToSnip))
                     { SwitchToSnipCommand?.Execute().SubscribeLoggingErrors(); return true; }
-                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Translate_SwitchToRecord))
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, TranslateKeys?.SwitchToRecord))
                     { SwitchToRecordCommand?.Execute().SubscribeLoggingErrors(); return true; }
                 break;
         }

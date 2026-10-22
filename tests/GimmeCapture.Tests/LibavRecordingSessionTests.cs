@@ -90,6 +90,19 @@ public sealed class LibavRecordingSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task Wgc_AWindowThatDoesNotExist_IsNotTakenForAWedge_EvenWhenBringUpRunsLate()
+    {
+        // A bring-up that runs late is how a wedged WGC is recognized, and WGC is then turned off for the session. A
+        // cold or busy machine can make any bring-up late (CI did, once), so a window that is gone has to fail before
+        // it. With no time allowed for the bring-up at all, the start used to set the flag every time.
+        using var session = new LibavWgcMkvSession { PreferHardwareEncoder = false, BringupTimeoutMs = 0 };
+
+        Assert.False(await session.StartAsync(
+            Path.Combine(_dir, "gone.mkv"), IntPtr.Zero, Fps, drawMouse: false, VideoCodec.H264));
+        Assert.False(session.TimedOutWaitingForFrame);
+    }
+
+    [Fact]
     public async Task WgcComposite_NoWindowThatCanBeCaptured_FailsToStart()
     {
         for (int attempt = 0; attempt < 20; attempt++)
