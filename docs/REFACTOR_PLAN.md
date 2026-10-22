@@ -39,15 +39,14 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
    log (#182, #183), repository hygiene (#184), unused locale keys failing the build (#185), the overlay's 713-line
    `OnDataContextChanged` split into seven wiring methods (#186), one encode core (`LibavAudioEncoder`) behind the
    AAC, MP3 and Opus transcoders (#195), one encoder-and-file writer (`RecordingSegmentWriter`) behind the gdigrab,
-   WGC and WGC-composite recording sessions, under tests that record with each (#197, #198), and one start, stop
-   and startup-gate shell for them (`LibavRecordingSession`)
+   WGC and WGC-composite recording sessions, under tests that record with each (#197, #198), one start, stop and
+   startup-gate shell for them (`LibavRecordingSession`, #199), and one frame conversion and timestamp clock for
+   gdigrab's single-threaded and pipelined paths
 4. ✅ CI and tests: one Linux workflow (#187), Linux and Windows release builds side by side (#188), release and
    hung-test guards (#189), coverage without `.axaml` at a 30% gate and the audio and Linux tests in CI (#190), NuGet
    updates by hand after Dependabot proved unable to handle the multi-target projects (#191, #193, #194)
 
 ### Next
-- gdigrab's single-threaded and pipelined decode paths, about 70 lines alike: the conversion into the encoder's
-  format, the BGRA overlay round-trip and the PTS stamping
 - The snip view model's `_mainVm` service locator → injected settings snapshot, state interfaces and services;
   `ILocalizationService` for the ~300 static `LocalizationService.Instance` uses; one home for P/Invoke structs
 

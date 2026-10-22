@@ -36,6 +36,7 @@ public sealed class LibavRecordingSessionTests : IDisposable
     [InlineData(true, false, false)]  // wall-clock timestamps, which RecordingService always asks for
     [InlineData(false, true, false)]  // capture and encode on separate threads
     [InlineData(true, false, true)]   // cursor and keystroke overlays, drawn through a BGRA round-trip
+    [InlineData(true, true, true)]    // separate threads, with the capture side stamping and drawing
     public async Task Gdigrab_RecordsTheRegion(bool wallClockPts, bool pipelined, bool overlays)
     {
         string path = Path.Combine(_dir, "gdigrab.mkv");
