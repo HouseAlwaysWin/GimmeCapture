@@ -207,7 +207,7 @@ internal sealed partial class VideoEditViewModel
     // Wire the composed editing pieces; called once from the constructor.
     private void InitializeEditing(VideoEditResult initial)
     {
-        Draw = new DrawingToolAdapter(EditorState);
+        Draw = new DrawingToolAdapter(EditorState, Localization);
 
         Redaction = new RedactionEditorState(
             () => (SurfaceWidth, SurfaceHeight),

@@ -156,7 +156,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         {
             VideoEditSegment[] runs = KeptRuns();
             double outLen = runs.Sum(r => r.OutputDuration);
-            LocalizationService loc = LocalizationService.Instance;
+            var loc = Localization;
             return $"{runs.Length} {loc["CompressTrimSegments"]}    {loc["CompressTrimLength"]} {Fmt(outLen)}";
         }
     }

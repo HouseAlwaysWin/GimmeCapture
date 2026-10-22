@@ -39,7 +39,7 @@ public partial class SnipWindowViewModel
             _isLocalProcessing = true;
             ShowProcessingOverlay = true;
             IsIndeterminate = true;
-            ProcessingText = LocalizationService.Instance["QuickOcrProcessing"];
+            ProcessingText = Localization["QuickOcrProcessing"];
 
             // Only a LIVE commit hides the overlay to grab clean pixels; a frozen one crops the still in place and
             // leaves the overlay up (see OverlaySurface.CommitCoreAsync). Read before the commit, because that is
@@ -204,7 +204,7 @@ public partial class SnipWindowViewModel
                 _isLocalProcessing = true;
                 ShowProcessingOverlay = true;
                 IsIndeterminate = true;
-                ProcessingText = LocalizationService.Instance[statusKey!] ?? "Processing...";
+                ProcessingText = Localization[statusKey!] ?? "Processing...";
             }
 
             // Only a LIVE commit hides the overlay to grab clean pixels; a frozen one crops the still in place and

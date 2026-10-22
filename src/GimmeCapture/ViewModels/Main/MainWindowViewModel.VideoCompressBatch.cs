@@ -271,7 +271,7 @@ public partial class MainWindowViewModel
                 CompressCategoryChoices.Add(full);
             }
             NewCategoryName = string.Empty;
-            ShowToastAction?.Invoke(LocalizationService.Instance["CompressCategoryCreated"], ToastSeverity.Success);
+            ShowToastAction?.Invoke(Localization["CompressCategoryCreated"], ToastSeverity.Success);
         }
         catch (Exception ex)
         {
@@ -544,7 +544,7 @@ public partial class MainWindowViewModel
         // so the button never feels dead.
         if (CompressQueue.Count == before)
         {
-            CompressStatusText = LocalizationService.Instance["CompressNoNewFiles"];
+            CompressStatusText = Localization["CompressNoNewFiles"];
         }
     }
 
@@ -761,7 +761,7 @@ public partial class MainWindowViewModel
         }
 
         CompressSettingsSnapshot snap = BuildSettingsSnapshot(item); // per-item bundle or live settings
-        string prefix = LocalizationService.Instance["CompressEstimateLabel"];
+        string prefix = Localization["CompressEstimateLabel"];
 
         // Target-size mode is already exact (the requested size) — no sample encode needed. Warn on a direct
         // 精算 click so the button doesn't feel dead.
@@ -771,7 +771,7 @@ public partial class MainWindowViewModel
             if (notifyTargetSize)
             {
                 ShowToastAction?.Invoke(
-                    LocalizationService.Instance["CompressEstimateTargetSizeWarning"], ToastSeverity.Info);
+                    Localization["CompressEstimateTargetSizeWarning"], ToastSeverity.Info);
             }
             return;
         }
@@ -787,12 +787,12 @@ public partial class MainWindowViewModel
         }
 
         item.IsEstimating = true;
-        item.EstimatedText = $"{prefix}: {LocalizationService.Instance["CompressEstimating"]}";
+        item.EstimatedText = $"{prefix}: {Localization["CompressEstimating"]}";
         try
         {
             long bytes = await CompressPipeline.EstimateBySampleAsync(item.Path, snap, item.EffectiveKeptRuns(), item.Crop);
             item.EstimatedText = bytes >= 0
-                ? $"{prefix}: ≈ {FileSizeFormatter.Format(bytes)} ({LocalizationService.Instance["CompressEstimateMeasured"]})"
+                ? $"{prefix}: ≈ {FileSizeFormatter.Format(bytes)} ({Localization["CompressEstimateMeasured"]})"
                 : BuildItemEstimate(item); // sample failed → fall back to the formula
         }
         finally
@@ -807,7 +807,7 @@ public partial class MainWindowViewModel
         if (BuildSettingsSnapshot().UseTargetSize)
         {
             ShowToastAction?.Invoke(
-                LocalizationService.Instance["CompressEstimateTargetSizeWarning"], ToastSeverity.Info);
+                Localization["CompressEstimateTargetSizeWarning"], ToastSeverity.Info);
             return;
         }
 
@@ -857,7 +857,7 @@ public partial class MainWindowViewModel
         IsBatchRunning = false;
 
         int done = CompressQueue.Count(i => i.Status == CompressQueueStatus.Done);
-        CompressStatusText = $"{LocalizationService.Instance["CompressQueueComplete"]}  ({done}/{CompressQueue.Count})";
+        CompressStatusText = $"{Localization["CompressQueueComplete"]}  ({done}/{CompressQueue.Count})";
 
         // Batch finished — release the encode/decode working buffers accumulated across the run.
         ProcessMemoryTrimService.RequestIdleTrimAsync("after-batch-compress").Forget("MemoryTrim.BatchCompress");

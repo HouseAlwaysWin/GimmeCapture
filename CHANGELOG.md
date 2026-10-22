@@ -219,6 +219,8 @@
   history, AI resources and the rest), and reads its settings through an interface of its own, its hotkeys straight
   from the settings they are saved in. Its tests can stand in for each of these instead of building a whole main
   window, and a test keeps the main view model from coming back.
+- View models read their UI strings through the localization they are given (the app's own unless a test hands them
+  a stand-in) instead of the static instance, and the localization check counts those lookups too.
 - The two Linux workflows are one, in one job: it compiles both heads, then runs the Linux test suite. It runs on
   `main` too, so a `main` that no longer builds on Linux shows up at once. Its NuGet cache lives on `main` and
   branches reuse it; before, each branch saved its own 1.7 GB copy, twice. A `claude/**` branch with an open PR

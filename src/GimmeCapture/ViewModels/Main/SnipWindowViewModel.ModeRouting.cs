@@ -227,9 +227,9 @@ public partial class SnipWindowViewModel
 
     public string ModeDisplayName => CurrentMode switch
     {
-        SnipMode.Translation => LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation",
-        SnipMode.Recording => LocalizationService.Instance["CaptureModeRecord"],
-        _ => LocalizationService.Instance["CaptureModeNormal"]
+        SnipMode.Translation => Localization["CaptureModeTranslation"] ?? "Translation",
+        SnipMode.Recording => Localization["CaptureModeRecord"],
+        _ => Localization["CaptureModeNormal"]
     };
 
     public bool IsRecordingActive => _recordingService?.State == RecordingState.Recording;

@@ -576,7 +576,7 @@ public partial class SnipWindowViewModel
         });
         ApplyHexColorCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
 
-        ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
+        ChangeLanguageCommand = ReactiveCommand.Create(() => Localization.CycleLanguage());
         ChangeLanguageCommand.ThrownExceptions.Subscribe(ex => AppLog.Debug("SnipWindowViewModel.Toolbar", $"Command error: {ex}"));
         
         ToggleBoldCommand = ReactiveCommand.Create(() => 

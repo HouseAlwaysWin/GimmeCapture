@@ -24,6 +24,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
     protected FloatingWindowViewModelBase()
     {
+        _processingText = Localization["StatusProcessing"];
         _editorStateSubscription = _editorState.Changed.Subscribe(_ =>
         {
             this.RaisePropertyChanged(nameof(CurrentAnnotationTool));
@@ -539,7 +540,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
     public bool ShowProcessingOverlay => IsProcessing;
 
-    private string _processingText = LocalizationService.Instance["StatusProcessing"];
+    private string _processingText; // set in the constructor, once Localization is
     public string ProcessingText
     {
         get => _processingText;

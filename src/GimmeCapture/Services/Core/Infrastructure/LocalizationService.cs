@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Avalonia.Media;
 using Avalonia.Platform;
+using GimmeCapture.Services.Abstractions;
 using ReactiveUI;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
@@ -16,7 +17,7 @@ namespace GimmeCapture.Services.Core.Infrastructure;
         Japanese
     }
 
-    public class LocalizationService : ReactiveObject
+    public class LocalizationService : ReactiveObject, ILocalizationService
     {
         private static LocalizationService? _instance;
         public static LocalizationService Instance => _instance ??= new LocalizationService();

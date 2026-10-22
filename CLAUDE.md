@@ -257,8 +257,9 @@ Three locales are kept in **strict key parity**:
 
 - `en-US.json` is the reference key set. `check-localization.ps1` (run in CI and by
   `verify.ps1`) **fails the build** if any locale is missing keys or has extra keys, or if a key
-  is defined that nothing uses. A key built at run time must use `Instance[$"Prefix{...}"]` or an
-  `EnumToLocalizedConverter` `ConverterParameter`, which the check treats as prefixes.
+  is defined that nothing uses. A key built at run time must use `Instance[$"Prefix{...}"]` (or
+  `Localization[$"Prefix{...}"]` in a view model) or an `EnumToLocalizedConverter` `ConverterParameter`,
+  which the check treats as prefixes.
 - When you add or remove a UI string, update **all three** JSON files with the same
   keys. There is also a `LocalizationParityTests` unit test.
 - Parity only compares keys, so `HardcodedUiTextTests` also fails the build on user-visible
@@ -266,7 +267,9 @@ Three locales are kept in **strict key parity**:
   Chinese/Japanese string literals in C#. Bind a key instead; the few deliberate literals
   (product name, glyph labels, model-output patterns) are allow-listed there with the reason.
 - Strings are consumed via `LocalizationService` (a singleton `ReactiveObject` with
-  an indexer for binding) and `EnumToLocalizedConverter`.
+  an indexer for binding) and `EnumToLocalizedConverter`. View models read them through
+  `ViewModelBase.Localization` (an `ILocalizationService`, the singleton unless a test hands them
+  a stand-in), not `LocalizationService.Instance`; only nested option types and views use the singleton.
 - Fonts switch per language (Cinzel / Noto Serif TC / Noto Serif JP).
 
 ## Testing Conventions

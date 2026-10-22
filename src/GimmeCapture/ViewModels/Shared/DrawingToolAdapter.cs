@@ -5,6 +5,7 @@ using System.Reactive;
 using System.Reactive.Linq;
 using Avalonia.Media;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 
@@ -16,12 +17,13 @@ namespace GimmeCapture.ViewModels.Shared;
 /// from <c>FloatingWindowViewModelBase</c> — the compress 進階影片編輯 editor. Mirrors the base VM's
 /// delegation, change-forwarding, and command wiring (same Tip* localization keys and hotkey hints).
 /// </summary>
-public sealed class DrawingToolAdapter : ReactiveObject, IDrawingToolViewModel, IDisposable
+public sealed class DrawingToolAdapter : ViewModelBase, IDrawingToolViewModel, IDisposable
 {
     private readonly AnnotationEditorState _state;
     private readonly IDisposable _stateSubscription;
 
-    public DrawingToolAdapter(AnnotationEditorState state)
+    public DrawingToolAdapter(AnnotationEditorState state, ILocalizationService? localization = null)
+        : base(localization)
     {
         _state = state;
 
@@ -163,21 +165,21 @@ public sealed class DrawingToolAdapter : ReactiveObject, IDrawingToolViewModel, 
     public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; } = ReactiveCommand.Create(() => { });
 
     // ── Tooltips (same keys/hotkey hints as the Pin windows) ──
-    public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} (Ctrl+Z)";
-    public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} (Ctrl+Y)";
-    public string RectangleTooltip => $"{LocalizationService.Instance["TipRectangle"]} (R)";
-    public string EllipseTooltip => $"{LocalizationService.Instance["TipEllipse"]} (E)";
-    public string ArrowTooltip => $"{LocalizationService.Instance["TipArrow"]} (A)";
-    public string LineTooltip => $"{LocalizationService.Instance["TipLine"]} (L)";
-    public string PenTooltip => $"{LocalizationService.Instance["TipPen"]} (P)";
-    public string TextTooltip => $"{LocalizationService.Instance["TipText"]} (T)";
-    public string CalloutTooltip => LocalizationService.Instance["TipCallout"];
-    public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} (M)";
-    public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} (B)";
-    public string HighlighterTooltip => LocalizationService.Instance["TipHighlighter"];
-    public string StepTooltip => LocalizationService.Instance["TipStep"];
-    public string BringToFrontTooltip => LocalizationService.Instance["TipBringToFront"];
-    public string SendToBackTooltip => LocalizationService.Instance["TipSendToBack"];
+    public string UndoTooltip => $"{Localization["Undo"]} (Ctrl+Z)";
+    public string RedoTooltip => $"{Localization["Redo"]} (Ctrl+Y)";
+    public string RectangleTooltip => $"{Localization["TipRectangle"]} (R)";
+    public string EllipseTooltip => $"{Localization["TipEllipse"]} (E)";
+    public string ArrowTooltip => $"{Localization["TipArrow"]} (A)";
+    public string LineTooltip => $"{Localization["TipLine"]} (L)";
+    public string PenTooltip => $"{Localization["TipPen"]} (P)";
+    public string TextTooltip => $"{Localization["TipText"]} (T)";
+    public string CalloutTooltip => Localization["TipCallout"];
+    public string MosaicTooltip => $"{Localization["TipMosaic"]} (M)";
+    public string BlurTooltip => $"{Localization["TipBlur"]} (B)";
+    public string HighlighterTooltip => Localization["TipHighlighter"];
+    public string StepTooltip => Localization["TipStep"];
+    public string BringToFrontTooltip => Localization["TipBringToFront"];
+    public string SendToBackTooltip => Localization["TipSendToBack"];
 
     public void Dispose() => _stateSubscription.Dispose();
 }

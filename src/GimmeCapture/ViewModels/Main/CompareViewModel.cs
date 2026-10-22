@@ -82,7 +82,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         SkipForwardCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.CompareSkipFwd", ex));
 
         Title = Path.GetFileName(sourcePath);
-        StatusText = LocalizationService.Instance["CompressComparePreparing"];
+        StatusText = Localization["CompressComparePreparing"];
     }
 
     public string Title { get; }
@@ -158,7 +158,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             AppLog.Error("Compress.CompareInit", ex);
-            StatusText = LocalizationService.Instance["CompressQueueFailed"];
+            StatusText = Localization["CompressQueueFailed"];
             IsPreparing = false;
         }
     }
@@ -404,7 +404,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             string newPath = Path.Combine(_sampleDir, $"win_{++_sampleSeq}.mp4");
             Dispatcher.UIThread.Post(() =>
             {
-                StatusText = LocalizationService.Instance["CompressComparePreparing"];
+                StatusText = Localization["CompressComparePreparing"];
                 IsPreparing = true;
             });
 
@@ -424,7 +424,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                 TryDelete(newPath);
                 Dispatcher.UIThread.Post(() =>
                 {
-                    StatusText = LocalizationService.Instance["CompressQueueFailed"];
+                    StatusText = Localization["CompressQueueFailed"];
                     IsPreparing = false;
                 });
                 return null;

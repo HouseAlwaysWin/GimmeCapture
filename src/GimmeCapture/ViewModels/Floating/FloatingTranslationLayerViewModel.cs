@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace GimmeCapture.ViewModels.Floating;
 
-internal sealed class FloatingTranslationLayerViewModel : ReactiveObject
+internal sealed class FloatingTranslationLayerViewModel : ViewModelBase
 {
     private PixelPoint _screenOffset;
     private Size _viewportSize;
@@ -47,11 +47,11 @@ internal sealed class FloatingTranslationLayerViewModel : ReactiveObject
     public ReactiveCommand<object?, Unit> CopyItemTextCommand { get; }
     public ReactiveCommand<TranslationResultItem, Unit> PinItemCommand { get; }
 
-    public string MenuCopyTranslation => LocalizationService.Instance["CopyTranslation"] ?? "Copy";
-    public string MenuPinTranslation => LocalizationService.Instance["MenuPinTranslation"] ?? "Pin";
-    public string MenuClose => LocalizationService.Instance["MenuClose"] ?? "Close";
-    public string InputLabel => LocalizationService.Instance["Input"] ?? "Input";
-    public string OutputLabel => LocalizationService.Instance["Output"] ?? "Output";
+    public string MenuCopyTranslation => Localization["CopyTranslation"] ?? "Copy";
+    public string MenuPinTranslation => Localization["MenuPinTranslation"] ?? "Pin";
+    public string MenuClose => Localization["MenuClose"] ?? "Close";
+    public string InputLabel => Localization["Input"] ?? "Input";
+    public string OutputLabel => Localization["Output"] ?? "Output";
 
     public Func<object?, Task>? CopyAction { get; set; }
     public Func<TranslationResultItem, Task>? PinAction { get; set; }

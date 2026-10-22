@@ -82,7 +82,7 @@ public partial class FloatingVideoViewModel
         if (!TryGetSelectionPixelRect(out var crop)) return;
 
         IsProcessing = true;
-        ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
+        ProcessingText = Localization["StatusProcessing"] ?? "Processing...";
         try
         {
             string? exported = await ExportCroppedRegionAsync(crop, Path.GetExtension(VideoPath));
@@ -230,7 +230,7 @@ public partial class FloatingVideoViewModel
         {
             try
             {
-                ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
+                ProcessingText = Localization["StatusExportingVideo"] ?? "Exporting Video...";
 
                 // Copy honors the toolbar's export format (previously fixed to the source container).
                 string copyExt = SelectedExportFormat.StartsWith('.') ? SelectedExportFormat : "." + SelectedExportFormat;
@@ -282,7 +282,7 @@ public partial class FloatingVideoViewModel
                     }
                 }
 
-                ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                ProcessingText = Localization["StatusExportFailed"] ?? "Export failed";
                 await Task.Delay(2000);
             }
             catch (Exception ex)
@@ -587,7 +587,7 @@ public partial class FloatingVideoViewModel
             if (string.IsNullOrEmpty(targetPath)) return;
 
             IsProcessing = true;
-            ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
+            ProcessingText = Localization["StatusProcessing"] ?? "Processing...";
 
             try
             {
@@ -614,7 +614,7 @@ public partial class FloatingVideoViewModel
                     }
                 }
 
-                ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                ProcessingText = Localization["StatusExportFailed"] ?? "Export failed";
                 await Task.Delay(2000);
             }
             catch (Exception ex)

@@ -27,4 +27,6 @@ public sealed record MainWindowViewModelDependencies(
     Lazy<OcrRuntimeService> OcrRuntimeService,
     AIPathService AIPathService,
     IResourceQueueService ResourceQueue,
-    ITranslationResultLayerService TranslationResultLayer);
+    ITranslationResultLayerService TranslationResultLayer,
+    // The UI strings; the app's own when null.
+    ILocalizationService? Localization = null);

@@ -180,7 +180,7 @@ public partial class MainWindowViewModel
 
             if (string.IsNullOrEmpty(zipPath))
             {
-                var msg = string.Format(LocalizationService.Instance["UpdateFound"], release.TagName);
+                var msg = string.Format(Localization["UpdateFound"], release.TagName);
                 bool? result = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var mainWindow = _windowManager.GetMainWindow();
@@ -196,7 +196,7 @@ public partial class MainWindowViewModel
 
             if (!string.IsNullOrEmpty(zipPath))
             {
-                var readyMsg = LocalizationService.Instance["UpdateReady"];
+                var readyMsg = Localization["UpdateReady"];
                 bool? readyResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var mainWindow = _windowManager.GetMainWindow();
@@ -227,7 +227,7 @@ public partial class MainWindowViewModel
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => {
                     if (ShowUpdateDialogAction != null)
                     {
-                        await ShowUpdateDialogAction(LocalizationService.Instance["NoUpdateFound"], false);
+                        await ShowUpdateDialogAction(Localization["NoUpdateFound"], false);
                     }
                 });
             }
@@ -238,7 +238,7 @@ public partial class MainWindowViewModel
     {
         if (PickFolderAction != null)
         {
-            var path = await PickFolderAction(LocalizationService.Instance["PickRecordingFolderTitle"]);
+            var path = await PickFolderAction(Localization["PickRecordingFolderTitle"]);
             if (!string.IsNullOrEmpty(path)) RecordingSettings.VideoSaveDirectory = path;
         }
     }
@@ -247,7 +247,7 @@ public partial class MainWindowViewModel
     {
         if (PickFolderAction != null)
         {
-            var path = await PickFolderAction(LocalizationService.Instance["PickScreenshotFolderTitle"]);
+            var path = await PickFolderAction(Localization["PickScreenshotFolderTitle"]);
             if (!string.IsNullOrEmpty(path)) SaveDirectory = path;
         }
     }
@@ -256,7 +256,7 @@ public partial class MainWindowViewModel
     {
         if (PickFolderAction != null)
         {
-            var path = await PickFolderAction(LocalizationService.Instance["PickTempFolderTitle"]);
+            var path = await PickFolderAction(Localization["PickTempFolderTitle"]);
             if (!string.IsNullOrEmpty(path)) TempDirectory = path;
         }
     }

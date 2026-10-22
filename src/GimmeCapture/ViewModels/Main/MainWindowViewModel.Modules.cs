@@ -208,8 +208,8 @@ public partial class MainWindowViewModel
         if (ConfirmAction != null)
         {
             var result = await ConfirmAction(
-                LocalizationService.Instance["UpdateCheckTitle"], 
-                LocalizationService.Instance["ConfirmCancelDownload"],
+                Localization["UpdateCheckTitle"], 
+                Localization["ConfirmCancelDownload"],
                 false);
 
             if (result)
@@ -224,8 +224,8 @@ public partial class MainWindowViewModel
         try 
         {
             var result = await (ConfirmAction?.Invoke(
-                LocalizationService.Instance["TabModules"], 
-                LocalizationService.Instance["ConfirmRemoveModule"],
+                Localization["TabModules"], 
+                Localization["ConfirmRemoveModule"],
                 false) ?? Task.FromResult(false));
 
             if (!result) return;
@@ -249,8 +249,8 @@ public partial class MainWindowViewModel
             if (!removed && ConfirmAction != null)
             {
                 await ConfirmAction(
-                    LocalizationService.Instance["TabModules"],
-                    string.Format(LocalizationService.Instance["ModuleRemoveFailed"], _moduleInstallCoordinator.LastErrorMessage),
+                    Localization["TabModules"],
+                    string.Format(Localization["ModuleRemoveFailed"], _moduleInstallCoordinator.LastErrorMessage),
                     true);
             }
         }
@@ -260,7 +260,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    public class ModuleItem : ReactiveObject
+    public class ModuleItem : ViewModelBase
     {
         public string Name { get; }
         public string DescriptionKey { get; }
@@ -392,7 +392,7 @@ public partial class MainWindowViewModel
             Name = name;
             DescriptionKey = descriptionKey;
             
-            LocalizationService.Instance.WhenAnyValue(x => x.CurrentLanguage)
+            Localization.WhenAnyValue(x => x.CurrentLanguage)
                 .Subscribe(_ => UpdateDescription());
             UpdateDescription();
         }
@@ -405,15 +405,15 @@ public partial class MainWindowViewModel
         
         public void UpdateDescription()
         {
-            Description = LocalizationService.Instance[DescriptionKey];
+            Description = Localization[DescriptionKey];
 
             if (IsPending)
             {
-                StatusText = LocalizationService.Instance["Pending"];
+                StatusText = Localization["Pending"];
             }
             else if (IsProcessing)
             {
-                StatusText = LocalizationService.Instance[
+                StatusText = Localization[
                     DownloadStage == ArtifactDownloadStage.Verifying
                         ? "DownloadStageVerifying"
                         : DownloadStage == ArtifactDownloadStage.Completed
@@ -422,31 +422,31 @@ public partial class MainWindowViewModel
             }
             else if (QueueStatus == ResourceQueueStatus.Cancelled)
             {
-                StatusText = LocalizationService.Instance["DownloadStageCancelled"];
+                StatusText = Localization["DownloadStageCancelled"];
             }
             else if (HasError || QueueStatus == ResourceQueueStatus.Failed)
             {
-                StatusText = LocalizationService.Instance["DownloadStageFailed"];
+                StatusText = Localization["DownloadStageFailed"];
             }
             else
             {
                 StatusText = IsInstalled 
-                    ? LocalizationService.Instance["Installed"] 
-                    : LocalizationService.Instance["NotInstalled"];
+                    ? Localization["Installed"] 
+                    : Localization["NotInstalled"];
             }
             
             if (IsProcessing || IsPending)
             {
-                 ActionButtonText = LocalizationService.Instance["CancelDownload"];
+                 ActionButtonText = Localization["CancelDownload"];
                  MainActionCommand = CancelCommand;
             }
             else
             {
                 ActionButtonText = HasError
-                    ? LocalizationService.Instance["RetryDownload"]
+                    ? Localization["RetryDownload"]
                     : IsInstalled
-                        ? LocalizationService.Instance["RemoveModule"]
-                        : LocalizationService.Instance["InstallModule"];
+                        ? Localization["RemoveModule"]
+                        : Localization["InstallModule"];
                 MainActionCommand = IsInstalled ? RemoveCommand : InstallCommand;
             }
         }

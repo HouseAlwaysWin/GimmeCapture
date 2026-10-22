@@ -47,18 +47,19 @@ Write-Host "Localization key parity passed ($($referenceKeys.Count) keys)."
 #         and EnumToLocalizedConverter parameters count as prefix wildcards, and any
 #         literal appearance in source counts as usage, so a key built some other way
 #         needs one of those forms. 64 had piled up while this was only a warning.
+# A lookup is LocalizationService.Instance[...] or, in a view model, Localization[...].
 $srcDir = Join-Path $root "src\GimmeCapture"
 $csText = (Get-ChildItem -Path $srcDir -Recurse -Filter *.cs | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 $xamlText = (Get-ChildItem -Path $srcDir -Recurse -Filter *.axaml | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 $allText = $csText + $xamlText
 
 $staticRefs = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-foreach ($m in [regex]::Matches($csText, 'Instance\["([A-Za-z0-9_]+)"\]')) { [void]$staticRefs.Add($m.Groups[1].Value) }
+foreach ($m in [regex]::Matches($csText, '\b(?:Instance|Localization)\["([A-Za-z0-9_]+)"\]')) { [void]$staticRefs.Add($m.Groups[1].Value) }
 foreach ($m in [regex]::Matches($csText, 'SetStatus\("([A-Za-z0-9_]+)"\)')) { [void]$staticRefs.Add($m.Groups[1].Value) }
 foreach ($m in [regex]::Matches($xamlText, 'Binding\s+\[([A-Za-z0-9_]+)\]')) { [void]$staticRefs.Add($m.Groups[1].Value) }
 
 $prefixes = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-foreach ($m in [regex]::Matches($csText, 'Instance\[\$"([A-Za-z0-9_]+)\{')) { [void]$prefixes.Add($m.Groups[1].Value) }
+foreach ($m in [regex]::Matches($csText, '\b(?:Instance|Localization)\[\$"([A-Za-z0-9_]+)\{')) { [void]$prefixes.Add($m.Groups[1].Value) }
 foreach ($m in [regex]::Matches($xamlText, "ConverterParameter='([A-Za-z0-9_]+)'")) { [void]$prefixes.Add($m.Groups[1].Value) }
 foreach ($m in [regex]::Matches($xamlText, 'ConverterParameter="([A-Za-z0-9_]+)"')) { [void]$prefixes.Add($m.Groups[1].Value) }
 

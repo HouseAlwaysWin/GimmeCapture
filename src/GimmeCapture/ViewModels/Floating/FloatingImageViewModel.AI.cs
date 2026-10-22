@@ -240,7 +240,7 @@ public partial class FloatingImageViewModel
         // Check if AI is enabled
         if (!_appSettingsService.Settings.EnableAI)
         {
-            DiagnosticText = LocalizationService.Instance["AIDisabled"];
+            DiagnosticText = Localization["AIDisabled"];
             CurrentTool = FloatingTool.None;
 
             ShowMessageDialog("AIDisabledTitle", "AIDisabledMessage");
@@ -257,7 +257,7 @@ public partial class FloatingImageViewModel
 
         
         IsProcessing = true;
-        ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
+        ProcessingText = Localization["StatusInitializingAI"];
         
         var sam2 = await GetSAM2ServiceAsync(prepareCurrentImage: false);
         if (sam2 == null) 
@@ -274,7 +274,7 @@ public partial class FloatingImageViewModel
         try
         {
             IsProcessing = true;
-            ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
+            ProcessingText = Localization["StatusInitializingAI"];
             
             StartInteractiveSession();
             Task.Run(async () =>
@@ -289,12 +289,12 @@ public partial class FloatingImageViewModel
                 }
             }).Forget("FloatingImage.PrepareSam2Background");
             
-            DiagnosticText = $"{LocalizationService.Instance["StatusReady"]} [{sam2.ModelVariantName}]";
+            DiagnosticText = $"{Localization["StatusReady"]} [{sam2.ModelVariantName}]";
         }
         catch (Exception ex)
         {
             AppLog.Warning("FloatingImage.StartInteractiveRemoval", ex);
-            DiagnosticText = LocalizationService.Instance["StatusError"]; // Or specify a new one
+            DiagnosticText = Localization["StatusError"]; // Or specify a new one
             CurrentTool = FloatingTool.None;
 
             ShowMessageDialog("AIInitErrorTitle", "AIInitErrorMessage", ex.Message);
@@ -352,7 +352,7 @@ public partial class FloatingImageViewModel
         try
         {
             IsProcessing = true;
-            ProcessingText = LocalizationService.Instance["StatusProcessing"];
+            ProcessingText = Localization["StatusProcessing"];
             
             var cleanMask = await sam2.GetMaskBitmapAsync(_interactiveSession.Points);
             var iouInfo = sam2.LastIouInfo;
@@ -471,8 +471,8 @@ public partial class FloatingImageViewModel
 
     private async Task<bool> ShowDownloadConfirmationAsync()
     {
-        var title = LocalizationService.Instance["AIDownloadTitle"];
-        var msg = LocalizationService.Instance["AIDownloadConfirm"];
+        var title = Localization["AIDownloadTitle"];
+        var msg = Localization["AIDownloadConfirm"];
         bool confirmed = false;
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
@@ -543,8 +543,8 @@ public partial class FloatingImageViewModel
         // 3. Not ready, Not downloading -> Ask for permission
         // Background removal's own question (~300 MB of ONNX Runtime and U2Net); it used to ask interactive
         // selection's (~100 MB).
-        var title = LocalizationService.Instance["AIDownloadTitle"];
-        var msg = LocalizationService.Instance["AIDownloadPrompt"];
+        var title = Localization["AIDownloadTitle"];
+        var msg = Localization["AIDownloadPrompt"];
         bool confirmed = false;
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
@@ -583,7 +583,7 @@ public partial class FloatingImageViewModel
         try
         {
             IsProcessing = true;
-            ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Processing...";
+            ProcessingText = Localization["ProcessingAI"] ?? "Processing...";
             
             // Save state for Undo
             PushUndoState();
@@ -655,7 +655,7 @@ public partial class FloatingImageViewModel
         {
             RaiseInteractiveStateChanged();
             IsProcessing = true;
-            ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Applying Removal...";
+            ProcessingText = Localization["ProcessingAI"] ?? "Applying Removal...";
             
             PushUndoState();
 
@@ -799,7 +799,7 @@ public partial class FloatingImageViewModel
         if (string.IsNullOrWhiteSpace(keyOrText))
             return string.Empty;
 
-        var localized = LocalizationService.Instance[keyOrText];
+        var localized = Localization[keyOrText];
         return string.IsNullOrWhiteSpace(localized) ? keyOrText : localized;
     }
 

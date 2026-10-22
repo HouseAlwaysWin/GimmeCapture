@@ -222,7 +222,7 @@ public class TranslationSettingsViewModel : ViewModelBase
         }
         else if (!_aiResource().IsLlamaModelReady())
         {
-            _setStatus(LocalizationService.Instance["StatusLlamaModelNotReady"]);
+            _setStatus(Localization["StatusLlamaModelNotReady"]);
         }
 
         ReplaceLlamaModelOptions(nextModels);
