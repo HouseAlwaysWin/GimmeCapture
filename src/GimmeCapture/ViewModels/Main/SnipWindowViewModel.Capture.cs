@@ -85,17 +85,17 @@ public partial class SnipWindowViewModel
                             result.Text, exportDir, _mainVm.FileNameTemplate);
                         statusKey = exportedPath != null ? "QuickOcrSavedToFile" : "QuickOcrSaveFailed";
                     }
-                    _mainVm.SetOcrStatus(statusKey, result.Language);
+                    _host.SetOcrStatus(statusKey, result.Language);
                     break;
                 case QuickOcrStatus.ModuleMissing:
-                    _mainVm.SetStatus("QuickOcrModuleMissing");
-                    _mainVm.RequestOpenModulesAction?.Invoke();
+                    _host.SetStatus("QuickOcrModuleMissing");
+                    _host.RequestOpenModulesAction?.Invoke();
                     break;
                 case QuickOcrStatus.NoText:
-                    _mainVm.SetOcrStatus("QuickOcrNoText", result.Language);
+                    _host.SetOcrStatus("QuickOcrNoText", result.Language);
                     break;
                 default:
-                    _mainVm.SetStatus("QuickOcrFailed");
+                    _host.SetStatus("QuickOcrFailed");
                     break;
             }
         }
@@ -332,15 +332,15 @@ public partial class SnipWindowViewModel
         // The confirmation carries a thumbnail of what landed, so the answer to "what am I about to paste?" is
         // on screen instead of something you have to paste to find out. Built here because the ritual disposes
         // `bitmap` on the way out — the thumbnail is detached, and SetCopyStatus owns it from this point.
-        _mainVm?.SetCopyStatus(copied, copied ? _clipboardPreviewFactory(bitmap) : null);
+        _host.SetCopyStatus(copied, copied ? _clipboardPreviewFactory(bitmap) : null);
 
         // Copies are clipboard-only by default; when history is on, persist a managed copy so it
         // shows up in the history panel (and is cleaned up on remove/prune).
-        if (_mainVm != null && _mainVm.EnableHistory)
+        if (_mainVm != null && _mainVm.EnableHistory && _services != null)
         {
-            var copyPath = _mainVm.CaptureHistory.CreateManagedCapturePath("png");
+            var copyPath = _services.CaptureHistory.CreateManagedCapturePath("png");
             await _captureService.SaveToFileAsync(bitmap, copyPath);
-            _mainVm.CaptureHistory.AddImageAsync(copyPath, GimmeCapture.Models.CaptureHistorySource.PlainCopy).Forget("CaptureHistory.AddCopy");
+            _services.CaptureHistory.AddImageAsync(copyPath, GimmeCapture.Models.CaptureHistorySource.PlainCopy).Forget("CaptureHistory.AddCopy");
         }
     });
 
@@ -377,7 +377,7 @@ public partial class SnipWindowViewModel
                     var path = System.IO.Path.Combine(dir, fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;
-                    _mainVm?.SetStatus("StatusSaved");
+                    _host.SetStatus("StatusSaved");
                     AppLog.Debug("SnipWindowViewModel.Capture", $"Auto-saved to {path}");
                 }
                 else if (PickSaveFileAction != null)
@@ -387,7 +387,7 @@ public partial class SnipWindowViewModel
                     {
                         await _captureService.SaveToFileAsync(bitmap, path);
                         savedPath = path;
-                        _mainVm?.SetStatus("StatusSaved");
+                        _host.SetStatus("StatusSaved");
                     }
                     AppLog.Debug("SnipWindowViewModel.Capture", $"Saved to {path}");
                 }
@@ -402,7 +402,7 @@ public partial class SnipWindowViewModel
 
                 if (!string.IsNullOrWhiteSpace(savedPath))
                 {
-                    _mainVm?.CaptureHistory.AddImageAsync(savedPath).Forget("CaptureHistory.AddImage");
+                    _services?.CaptureHistory.AddImageAsync(savedPath).Forget("CaptureHistory.AddImage");
                     if (_mainVm?.RevealAfterSave ?? true)
                     {
                         FileLocationService.RevealInFileExplorer(savedPath);
@@ -535,13 +535,8 @@ public partial class SnipWindowViewModel
 
     private async Task RunCaptureActionAsync(CaptureMode mode, Func<Task> captureAsync)
     {
-        if (_mainVm == null)
-        {
-            await captureAsync();
-            return;
-        }
-
-        var result = await _mainVm.RunCaptureActionAsync(mode, captureAsync);
+        // An overlay opened without a host captures at once (NullSnipWindowHost).
+        var result = await _host.RunCaptureActionAsync(mode, captureAsync);
         if (result != CaptureLaunchResult.Launched)
         {
             ShowAction?.Invoke();

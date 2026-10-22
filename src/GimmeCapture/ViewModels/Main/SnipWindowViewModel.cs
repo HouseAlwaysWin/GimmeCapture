@@ -80,6 +80,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly MainWindowViewModel? _mainVm;
     public MainWindowViewModel? MainVm => _mainVm;
 
+    // What the overlay tells the window that opened it, and the app services it uses; no services when it was opened
+    // on its own (a test or the designer).
+    private readonly ISnipWindowHost _host;
+    private readonly SnipWindowServices? _services;
+
     /// <summary>
     /// True when the capture overlay should open / stay WITHOUT stealing foreground focus (the
     /// CaptureWithoutStealingFocus setting is on, and we are not in Translation mode — translation needs real
@@ -328,9 +333,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         return (dr * dr) + (dg * dg) + (db * db);
     }
 
-    public bool IsAIDownloading => _mainVm?.AIResourceService.IsDownloading ?? false;
-    public double AIResourceProgress => _mainVm?.AIResourceService.DownloadProgress ?? 0;
-
     // Actions
     public Action? CloseAction { get; set; }
     /// <summary>Assigned by SnipWindow: forcibly collapses the Win32 selection-border window region to a 1×1 stub
@@ -437,7 +439,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         IAIScanSessionService? aiScanSessionService = null,
         IQuickOcrService? quickOcrService = null,
         ICaptureVisibilityCoordinator? captureVisibilityCoordinator = null,
-        IOcrEngineFactory? ocrEngineFactory = null)
+        IOcrEngineFactory? ocrEngineFactory = null,
+        ISnipWindowHost? host = null,
+        SnipWindowServices? services = null)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _detectionService = detectionService ?? CreateDesignWindowDetectionService();
@@ -451,6 +455,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _selectionBorderThickness = borderThickness;
         _recordingService = recService;
         _mainVm = mainVm;
+        _host = host ?? NullSnipWindowHost.Instance;
+        _services = services;
         _surface = new OverlaySurface(_captureService, _captureVisibilityCoordinator, BuildSelectionCommit);
         // ShouldAvoidStealingFocus derives from the surface, so the View's WS_EX_NOACTIVATE re-apply stream has to
         // see freeze transitions too — before, a mid-session freeze flipped the value and never re-applied the style.

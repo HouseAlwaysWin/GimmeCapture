@@ -39,6 +39,7 @@ public sealed class QuickOcrProcessingIndicatorTests
             detectionService: null,
             recService: null,
             mainVm: mainVm,
+            host: mainVm,
             translationSession: null,
             translationSelectionMonitor: null,
             aiScanSessionService: null,

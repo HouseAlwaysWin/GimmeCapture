@@ -73,9 +73,9 @@ public partial class SnipWindowViewModel
     {
         if (string.IsNullOrWhiteSpace(hotkey)) return;
         if (modifierCombosOnly && !hotkey.Contains('+')) return;
-        if (_mainVm?.HotkeyService == null) return;
+        if (_services == null) return;
 
-        _mainVm.HotkeyService.Register(id, hotkey);
+        _services.Hotkeys.Register(id, hotkey);
         _unfocusedOverlayHotkeyIds.Add(id);
     }
 
@@ -85,7 +85,7 @@ public partial class SnipWindowViewModel
 
         foreach (var id in _unfocusedOverlayHotkeyIds)
         {
-            _mainVm?.HotkeyService?.Unregister(id);
+            _services?.Hotkeys.Unregister(id);
         }
 
         _unfocusedOverlayHotkeyIds.Clear();

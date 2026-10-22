@@ -49,8 +49,11 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
    updates by hand after Dependabot proved unable to handle the multi-target projects (#191, #193, #194)
 
 ### Next
-- The snip view model's `_mainVm` service locator → injected settings snapshot, state interfaces and services;
-  `ILocalizationService` for the ~300 static `LocalizationService.Instance` uses
+- The snip view model's `_mainVm` service locator (212 uses of 110 members). Done: its calls back into the main
+  window go through `ISnipWindowHost`, and its services come in as `SnipWindowServices`. Left: the ~95 settings it
+  reads (six of which it writes back) behind a live settings interface; the overlay view's own reach through
+  `MainVm`, for settings and to build pinned images; then dropping the `MainWindowViewModel` parameter
+- `ILocalizationService` for the ~300 static `LocalizationService.Instance` uses
 
 ## Remaining `Application.Current` Usage
 In sanctioned locations (platform impls / composition root / view code-behind):

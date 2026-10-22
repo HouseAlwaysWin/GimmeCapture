@@ -76,7 +76,10 @@ public partial class MainWindowViewModel
 
         return launchResult ?? CaptureLaunchResult.Cancelled;
     }
-    
+
+    Task<CaptureLaunchResult> ISnipWindowHost.RunCaptureActionAsync(CaptureMode mode, Func<Task> captureAsync) =>
+        RunCaptureActionAsync(mode, captureAsync);
+
     private async Task ResetToDefault()
     {
         _isDataLoading = true;

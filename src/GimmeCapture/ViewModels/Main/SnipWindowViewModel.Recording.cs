@@ -174,7 +174,7 @@ public partial class SnipWindowViewModel
                 {
                     _autoStopLengthTriggered = true;
                     bool pin = _mainVm.RecordingSettings.AutoStopAction == RecordingAutoStopAction.Pin;
-                    _mainVm.SetStatus("RecordAutoStopReached");
+                    _host.SetStatus("RecordAutoStopReached");
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         (pin ? ExecutePinRecordingAsync() : ExecuteStopRecordingAsync(suppressSaveDialog: true))
                             .Forget("Recording.AutoStopLength"));
@@ -185,7 +185,7 @@ public partial class SnipWindowViewModel
                 {
                     _lowDiskStopTriggered = true;
                     AppLog.Debug("SnipWindowViewModel.Recording", "Low disk space — stopping recording to preserve the capture.");
-                    _mainVm.SetStatus("RecordLowDiskSpace");
+                    _host.SetStatus("RecordLowDiskSpace");
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         ExecutePinRecordingAsync().Forget("Recording.LowDiskStop"));
                 }
@@ -217,7 +217,7 @@ public partial class SnipWindowViewModel
         _recordStartInFlight = true;
         try
         {
-            if (_recordingService == null || _mainVm == null)
+            if (_recordingService == null || _mainVm == null || _services == null)
             {
                 return;
             }
@@ -228,27 +228,27 @@ public partial class SnipWindowViewModel
                 || (SelectionRect.Width >= 2 && SelectionRect.Height >= 2);
             if (!hasTarget)
             {
-                _mainVm.SetStatus("RecordSelectTargetFirst");
+                _host.SetStatus("RecordSelectTargetFirst");
                 return;
             }
 
             // Validate before showing the countdown so the user does not wait
             // only to discover that recording cannot start. On the pool: if nothing has loaded FFmpeg yet, this is
             // where ~150 MB of native libraries get loaded.
-            if (!await Task.Run(_mainVm.FfmpegDownloader.IsFFmpegAvailable))
+            if (!await Task.Run(_services.FfmpegDownloader.IsFFmpegAvailable))
             {
-                _mainVm.SetStatus("FFmpegNotReady");
+                _host.SetStatus("FFmpegNotReady");
                 return;
             }
 
             string format = _mainVm.RecordingSettings.RecordFormat?.ToLowerInvariant() ?? "mp4";
             if (format == "gif" && !RecordingFormatCapabilities.IsGifAvailable())
             {
-                _mainVm.SetStatus("GifUnavailableReason");
+                _host.SetStatus("GifUnavailableReason");
                 return;
             }
 
-            var launchResult = await _mainVm.RunCaptureActionAsync(
+            var launchResult = await _host.RunCaptureActionAsync(
                 CaptureMode.Record,
                 () => StartRecordingCoreAsync(format));
             if (launchResult != CaptureLaunchResult.Launched)
@@ -271,13 +271,13 @@ public partial class SnipWindowViewModel
         ShowProcessingOverlay = false;
         ProcessingText = string.Empty;
 
-        if (_recordingService == null || _mainVm == null) return;
+        if (_recordingService == null || _mainVm == null || _services == null) return;
 
         // Use TempFolder setting if available, otherwise local Temp folder in app directory
         string tempDir = _mainVm.TempDirectory;
         if (string.IsNullOrEmpty(tempDir))
         {
-            tempDir = System.IO.Path.Combine(_mainVm.AppSettingsService.BaseDataDirectory, "Temp");
+            tempDir = System.IO.Path.Combine(_services.SettingsService.BaseDataDirectory, "Temp");
         }
 
         FileLocationService.EnsureDirectory(tempDir, "SnipRecording.EnsureTempDirectory");
@@ -364,16 +364,16 @@ public partial class SnipWindowViewModel
             // loss isn't silent (recording still proceeds without it).
             if (_recordingService.RequestedMicrophoneUnavailable)
             {
-                _mainVm.ShowToast("RecordMicUnavailable");
+                _host.ShowToast("RecordMicUnavailable");
             }
             if (_recordingService.RequestedSystemAudioUnavailable)
             {
-                _mainVm.ShowToast("RecordSystemAudioUnavailable");
+                _host.ShowToast("RecordSystemAudioUnavailable");
             }
         }
         else
         {
-            _mainVm.SetStatus(string.IsNullOrWhiteSpace(_recordingService.LastStartError)
+            _host.SetStatus(string.IsNullOrWhiteSpace(_recordingService.LastStartError)
                 ? "Recording start failed. Please try again."
                 : _recordingService.LastStartError);
             _recordingUsesWindowsExcludeFromCapture = false;
@@ -542,7 +542,7 @@ public partial class SnipWindowViewModel
             var baseRect = _recordingCaptureLogicalRect ?? SelectionRect;
             int pw = Math.Max(2, (int)Math.Round(baseRect.Width > 1 ? baseRect.Width : 640.0));
             int ph = Math.Max(2, (int)Math.Round(baseRect.Height > 1 ? baseRect.Height : 360.0));
-            _mainVm?.CaptureHistory.AddVideoAsync(revealPath, pw, ph).Forget("CaptureHistory.AddVideo");
+            _services?.CaptureHistory.AddVideoAsync(revealPath, pw, ph).Forget("CaptureHistory.AddVideo");
             if (_mainVm?.RevealAfterSave ?? true)
             {
                 FileLocationService.RevealInFileExplorer(revealPath);
@@ -600,7 +600,7 @@ public partial class SnipWindowViewModel
                 }
             }
 
-            _mainVm?.CaptureHistory.AddVideoAsync(file, pw, ph).Forget("CaptureHistory.AddVideo");
+            _services?.CaptureHistory.AddVideoAsync(file, pw, ph).Forget("CaptureHistory.AddVideo");
         }
 
         if (!pin && (_mainVm?.RevealAfterSave ?? true) && !string.IsNullOrEmpty(_separateRecordingFolder))
@@ -642,7 +642,7 @@ public partial class SnipWindowViewModel
     {
         string baseDir = _mainVm != null && !string.IsNullOrEmpty(_mainVm.RecordingSettings.VideoSaveDirectory)
             ? _mainVm.RecordingSettings.VideoSaveDirectory
-            : System.IO.Path.Combine(_mainVm?.AppSettingsService.BaseDataDirectory ?? AppContext.BaseDirectory, "Recordings");
+            : System.IO.Path.Combine(_services?.SettingsService.BaseDataDirectory ?? AppContext.BaseDirectory, "Recordings");
 
         string folder = System.IO.Path.Combine(baseDir, $"GimmeCapture_Windows_{DateTime.Now:yyyyMMdd_HHmmss}");
         FileLocationService.EnsureDirectory(folder, "SnipRecording.EnsureSeparateDir");
@@ -841,7 +841,7 @@ public partial class SnipWindowViewModel
                     FileLocationService.RevealInFileExplorer(recordingPath);
                 }
 
-                _mainVm?.CaptureHistory.AddVideoAsync(recordingPath, pixelWidth, pixelHeight).Forget("CaptureHistory.AddVideo");
+                _services?.CaptureHistory.AddVideoAsync(recordingPath, pixelWidth, pixelHeight).Forget("CaptureHistory.AddVideo");
 
                 _recordingService.ClearLastRecording();
                 _currentRecordingPath = null;

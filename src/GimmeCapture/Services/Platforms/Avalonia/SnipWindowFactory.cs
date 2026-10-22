@@ -110,7 +110,16 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             aiScanSessionService,
             quickOcrService,
             new AvaloniaCaptureVisibilityCoordinator(),
-            ocrEngineFactory);
+            ocrEngineFactory,
+            host: vm,
+            services: new SnipWindowServices(
+                vm.HotkeyService,
+                vm.HotkeyRouterService,
+                vm.AppSettingsService,
+                vm.CaptureHistory,
+                vm.AIResourceService,
+                vm.OcrRuntimeService,
+                () => vm.FfmpegDownloader));
 
         snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode);
         if (mode == CaptureMode.Record)
