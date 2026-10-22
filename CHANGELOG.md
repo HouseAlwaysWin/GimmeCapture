@@ -34,6 +34,10 @@
   through parts of themselves with a hook in their window procedure, and that hook was an ANSI one. Windows converted
   every typed character to the system's code page and back on its way through, so an emoji, or any character that
   code page lacks (Thai on a Chinese system, say), arrived as '?'.
+- **A window that closes just before its recording starts no longer switches window recording off.** Starting to
+  record a window that was already gone only failed once window capture had begun starting up, and on a busy or
+  freshly started machine that could take long enough to look like stuck capture, which turns window capture off
+  until the app restarts (recordings then fall back to the screen region). It now fails at once.
 - **Recording a new hotkey no longer triggers the old ones.** While the hotkeys page waits for a new combo, an
   existing hotkey pressed there fired its action and swallowed the key, so it could not be recorded.
 - **Settings you change now survive a restart.** 24 settings and hotkeys were written to the config correctly but
