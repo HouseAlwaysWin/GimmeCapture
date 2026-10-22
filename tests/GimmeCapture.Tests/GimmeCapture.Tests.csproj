@@ -23,6 +23,8 @@
     <!-- Pump a WinForms message loop to stand in for the UI thread. -->
     <Compile Remove="RecordingStartUiStallTests.cs" />
     <Compile Remove="GlobalHotkeyHookLatencyTests.cs" />
+    <!-- Records with gdigrab and Windows Graphics Capture, and shows WinForms windows to record. -->
+    <Compile Remove="LibavRecordingSessionTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
