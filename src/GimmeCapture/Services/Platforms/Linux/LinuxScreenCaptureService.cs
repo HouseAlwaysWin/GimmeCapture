@@ -197,7 +197,7 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
         });
     }
 
-    private static (int X, int Y, int Width, int Height) ToPhysicalRect(Rect region, PixelPoint screenOffset, double visualScaling)
+    internal static (int X, int Y, int Width, int Height) ToPhysicalRect(Rect region, PixelPoint screenOffset, double visualScaling)
     {
         int x = (int)(region.X * visualScaling) + screenOffset.X;
         int y = (int)(region.Y * visualScaling) + screenOffset.Y;
@@ -239,14 +239,12 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
             // via the default Xlib handler) if the rectangle extends outside the drawable.
             if (XGetGeometry(display, root, out _, out _, out _, out uint rootW, out uint rootH, out _, out _) != 0)
             {
-                if (x < 0) { width += x; x = 0; }
-                if (y < 0) { height += y; y = 0; }
-                if (x + width > (int)rootW) { width = (int)rootW - x; }
-                if (y + height > (int)rootH) { height = (int)rootH - y; }
-                if (width <= 0 || height <= 0)
+                if (ClampToRoot(x, y, width, height, (int)rootW, (int)rootH) is not { } clamped)
                 {
                     return null;
                 }
+
+                (x, y, width, height) = clamped;
             }
 
             IntPtr imgPtr = XGetImage(display, root, x, y, (uint)width, (uint)height, ~UIntPtr.Zero, ZPixmap);
@@ -269,6 +267,16 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
         {
             XCloseDisplay(display);
         }
+    }
+
+    /// <summary>The part of a capture rectangle inside the root window, or null when nothing of it is.</summary>
+    internal static (int X, int Y, int Width, int Height)? ClampToRoot(int x, int y, int width, int height, int rootWidth, int rootHeight)
+    {
+        if (x < 0) { width += x; x = 0; }
+        if (y < 0) { height += y; y = 0; }
+        if (x + width > rootWidth) { width = rootWidth - x; }
+        if (y + height > rootHeight) { height = rootHeight - y; }
+        return width > 0 && height > 0 ? (x, y, width, height) : null;
     }
 
     private static unsafe SKBitmap ConvertToSkBitmap(XImage img, int width, int height)

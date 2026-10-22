@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [int]$CoverageThreshold = 25,
+    [int]$CoverageThreshold = 30,
     [switch]$SkipPublish,
     # Keep this run's artifacts even when it passes. A run costs several GB (a full build tree plus two
     # self-contained publishes), so passing runs are deleted by default; use this when you want to
@@ -18,6 +18,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $root "GimmeCapture.slnx"
 $appProject = Join-Path $root "src\GimmeCapture\GimmeCapture.csproj"
 $testProject = Join-Path $root "tests\GimmeCapture.Tests\GimmeCapture.Tests.csproj"
+$coverageSettings = Join-Path $root "tests\GimmeCapture.Tests\coverage.runsettings"
 $artifactsRoot = Join-Path $root "artifacts\verify"
 $artifacts = Join-Path $artifactsRoot ([Guid]::NewGuid().ToString("N"))
 $coverage = Join-Path $artifacts "coverage"
@@ -80,6 +81,8 @@ $testArgs = @(
     "--disable-build-servers",
     "-maxcpucount:1",
     "-nodeReuse:false",
+    # Leaves the code the XAML compiler generates from .axaml files out of the coverage figure.
+    "--settings", $coverageSettings,
     "--collect:XPlat Code Coverage",
     # A test stuck for 10 minutes is dumped and stopped instead of holding the run until the job's timeout, and a
     # test host that dies names the test it was running.

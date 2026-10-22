@@ -161,7 +161,7 @@ Translation/OCR 服務拆分、Snip 大型 ViewModel partial 拆檔、UI 解耦
 - 缺特性測試的關鍵單元：`MainWindowViewModel`、`ResourceQueueService`、
   `TranslationService`、app-shell/tray 編排。
 - 無端對端（capture→annotate→save）與錄影整合測試。
-- 覆蓋率門檻僅 **25%**（`scripts/verify.ps1`）。
+- 覆蓋率門檻僅 **30%**（`scripts/verify.ps1`，不計 `.axaml` 產生的程式碼）。
 - **建議**：在動大型重構前，先為上述服務補特性測試作為安全網（roadmap Phase 0）。
 
 **效能（`docs/Span ArrayPool Performance Plan.md`）— 大部分已實作**（原報告誤判為 0%）：

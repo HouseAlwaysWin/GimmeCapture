@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- scripts/verify.ps1 passes this file along with its "XPlat Code Coverage" collect switch, which turns the
+     collector configured below on. -->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <!-- The XAML compiler emits the code that builds each view with its .axaml file as the source. No unit
+               test can reach it, so counting its ~3,900 lines only measured how much XAML the app has. -->
+          <ExcludeByFile>**/*.axaml</ExcludeByFile>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

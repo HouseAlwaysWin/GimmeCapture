@@ -70,18 +70,18 @@ public sealed class LinuxStartupRegistrationService : IStartupRegistrationServic
             "Type=Application",
             "Name=GimmeCapture",
             "Comment=Screen capture tool",
-            $"Exec={BuildExecCommand()}",
+            $"Exec={BuildExecCommand(Environment.ProcessPath, Assembly.GetEntryAssembly()?.Location)}",
             "Terminal=false",
             "X-GNOME-Autostart-enabled=true",
             "");
     }
 
-    private static string BuildExecCommand()
+    internal static string BuildExecCommand(string? processPath, string? entryAssemblyPath)
     {
         // Framework-dependent runs report the dotnet host as ProcessPath, so append the entry dll;
         // a self-contained apphost reports itself and needs no dll argument.
-        string host = Environment.ProcessPath ?? "dotnet";
-        string entryDll = Assembly.GetEntryAssembly()?.Location ?? string.Empty;
+        string host = processPath ?? "dotnet";
+        string entryDll = entryAssemblyPath ?? string.Empty;
         bool isDotnetHost = Path.GetFileNameWithoutExtension(host).Equals("dotnet", StringComparison.OrdinalIgnoreCase);
 
         string cmd = isDotnetHost && !string.IsNullOrEmpty(entryDll)

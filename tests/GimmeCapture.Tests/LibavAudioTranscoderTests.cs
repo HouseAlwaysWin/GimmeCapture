@@ -8,29 +8,45 @@ namespace GimmeCapture.Tests;
 
 /// <summary>
 /// Characterization tests for the audio transcoders (<see cref="LibavAacTranscoder"/>,
-/// <see cref="LibavOpusTranscoder"/>, <see cref="LibavPinAudioPcmDecoder"/>), which previously had zero
-/// direct coverage. OPT-IN like <see cref="CompressIntegrationTests"/>: skipped unless
-/// COMPRESS_IT_OUTDIR is set, so it never runs on CI / Linux. Requires Windows + the bundled FFmpeg libs
-/// (aac + libopus encoders). Drive via <c>scripts/test-compress.ps1</c>, or set the env var and run:
-///   dotnet test --filter FullyQualifiedName~LibavAudioTranscoder
-/// The WAV input is synthesized in-process (no source clip needed) via <see cref="WavTestAudio"/>.
+/// <see cref="LibavOpusTranscoder"/>, <see cref="LibavMp3Transcoder"/>) and <see cref="LibavPinAudioPcmDecoder"/>.
+/// The WAV input is synthesized in-process via <see cref="WavTestAudio"/>, so all they need is the bundled FFmpeg
+/// (aac, libopus and libmp3lame encoders), which every CI job provisions; like
+/// <see cref="RecordingContractTests"/>' GIF test they run everywhere. Each test writes to its own temporary folder
+/// and deletes it. Set COMPRESS_IT_OUTDIR to write to that folder and keep the files instead, as
+/// <c>scripts/test-compress.ps1</c> does so they can be listened to.
 /// </summary>
-public class LibavAudioTranscoderTests
+public sealed class LibavAudioTranscoderTests : IDisposable
 {
     private const string OutDirVariable = "COMPRESS_IT_OUTDIR";
 
-    private static string? OutDir => Environment.GetEnvironmentVariable(OutDirVariable);
+    // xUnit creates an instance per test, so each test gets its own folder.
+    private readonly string _outDir;
+    private readonly bool _keepOutputs;
 
-    private static string OutPath(string name)
+    public LibavAudioTranscoderTests()
     {
-        Directory.CreateDirectory(OutDir!);
-        return Path.Combine(OutDir!, name);
+        string? requested = Environment.GetEnvironmentVariable(OutDirVariable);
+        _keepOutputs = !string.IsNullOrWhiteSpace(requested);
+        _outDir = _keepOutputs
+            ? requested!
+            : Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_outDir);
     }
 
-    private static string NewWav(string name, double seconds = 1.0) =>
+    public void Dispose()
+    {
+        if (!_keepOutputs && Directory.Exists(_outDir))
+        {
+            Directory.Delete(_outDir, recursive: true);
+        }
+    }
+
+    private string OutPath(string name) => Path.Combine(_outDir, name);
+
+    private string NewWav(string name, double seconds = 1.0) =>
         WavTestAudio.WriteSineWav(OutPath(name), seconds);
 
-    [OptInFact(OutDirVariable)]
+    [Fact]
     public void EncodeWavToM4a_ProducesReadableAacAudio()
     {
         string wav = NewWav("aac_src.wav");
@@ -44,7 +60,7 @@ public class LibavAudioTranscoderTests
         Assert.True(decoded.PcmBytes.Length > 0, "AAC output has no decodable audio");
     }
 
-    [OptInFact(OutDirVariable)]
+    [Fact]
     public void EncodeWavToM4a_HonorsBitrate_HigherQualityIsLarger()
     {
         // A 2s tone at 192k vs 96k: the higher-bitrate file must be meaningfully larger.
@@ -60,7 +76,7 @@ public class LibavAudioTranscoderTests
         Assert.True(hiLen > loLen, $"High-bitrate AAC ({hiLen}) should exceed low-bitrate ({loLen})");
     }
 
-    [OptInFact(OutDirVariable)]
+    [Fact]
     public void EncodeWavToM4a_MonoMixdown_ProducesReadableAudio()
     {
         string wav = NewWav("aac_mono_src.wav");
@@ -73,7 +89,7 @@ public class LibavAudioTranscoderTests
         Assert.True(decoded.PcmBytes.Length > 0, "mono AAC output has no decodable audio");
     }
 
-    [OptInFact(OutDirVariable)]
+    [Fact]
     public void EncodeWavToOpusOgg_ProducesReadableAudio()
     {
         string wav = NewWav("opus_src.wav");
@@ -86,7 +102,7 @@ public class LibavAudioTranscoderTests
         Assert.True(decoded.PcmBytes.Length > 0, "Opus output has no decodable audio");
     }
 
-    [OptInFact(OutDirVariable)]
+    [Fact]
     public void RoundTrip_WavToAacToPcm_YieldsStereo16BitPcm()
     {
         string wav = NewWav("rt_src.wav", seconds: 1.0);
@@ -103,7 +119,7 @@ public class LibavAudioTranscoderTests
         Assert.Equal(0, decoded.PcmBytes.Length % 4);
     }
 
-    [OptInFact(OutDirVariable)]
+    [Fact]
     public void EncodeWavToMp3_ProducesReadableMp3Audio()
     {
         string wav = NewWav("mp3_src.wav");
