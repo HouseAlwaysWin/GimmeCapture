@@ -44,6 +44,18 @@ if ($initialStatus.Count -gt 0) {
     throw "The working tree must be clean before starting a release."
 }
 
+# Release exactly what GitHub has. A local main behind origin/main would leave out merged PRs, and its atomic push
+# would only be rejected after the whole verify run; one ahead would ship commits no PR or CI run has seen.
+& git fetch --quiet origin main
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to fetch origin/main."
+}
+$localMain = (& git rev-parse main).Trim()
+$originMain = (& git rev-parse origin/main).Trim()
+if ($localMain -ne $originMain) {
+    throw "Local main ($($localMain.Substring(0, 8))) differs from origin/main ($($originMain.Substring(0, 8))). Pull or push first."
+}
+
 if (git tag -l $version) {
     throw "Tag $version already exists locally. Use a new version instead of moving an existing release tag."
 }

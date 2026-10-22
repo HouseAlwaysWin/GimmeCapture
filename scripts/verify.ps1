@@ -81,6 +81,9 @@ $testArgs = @(
     "-maxcpucount:1",
     "-nodeReuse:false",
     "--collect:XPlat Code Coverage",
+    # A test stuck for 10 minutes is dumped and stopped instead of holding the run until the job's timeout, and a
+    # test host that dies names the test it was running.
+    "--blame-hang", "--blame-hang-timeout", "10m",
     "--results-directory", $coverage
 )
 Invoke-DotNet @testArgs
