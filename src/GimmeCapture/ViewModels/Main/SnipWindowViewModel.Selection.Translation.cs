@@ -58,16 +58,16 @@ public partial class SnipWindowViewModel
         try
         {
             if (!await EnsureTranslationEngineReadyAsync()) return;
-            var mainVm = _mainVm;
+            var settings = _settings;
             var translationSession = _translationSession;
-            if (mainVm == null || translationSession == null) return;
+            if (settings == null || translationSession == null) return;
 
             // Ensure warm-up has completed before the first actual translation pass.
             StartTranslationWarmup();
             await AwaitTranslationWarmupAsync(token);
 
             // Ensure OCR resources
-            bool ready = await translationSession.EnsureOcrReadyAsync(mainVm.SourceLanguage, token);
+            bool ready = await translationSession.EnsureOcrReadyAsync(settings.SourceLanguage, token);
             if (!ready)
             {
                 AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] OCR not ready");
@@ -106,8 +106,8 @@ public partial class SnipWindowViewModel
                     async () => await translationSession.AnalyzeAndTranslateAsync(
                         translationBitmap,
                         effectiveScale,
-                        mainVm.SourceLanguage,
-                        mainVm.TargetLanguage,
+                        settings.SourceLanguage,
+                        settings.TargetLanguage,
                         token),
                     token);
                 
@@ -355,14 +355,14 @@ public partial class SnipWindowViewModel
         {
             if (!await EnsureTranslationEngineReadyAsync()) return;
 
-            if (_mainVm == null || _services == null || _translationSession == null)
+            if (_settings == null || _services == null || _translationSession == null)
             {
                 AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] ScanAllText: translation dependencies are NULL");
                 return;
             }
 
             // Ensure OCR resources
-            bool ready = await _translationSession.EnsureOcrReadyAsync(_mainVm.SourceLanguage);
+            bool ready = await _translationSession.EnsureOcrReadyAsync(_settings.SourceLanguage);
             if (!ready)
             {
                 AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] OCR not ready for scan");
@@ -518,14 +518,14 @@ public partial class SnipWindowViewModel
     {
         try
         {
-            if (_mainVm == null || _translationSession == null)
+            if (_settings == null || _translationSession == null)
             {
                 return false;
             }
 
             var result = await _translationSession.CheckEngineReadyAsync(
-                _mainVm.SourceLanguage,
-                _mainVm.TargetLanguage);
+                _settings.SourceLanguage,
+                _settings.TargetLanguage);
             if (result.IsReady) return true;
 
             if (result.ErrorKey != null)
@@ -710,7 +710,7 @@ public partial class SnipWindowViewModel
                     Annotations,
                     translatedSelections,
                     translatedBlocks,
-                    _mainVm?.ShowSnipCursor ?? false);
+                    _settings?.ShowSnipCursor ?? false);
 
                 var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
                     new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),

@@ -214,10 +214,10 @@
 - Each Windows function and struct that more than one part of the app calls is declared once (`POINT` had six
   definitions, `RECT` four), and the capture overlay and pinned images share one click-through hook, now tested on a
   real window. The three X11 calls the Linux capture, hotkey and window-shape code share are declared once too.
-- The capture overlay reports statuses, toasts and confirmations to the main window through a small interface, and
-  is handed the services it uses (hotkeys, capture history, AI resources and the rest) instead of reaching into the
-  main window for them. Its tests can stand in a host instead of building a whole main window. Its own hotkeys it
-  reads from the settings they are saved in.
+- The capture overlay no longer reaches into the main window for everything. It reports statuses, toasts and
+  confirmations through a small interface, is handed the services it uses (hotkeys, capture history, AI resources and
+  the rest), and reads its settings through an interface of its own, its hotkeys straight from the settings they are
+  saved in. Its tests can stand in for each of these instead of building a whole main window.
 - The two Linux workflows are one, in one job: it compiles both heads, then runs the Linux test suite. It runs on
   `main` too, so a `main` that no longer builds on Linux shows up at once. Its NuGet cache lives on `main` and
   branches reuse it; before, each branch saved its own 1.7 GB copy, twice. A `claude/**` branch with an open PR

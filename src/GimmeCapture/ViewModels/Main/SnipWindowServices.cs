@@ -21,6 +21,7 @@ public sealed class SnipWindowServices
         CaptureHistoryService captureHistory,
         AIResourceService aiResources,
         OcrRuntimeService ocrRuntime,
+        ITranslationResultLayerService translationResultLayer,
         Func<FFmpegDownloaderService> ffmpegDownloader)
     {
         Hotkeys = hotkeys ?? throw new ArgumentNullException(nameof(hotkeys));
@@ -29,6 +30,7 @@ public sealed class SnipWindowServices
         CaptureHistory = captureHistory ?? throw new ArgumentNullException(nameof(captureHistory));
         AIResources = aiResources ?? throw new ArgumentNullException(nameof(aiResources));
         OcrRuntime = ocrRuntime ?? throw new ArgumentNullException(nameof(ocrRuntime));
+        TranslationResultLayer = translationResultLayer ?? throw new ArgumentNullException(nameof(translationResultLayer));
         ArgumentNullException.ThrowIfNull(ffmpegDownloader);
         _ffmpegDownloader = new Lazy<FFmpegDownloaderService>(ffmpegDownloader);
     }
@@ -46,6 +48,9 @@ public sealed class SnipWindowServices
     public AIResourceService AIResources { get; }
 
     public OcrRuntimeService OcrRuntime { get; }
+
+    /// <summary>The app-wide layer of floating translation results that pinned translations go to.</summary>
+    public ITranslationResultLayerService TranslationResultLayer { get; }
 
     public FFmpegDownloaderService FfmpegDownloader => _ffmpegDownloader.Value;
 }

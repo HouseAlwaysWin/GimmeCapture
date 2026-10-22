@@ -158,6 +158,44 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
+    public void EnteringSelectedState_HidesTheToolbar_WhenTheSettingsSaySo_WithNoMainWindowBehindIt()
+    {
+        // The overlay reads its settings through ISnipOverlaySettings, so a stand-in is all a test needs.
+        var settings = OverlaySettings();
+        settings.SetupGet(s => s.DefaultHideSnipToolbar).Returns(true);
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object, settings: settings.Object);
+
+        vm.SelectionRect = new Rect(10, 10, 120, 80);
+        vm.CurrentState = SnipState.Selecting;
+        vm.CurrentState = SnipState.Selected;
+
+        Assert.False(vm.ShowToolbar);
+    }
+
+    [Fact]
+    public void LanguagesChosenOnTheOverlay_AreWrittenToTheSettings()
+    {
+        var settings = OverlaySettings();
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object, settings: settings.Object);
+
+        vm.SourceLanguage = OCRLanguage.Japanese;
+        vm.TargetLanguage = TranslationLanguage.English;
+
+        settings.VerifySet(s => s.SourceLanguage = OCRLanguage.Japanese);
+        settings.VerifySet(s => s.TargetLanguage = TranslationLanguage.English);
+    }
+
+    // A settings stand-in whose recording settings exist, as the main window's always do.
+    private static Mock<ISnipOverlaySettings> OverlaySettings()
+    {
+        var settings = new Mock<ISnipOverlaySettings>();
+        settings.SetupGet(s => s.RecordingSettings).Returns(new RecordingSettingsViewModel());
+        return settings;
+    }
+
+    [Fact]
     public async Task OverlayHotkeys_AreTheOnesTheMainWindowsSettingsHold()
     {
         // The overlay reads its own hotkeys from the settings model that the main window's hotkey settings write,
@@ -166,7 +204,7 @@ public class SnipWindowViewModelTests
         await mainVm.InitialSettingsLoadTask;
         using var vm = new SnipWindowViewModel(
             Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object,
-            mainVm: mainVm, host: mainVm, services: ServicesOf(mainVm));
+            mainVm: mainVm, host: mainVm, services: ServicesOf(mainVm), settings: mainVm);
 
         mainVm.Snip_Copy = "Ctrl+Shift+C";
         mainVm.Record_Copy = "Ctrl+Alt+C";
@@ -187,6 +225,7 @@ public class SnipWindowViewModelTests
         mainVm.CaptureHistory,
         mainVm.AIResourceService,
         mainVm.OcrRuntimeService,
+        mainVm.TranslationResultLayer,
         () => mainVm.FfmpegDownloader);
 
     [Fact]
@@ -384,7 +423,7 @@ public class SnipWindowViewModelTests
         mainVm.EnableHistory = false; // keep the commit clipboard-only; history would write a file
 
         using var vm = new SnipWindowViewModel(
-            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm);
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm, settings: mainVm);
         vm.Surface.UseHeadlessBackdropForTest();
         vm.Surface.FreezeFromPreOverlayGrab(new SkiaSharp.SKBitmap(800, 600), 1.0);
         vm.SelectionRect = new Rect(10, 10, 40, 30);
@@ -433,7 +472,7 @@ public class SnipWindowViewModelTests
         mainVm.EnableHistory = false; // keep the commit clipboard-only; history would write a file
 
         using var vm = new SnipWindowViewModel(
-            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm);
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm, settings: mainVm);
         vm.SelectionRect = new Rect(10, 10, 40, 30);
 
         await vm.RunCopyCaptureForTestAsync();
@@ -507,7 +546,7 @@ public class SnipWindowViewModelTests
         mainVm.ShowToastAction = (_, _) => plainToasts++;
 
         using var vm = new SnipWindowViewModel(
-            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm);
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm, settings: mainVm);
         vm.SelectionRect = new Rect(10, 10, 400, 300);
 
         // The real thumbnail needs a render platform this test class does not stand up, so record the request
@@ -571,7 +610,7 @@ public class SnipWindowViewModelTests
         mainVm.EnableHistory = false; // keep the commit clipboard-only; history would write a file
 
         using var vm = new SnipWindowViewModel(
-            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm);
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm, settings: mainVm);
         vm.SelectionRect = new Rect(10, 10, 40, 30);
 
         vm.UseStandaloneSpinnerDelayForTest(TimeSpan.Zero); // assert on the branch, not on a wall-clock timer
@@ -619,7 +658,7 @@ public class SnipWindowViewModelTests
         mainVm.EnableHistory = false;
 
         using var vm = new SnipWindowViewModel(
-            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm);
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm, settings: mainVm);
         vm.SelectionRect = new Rect(10, 10, 40, 30);
 
         // A delay that cannot elapse within the test: if the stand-in still appeared, the anti-flash gate is gone.
@@ -651,7 +690,7 @@ public class SnipWindowViewModelTests
         mainVm.EnableHistory = false;
 
         using var vm = new SnipWindowViewModel(
-            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm);
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm, settings: mainVm);
         vm.Surface.UseHeadlessBackdropForTest();
         vm.Surface.FreezeFromPreOverlayGrab(new SkiaSharp.SKBitmap(800, 600), 1.0);
         vm.SelectionRect = new Rect(10, 10, 40, 30);
@@ -724,7 +763,7 @@ public class SnipWindowViewModelTests
         mainVm.EnableHistory = false; // keep the commit clipboard-only; history would write a file
 
         using var vm = new SnipWindowViewModel(
-            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm);
+            Colors.Red, 2.0, capture.Object, null, null, mainVm, null, null, null, null, coordinator.Object, host: mainVm, settings: mainVm);
         vm.SelectionRect = new Rect(10, 10, 40, 30);
 
         await vm.RunCopyCaptureForTestAsync();

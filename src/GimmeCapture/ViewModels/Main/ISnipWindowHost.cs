@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
@@ -8,11 +9,19 @@ namespace GimmeCapture.ViewModels.Main;
 
 /// <summary>
 /// What the capture overlay asks of the window that opened it: the status line and its toasts, a confirmation, running
-/// a capture action through the main window's countdown, and opening the Modules tab. <see cref="MainWindowViewModel"/>
-/// implements it; an overlay opened without one uses <see cref="NullSnipWindowHost"/>.
+/// a capture action through the main window's countdown, and opening the Modules tab. It also shows the main window's
+/// progress, which the overlay mirrors while it is open. <see cref="MainWindowViewModel"/> implements it; an overlay
+/// opened without one uses <see cref="NullSnipWindowHost"/>.
 /// </summary>
-public interface ISnipWindowHost
+public interface ISnipWindowHost : INotifyPropertyChanged
 {
+    /// <summary>Whether the main window is busy with something it shows progress for.</summary>
+    bool ShowProcessingOverlay { get; }
+
+    double ProgressValue { get; }
+
+    bool IsIndeterminate { get; }
+
     /// <summary>Shows a status (a localization key), with a toast unless it is routine.</summary>
     void SetStatus(string key);
 
@@ -37,7 +46,7 @@ public interface ISnipWindowHost
 
 /// <summary>
 /// The host of an overlay opened on its own (in a test or the designer): statuses go nowhere, nothing can be confirmed,
-/// and a capture action runs at once.
+/// a capture action runs at once, and nothing is ever in progress.
 /// </summary>
 public sealed class NullSnipWindowHost : ISnipWindowHost
 {
@@ -46,6 +55,19 @@ public sealed class NullSnipWindowHost : ISnipWindowHost
     private NullSnipWindowHost()
     {
     }
+
+    // Nothing here ever changes.
+    public event PropertyChangedEventHandler? PropertyChanged
+    {
+        add { }
+        remove { }
+    }
+
+    public bool ShowProcessingOverlay => false;
+
+    public double ProgressValue => 0;
+
+    public bool IsIndeterminate => false;
 
     public void SetStatus(string key)
     {

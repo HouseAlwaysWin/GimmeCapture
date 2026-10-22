@@ -119,7 +119,9 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
                 vm.CaptureHistory,
                 vm.AIResourceService,
                 vm.OcrRuntimeService,
-                () => vm.FfmpegDownloader));
+                vm.TranslationResultLayer,
+                () => vm.FfmpegDownloader),
+            settings: vm);
 
         snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode);
         if (mode == CaptureMode.Record)
