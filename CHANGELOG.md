@@ -200,6 +200,9 @@
   request (`RECORDING_PROBE=1`, since they put windows on screen).
 - They also share their start, stop and startup check. A recorder that fails as it starts now always reports a
   failed start; it used to throw its error instead about half the time, which the app caught and treated the same.
+- The region recorder's two loops, the usual one and *Pipelined encoding*, share how a captured frame is converted
+  for the encoder (overlays drawn on the way) and how it is timestamped, instead of a copy each. A test now records
+  with *Pipelined encoding* as the app runs it: wall-clock timestamps, overlays on.
 - The two Linux workflows are one, in one job: it compiles both heads, then runs the Linux test suite. It runs on
   `main` too, so a `main` that no longer builds on Linux shows up at once. Its NuGet cache lives on `main` and
   branches reuse it; before, each branch saved its own 1.7 GB copy, twice. A `claude/**` branch with an open PR

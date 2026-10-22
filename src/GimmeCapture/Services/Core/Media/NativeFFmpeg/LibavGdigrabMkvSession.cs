@@ -93,16 +93,13 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
     {
         AVFormatContext* inputFmt = null;
         AVCodecContext* decCtx = null;
-        SwsContext* sws = null;
-        SwsContext* swsToBgra = null;
         AVPacket* pkt = null;
         AVFrame* decFrame = null;
-        AVFrame* bgraFrame = null;
         AVDictionary* demuxOpts = null;
         RecordingSegmentWriter? writer = null;
+        CapturedFrameConverter? converter = null;
 
         int videoIn = -1;
-        long producedFrames = 0; // the pipelined path's capture side; the writer counts what it encodes
 
         // Optional webcam picture-in-picture, composited per frame via a BGRA round-trip in the encode loop.
         WebcamPipCompositor? webcam = null;
@@ -203,17 +200,15 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             }
             LogNative($"Selected encoder: {writer.EncoderName}");
 
+            converter = new CapturedFrameConverter(decCtx, writer.Encoder, composite);
+            WallClockPts? wallClock = UseWallClockPts ? new WallClockPts(writer.Encoder->time_base) : null;
+
             if (PipelinedEncoding)
             {
-                RunPipelinedEncode(inputFmt, videoIn, pkt, decCtx, writer, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, ref producedFrames, firstFrameTcs, ct);
+                RunPipelinedEncode(inputFmt, videoIn, pkt, decCtx, decFrame, writer, converter, wallClock, firstFrameTcs, ct);
             }
             else
             {
-                // Wall-clock PTS clock (only consulted when UseWallClockPts). Started lazily on the first encoded
-                // frame so that frame lands at pts 0 regardless of capture-startup latency.
-                var encodeClock = new System.Diagnostics.Stopwatch();
-                long lastEncPts = -1;
-
                 while (!ct.IsCancellationRequested)
                 {
                     int rr = ffmpeg.av_read_frame(inputFmt, pkt);
@@ -239,11 +234,11 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
                     ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet(dec)");
                     ffmpeg.av_packet_unref(pkt);
 
-                    DecodeEncodeLoop(decCtx, writer, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
+                    DecodeEncodeLoop(decCtx, decFrame, writer, converter, wallClock, firstFrameTcs);
                 }
 
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "flush_decoder");
-                DecodeEncodeLoop(decCtx, writer, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
+                DecodeEncodeLoop(decCtx, decFrame, writer, converter, wallClock, firstFrameTcs);
 
                 writer.Flush();
             }
@@ -279,17 +274,7 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             writer?.Dispose();
             SafeFreePkt(&pkt);
             SafeFreeFrame(&decFrame);
-            SafeFreeFrame(&bgraFrame);
-
-            if (sws != null)
-            {
-                ffmpeg.sws_freeContext(sws);
-            }
-
-            if (swsToBgra != null)
-            {
-                ffmpeg.sws_freeContext(swsToBgra);
-            }
+            converter?.Dispose();
 
             if (decCtx != null)
             {
@@ -308,123 +293,21 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         }
     }
 
+    // Single-threaded encode loop: drain the decoder, converting each frame straight into the writer's frame and
+    // encoding it here.
     private static unsafe void DecodeEncodeLoop(
         AVCodecContext* decCtx,
-        RecordingSegmentWriter writer,
-        ref SwsContext* sws,
-        ref SwsContext* swsToBgra,
         AVFrame* decFrame,
-        ref AVFrame* bgraFrame,
-        Action<SKBitmap>? composite,
-        TaskCompletionSource<bool> firstFrameTcs,
-        bool useWallClockPts,
-        System.Diagnostics.Stopwatch encodeClock,
-        ref long lastEncPts)
+        RecordingSegmentWriter writer,
+        CapturedFrameConverter converter,
+        WallClockPts? wallClock,
+        TaskCompletionSource<bool> firstFrameTcs)
     {
-        AVCodecContext* encCtx = writer.Encoder;
-        while (true)
+        while (TryReceiveFrame(decCtx, decFrame, "receive_frame(dec)"))
         {
-            ffmpeg.av_frame_unref(decFrame);
-            int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
-            if (gr == ffmpeg.AVERROR_EOF || gr == ffmpeg.AVERROR(11))
-            {
-                break;
-            }
-            ThrowIfErr(gr, "receive_frame(dec)");
-
-            var srcFmt = (AVPixelFormat)decFrame->format;
-            int srcW = decFrame->width > 0 ? decFrame->width : decCtx->width;
-            int srcH = decFrame->height > 0 ? decFrame->height : decCtx->height;
-
-            if (sws == null)
-            {
-                if (composite != null)
-                {
-                    // Composite path: decode → BGRA (overlay + webcam PiP drawn here) → encoder pixel format.
-                    swsToBgra = ffmpeg.sws_getContext(
-                        srcW, srcH, srcFmt,
-                        srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
-                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
-                    sws = ffmpeg.sws_getContext(
-                        srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
-                        encCtx->width, encCtx->height, encCtx->pix_fmt,
-                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
-                    if (swsToBgra == null || sws == null)
-                    {
-                        throw new InvalidOperationException("sws_getContext failed for BGRA composite path.");
-                    }
-
-                    bgraFrame = ffmpeg.av_frame_alloc();
-                    bgraFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
-                    bgraFrame->width = srcW;
-                    bgraFrame->height = srcH;
-                    ThrowIfErr(ffmpeg.av_frame_get_buffer(bgraFrame, 32), "frame_get_buffer(bgra)");
-                }
-                else
-                {
-                    sws = ffmpeg.sws_getContext(
-                        srcW, srcH, srcFmt,
-                        encCtx->width, encCtx->height, encCtx->pix_fmt,
-                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
-                    if (sws == null)
-                    {
-                        throw new InvalidOperationException($"sws_getContext failed for src={srcFmt} {srcW}x{srcH} -> dst={encCtx->pix_fmt} {encCtx->width}x{encCtx->height}");
-                    }
-                }
-            }
-
             AVFrame* encFrame = writer.FrameToFill();
-
-            if (composite != null && bgraFrame != null && swsToBgra != null)
-            {
-                // decode → BGRA
-                ffmpeg.sws_scale(swsToBgra, decFrame->data, decFrame->linesize, 0, decFrame->height, bgraFrame->data, bgraFrame->linesize);
-
-                // Draw the cursor ring / click ripple and/or webcam PiP onto the BGRA pixels in place.
-                var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
-                using (var sk = new SKBitmap())
-                {
-                    if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
-                    {
-                        composite(sk);
-                    }
-                }
-
-                // BGRA → encoder pixel format
-                ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, bgraFrame->height, encFrame->data, encFrame->linesize);
-            }
-            else
-            {
-                ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height, encFrame->data, encFrame->linesize);
-            }
-
-            long framePts;
-            if (useWallClockPts)
-            {
-                // Pace output PTS by real elapsed time so a slow/behind gdigrab capture stays the correct speed.
-                // time_base is 1/fps, so pts (in time_base units) == elapsed_seconds * fps. Started lazily here so
-                // the first frame is pts 0. Bumped to stay strictly monotonic if two frames land in the same tick.
-                if (!encodeClock.IsRunning)
-                {
-                    encodeClock.Start();
-                }
-
-                double fps = encCtx->time_base.num != 0
-                    ? encCtx->time_base.den / (double)encCtx->time_base.num
-                    : 30.0;
-                long pts = (long)(encodeClock.Elapsed.TotalSeconds * fps);
-                if (pts <= lastEncPts)
-                {
-                    pts = lastEncPts + 1;
-                }
-
-                lastEncPts = pts;
-                framePts = pts;
-            }
-            else
-            {
-                framePts = writer.FrameCount;
-            }
+            converter.Convert(decFrame, encFrame);
+            long framePts = wallClock?.Next() ?? writer.FrameCount;
 
             if (writer.FrameCount == 0)
             {
@@ -442,28 +325,22 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
     // joining it; the producer only reads the encoder's frame size, format and time base, fixed once it is open.
     // Under sustained back-pressure full-queue frames are dropped rather than stalling capture. Each queued frame is
     // owned by exactly one side (consumer after encode, producer on drop), so there is no double-free.
-    private unsafe void RunPipelinedEncode(
+    private static unsafe void RunPipelinedEncode(
         AVFormatContext* inputFmt,
         int videoIn,
         AVPacket* readPkt,
         AVCodecContext* decCtx,
-        RecordingSegmentWriter writer,
-        ref SwsContext* sws,
-        ref SwsContext* swsToBgra,
         AVFrame* decFrame,
-        ref AVFrame* bgraFrame,
-        Action<SKBitmap>? composite,
-        ref long frameCounter,
+        RecordingSegmentWriter writer,
+        CapturedFrameConverter converter,
+        WallClockPts? wallClock,
         TaskCompletionSource<bool> firstFrameTcs,
         CancellationToken ct)
     {
         using var queue = new BlockingCollection<IntPtr>(boundedCapacity: 8);
         Exception? consumerEx = null;
         AVCodecContext* encCtx = writer.Encoder;
-
-        // Only the producer stamps PTS, so this clock/last-pts pair needs no synchronization.
-        var encodeClock = new System.Diagnostics.Stopwatch();
-        long lastEncPts = -1;
+        long producedFrames = 0; // dropped frames included; the writer counts the ones it encodes
 
         var consumer = new Thread(() =>
         {
@@ -509,11 +386,11 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
 
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, readPkt), "send_packet(dec,pipe)");
                 ffmpeg.av_packet_unref(readPkt);
-                DecodeComposeEnqueue(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, queue, ref frameCounter, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
+                DecodeComposeEnqueue(decCtx, decFrame, encCtx, converter, wallClock, queue, ref producedFrames, firstFrameTcs);
             }
 
             ffmpeg.avcodec_send_packet(decCtx, null);
-            DecodeComposeEnqueue(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, queue, ref frameCounter, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
+            DecodeComposeEnqueue(decCtx, decFrame, encCtx, converter, wallClock, queue, ref producedFrames, firstFrameTcs);
         }
         finally
         {
@@ -534,126 +411,39 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         }
     }
 
-    // Producer half of the pipeline: drain the decoder, composite, scale into a fresh encoder-format frame,
-    // and enqueue it (dropping it if the queue is full). Mirrors DecodeEncodeLoop's lazy sws/composite setup.
+    // Producer half of the pipeline: drain the decoder, convert each frame into a fresh encoder-format frame and
+    // enqueue it, dropping it if the queue is full. Its pts is stamped here, at arrival, and travels with it through
+    // the queue (the consumer only encodes), so wall-clock pacing is as correct pipelined as not.
     private static unsafe void DecodeComposeEnqueue(
         AVCodecContext* decCtx,
-        AVCodecContext* encCtx,
-        ref SwsContext* sws,
-        ref SwsContext* swsToBgra,
         AVFrame* decFrame,
-        ref AVFrame* bgraFrame,
-        Action<SKBitmap>? composite,
+        AVCodecContext* encCtx,
+        CapturedFrameConverter converter,
+        WallClockPts? wallClock,
         BlockingCollection<IntPtr> queue,
-        ref long frameCounter,
-        TaskCompletionSource<bool> firstFrameTcs,
-        bool useWallClockPts,
-        System.Diagnostics.Stopwatch encodeClock,
-        ref long lastEncPts)
+        ref long producedFrames,
+        TaskCompletionSource<bool> firstFrameTcs)
     {
-        while (true)
+        while (TryReceiveFrame(decCtx, decFrame, "receive_frame(dec,pipe)"))
         {
-            ffmpeg.av_frame_unref(decFrame);
-            int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
-            if (gr == ffmpeg.AVERROR_EOF || gr == ffmpeg.AVERROR(11))
-            {
-                break;
-            }
-            ThrowIfErr(gr, "receive_frame(dec,pipe)");
-
-            var srcFmt = (AVPixelFormat)decFrame->format;
-            int srcW = decFrame->width > 0 ? decFrame->width : decCtx->width;
-            int srcH = decFrame->height > 0 ? decFrame->height : decCtx->height;
-
-            if (sws == null)
-            {
-                if (composite != null)
-                {
-                    swsToBgra = ffmpeg.sws_getContext(
-                        srcW, srcH, srcFmt,
-                        srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
-                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
-                    sws = ffmpeg.sws_getContext(
-                        srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
-                        encCtx->width, encCtx->height, encCtx->pix_fmt,
-                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
-                    if (swsToBgra == null || sws == null)
-                    {
-                        throw new InvalidOperationException("sws_getContext failed for BGRA composite path (pipe).");
-                    }
-
-                    bgraFrame = ffmpeg.av_frame_alloc();
-                    bgraFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
-                    bgraFrame->width = srcW;
-                    bgraFrame->height = srcH;
-                    ThrowIfErr(ffmpeg.av_frame_get_buffer(bgraFrame, 32), "frame_get_buffer(bgra,pipe)");
-                }
-                else
-                {
-                    sws = ffmpeg.sws_getContext(
-                        srcW, srcH, srcFmt,
-                        encCtx->width, encCtx->height, encCtx->pix_fmt,
-                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
-                    if (sws == null)
-                    {
-                        throw new InvalidOperationException("sws_getContext failed (pipe).");
-                    }
-                }
-            }
-
             AVFrame* encFrame = ffmpeg.av_frame_alloc();
-            encFrame->format = (int)encCtx->pix_fmt;
-            encFrame->width = encCtx->width;
-            encFrame->height = encCtx->height;
-            ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "frame_get_buffer(enc,pipe)");
-
-            if (composite != null && bgraFrame != null && swsToBgra != null)
+            try
             {
-                ffmpeg.sws_scale(swsToBgra, decFrame->data, decFrame->linesize, 0, decFrame->height, bgraFrame->data, bgraFrame->linesize);
-                var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
-                using (var sk = new SKBitmap())
-                {
-                    if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
-                    {
-                        composite(sk);
-                    }
-                }
-                ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, bgraFrame->height, encFrame->data, encFrame->linesize);
+                encFrame->format = (int)encCtx->pix_fmt;
+                encFrame->width = encCtx->width;
+                encFrame->height = encCtx->height;
+                ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "frame_get_buffer(enc,pipe)");
+                converter.Convert(decFrame, encFrame);
             }
-            else
+            catch
             {
-                ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height, encFrame->data, encFrame->linesize);
+                ffmpeg.av_frame_free(&encFrame);
+                throw;
             }
 
-            // Same PTS rule as the single-threaded loop. Stamping happens HERE, on the producer thread, at frame
-            // arrival — the frame then carries its pts through the queue and the consumer only encodes it — so
-            // wall-clock pacing is just as correct when pipelined as when not.
-            if (useWallClockPts)
-            {
-                if (!encodeClock.IsRunning)
-                {
-                    encodeClock.Start();
-                }
-
-                double fps = encCtx->time_base.num != 0
-                    ? encCtx->time_base.den / (double)encCtx->time_base.num
-                    : 30.0;
-                long pts = (long)(encodeClock.Elapsed.TotalSeconds * fps);
-                if (pts <= lastEncPts)
-                {
-                    pts = lastEncPts + 1;
-                }
-
-                lastEncPts = pts;
-                encFrame->pts = pts;
-            }
-            else
-            {
-                encFrame->pts = frameCounter;
-            }
-
-            frameCounter++;
-            if (frameCounter == 1)
+            encFrame->pts = wallClock?.Next() ?? producedFrames;
+            producedFrames++;
+            if (producedFrames == 1)
             {
                 firstFrameTcs.TrySetResult(true);
             }
@@ -661,10 +451,23 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             if (!queue.TryAdd((IntPtr)encFrame))
             {
                 // Queue full — drop this frame rather than stall capture.
-                var f = encFrame;
-                ffmpeg.av_frame_free(&f);
+                ffmpeg.av_frame_free(&encFrame);
             }
         }
+    }
+
+    // Takes the decoder's next frame into decFrame; false once it needs another packet or has been drained.
+    private static unsafe bool TryReceiveFrame(AVCodecContext* decCtx, AVFrame* decFrame, string context)
+    {
+        ffmpeg.av_frame_unref(decFrame);
+        int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
+        if (gr == ffmpeg.AVERROR_EOF || gr == ffmpeg.AVERROR(11))
+        {
+            return false;
+        }
+
+        ThrowIfErr(gr, context);
+        return true;
     }
 
     private static unsafe void SafeFreePkt(AVPacket** pkt)
@@ -688,6 +491,162 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         if (err < 0)
         {
             throw FFmpegErrors.ToException(err, ctx);
+        }
+    }
+
+    /// <summary>
+    /// Converts each captured frame into the encoder's pixel format and size. With overlays to burn in (cursor,
+    /// clicks, webcam picture-in-picture, keystrokes) it goes through a BGRA frame they are drawn on; otherwise it
+    /// scales directly. The scalers and the BGRA frame are set up from the first frame and kept until disposed.
+    /// </summary>
+    private sealed unsafe class CapturedFrameConverter : IDisposable
+    {
+        private readonly AVCodecContext* _decoder;
+        private readonly AVPixelFormat _targetFormat;
+        private readonly int _targetWidth;
+        private readonly int _targetHeight;
+        private readonly Action<SKBitmap>? _overlays;
+        private SwsContext* _toTarget;
+        private SwsContext* _toBgra;
+        private AVFrame* _bgra;
+
+        /// <param name="decoder">The capture decoder, whose size stands in for a frame that carries none.</param>
+        /// <param name="encoder">The opened encoder, whose pixel format and size every frame is converted to.</param>
+        /// <param name="overlays">Draws every overlay onto a BGRA frame, or null when there are none.</param>
+        public CapturedFrameConverter(AVCodecContext* decoder, AVCodecContext* encoder, Action<SKBitmap>? overlays)
+        {
+            _decoder = decoder;
+            _targetFormat = encoder->pix_fmt;
+            _targetWidth = encoder->width;
+            _targetHeight = encoder->height;
+            _overlays = overlays;
+        }
+
+        /// <summary>Converts <paramref name="captured"/> into <paramref name="target"/>, a frame in the encoder's format.</summary>
+        public void Convert(AVFrame* captured, AVFrame* target)
+        {
+            if (_toTarget == null)
+            {
+                SetUp(captured);
+            }
+
+            if (_overlays != null)
+            {
+                // captured → BGRA, the overlays drawn onto those pixels in place, then BGRA → encoder format.
+                ffmpeg.sws_scale(_toBgra, captured->data, captured->linesize, 0, captured->height, _bgra->data, _bgra->linesize);
+
+                var info = new SKImageInfo(_bgra->width, _bgra->height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                using (var sk = new SKBitmap())
+                {
+                    if (sk.InstallPixels(info, (IntPtr)_bgra->data[0], _bgra->linesize[0]))
+                    {
+                        _overlays(sk);
+                    }
+                }
+
+                ffmpeg.sws_scale(_toTarget, _bgra->data, _bgra->linesize, 0, _bgra->height, target->data, target->linesize);
+            }
+            else
+            {
+                ffmpeg.sws_scale(_toTarget, captured->data, captured->linesize, 0, captured->height, target->data, target->linesize);
+            }
+        }
+
+        private void SetUp(AVFrame* captured)
+        {
+            var srcFmt = (AVPixelFormat)captured->format;
+            int srcW = captured->width > 0 ? captured->width : _decoder->width;
+            int srcH = captured->height > 0 ? captured->height : _decoder->height;
+
+            if (_overlays != null)
+            {
+                _toBgra = ffmpeg.sws_getContext(
+                    srcW, srcH, srcFmt,
+                    srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
+                    (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                _toTarget = ffmpeg.sws_getContext(
+                    srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
+                    _targetWidth, _targetHeight, _targetFormat,
+                    (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                if (_toBgra == null || _toTarget == null)
+                {
+                    throw new InvalidOperationException("sws_getContext failed for BGRA composite path.");
+                }
+
+                _bgra = ffmpeg.av_frame_alloc();
+                _bgra->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
+                _bgra->width = srcW;
+                _bgra->height = srcH;
+                ThrowIfErr(ffmpeg.av_frame_get_buffer(_bgra, 32), "frame_get_buffer(bgra)");
+            }
+            else
+            {
+                _toTarget = ffmpeg.sws_getContext(
+                    srcW, srcH, srcFmt,
+                    _targetWidth, _targetHeight, _targetFormat,
+                    (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                if (_toTarget == null)
+                {
+                    throw new InvalidOperationException($"sws_getContext failed for src={srcFmt} {srcW}x{srcH} -> dst={_targetFormat} {_targetWidth}x{_targetHeight}");
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_toTarget != null)
+            {
+                ffmpeg.sws_freeContext(_toTarget);
+                _toTarget = null;
+            }
+
+            if (_toBgra != null)
+            {
+                ffmpeg.sws_freeContext(_toBgra);
+                _toBgra = null;
+            }
+
+            if (_bgra != null)
+            {
+                AVFrame* bgra = _bgra;
+                ffmpeg.av_frame_free(&bgra);
+                _bgra = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stamps frames by when they are captured rather than by count (see <see cref="UseWallClockPts"/>): the time since
+    /// the first frame times fps, in the encoder's 1/fps time base. The clock starts at that first frame, so it is pts 0
+    /// however long capture took to start, and a frame landing in the same tick as the one before is moved one tick on,
+    /// so timestamps only increase. Both paths stamp on the capture thread, so it needs no locking.
+    /// </summary>
+    private sealed class WallClockPts
+    {
+        private readonly Stopwatch _clock = new();
+        private readonly double _fps;
+        private long _last = -1;
+
+        public WallClockPts(AVRational timeBase)
+        {
+            _fps = timeBase.num != 0 ? timeBase.den / (double)timeBase.num : 30.0;
+        }
+
+        public long Next()
+        {
+            if (!_clock.IsRunning)
+            {
+                _clock.Start();
+            }
+
+            long pts = (long)(_clock.Elapsed.TotalSeconds * _fps);
+            if (pts <= _last)
+            {
+                pts = _last + 1;
+            }
+
+            _last = pts;
+            return pts;
         }
     }
 }
