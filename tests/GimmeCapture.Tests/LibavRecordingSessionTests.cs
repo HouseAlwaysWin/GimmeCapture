@@ -61,8 +61,8 @@ public sealed class LibavRecordingSessionTests : IDisposable
     {
         using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = false };
 
-        bool started = await session.StartAsync(
-            Path.Combine(_dir, "offscreen.mkv"), 1_000_000, 1_000_000, 320, 240, Fps, drawMouse: false, VideoCodec.H264);
+        bool started = await StartsAsync(session.StartAsync(
+            Path.Combine(_dir, "offscreen.mkv"), 1_000_000, 1_000_000, 320, 240, Fps, drawMouse: false, VideoCodec.H264));
 
         Assert.False(started);
         Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
@@ -73,8 +73,8 @@ public sealed class LibavRecordingSessionTests : IDisposable
     {
         using var session = new LibavWgcMkvSession { PreferHardwareEncoder = false };
 
-        bool started = await session.StartAsync(
-            Path.Combine(_dir, "nowindow.mkv"), IntPtr.Zero, Fps, drawMouse: false, VideoCodec.H264);
+        bool started = await StartsAsync(session.StartAsync(
+            Path.Combine(_dir, "nowindow.mkv"), IntPtr.Zero, Fps, drawMouse: false, VideoCodec.H264));
 
         Assert.False(started);
         Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
@@ -87,8 +87,8 @@ public sealed class LibavRecordingSessionTests : IDisposable
     {
         using var session = new LibavWgcCompositeMkvSession { PreferHardwareEncoder = false };
 
-        bool started = await session.StartAsync(
-            Path.Combine(_dir, "nowindows.mkv"), new[] { IntPtr.Zero }, Fps, drawMouse: false, VideoCodec.H264);
+        bool started = await StartsAsync(session.StartAsync(
+            Path.Combine(_dir, "nowindows.mkv"), new[] { IntPtr.Zero }, Fps, drawMouse: false, VideoCodec.H264));
 
         Assert.False(started);
         Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
@@ -125,6 +125,24 @@ public sealed class LibavRecordingSessionTests : IDisposable
 
         Assert.True(string.IsNullOrEmpty(session.LastWarningMessage), session.LastWarningMessage); // none skipped
         await AssertSegmentAsync(path, session.SelectedEncoderName, expectedSize: null);
+    }
+
+    /// <summary>
+    /// Whether a start the test expects to fail at once succeeded after all. Such a start either returns false or
+    /// rethrows the worker's error: the worker faults its first-frame signal just before it returns false, the
+    /// startup gate takes whichever of the two it sees complete first, and either can win. RecordingService treats
+    /// both as a failed start.
+    /// </summary>
+    private static async Task<bool> StartsAsync(Task<bool> start)
+    {
+        try
+        {
+            return await start;
+        }
+        catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)
+        {
+            return false;
+        }
     }
 
     private static async Task RecordAsync(Task<bool> start, Func<Task> stop, Func<string?> lastError)
