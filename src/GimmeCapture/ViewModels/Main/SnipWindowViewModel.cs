@@ -159,46 +159,52 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         set => SetCurrentMode(value);
     }
 
+    // The overlay's own hotkeys, read live from the settings model: the main window's Snip_*, Record_* and Translate_*
+    // settings read and write these same objects. Null for an overlay opened on its own, which uses the fallbacks.
+    private SnipHotkeys? SnipKeys => _services?.SettingsService.Settings.Snip;
+    private RecordHotkeys? RecordKeys => _services?.SettingsService.Settings.Record;
+    private TranslateHotkeys? TranslateKeys => _services?.SettingsService.Settings.Translate;
+
     // Hotkeys / Tooltips (Dynamic by Mode)
     public string SnipHotkey => _mainVm?.SnipHotkey ?? "Shift+F1";
     public string RecordHotkey => _mainVm?.RecordHotkey ?? "Shift+F2";
     public string TranslateHotkey => _mainVm?.TranslateHotkey ?? "Shift+F3";
     public string TextCopyHotkey => _mainVm?.TextCopyHotkey ?? "Shift+F4";
     
-    public string CopyHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Copy ?? "Ctrl+C") : (_mainVm?.Snip_Copy ?? "Ctrl+C");
-    public string UndoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Undo ?? "Ctrl+Z") : (_mainVm?.Snip_Undo ?? "Ctrl+Z");
-    public string RedoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Redo ?? "Ctrl+Y") : (_mainVm?.Snip_Redo ?? "Ctrl+Y");
+    public string CopyHotkey => CurrentMode == SnipMode.Recording ? (RecordKeys?.Copy ?? "Ctrl+C") : (SnipKeys?.Copy ?? "Ctrl+C");
+    public string UndoHotkey => CurrentMode == SnipMode.Recording ? (RecordKeys?.Undo ?? "Ctrl+Z") : (SnipKeys?.Undo ?? "Ctrl+Z");
+    public string RedoHotkey => CurrentMode == SnipMode.Recording ? (RecordKeys?.Redo ?? "Ctrl+Y") : (SnipKeys?.Redo ?? "Ctrl+Y");
     // In translation mode, Delete is reserved for ClearAllHotkey.
     public string ClearHotkey => CurrentMode == SnipMode.Translation
         ? string.Empty
-        : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Clear ?? "Delete") : (_mainVm?.Snip_Clear ?? "Delete"));
-    public string SaveHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Save ?? "Ctrl+S") : (_mainVm?.Snip_Save ?? "Ctrl+S");
-    public string CloseHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Close ?? "Escape") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Close ?? "Escape") : (_mainVm?.Snip_Close ?? "Escape"));
+        : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Clear ?? "Delete") : (SnipKeys?.Clear ?? "Delete"));
+    public string SaveHotkey => CurrentMode == SnipMode.Recording ? (RecordKeys?.Save ?? "Ctrl+S") : (SnipKeys?.Save ?? "Ctrl+S");
+    public string CloseHotkey => CurrentMode == SnipMode.Translation ? (TranslateKeys?.Close ?? "Escape") : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Close ?? "Escape") : (SnipKeys?.Close ?? "Escape"));
     
     // Annotation tool hotkeys are disabled in translation mode to avoid
     // stealing key gestures from translation-specific actions.
-    public string RectangleHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Rectangle ?? "R") : (_mainVm?.Snip_Rectangle ?? "R"));
-    public string EllipseHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Ellipse ?? "E") : (_mainVm?.Snip_Ellipse ?? "E"));
-    public string ArrowHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Arrow ?? "A") : (_mainVm?.Snip_Arrow ?? "A"));
-    public string LineHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Line ?? "L") : (_mainVm?.Snip_Line ?? "L"));
-    public string PenHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Pen ?? "P") : (_mainVm?.Snip_Pen ?? "P"));
-    public string TextHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Text ?? "T") : (_mainVm?.Snip_Text ?? "T"));
-    public string MosaicHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Mosaic ?? "M") : (_mainVm?.Snip_Mosaic ?? "M"));
-    public string BlurHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Blur ?? "B") : (_mainVm?.Snip_Blur ?? "B"));
+    public string RectangleHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Rectangle ?? "R") : (SnipKeys?.Rectangle ?? "R"));
+    public string EllipseHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Ellipse ?? "E") : (SnipKeys?.Ellipse ?? "E"));
+    public string ArrowHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Arrow ?? "A") : (SnipKeys?.Arrow ?? "A"));
+    public string LineHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Line ?? "L") : (SnipKeys?.Line ?? "L"));
+    public string PenHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Pen ?? "P") : (SnipKeys?.Pen ?? "P"));
+    public string TextHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Text ?? "T") : (SnipKeys?.Text ?? "T"));
+    public string MosaicHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Mosaic ?? "M") : (SnipKeys?.Mosaic ?? "M"));
+    public string BlurHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Blur ?? "B") : (SnipKeys?.Blur ?? "B"));
     public string FullscreenSelectHotkey => CurrentMode switch
     {
-        SnipMode.Recording => _mainVm?.Record_FullscreenSelect ?? "F",
-        SnipMode.Screenshot => _mainVm?.Snip_FullscreenSelect ?? "F",
+        SnipMode.Recording => RecordKeys?.FullscreenSelect ?? "F",
+        SnipMode.Screenshot => SnipKeys?.FullscreenSelect ?? "F",
         _ => string.Empty
     };
 
-    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "F8") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "F6") : (_mainVm?.Snip_Pin ?? "F6"));
-    public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Toolbar ?? "F4") : (_mainVm?.Snip_Toolbar ?? "F4"));
-    public string ActivePlaybackHotkey => _mainVm?.Record_Playback ?? "Space";
-    public string ActiveStopHotkey => _mainVm?.Record_Stop ?? "F9";
-    public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";
-    public string MagicWandHotkey => _mainVm?.Snip_MagicWand ?? "W";
-    public string SnipSelectionModeHotkey => _mainVm?.Snip_SelectionMode ?? "S";
+    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (TranslateKeys?.Action ?? "F8") : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Action ?? "F6") : (SnipKeys?.Pin ?? "F6"));
+    public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (TranslateKeys?.Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (RecordKeys?.Toolbar ?? "F4") : (SnipKeys?.Toolbar ?? "F4"));
+    public string ActivePlaybackHotkey => RecordKeys?.Playback ?? "Space";
+    public string ActiveStopHotkey => RecordKeys?.Stop ?? "F9";
+    public string RemoveBackgroundHotkey => SnipKeys?.RemoveBackground ?? "Shift+R";
+    public string MagicWandHotkey => SnipKeys?.MagicWand ?? "W";
+    public string SnipSelectionModeHotkey => SnipKeys?.SelectionMode ?? "S";
 
     // Mode-switch hotkeys (resolved per current mode)
     // Return empty string when already in the target mode to avoid conflicts
@@ -206,37 +212,37 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string SwitchToSnipHotkey => CurrentMode switch
     {
         SnipMode.Screenshot => string.Empty, // Already in Snip mode
-        SnipMode.Recording => _mainVm?.Record_SwitchToSnip ?? "F1",
-        SnipMode.Translation => _mainVm?.Translate_SwitchToSnip ?? "F1",
+        SnipMode.Recording => RecordKeys?.SwitchToSnip ?? "F1",
+        SnipMode.Translation => TranslateKeys?.SwitchToSnip ?? "F1",
         _ => string.Empty
     };
     public string SwitchToRecordHotkey => CurrentMode switch
     {
         SnipMode.Recording => string.Empty, // Already in Record mode
-        SnipMode.Screenshot => _mainVm?.Snip_SwitchToRecord ?? "F2",
-        SnipMode.Translation => _mainVm?.Translate_SwitchToRecord ?? "F2",
+        SnipMode.Screenshot => SnipKeys?.SwitchToRecord ?? "F2",
+        SnipMode.Translation => TranslateKeys?.SwitchToRecord ?? "F2",
         _ => string.Empty
     };
     public string SwitchToTranslateHotkey => CurrentMode switch
     {
         SnipMode.Translation => string.Empty, // Already in Translation mode
-        SnipMode.Screenshot => _mainVm?.Snip_SwitchToTranslate ?? "F3",
-        SnipMode.Recording => _mainVm?.Record_SwitchToTranslate ?? "F3",
+        SnipMode.Screenshot => SnipKeys?.SwitchToTranslate ?? "F3",
+        SnipMode.Recording => RecordKeys?.SwitchToTranslate ?? "F3",
         _ => string.Empty
     };
 
     // Translation mode specific hotkeys
-    public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "T";
-    public string TranslatePinHotkey => _mainVm?.Translate_Pin ?? "F6";
-    public string ScanAllHotkey => _mainVm?.Translate_ScanAll ?? "S";
-    public string ClearAllHotkey => _mainVm?.Translate_ClearAll ?? "Delete";
-    public string ToggleSelectHotkey => _mainVm?.Translate_ToggleSelect ?? "Tab";
-    public string AutoDetectHotkey => _mainVm?.Translate_AutoDetect ?? "D";
-    public string ModeCursorHotkey => _mainVm?.Translate_ModeCursor ?? "D1";
-    public string ModeSingleHotkey => _mainVm?.Translate_ModeSingle ?? "D2";
-    public string ModeMultiHotkey => _mainVm?.Translate_ModeMulti ?? "D3";
+    public string TranslateAllHotkey => TranslateKeys?.TranslateAll ?? "T";
+    public string TranslatePinHotkey => TranslateKeys?.Pin ?? "F6";
+    public string ScanAllHotkey => TranslateKeys?.ScanAll ?? "S";
+    public string ClearAllHotkey => TranslateKeys?.ClearAll ?? "Delete";
+    public string ToggleSelectHotkey => TranslateKeys?.ToggleSelect ?? "Tab";
+    public string AutoDetectHotkey => TranslateKeys?.AutoDetect ?? "D";
+    public string ModeCursorHotkey => TranslateKeys?.ModeCursor ?? "D1";
+    public string ModeSingleHotkey => TranslateKeys?.ModeSingle ?? "D2";
+    public string ModeMultiHotkey => TranslateKeys?.ModeMulti ?? "D3";
     /// <summary>Shift / Ctrl / Alt / None — matches settings.</summary>
-    public string TranslationSelectionHoldModifier => _mainVm?.Translate_SelectionHoldModifier ?? "Ctrl";
+    public string TranslationSelectionHoldModifier => TranslateKeys?.SelectionHoldModifier ?? "Ctrl";
 
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
     public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";

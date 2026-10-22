@@ -158,6 +158,38 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
+    public async Task OverlayHotkeys_AreTheOnesTheMainWindowsSettingsHold()
+    {
+        // The overlay reads its own hotkeys from the settings model that the main window's hotkey settings write,
+        // so a key changed there is the key an open overlay shows and answers to, in each mode.
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object,
+            mainVm: mainVm, host: mainVm, services: ServicesOf(mainVm));
+
+        mainVm.Snip_Copy = "Ctrl+Shift+C";
+        mainVm.Record_Copy = "Ctrl+Alt+C";
+        mainVm.Translate_Close = "Q";
+
+        Assert.Equal("Ctrl+Shift+C", vm.CopyHotkey);
+        vm.CurrentMode = SnipMode.Recording;
+        Assert.Equal("Ctrl+Alt+C", vm.CopyHotkey);
+        vm.CurrentMode = SnipMode.Translation;
+        Assert.Equal("Q", vm.CloseHotkey);
+    }
+
+    // The services the factory hands an overlay opened from this main window.
+    private static SnipWindowServices ServicesOf(MainWindowViewModel mainVm) => new(
+        mainVm.HotkeyService,
+        mainVm.HotkeyRouterService,
+        mainVm.AppSettingsService,
+        mainVm.CaptureHistory,
+        mainVm.AIResourceService,
+        mainVm.OcrRuntimeService,
+        () => mainVm.FfmpegDownloader);
+
+    [Fact]
     public void ResolveAutoActionMode_Normal_ReturnsNone()
     {
         // A plain screenshot has no auto-action (the old auto-pin-on-normal branch was removed when lock-selection

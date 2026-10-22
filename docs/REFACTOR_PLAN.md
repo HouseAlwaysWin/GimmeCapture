@@ -50,9 +50,10 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
 
 ### Next
 - The snip view model's `_mainVm` service locator (212 uses of 110 members). Done: its calls back into the main
-  window go through `ISnipWindowHost`, and its services come in as `SnipWindowServices`. Left: the ~95 settings it
-  reads (six of which it writes back) behind a live settings interface; the overlay view's own reach through
-  `MainVm`, for settings and to build pinned images; then dropping the `MainWindowViewModel` parameter
+  window go through `ISnipWindowHost` and its services come in as `SnipWindowServices` (#202), and it reads its own
+  59 hotkeys from the settings model. Left: 38 other settings in 90 uses (six of them written back) and the
+  main-window state it mirrors, behind a live settings interface; the overlay view's own reach through `MainVm`, for
+  settings and to build pinned images; then dropping the `MainWindowViewModel` parameter
 - `ILocalizationService` for the ~300 static `LocalizationService.Instance` uses
 
 ## Remaining `Application.Current` Usage
