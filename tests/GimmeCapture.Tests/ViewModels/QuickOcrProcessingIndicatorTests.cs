@@ -38,7 +38,6 @@ public sealed class QuickOcrProcessingIndicatorTests
             captureService: capture,
             detectionService: null,
             recService: null,
-            mainVm: mainVm,
             host: mainVm,
             settings: mainVm,
             translationSession: null,

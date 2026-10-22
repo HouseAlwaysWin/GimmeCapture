@@ -35,6 +35,8 @@ public interface ISnipOverlaySettings : INotifyPropertyChanged
     bool EnableHistory { get; }
     bool ShowSnipCursor { get; }
     bool HideSnipSelectionDecoration { get; }
+    bool HideSnipPinDecoration { get; }
+    bool HideSnipPinBorder { get; }
     bool DefaultHideSnipToolbar { get; }
     bool CaptureWithoutStealingFocus { get; }
     OcrTextLayout OcrTextLayout { get; }
