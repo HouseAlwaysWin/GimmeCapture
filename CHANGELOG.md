@@ -218,6 +218,10 @@
 - Workflows cancel superseded PR runs, time out instead of hanging for six hours, and ask only for the token
   permissions they use. The release job's one third-party action is pinned to a commit SHA, Dependabot keeps the
   workflow actions current, and CodeQL scans the C# code and the workflows.
+- Dependabot now proposes NuGet updates too, weekly and only for versions out for a week, each PR with its lock
+  files regenerated. Packages that must move together come in one PR: Avalonia, LLamaSharp, ONNX Runtime, Serilog
+  and the test tooling. New FFmpeg.AutoGen and SkiaSharp majors, and ONNX Runtime past its patch releases, are
+  left for planned upgrades.
 
 ---
 
