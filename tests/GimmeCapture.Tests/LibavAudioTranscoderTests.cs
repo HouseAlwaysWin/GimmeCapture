@@ -103,6 +103,22 @@ public sealed class LibavAudioTranscoderTests : IDisposable
     }
 
     [Fact]
+    public void EncodeWavToOpusOgg_HonorsQuality_HigherQualityIsLarger()
+    {
+        // Opus maps quality to its own bitrates (High 192 kbps, Low 64 kbps), not AAC's.
+        string wav = NewWav("opus_rate_src.wav", seconds: 2.0);
+        string hi = OutPath("opus_high.ogg");
+        string lo = OutPath("opus_low.ogg");
+
+        LibavOpusTranscoder.EncodeWavToOpusOgg(wav, hi, VideoQuality.High);
+        LibavOpusTranscoder.EncodeWavToOpusOgg(wav, lo, VideoQuality.Low);
+
+        long hiLen = new FileInfo(hi).Length;
+        long loLen = new FileInfo(lo).Length;
+        Assert.True(hiLen > loLen, $"High-quality Opus ({hiLen}) should exceed low-quality ({loLen})");
+    }
+
+    [Fact]
     public void RoundTrip_WavToAacToPcm_YieldsStereo16BitPcm()
     {
         string wav = NewWav("rt_src.wav", seconds: 1.0);
