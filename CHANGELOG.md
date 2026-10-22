@@ -187,6 +187,9 @@
   4.0, test SDK 18.11, coverlet 10.1 and Moq 4.21. ReactiveUI.Avalonia stays at 12.0.3, since every newer release
   also moves ReactiveUI to a new major. FFmpeg.AutoGen 9, SkiaSharp 4, NAudio 3, LLamaSharp 0.30 and ONNX Runtime
   wait for upgrades of their own.
+- The AAC, MP3 and Opus encoders share one encode routine instead of two copies, and every file they write is
+  what it was before, byte for byte (Ogg's random stream serial aside). A test now also pins Opus's own bitrates
+  for High and Low.
 - The two Linux workflows are one, in one job: it compiles both heads, then runs the Linux test suite. It runs on
   `main` too, so a `main` that no longer builds on Linux shows up at once. Its NuGet cache lives on `main` and
   branches reuse it; before, each branch saved its own 1.7 GB copy, twice. A `claude/**` branch with an open PR
