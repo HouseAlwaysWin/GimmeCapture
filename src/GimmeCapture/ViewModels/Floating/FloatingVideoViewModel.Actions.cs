@@ -608,7 +608,7 @@ public partial class FloatingVideoViewModel
                     if (bitmap != null)
                     {
                         using var stream = new System.IO.FileStream(targetPath, System.IO.FileMode.Create);
-                        bitmap.Save(stream);
+                        bitmap.Save(stream, PngBitmapEncoderOptions.Default);
                         FileLocationService.RevealInFileExplorer(targetPath);
                         return;
                     }

@@ -65,7 +65,7 @@ public class DrawingToolbarThemeProbeTests
 
         var rtb = new RenderTargetBitmap(new PixelSize(460, 90), new Vector(96, 96));
         rtb.Render(window);
-        rtb.Save(Path.Combine(OutDir, "drawingtoolbar_probe.png"));
+        rtb.Save(Path.Combine(OutDir, "drawingtoolbar_probe.png"), PngBitmapEncoderOptions.Default);
 
         File.WriteAllText(Path.Combine(OutDir, "drawingtoolbar_probe.txt"), sb.ToString());
     }
