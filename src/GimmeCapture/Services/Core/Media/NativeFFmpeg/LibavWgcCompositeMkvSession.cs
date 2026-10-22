@@ -175,17 +175,8 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
         CancellationToken ct,
         TaskCompletionSource<bool> firstFrameTcs)
     {
-        AVFormatContext* outputFmt = null;
-        AVCodecContext* encCtx = null;
         SwsContext* sws = null;
-        AVPacket* pkt = null;
-        AVFrame* encFrame = null;
-        AVDictionary* encOpts = null;
-
-        AVStream* outStream;
-        long frameCounter = 0;
-        long packetCounter = 0;
-        bool encFrameInitialized = false;
+        RecordingSegmentWriter? writer = null;
 
         var sources = new List<WgcWindowCaptureSource>();
         var buffers = new List<byte[]?>();
@@ -253,48 +244,17 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
             var (canvasW, canvasH) = CompositeGridLayout.CanvasSize(sizes);
             var cells = CompositeGridLayout.ComputeCells(sources.Count, canvasW, canvasH);
 
-            pkt = ffmpeg.av_packet_alloc();
-            encFrame = ffmpeg.av_frame_alloc();
+            writer = RecordingSegmentWriter.Open(
+                outputPath, codec, PreferHardwareEncoder, canvasW, canvasH, fps, VideoCrf, VideoBitrate);
+            AVCodecContext* encCtx = writer.Encoder;
 
-            encCtx = LibavRecordingEncoder.OpenRecordingEncoderContext(
-                codec, PreferHardwareEncoder, canvasW, canvasH, fps, VideoCrf, VideoBitrate, &encOpts,
-                out string encName, out string? warningMessage);
-            if (encCtx == null)
-            {
-                throw new InvalidOperationException("No compatible video encoder available for recording.");
-            }
-
-            SelectedEncoderName = encName;
+            SelectedEncoderName = writer.EncoderName;
+            string? warningMessage = writer.EncoderWarning;
             if (!string.IsNullOrWhiteSpace(warningMessage))
             {
                 LastWarningMessage = string.IsNullOrEmpty(LastWarningMessage) ? warningMessage : $"{LastWarningMessage} {warningMessage}";
             }
-            LogNative($"Composite encoder: {encName} ({canvasW}x{canvasH}@{fps}, {sources.Count} windows)");
-
-            ThrowIfErr(
-                ffmpeg.avformat_alloc_output_context2(&outputFmt, null, "matroska", outputPath),
-                "avformat_alloc_output_context2");
-
-            outStream = ffmpeg.avformat_new_stream(outputFmt, null);
-            if (outStream == null)
-            {
-                throw new OutOfMemoryException("new_stream");
-            }
-
-            ThrowIfErr(ffmpeg.avcodec_parameters_from_context(outStream->codecpar, encCtx), "codec_parameters_from_context");
-            outStream->codecpar->codec_type = AVMediaType.AVMEDIA_TYPE_VIDEO;
-            outStream->codecpar->codec_id = encCtx->codec_id;
-            outStream->time_base = encCtx->time_base;
-            outStream->avg_frame_rate = encCtx->framerate;
-            outStream->r_frame_rate = encCtx->framerate;
-            outStream->codecpar->codec_tag = 0;
-
-            if ((outputFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
-            {
-                ThrowIfErr(ffmpeg.avio_open(&outputFmt->pb, outputPath, ffmpeg.AVIO_FLAG_WRITE), "avio_open");
-            }
-
-            ThrowIfErr(ffmpeg.avformat_write_header(outputFmt, null), "write_header");
+            LogNative($"Composite encoder: {writer.EncoderName} ({canvasW}x{canvasH}@{fps}, {sources.Count} windows)");
 
             // Persistent composite canvas (BGRA) reused every frame — no per-frame Skia allocation.
             using var canvas = new SKBitmap(new SKImageInfo(canvasW, canvasH, SKColorType.Bgra8888, SKAlphaType.Premul));
@@ -346,12 +306,8 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
             var clock = Stopwatch.StartNew();
             while (!ct.IsCancellationRequested)
             {
-                long target = (long)(clock.Elapsed.TotalSeconds * fps);
-                if (frameCounter > target)
+                if (!RecordingFramePacer.IsFrameDue(clock, writer.FrameCount, fps))
                 {
-                    double nextDueMs = frameCounter * 1000.0 / fps;
-                    double sleepMs = nextDueMs - clock.Elapsed.TotalMilliseconds;
-                    Thread.Sleep(sleepMs > 1 ? (int)Math.Min(sleepMs, 16) : 1);
                     continue;
                 }
 
@@ -369,45 +325,31 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
                 }
                 skCanvas.Flush();
 
-                if (!encFrameInitialized)
-                {
-                    encFrame->format = (int)encCtx->pix_fmt;
-                    encFrame->width = encCtx->width;
-                    encFrame->height = encCtx->height;
-                    ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "frame_get_buffer(enc)");
-                    encFrameInitialized = true;
-                }
-
-                ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "frame_make_writable(enc)");
-
+                AVFrame* encFrame = writer.FrameToFill();
                 var srcData = new byte_ptrArray4();
                 srcData[0] = (byte*)canvasPixels;
                 var srcStride = new int_array4();
                 srcStride[0] = canvasStride;
                 ffmpeg.sws_scale(sws, srcData, srcStride, 0, canvasH, encFrame->data, encFrame->linesize);
 
-                encFrame->pts = frameCounter;
-                if (frameCounter == 0)
+                if (writer.FrameCount == 0)
                 {
                     firstFrameTcs.TrySetResult(true);
                 }
-                frameCounter++;
 
-                ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "send_frame(enc)");
-                LibavRecordingEncoder.WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
+                writer.EncodeFrame(pts: writer.FrameCount);
             }
 
-            ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "flush_encoder");
-            LibavRecordingEncoder.WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
-            ffmpeg.av_write_trailer(outputFmt);
+            writer.Flush();
+            writer.WriteTrailer();
 
-            if (frameCounter == 0)
+            if (writer.FrameCount == 0)
             {
                 throw new InvalidOperationException("Composite WGC pipeline produced zero frames.");
             }
 
-            AppLog.Information($"Wgc.Composite.Stop windows={sources.Count} frames={frameCounter} packets={packetCounter}");
-            AppLog.Debug("LibavWgcCompositeMkvSession", $"[LibavWgcComposite] segment done: frames={frameCounter}, packets={packetCounter}, output='{outputPath}'");
+            AppLog.Information($"Wgc.Composite.Stop windows={sources.Count} frames={writer.FrameCount} packets={writer.PacketCount}");
+            AppLog.Debug("LibavWgcCompositeMkvSession", $"[LibavWgcComposite] segment done: frames={writer.FrameCount}, packets={writer.PacketCount}, output='{outputPath}'");
         }
         finally
         {
@@ -418,32 +360,11 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
                 WgcWindowCaptureSource.DisposeDetached(sources[i], $"composite#{i}");
             }
 
-            SafeFreePkt(&pkt);
-            SafeFreeFrame(&encFrame);
+            writer?.Dispose();
 
             if (sws != null)
             {
                 ffmpeg.sws_freeContext(sws);
-            }
-
-            if (encCtx != null)
-            {
-                ffmpeg.avcodec_free_context(&encCtx);
-            }
-
-            if (outputFmt != null)
-            {
-                if ((outputFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0 && outputFmt->pb != null)
-                {
-                    ffmpeg.avio_closep(&outputFmt->pb);
-                }
-
-                ffmpeg.avformat_free_context(outputFmt);
-            }
-
-            if (encOpts != null)
-            {
-                ffmpeg.av_dict_free(&encOpts);
             }
         }
     }
@@ -465,30 +386,6 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
         finally
         {
             handle.Free();
-        }
-    }
-
-    private static unsafe void SafeFreePkt(AVPacket** pkt)
-    {
-        if (pkt != null && *pkt != null)
-        {
-            ffmpeg.av_packet_free(pkt);
-        }
-    }
-
-    private static unsafe void SafeFreeFrame(AVFrame** frame)
-    {
-        if (frame != null && *frame != null)
-        {
-            ffmpeg.av_frame_free(frame);
-        }
-    }
-
-    private static void ThrowIfErr(int err, string ctx)
-    {
-        if (err < 0)
-        {
-            throw FFmpegErrors.ToException(err, ctx);
         }
     }
 

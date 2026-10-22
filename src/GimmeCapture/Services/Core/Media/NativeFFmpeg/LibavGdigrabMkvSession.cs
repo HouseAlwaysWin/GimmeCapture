@@ -188,23 +188,17 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         TaskCompletionSource<bool> firstFrameTcs)
     {
         AVFormatContext* inputFmt = null;
-        AVFormatContext* outputFmt = null;
         AVCodecContext* decCtx = null;
-        AVCodecContext* encCtx = null;
         SwsContext* sws = null;
         SwsContext* swsToBgra = null;
         AVPacket* pkt = null;
         AVFrame* decFrame = null;
-        AVFrame* encFrame = null;
         AVFrame* bgraFrame = null;
         AVDictionary* demuxOpts = null;
-        AVDictionary* encOpts = null;
+        RecordingSegmentWriter? writer = null;
 
         int videoIn = -1;
-        AVStream* outStream = null;
-        long frameCounter = 0;
-        long packetCounter = 0;
-        bool encFrameInitialized = false;
+        long producedFrames = 0; // the pipelined path's capture side; the writer counts what it encodes
 
         // Optional webcam picture-in-picture, composited per frame via a BGRA round-trip in the encode loop.
         WebcamPipCompositor? webcam = null;
@@ -237,7 +231,6 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
         pkt = ffmpeg.av_packet_alloc();
         decFrame = ffmpeg.av_frame_alloc();
-        encFrame = ffmpeg.av_frame_alloc();
 
         try
         {
@@ -295,58 +288,20 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, inPar), "parameters_to_context(dec)");
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "avcodec_open2(dec)");
 
-            encCtx = LibavRecordingEncoder.OpenRecordingEncoderContext(
-                codec,
-                PreferHardwareEncoder,
-                width,
-                height,
-                fps,
-                VideoCrf,
-                VideoBitrate,
-                &encOpts,
-                out string encName,
-                out string? warningMessage);
-            if (encCtx == null)
+            writer = RecordingSegmentWriter.Open(
+                outputPath, codec, PreferHardwareEncoder, width, height, fps, VideoCrf, VideoBitrate);
+
+            SelectedEncoderName = writer.EncoderName;
+            LastWarningMessage = writer.EncoderWarning;
+            if (!string.IsNullOrWhiteSpace(writer.EncoderWarning))
             {
-                throw new InvalidOperationException("No compatible video encoder available for recording.");
+                LogNative(writer.EncoderWarning);
             }
-
-            SelectedEncoderName = encName;
-            LastWarningMessage = warningMessage;
-            if (!string.IsNullOrWhiteSpace(warningMessage))
-            {
-                LogNative(warningMessage);
-            }
-            LogNative($"Selected encoder: {encName}");
-
-            ThrowIfErr(
-                ffmpeg.avformat_alloc_output_context2(&outputFmt, null, "matroska", outputPath),
-                "avformat_alloc_output_context2");
-
-            outStream = ffmpeg.avformat_new_stream(outputFmt, null);
-            if (outStream == null)
-            {
-                throw new OutOfMemoryException("new_stream");
-            }
-
-            ThrowIfErr(ffmpeg.avcodec_parameters_from_context(outStream->codecpar, encCtx), "codec_parameters_from_context");
-            outStream->codecpar->codec_type = AVMediaType.AVMEDIA_TYPE_VIDEO;
-            outStream->codecpar->codec_id = encCtx->codec_id;
-            outStream->time_base = encCtx->time_base;
-            outStream->avg_frame_rate = encCtx->framerate;
-            outStream->r_frame_rate = encCtx->framerate;
-            outStream->codecpar->codec_tag = 0;
-
-            if ((outputFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
-            {
-                ThrowIfErr(ffmpeg.avio_open(&outputFmt->pb, outputPath, ffmpeg.AVIO_FLAG_WRITE), "avio_open");
-            }
-
-            ThrowIfErr(ffmpeg.avformat_write_header(outputFmt, null), "write_header");
+            LogNative($"Selected encoder: {writer.EncoderName}");
 
             if (PipelinedEncoding)
             {
-                RunPipelinedEncode(inputFmt, videoIn, pkt, decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, outputFmt, outStream, ref frameCounter, ref packetCounter, firstFrameTcs, ct);
+                RunPipelinedEncode(inputFmt, videoIn, pkt, decCtx, writer, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, ref producedFrames, firstFrameTcs, ct);
             }
             else
             {
@@ -380,19 +335,18 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                     ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet(dec)");
                     ffmpeg.av_packet_unref(pkt);
 
-                    DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
+                    DecodeEncodeLoop(decCtx, writer, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
                 }
 
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "flush_decoder");
-                DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
+                DecodeEncodeLoop(decCtx, writer, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
 
-                ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "flush_encoder");
-                LibavRecordingEncoder.WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
+                writer.Flush();
             }
 
-            ffmpeg.av_write_trailer(outputFmt);
+            writer.WriteTrailer();
 
-            if (frameCounter == 0)
+            if (writer.FrameCount == 0)
             {
                 throw new InvalidOperationException("Recording pipeline produced zero frames.");
             }
@@ -410,7 +364,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 // ignore telemetry failure
             }
 
-            AppLog.Debug("LibavGdigrabMkvSession", $"[LibavGdigrab] segment done: frames={frameCounter}, packets={packetCounter}, output='{outputPath}', bytes={outputBytes}");
+            AppLog.Debug("LibavGdigrabMkvSession", $"[LibavGdigrab] segment done: frames={writer.FrameCount}, packets={writer.PacketCount}, output='{outputPath}', bytes={outputBytes}");
         }
         finally
         {
@@ -418,9 +372,9 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             overlay?.Dispose();
             keystrokes?.Dispose();
 
+            writer?.Dispose();
             SafeFreePkt(&pkt);
             SafeFreeFrame(&decFrame);
-            SafeFreeFrame(&encFrame);
             SafeFreeFrame(&bgraFrame);
 
             if (sws != null)
@@ -438,58 +392,32 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 ffmpeg.avcodec_free_context(&decCtx);
             }
 
-            if (encCtx != null)
-            {
-                ffmpeg.avcodec_free_context(&encCtx);
-            }
-
             if (inputFmt != null)
             {
                 ffmpeg.avformat_close_input(&inputFmt);
-            }
-
-            if (outputFmt != null)
-            {
-                if ((outputFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0 && outputFmt->pb != null)
-                {
-                    ffmpeg.avio_closep(&outputFmt->pb);
-                }
-
-                ffmpeg.avformat_free_context(outputFmt);
             }
 
             if (demuxOpts != null)
             {
                 ffmpeg.av_dict_free(&demuxOpts);
             }
-
-            if (encOpts != null)
-            {
-                ffmpeg.av_dict_free(&encOpts);
-            }
         }
     }
 
     private static unsafe void DecodeEncodeLoop(
         AVCodecContext* decCtx,
-        AVCodecContext* encCtx,
+        RecordingSegmentWriter writer,
         ref SwsContext* sws,
         ref SwsContext* swsToBgra,
         AVFrame* decFrame,
-        AVFrame* encFrame,
         ref AVFrame* bgraFrame,
-        ref bool encFrameInitialized,
         Action<SKBitmap>? composite,
-        AVFormatContext* outputFmt,
-        AVStream* outStream,
-        AVPacket* pkt,
-        ref long frameCounter,
-        ref long packetCounter,
         TaskCompletionSource<bool> firstFrameTcs,
         bool useWallClockPts,
         System.Diagnostics.Stopwatch encodeClock,
         ref long lastEncPts)
     {
+        AVCodecContext* encCtx = writer.Encoder;
         while (true)
         {
             ffmpeg.av_frame_unref(decFrame);
@@ -541,16 +469,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 }
             }
 
-            if (!encFrameInitialized)
-            {
-                encFrame->format = (int)encCtx->pix_fmt;
-                encFrame->width = encCtx->width;
-                encFrame->height = encCtx->height;
-                ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "frame_get_buffer(enc)");
-                encFrameInitialized = true;
-            }
-
-            ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "frame_make_writable(enc)");
+            AVFrame* encFrame = writer.FrameToFill();
 
             if (composite != null && bgraFrame != null && swsToBgra != null)
             {
@@ -575,6 +494,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height, encFrame->data, encFrame->linesize);
             }
 
+            long framePts;
             if (useWallClockPts)
             {
                 // Pace output PTS by real elapsed time so a slow/behind gdigrab capture stays the correct speed.
@@ -595,90 +515,67 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 }
 
                 lastEncPts = pts;
-                encFrame->pts = pts;
+                framePts = pts;
             }
             else
             {
-                encFrame->pts = frameCounter;
+                framePts = writer.FrameCount;
             }
 
-            frameCounter++;
-            if (frameCounter == 1)
+            if (writer.FrameCount == 0)
             {
                 firstFrameTcs.TrySetResult(true);
             }
 
-            ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "send_frame(enc)");
-            LibavRecordingEncoder.WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
+            writer.EncodeFrame(framePts);
         }
     }
 
     // Producer/consumer variant of the encode loop. This (the worker) thread reads + decodes + composites
     // each frame into a fresh encoder-format frame and hands it to a bounded queue; a dedicated encoder
     // thread drains the queue and muxes. Capture/composite and the (CPU-heavy) software encode overlap.
-    // The encoder + muxer are touched only by the consumer thread; under sustained back-pressure full-queue
-    // frames are dropped rather than stalling capture. Each queued frame is owned by exactly one side
-    // (consumer after encode, producer on drop), so there is no double-free.
+    // The writer (encoder + muxer) is used only by the consumer thread, until the producer writes the trailer after
+    // joining it; the producer only reads the encoder's frame size, format and time base, fixed once it is open.
+    // Under sustained back-pressure full-queue frames are dropped rather than stalling capture. Each queued frame is
+    // owned by exactly one side (consumer after encode, producer on drop), so there is no double-free.
     private unsafe void RunPipelinedEncode(
         AVFormatContext* inputFmt,
         int videoIn,
         AVPacket* readPkt,
         AVCodecContext* decCtx,
-        AVCodecContext* encCtx,
+        RecordingSegmentWriter writer,
         ref SwsContext* sws,
         ref SwsContext* swsToBgra,
         AVFrame* decFrame,
         ref AVFrame* bgraFrame,
         Action<SKBitmap>? composite,
-        AVFormatContext* outputFmt,
-        AVStream* outStream,
         ref long frameCounter,
-        ref long packetCounter,
         TaskCompletionSource<bool> firstFrameTcs,
         CancellationToken ct)
     {
         using var queue = new BlockingCollection<IntPtr>(boundedCapacity: 8);
         Exception? consumerEx = null;
-        long localPacketCounter = 0;
+        AVCodecContext* encCtx = writer.Encoder;
 
         // Only the producer stamps PTS, so this clock/last-pts pair needs no synchronization.
         var encodeClock = new System.Diagnostics.Stopwatch();
         long lastEncPts = -1;
 
-        // Pointers can't be captured by a lambda — pass them through as IntPtr and cast back inside.
-        IntPtr encCtxPtr = (IntPtr)encCtx;
-        IntPtr outFmtPtr = (IntPtr)outputFmt;
-        IntPtr outStreamPtr = (IntPtr)outStream;
-
         var consumer = new Thread(() =>
         {
-            AVCodecContext* enc = (AVCodecContext*)encCtxPtr;
-            AVFormatContext* ofmt = (AVFormatContext*)outFmtPtr;
-            AVStream* ost = (AVStream*)outStreamPtr;
-            AVPacket* outPkt = ffmpeg.av_packet_alloc();
             try
             {
                 foreach (IntPtr p in queue.GetConsumingEnumerable())
                 {
-                    AVFrame* f = (AVFrame*)p;
-                    int sr = ffmpeg.avcodec_send_frame(enc, f);
-                    var ff = f;
-                    ffmpeg.av_frame_free(&ff);
-                    ThrowIfErr(sr, "send_frame(enc,pipe)");
-                    LibavRecordingEncoder.WriteEncodedPackets(enc, ofmt, ost, outPkt, ref localPacketCounter);
+                    writer.EncodeAndFree((AVFrame*)p, "send_frame(enc,pipe)");
                 }
 
                 // Flush the encoder on the thread that owns it.
-                ThrowIfErr(ffmpeg.avcodec_send_frame(enc, null), "flush_encoder(pipe)");
-                LibavRecordingEncoder.WriteEncodedPackets(enc, ofmt, ost, outPkt, ref localPacketCounter);
+                writer.Flush("flush_encoder(pipe)");
             }
             catch (Exception ex)
             {
                 consumerEx = ex;
-            }
-            finally
-            {
-                if (outPkt != null) { var pp = outPkt; ffmpeg.av_packet_free(&pp); }
             }
         })
         { IsBackground = true, Name = "RecordEncode" };
@@ -727,7 +624,6 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             }
         }
 
-        packetCounter += localPacketCounter;
         if (consumerEx != null)
         {
             throw consumerEx;

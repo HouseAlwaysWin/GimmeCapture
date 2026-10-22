@@ -38,14 +38,15 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
 3. ✅ Cleanup: dead code (#179), one confirmation dialog and progress bar (#181), failures and traces reaching the
    log (#182, #183), repository hygiene (#184), unused locale keys failing the build (#185), the overlay's 713-line
    `OnDataContextChanged` split into seven wiring methods (#186), one encode core (`LibavAudioEncoder`) behind the
-   AAC, MP3 and Opus transcoders
+   AAC, MP3 and Opus transcoders (#195), one encoder-and-file writer (`RecordingSegmentWriter`) behind the gdigrab,
+   WGC and WGC-composite recording sessions, under tests that record with each (#197)
 4. ✅ CI and tests: one Linux workflow (#187), Linux and Windows release builds side by side (#188), release and
    hung-test guards (#189), coverage without `.axaml` at a 30% gate and the audio and Linux tests in CI (#190), NuGet
    updates by hand after Dependabot proved unable to handle the multi-target projects (#191, #193, #194)
 
 ### Next
-- One shared core for the three recording sessions' `RunTranscode`s (gdigrab, WGC, WGC composite; 277-294 lines
-  each), once a recording test covers them: nothing exercises them today
+- The recording sessions' shared shell: starting and stopping the worker and the startup gate, about 100 lines in
+  each of the three. Also gdigrab's single-threaded and pipelined decode paths, about 70 lines alike
 - The snip view model's `_mainVm` service locator → injected settings snapshot, state interfaces and services;
   `ILocalizationService` for the ~300 static `LocalizationService.Instance` uses; one home for P/Invoke structs
 
