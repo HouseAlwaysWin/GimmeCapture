@@ -69,7 +69,7 @@ public class VolumeFlyoutRenderTests
 
         var rtb = new RenderTargetBitmap(new PixelSize(w, h), new Vector(96, 96));
         rtb.Render(window);
-        rtb.Save(Path.Combine(OutDir, pngName));
+        rtb.Save(Path.Combine(OutDir, pngName), PngBitmapEncoderOptions.Default);
         double accentWin = AccentCentreX(rtb, w, h);
         window.Close();
         Dispatcher.UIThread.RunJobs();
@@ -140,7 +140,7 @@ public class VolumeFlyoutRenderTests
             int ch = Math.Max(1, (int)Math.Ceiling(child.Bounds.Height));
             var rtb = new RenderTargetBitmap(new PixelSize(cw, ch), new Vector(96, 96));
             rtb.Render(child); // render in place (it's already parented to the open popup host)
-            rtb.Save(Path.Combine(OutDir, "vol_actual_control.png"));
+            rtb.Save(Path.Combine(OutDir, "vol_actual_control.png"), PngBitmapEncoderOptions.Default);
             double accent = AccentCentreX(rtb, cw, ch);
             double offset = accent - cw / 2.0;
             sb.AppendLine($"ACTUAL control: accentCentre={accent:0.0}  imageWidth={cw}  imageCentre={cw / 2.0:0.0}  offset={offset:+0.0;-0.0}");

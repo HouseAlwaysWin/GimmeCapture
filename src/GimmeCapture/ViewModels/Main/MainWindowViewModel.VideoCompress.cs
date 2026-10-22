@@ -920,7 +920,7 @@ public partial class MainWindowViewModel
         try
         {
             using var ms = new System.IO.MemoryStream();
-            src.Save(ms);
+            src.Save(ms, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
             ms.Position = 0;
             return new Avalonia.Media.Imaging.Bitmap(ms);
         }

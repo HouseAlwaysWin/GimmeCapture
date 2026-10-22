@@ -182,6 +182,11 @@
 
 ### 🧹 Maintenance
 
+- Avalonia 12.1.4, up from 12.0.4, brings its fixes for the tray icon, focus left on removed controls, popup
+  placement and font fallback. Serilog moves to 4.4 and ZLinq to 1.5.6, and the test tooling to the xunit runner
+  4.0, test SDK 18.11, coverlet 10.1 and Moq 4.21. ReactiveUI.Avalonia stays at 12.0.3, since every newer release
+  also moves ReactiveUI to a new major. FFmpeg.AutoGen 9, SkiaSharp 4, NAudio 3, LLamaSharp 0.30 and ONNX Runtime
+  wait for upgrades of their own.
 - The two Linux workflows are one, in one job: it compiles both heads, then runs the Linux test suite. It runs on
   `main` too, so a `main` that no longer builds on Linux shows up at once. Its NuGet cache lives on `main` and
   branches reuse it; before, each branch saved its own 1.7 GB copy, twice. A `claude/**` branch with an open PR
