@@ -761,7 +761,7 @@ public partial class SnipWindowViewModel
         _isLocalProcessing = true;
         ShowProcessingOverlay = true;
         IsIndeterminate = true;
-        ProcessingText = LocalizationService.Instance["FinalizingRecording"] ?? "Finalizing...";
+        ProcessingText = Localization["FinalizingRecording"] ?? "Finalizing...";
         try
         {
             _recordTimer?.Stop();

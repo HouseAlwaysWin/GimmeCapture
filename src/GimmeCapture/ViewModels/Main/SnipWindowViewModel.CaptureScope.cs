@@ -83,7 +83,7 @@ public partial class SnipWindowViewModel
                 }
 
                 string name = string.Format(
-                    LocalizationService.Instance["CaptureScopeMonitor"] ?? "Monitor {0}", i + 1);
+                    Localization["CaptureScopeMonitor"] ?? "Monitor {0}", i + 1);
                 CaptureTargets.Add(new CaptureTargetItem(name, new Rect(s.X, s.Y, s.W, s.H), isMonitor: true));
             }
         }

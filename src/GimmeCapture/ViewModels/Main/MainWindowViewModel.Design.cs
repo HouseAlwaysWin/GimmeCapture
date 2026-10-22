@@ -10,7 +10,7 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class MainWindowViewModel
 {
-    private static MainWindowViewModelDependencies CreateDesignDependencies()
+    internal static MainWindowViewModelDependencies CreateDesignDependencies()
     {
         var baseDataDirectory = Path.Combine(
             Path.GetTempPath(),

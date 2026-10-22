@@ -736,13 +736,13 @@ public partial class SnipWindowViewModel
         try
         {
             if (CurrentState == SnipState.Detecting)
-                ProcessingText = LocalizationService.Instance["StatusAIScanning"] ?? "AI Scanning...";
+                ProcessingText = Localization["StatusAIScanning"] ?? "AI Scanning...";
 
             var progress = new Progress<AIScanStage>(_ =>
             {
                 if (CurrentState == SnipState.Detecting)
                 {
-                    ProcessingText = LocalizationService.Instance["StatusAIScanning"] ?? "AI Scanning...";
+                    ProcessingText = Localization["StatusAIScanning"] ?? "AI Scanning...";
                 }
             });
 

@@ -102,7 +102,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
     {
         _currentStatusKey = key;
         _currentStatusOcrLanguage = null;
-        StatusText = LocalizationService.Instance[key];
+        StatusText = Localization[key];
         MaybeShowToast(key, StatusText);
     }
 
@@ -119,18 +119,18 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
         MaybeShowToast(key, StatusText);
     }
 
-    private static string ComposeStatusText(string key, OCRLanguage? detectedLanguage)
+    private string ComposeStatusText(string key, OCRLanguage? detectedLanguage)
     {
-        string text = LocalizationService.Instance[key];
+        string text = Localization[key];
         if (detectedLanguage is not { } language)
         {
             return text;
         }
 
-        string languageName = LocalizationService.Instance[$"OCRLang{language}"];
+        string languageName = Localization[$"OCRLang{language}"];
         return text + string.Format(
             CultureInfo.CurrentCulture,
-            LocalizationService.Instance["QuickOcrDetectedLanguage"],
+            Localization["QuickOcrDetectedLanguage"],
             languageName);
     }
 
@@ -175,7 +175,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
         string key = copied ? "StatusCopied" : "StatusCopyFailed";
         _currentStatusKey = key;
         _currentStatusOcrLanguage = null;
-        StatusText = LocalizationService.Instance[key];
+        StatusText = Localization[key];
 
         if (copied && preview != null && ShowPreviewToastAction != null)
         {
@@ -190,7 +190,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
     /// <summary>Shows a transient toast for a localization key without changing the persistent status text.</summary>
     public void ShowToast(string localizationKey)
     {
-        var message = LocalizationService.Instance[localizationKey];
+        var message = Localization[localizationKey];
         if (!string.IsNullOrWhiteSpace(message))
         {
             ShowToastAction?.Invoke(message, ClassifyToastSeverity(localizationKey));
@@ -343,6 +343,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
     }
 
     public MainWindowViewModel(MainWindowViewModelDependencies dependencies)
+        : base(dependencies?.Localization)
     {
         ArgumentNullException.ThrowIfNull(dependencies);
         TranslationMemoryDiagnostics.Log("app-startup");
@@ -387,7 +388,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
             _settingsService,
             ResourceQueue);
 
-        LocalizationService.Instance
+        Localization
             .WhenAnyValue(x => x.CurrentLanguage)
             .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ =>
@@ -453,7 +454,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
         {
             if (PickFolderAction != null)
             {
-                var path = await PickFolderAction(LocalizationService.Instance["PickAIResourcesFolderTitle"]);
+                var path = await PickFolderAction(Localization["PickAIResourcesFolderTitle"]);
                 if (!string.IsNullOrEmpty(path))
                 {
                     AIResourcesDirectory = path;
@@ -648,7 +649,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
             {
                 if (isUpdateDownloading)
                 {
-                    ProcessingText = string.Format(LocalizationService.Instance["UpdateDownloading"], (int)avgProgress);
+                    ProcessingText = string.Format(Localization["UpdateDownloading"], (int)avgProgress);
                 }
                 else
                 {
@@ -658,7 +659,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
             }
             else
             {
-                var prefix = LocalizationService.Instance["ComponentDownloadingProgress"].Replace("...", "").Trim();
+                var prefix = Localization["ComponentDownloadingProgress"].Replace("...", "").Trim();
                 ProcessingText = $"{prefix} ({activeCount})... {(int)avgProgress}%";
             }
 

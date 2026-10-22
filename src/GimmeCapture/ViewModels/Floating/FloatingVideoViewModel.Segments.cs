@@ -37,7 +37,7 @@ public partial class FloatingVideoViewModel
     /// <summary>Raised after the strip blocks are rebuilt so the view can recompute proportional layout.</summary>
     public event Action? SegmentLayoutChanged;
 
-    public string TimelineHint => LocalizationService.Instance["TimelineHint"]
+    public string TimelineHint => Localization["TimelineHint"]
         ?? "Drag = scrub · Split · tap a piece to keep/drop";
 
     // The kept pieces = the output. Filtering happens here so the pure compiler stays Kept-agnostic.
@@ -59,10 +59,10 @@ public partial class FloatingVideoViewModel
     // Cached audio-stream presence (probed once); the compiler's audio chain needs to know.
     private bool? _sourceHasAudio;
 
-    public string TimelineTooltip => LocalizationService.Instance["TipTimeline"] ?? "Timeline (cut)";
-    public string SplitTooltip => LocalizationService.Instance["TipSplitSegment"] ?? "Split at playhead";
-    public string MergeSegmentTooltip => LocalizationService.Instance["TipMergeSegment"] ?? "Merge at playhead (undo split)";
-    public string PieceSpeedTooltip => LocalizationService.Instance["TipPieceSpeed"] ?? "Cycle speed of the piece at the playhead";
+    public string TimelineTooltip => Localization["TipTimeline"] ?? "Timeline (cut)";
+    public string SplitTooltip => Localization["TipSplitSegment"] ?? "Split at playhead";
+    public string MergeSegmentTooltip => Localization["TipMergeSegment"] ?? "Merge at playhead (undo split)";
+    public string PieceSpeedTooltip => Localization["TipPieceSpeed"] ?? "Cycle speed of the piece at the playhead";
 
     public ReactiveCommand<Unit, Unit> ToggleTimelineCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> SplitSegmentCommand { get; private set; } = null!;

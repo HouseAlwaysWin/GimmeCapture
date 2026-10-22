@@ -45,13 +45,15 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
    one place (`User32`, `Kernel32`, `Gdi32`, `LibX11`) with one click-through subclass for the overlay and pins
    (`Win32HitTestPassThrough`, #201), and the snip overlay's `_mainVm` service locator (212 uses of 110 members)
    replaced by `ISnipWindowHost`, `SnipWindowServices` and `ISnipOverlaySettings`, with its own hotkeys read from the
-   settings model (#202, #203, #204 and the last slice, which dropped the `MainWindowViewModel` parameter)
+   settings model (#202, #203, #204, #205), and view models reading their strings through
+   `ViewModelBase.Localization` (`ILocalizationService`) instead of the static instance
 4. ✅ CI and tests: one Linux workflow (#187), Linux and Windows release builds side by side (#188), release and
    hung-test guards (#189), coverage without `.axaml` at a 30% gate and the audio and Linux tests in CI (#190), NuGet
    updates by hand after Dependabot proved unable to handle the multi-target projects (#191, #193, #194)
 
 ### Next
-- `ILocalizationService` for the ~300 static `LocalizationService.Instance` uses
+- Library upgrades held back for PRs of their own: ReactiveUI 26 (with ReactiveUI.Avalonia), NAudio 3,
+  LLamaSharp 0.30, ONNX Runtime past the DirectML 1.24 line, FFmpeg 9 (FFmpeg.AutoGen 9 and a new mirrored build)
 
 ## Remaining `Application.Current` Usage
 In sanctioned locations (platform impls / composition root / view code-behind):

@@ -485,7 +485,7 @@ public partial class MainWindowViewModel
 
         _selectedQuickProfile = CompressQuickProfiles[0]; // seed to Custom via the field (no auto-apply)
 
-        CompressStatusText = LocalizationService.Instance["CompressStatusReady"];
+        CompressStatusText = Localization["CompressStatusReady"];
 
         var notBusy = this.WhenAnyValue(x => x.IsBusy, busy => !busy);
 
@@ -524,7 +524,7 @@ public partial class MainWindowViewModel
         InitBatchPresetChoices();
 
         // EstimatedText is a cached localized string; re-localize the labels when the language changes.
-        LocalizationService.Instance.WhenAnyValue(x => x.CurrentLanguage)
+        Localization.WhenAnyValue(x => x.CurrentLanguage)
             .Skip(1)
             .Subscribe(_ => RecomputeQueueEstimates());
 
@@ -636,7 +636,7 @@ public partial class MainWindowViewModel
         CompressPresets.Add(preset);
         CompressPresetService.Save(CompressPresets);
         SelectedSavedPreset = preset;
-        ShowToastAction?.Invoke(LocalizationService.Instance["CompressPresetSaved"], ToastSeverity.Success);
+        ShowToastAction?.Invoke(Localization["CompressPresetSaved"], ToastSeverity.Success);
     }
 
     private void LoadCompressPreset()
@@ -760,7 +760,7 @@ public partial class MainWindowViewModel
             return string.Empty; // not probed yet (or unreadable)
         }
 
-        string prefix = LocalizationService.Instance["CompressEstimateLabel"];
+        string prefix = Localization["CompressEstimateLabel"];
         CompressSettingsSnapshot s = BuildSettingsSnapshot(item); // per-item bundle, or the live settings
 
         // GIF/WebM aren't bitrate/CRF-modelled by the bpp estimator (palette / VP9), so don't show a misleading
@@ -768,7 +768,7 @@ public partial class MainWindowViewModel
         string fmt = EffectiveFormatFor(item);
         if (fmt.Equals("GIF", StringComparison.OrdinalIgnoreCase) || fmt.Equals("WebM", StringComparison.OrdinalIgnoreCase))
         {
-            return $"{prefix}: {LocalizationService.Instance["CompressEstimateVaries"]}";
+            return $"{prefix}: {Localization["CompressEstimateVaries"]}";
         }
 
         // Audio-only: size ≈ audio bitrate × duration (WAV = raw PCM at 48 kHz stereo s16). Whole-file
@@ -778,7 +778,7 @@ public partial class MainWindowViewModel
             double durationSec = item.ProbedDuration;
             if (durationSec <= 0)
             {
-                return $"{prefix}: {LocalizationService.Instance["CompressEstimateVaries"]}";
+                return $"{prefix}: {Localization["CompressEstimateVaries"]}";
             }
 
             long bytes = fmt.Equals("WAV", StringComparison.OrdinalIgnoreCase)
@@ -827,7 +827,7 @@ public partial class MainWindowViewModel
 
     // Toast shown when the user pauses a non-CRF file: only CRF mode can resume mid-encode after a restart.
     private void ShowPauseNoResumeWarning() =>
-        ShowToastAction?.Invoke(LocalizationService.Instance["CompressPauseNoResume"], ToastSeverity.Info);
+        ShowToastAction?.Invoke(Localization["CompressPauseNoResume"], ToastSeverity.Info);
 
     // Builds a CompareViewModel for the given file with the current encode settings, anchored at the editor's
     // playhead and using the editor's live rotation. Returns null if there is no item. The editor hosts the

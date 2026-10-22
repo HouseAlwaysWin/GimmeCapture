@@ -250,49 +250,49 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     /// <summary>Shift / Ctrl / Alt / None — matches settings.</summary>
     public string TranslationSelectionHoldModifier => TranslateKeys?.SelectionHoldModifier ?? "Ctrl";
 
-    public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
-    public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
-    public string ClearTooltip => $"{LocalizationService.Instance["Clear"]} ({ClearHotkey})";
-    public string SaveTooltip => $"{LocalizationService.Instance["TipSave"]} ({SaveHotkey})";
-    public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
-    public string PinTooltip => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? $"{LocalizationService.Instance["ActionStartPin"]} ({ActiveActionHotkey})" : $"{LocalizationService.Instance["TipPin"]} ({ActiveActionHotkey})");
-    public string ScrollingCaptureTooltip => $"{LocalizationService.Instance["ScrollingCapture"]} ({_settings?.ScrollingCaptureHotkey ?? "Shift+F5"})";
-    public string RectangleTooltip => $"{LocalizationService.Instance["TipRectangle"]} ({RectangleHotkey})";
-    public string EllipseTooltip => $"{LocalizationService.Instance["TipEllipse"]} ({EllipseHotkey})";
-    public string ArrowTooltip => $"{LocalizationService.Instance["TipArrow"]} ({ArrowHotkey})";
-    public string LineTooltip => $"{LocalizationService.Instance["TipLine"]} ({LineHotkey})";
-    public string PenTooltip => $"{LocalizationService.Instance["TipPen"]} ({PenHotkey})";
-    public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
-    public string CalloutTooltip => LocalizationService.Instance["TipCallout"];
-    public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
-    public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
-    public string HighlighterTooltip => LocalizationService.Instance["TipHighlighter"];
-    public string StepTooltip => LocalizationService.Instance["TipStep"];
-    public string BringToFrontTooltip => LocalizationService.Instance["TipBringToFront"];
-    public string SendToBackTooltip => LocalizationService.Instance["TipSendToBack"];
-    public string FullscreenSelectTooltip => $"{LocalizationService.Instance["ActionSelectFullscreen"]} ({FullscreenSelectHotkey})";
-    public string CaptureScopeTooltip => LocalizationService.Instance[SupportsWindowCapture ? "CaptureScopeTooltip" : "CaptureScopeTooltipMonitorOnly"];
-    public string SnipTooltip => CurrentMode == SnipMode.Screenshot ? LocalizationService.Instance["CaptureModeNormal"] : $"{LocalizationService.Instance["CaptureModeNormal"]} ({SwitchToSnipHotkey})";
-    public string RecordTooltip => CurrentMode == SnipMode.Recording ? LocalizationService.Instance["CaptureModeRecord"] : $"{LocalizationService.Instance["CaptureModeRecord"]} ({SwitchToRecordHotkey})";
-    public string TranslateTooltip => CurrentMode == SnipMode.Translation ? (LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation") : $"{(LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation")} ({SwitchToTranslateHotkey})";
-    public string HideTranslationResultsTooltip => $"{LocalizationService.Instance["HideTranslationResults"]} ({ActiveActionHotkey})";
-    public string TranslationPinTooltip => $"{LocalizationService.Instance["MenuPinTranslation"]} ({TranslatePinHotkey})";
-    public string TranslateAllTooltip => $"{LocalizationService.Instance["ActionTranslateAll"]} ({TranslateAllHotkey})";
-    public string ScanAllTooltip => $"{LocalizationService.Instance["ActionScanAll"]} ({ScanAllHotkey})";
-    public string ClearAllTooltip => $"{LocalizationService.Instance["ActionClearAll"]} ({ClearAllHotkey})";
-    public string ToggleSelectTooltip => $"{LocalizationService.Instance["ActionToggleSelect"]} ({ToggleSelectHotkey})";
-    public string AutoDetectTooltip => $"{LocalizationService.Instance["ActionAutoDetect"]} ({AutoDetectHotkey})";
-    public string ModeCursorTooltip => $"{LocalizationService.Instance["TranslateModeCursor"]} ({ModeCursorHotkey})";
-    public string ModeSingleTooltip => $"{LocalizationService.Instance["TranslateModeSingle"]} ({ModeSingleHotkey})";
-    public string ModeMultiTooltip => $"{LocalizationService.Instance["TranslateModeMulti"]} ({ModeMultiHotkey})";
-    public string ModeAudioTooltip => LocalizationService.Instance["TranslateModeAudio"] ?? "Audio Mode";
-    public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({ActiveToolbarHotkey})";
-    public string TogglePlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({ActivePlaybackHotkey})";
-    public string RemoveBackgroundTooltip => $"{LocalizationService.Instance["RemoveBackground"]} ({RemoveBackgroundHotkey})";
-    public string MagicWandTooltip => $"{LocalizationService.Instance["TipMagicWand"]} ({MagicWandHotkey})";
+    public string UndoTooltip => $"{Localization["Undo"]} ({UndoHotkey})";
+    public string RedoTooltip => $"{Localization["Redo"]} ({RedoHotkey})";
+    public string ClearTooltip => $"{Localization["Clear"]} ({ClearHotkey})";
+    public string SaveTooltip => $"{Localization["TipSave"]} ({SaveHotkey})";
+    public string CopyTooltip => $"{Localization["TipCopy"]} ({CopyHotkey})";
+    public string PinTooltip => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? $"{Localization["ActionStartPin"]} ({ActiveActionHotkey})" : $"{Localization["TipPin"]} ({ActiveActionHotkey})");
+    public string ScrollingCaptureTooltip => $"{Localization["ScrollingCapture"]} ({_settings?.ScrollingCaptureHotkey ?? "Shift+F5"})";
+    public string RectangleTooltip => $"{Localization["TipRectangle"]} ({RectangleHotkey})";
+    public string EllipseTooltip => $"{Localization["TipEllipse"]} ({EllipseHotkey})";
+    public string ArrowTooltip => $"{Localization["TipArrow"]} ({ArrowHotkey})";
+    public string LineTooltip => $"{Localization["TipLine"]} ({LineHotkey})";
+    public string PenTooltip => $"{Localization["TipPen"]} ({PenHotkey})";
+    public string TextTooltip => $"{Localization["TipText"]} ({TextHotkey})";
+    public string CalloutTooltip => Localization["TipCallout"];
+    public string MosaicTooltip => $"{Localization["TipMosaic"]} ({MosaicHotkey})";
+    public string BlurTooltip => $"{Localization["TipBlur"]} ({BlurHotkey})";
+    public string HighlighterTooltip => Localization["TipHighlighter"];
+    public string StepTooltip => Localization["TipStep"];
+    public string BringToFrontTooltip => Localization["TipBringToFront"];
+    public string SendToBackTooltip => Localization["TipSendToBack"];
+    public string FullscreenSelectTooltip => $"{Localization["ActionSelectFullscreen"]} ({FullscreenSelectHotkey})";
+    public string CaptureScopeTooltip => Localization[SupportsWindowCapture ? "CaptureScopeTooltip" : "CaptureScopeTooltipMonitorOnly"];
+    public string SnipTooltip => CurrentMode == SnipMode.Screenshot ? Localization["CaptureModeNormal"] : $"{Localization["CaptureModeNormal"]} ({SwitchToSnipHotkey})";
+    public string RecordTooltip => CurrentMode == SnipMode.Recording ? Localization["CaptureModeRecord"] : $"{Localization["CaptureModeRecord"]} ({SwitchToRecordHotkey})";
+    public string TranslateTooltip => CurrentMode == SnipMode.Translation ? (Localization["CaptureModeTranslation"] ?? "Translation") : $"{(Localization["CaptureModeTranslation"] ?? "Translation")} ({SwitchToTranslateHotkey})";
+    public string HideTranslationResultsTooltip => $"{Localization["HideTranslationResults"]} ({ActiveActionHotkey})";
+    public string TranslationPinTooltip => $"{Localization["MenuPinTranslation"]} ({TranslatePinHotkey})";
+    public string TranslateAllTooltip => $"{Localization["ActionTranslateAll"]} ({TranslateAllHotkey})";
+    public string ScanAllTooltip => $"{Localization["ActionScanAll"]} ({ScanAllHotkey})";
+    public string ClearAllTooltip => $"{Localization["ActionClearAll"]} ({ClearAllHotkey})";
+    public string ToggleSelectTooltip => $"{Localization["ActionToggleSelect"]} ({ToggleSelectHotkey})";
+    public string AutoDetectTooltip => $"{Localization["ActionAutoDetect"]} ({AutoDetectHotkey})";
+    public string ModeCursorTooltip => $"{Localization["TranslateModeCursor"]} ({ModeCursorHotkey})";
+    public string ModeSingleTooltip => $"{Localization["TranslateModeSingle"]} ({ModeSingleHotkey})";
+    public string ModeMultiTooltip => $"{Localization["TranslateModeMulti"]} ({ModeMultiHotkey})";
+    public string ModeAudioTooltip => Localization["TranslateModeAudio"] ?? "Audio Mode";
+    public string ToggleToolbarTooltip => $"{Localization["ActionToolbar"]} ({ActiveToolbarHotkey})";
+    public string TogglePlaybackTooltip => $"{Localization["ActionPlayback"]} ({ActivePlaybackHotkey})";
+    public string RemoveBackgroundTooltip => $"{Localization["RemoveBackground"]} ({RemoveBackgroundHotkey})";
+    public string MagicWandTooltip => $"{Localization["TipMagicWand"]} ({MagicWandHotkey})";
     
-    public string MenuPinTranslation => LocalizationService.Instance["MenuPinTranslation"];
-    public string MenuCopyTranslation => LocalizationService.Instance["CopyTranslation"] ?? "Copy Translation";
+    public string MenuPinTranslation => Localization["MenuPinTranslation"];
+    public string MenuCopyTranslation => Localization["CopyTranslation"] ?? "Copy Translation";
 
     public Color ThemeColor => _settings?.ThemeColor ?? Colors.Red;
     public Color OcrHighlightColor => _settings?.ThemeColor ?? SelectionBorderColor;
@@ -448,7 +448,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         IOcrEngineFactory? ocrEngineFactory = null,
         ISnipWindowHost? host = null,
         SnipWindowServices? services = null,
-        ISnipOverlaySettings? settings = null)
+        ISnipOverlaySettings? settings = null,
+        ILocalizationService? localization = null)
+        : base(localization)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _detectionService = detectionService ?? CreateDesignWindowDetectionService();
@@ -610,7 +612,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private void InitializeLocalizationBindings()
     {
         // Refresh tooltips when language changes
-        LocalizationService.Instance.PropertyChanged += OnLocalizationPropertyChanged;
+        Localization.PropertyChanged += OnLocalizationPropertyChanged;
     }
 
     private void InitializeRecordingBindings(RecordingService recordingService)
@@ -637,7 +639,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                 IsRecordingFinalizing = isFinalizing;
                 if (isFinalizing)
                 {
-                    ProcessingText = LocalizationService.Instance["StatusProcessing"];
+                    ProcessingText = Localization["StatusProcessing"];
                     OpenRecordingProgressWindowAction?.Invoke();
                 }
                 else
@@ -799,11 +801,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
     }
     public string InputAudioStateText => IsInputAudioActive
-        ? (LocalizationService.Instance["RecordAudioActive"] ?? "Active")
-        : (LocalizationService.Instance["RecordAudioIdle"] ?? "Idle");
+        ? (Localization["RecordAudioActive"] ?? "Active")
+        : (Localization["RecordAudioIdle"] ?? "Idle");
     public string OutputAudioStateText => IsOutputAudioActive
-        ? (LocalizationService.Instance["RecordAudioActive"] ?? "Active")
-        : (LocalizationService.Instance["RecordAudioIdle"] ?? "Idle");
+        ? (Localization["RecordAudioActive"] ?? "Active")
+        : (Localization["RecordAudioIdle"] ?? "Idle");
 
     private void RefreshAudioLevels()
     {
@@ -903,7 +905,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
     }
 
-    public string ShowOcrResultTooltip => $"{LocalizationService.Instance["ToggleOcrResult"]} (Debug)";
+    public string ShowOcrResultTooltip => $"{Localization["ToggleOcrResult"]} (Debug)";
 
     public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> ToggleTranslationResultsCommand { get; protected set; } = null!;
 
@@ -971,7 +973,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         StopAutoDetectLoop();
         _translationCts?.Cancel();
         _translationCts?.Dispose();
-        LocalizationService.Instance.PropertyChanged -= OnLocalizationPropertyChanged;
+        Localization.PropertyChanged -= OnLocalizationPropertyChanged;
         _audioMeterTimer.Stop();
         _audioLevelMonitor.Dispose();
         _hoverAnimationTimer.Stop();

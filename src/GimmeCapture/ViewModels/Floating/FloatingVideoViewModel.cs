@@ -343,35 +343,35 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public override string CropHotkey => _appSettingsService?.Settings.Snip.CropMode ?? base.CropHotkey;
 
     // Tooltip Hints
-    public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
-    public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
-    public string ClearTooltip => $"{LocalizationService.Instance["Clear"]} ({ClearHotkey})";
-    public string SaveTooltip => $"{LocalizationService.Instance["TipSave"]} ({SaveHotkey})";
-    public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
-    public string PinTooltip => $"{LocalizationService.Instance["TipPin"]} ({PinHotkey})";
-    public string RectangleTooltip => $"{LocalizationService.Instance["TipRectangle"]} ({RectangleHotkey})";
-    public string EllipseTooltip => $"{LocalizationService.Instance["TipEllipse"]} ({EllipseHotkey})";
-    public string ArrowTooltip => $"{LocalizationService.Instance["TipArrow"]} ({ArrowHotkey})";
-    public string LineTooltip => $"{LocalizationService.Instance["TipLine"]} ({LineHotkey})";
-    public string PenTooltip => $"{LocalizationService.Instance["TipPen"]} ({PenHotkey})";
-    public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
-    public string CalloutTooltip => LocalizationService.Instance["TipCallout"];
-    public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
-    public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
-    public string HighlighterTooltip => LocalizationService.Instance["TipHighlighter"];
-    public string StepTooltip => LocalizationService.Instance["TipStep"];
-    public string BringToFrontTooltip => LocalizationService.Instance["TipBringToFront"];
-    public string SendToBackTooltip => LocalizationService.Instance["TipSendToBack"];
-    public string PlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({PlaybackHotkey})";
+    public string UndoTooltip => $"{Localization["Undo"]} ({UndoHotkey})";
+    public string RedoTooltip => $"{Localization["Redo"]} ({RedoHotkey})";
+    public string ClearTooltip => $"{Localization["Clear"]} ({ClearHotkey})";
+    public string SaveTooltip => $"{Localization["TipSave"]} ({SaveHotkey})";
+    public string CopyTooltip => $"{Localization["TipCopy"]} ({CopyHotkey})";
+    public string PinTooltip => $"{Localization["TipPin"]} ({PinHotkey})";
+    public string RectangleTooltip => $"{Localization["TipRectangle"]} ({RectangleHotkey})";
+    public string EllipseTooltip => $"{Localization["TipEllipse"]} ({EllipseHotkey})";
+    public string ArrowTooltip => $"{Localization["TipArrow"]} ({ArrowHotkey})";
+    public string LineTooltip => $"{Localization["TipLine"]} ({LineHotkey})";
+    public string PenTooltip => $"{Localization["TipPen"]} ({PenHotkey})";
+    public string TextTooltip => $"{Localization["TipText"]} ({TextHotkey})";
+    public string CalloutTooltip => Localization["TipCallout"];
+    public string MosaicTooltip => $"{Localization["TipMosaic"]} ({MosaicHotkey})";
+    public string BlurTooltip => $"{Localization["TipBlur"]} ({BlurHotkey})";
+    public string HighlighterTooltip => Localization["TipHighlighter"];
+    public string StepTooltip => Localization["TipStep"];
+    public string BringToFrontTooltip => Localization["TipBringToFront"];
+    public string SendToBackTooltip => Localization["TipSendToBack"];
+    public string PlaybackTooltip => $"{Localization["ActionPlayback"]} ({PlaybackHotkey})";
     public string MuteTooltip => IsMuted
-        ? $"{(LocalizationService.Instance["RecordUnmute"] ?? "Unmute")} ({MuteHotkey})"
-        : $"{(LocalizationService.Instance["RecordMute"] ?? "Mute")} ({MuteHotkey})";
-    public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.Record.Toolbar ?? "H"})";
-    public string CloseTooltip => $"{LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
-    public string RepeatTooltip => $"{LocalizationService.Instance["ActionRepeat"]}";
-    public string SelectionTooltip => $"{LocalizationService.Instance["TipSelectionArea"]} ({SelectionHotkey})";
-    public string CropTooltip => $"{LocalizationService.Instance["TipCrop"]} ({CropHotkey})";
-    public string PinSelectionTooltip => $"{LocalizationService.Instance["TipPinSelection"]} ({PinHotkey})";
+        ? $"{(Localization["RecordUnmute"] ?? "Unmute")} ({MuteHotkey})"
+        : $"{(Localization["RecordMute"] ?? "Mute")} ({MuteHotkey})";
+    public string ToggleToolbarTooltip => $"{Localization["ActionToolbar"]} ({_appSettingsService?.Settings.Record.Toolbar ?? "H"})";
+    public string CloseTooltip => $"{Localization["ActionClose"]} ({CloseHotkey})";
+    public string RepeatTooltip => $"{Localization["ActionRepeat"]}";
+    public string SelectionTooltip => $"{Localization["TipSelectionArea"]} ({SelectionHotkey})";
+    public string CropTooltip => $"{Localization["TipCrop"]} ({CropHotkey})";
+    public string PinSelectionTooltip => $"{Localization["TipPinSelection"]} ({PinHotkey})";
 
     public override Avalonia.Thickness WindowPadding
     {
@@ -419,7 +419,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     // Wired by the host where the AI services live. (frameBitmap)
     public System.Action<Avalonia.Media.Imaging.Bitmap>? FreezeFrameToImagePinAction { get; set; }
 
-    public string FreezeFrameTooltip => LocalizationService.Instance["TipFreezeRemove"] ?? "Freeze this frame as an image pin";
+    public string FreezeFrameTooltip => Localization["TipFreezeRemove"] ?? "Freeze this frame as an image pin";
 
     // Spawns a new pinned video window (cropped selection). Signature mirrors
     // SnipWindowViewModel.OpenPinnedVideoWindowAction; self-wired by the view so

@@ -56,7 +56,7 @@ public partial class MainWindowViewModel
         && !string.Equals(SelectedRelease.NormalizedVersion, AppVersion.TrimStart('v'), StringComparison.OrdinalIgnoreCase)
         && SelectedRelease.GetPreferredZipAsset() != null
         && !UpdateService.IsDownloading;
-    public string UpdateDownloadStageText => LocalizationService.Instance[UpdateService.DownloadStage switch
+    public string UpdateDownloadStageText => Localization[UpdateService.DownloadStage switch
     {
         ArtifactDownloadStage.Verifying => "DownloadStageVerifying",
         ArtifactDownloadStage.Completed => "DownloadStageCompleted",
@@ -148,7 +148,7 @@ public partial class MainWindowViewModel
         }
 
         var readyMessage = string.Format(
-            LocalizationService.Instance["InstallSelectedVersionReady"],
+            Localization["InstallSelectedVersionReady"],
             SelectedRelease.TagName);
 
         bool? readyResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>

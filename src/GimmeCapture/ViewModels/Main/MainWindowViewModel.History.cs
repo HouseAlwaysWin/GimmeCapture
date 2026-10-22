@@ -241,8 +241,8 @@ public partial class MainWindowViewModel
         if (HistoryItems.Count == 0 && _allHistoryItems.Count == 0) return;
 
         // Clear deletes every saved file too (high blast radius) — confirm first. Yes/No only.
-        var title = LocalizationService.Instance["HistoryClearTitle"];
-        var message = LocalizationService.Instance["HistoryClearConfirm"];
+        var title = Localization["HistoryClearTitle"];
+        var message = Localization["HistoryClearConfirm"];
         if (ConfirmYesNoAction != null)
         {
             if (!await ConfirmYesNoAction(title, message)) return;
@@ -261,8 +261,8 @@ public partial class MainWindowViewModel
         if (item == null) return;
 
         // Remove deletes the underlying saved file, so confirm first (irreversible). Yes/No only.
-        var title = LocalizationService.Instance["HistoryRemoveTitle"];
-        var message = string.Format(LocalizationService.Instance["HistoryRemoveConfirm"], item.FileName);
+        var title = Localization["HistoryRemoveTitle"];
+        var message = string.Format(Localization["HistoryRemoveConfirm"], item.FileName);
         if (ConfirmYesNoAction != null)
         {
             if (!await ConfirmYesNoAction(title, message)) return;

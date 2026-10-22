@@ -35,37 +35,37 @@ public partial class MainWindowViewModel
 
     public IReadOnlyList<CaptureDelayOption> AvailableCaptureDelays =>
     [
-        new(CaptureDelay.Off, LocalizationService.Instance["CaptureDelayOff"]),
-        new(CaptureDelay.OneSecond, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 1)),
-        new(CaptureDelay.ThreeSeconds, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 3)),
-        new(CaptureDelay.FiveSeconds, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 5)),
-        new(CaptureDelay.TenSeconds, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 10))
+        new(CaptureDelay.Off, Localization["CaptureDelayOff"]),
+        new(CaptureDelay.OneSecond, string.Format(Localization["CaptureDelaySeconds"], 1)),
+        new(CaptureDelay.ThreeSeconds, string.Format(Localization["CaptureDelaySeconds"], 3)),
+        new(CaptureDelay.FiveSeconds, string.Format(Localization["CaptureDelaySeconds"], 5)),
+        new(CaptureDelay.TenSeconds, string.Format(Localization["CaptureDelaySeconds"], 10))
     ];
 
     public IReadOnlyList<RecordingAutoStopActionOption> AvailableRecordingAutoStopActions =>
     [
-        new(RecordingAutoStopAction.Pin, LocalizationService.Instance["RecordAutoStopPin"]),
-        new(RecordingAutoStopAction.Save, LocalizationService.Instance["RecordAutoStopSave"])
+        new(RecordingAutoStopAction.Pin, Localization["RecordAutoStopPin"]),
+        new(RecordingAutoStopAction.Save, Localization["RecordAutoStopSave"])
     ];
 
     public IReadOnlyList<OcrTextLayoutOption> AvailableOcrTextLayouts =>
     [
-        new(OcrTextLayout.PreserveLines, LocalizationService.Instance["OcrPreserveLines"]),
-        new(OcrTextLayout.SingleLine, LocalizationService.Instance["OcrSingleLine"])
+        new(OcrTextLayout.PreserveLines, Localization["OcrPreserveLines"]),
+        new(OcrTextLayout.SingleLine, Localization["OcrSingleLine"])
     ];
 
     public IReadOnlyList<ScrollDirectionOption> AvailableScrollDirections =>
     [
-        new(ScrollingCaptureDirection.Auto, LocalizationService.Instance["ScrollDirectionAuto"]),
-        new(ScrollingCaptureDirection.Vertical, LocalizationService.Instance["ScrollDirectionVertical"]),
-        new(ScrollingCaptureDirection.Horizontal, LocalizationService.Instance["ScrollDirectionHorizontal"])
+        new(ScrollingCaptureDirection.Auto, Localization["ScrollDirectionAuto"]),
+        new(ScrollingCaptureDirection.Vertical, Localization["ScrollDirectionVertical"]),
+        new(ScrollingCaptureDirection.Horizontal, Localization["ScrollDirectionHorizontal"])
     ];
 
     public IReadOnlyList<SnipToolbarPositionOption> AvailableSnipToolbarPositions =>
     [
-        new(SnipToolbarPosition.TopLeft, LocalizationService.Instance["SnipToolbarPositionTopLeft"]),
-        new(SnipToolbarPosition.TopCenter, LocalizationService.Instance["SnipToolbarPositionTopCenter"]),
-        new(SnipToolbarPosition.TopRight, LocalizationService.Instance["SnipToolbarPositionTopRight"])
+        new(SnipToolbarPosition.TopLeft, Localization["SnipToolbarPositionTopLeft"]),
+        new(SnipToolbarPosition.TopCenter, Localization["SnipToolbarPositionTopCenter"]),
+        new(SnipToolbarPosition.TopRight, Localization["SnipToolbarPositionTopRight"])
     ];
 
     // Translation settings section VM (source/target language + engine). These stay as forwarder properties
@@ -175,12 +175,12 @@ public partial class MainWindowViewModel
 
     public LanguageOption SelectedLanguageOption
     {
-        get => AvailableLanguages.AsValueEnumerable().FirstOrDefault(x => x.Value == LocalizationService.Instance.CurrentLanguage) ?? AvailableLanguages[0];
+        get => AvailableLanguages.AsValueEnumerable().FirstOrDefault(x => x.Value == Localization.CurrentLanguage) ?? AvailableLanguages[0];
         set
         {
-            if (value != null && LocalizationService.Instance.CurrentLanguage != value.Value)
+            if (value != null && Localization.CurrentLanguage != value.Value)
             {
-                LocalizationService.Instance.CurrentLanguage = value.Value;
+                Localization.CurrentLanguage = value.Value;
                 this.RaisePropertyChanged();
                 
                 if (!_isDataLoading)
@@ -474,9 +474,9 @@ public partial class MainWindowViewModel
         }
     }
 
-    public string SnipTooltip => $"{LocalizationService.Instance["StartCapture"]} ({SnipHotkey})";
-    public string RecordTooltip => $"{LocalizationService.Instance["CaptureModeRecord"]} ({RecordHotkey})";
-    public string TranslateTooltip => $"{LocalizationService.Instance["TranslateHotkey"]} ({TranslateHotkey})";
+    public string SnipTooltip => $"{Localization["StartCapture"]} ({SnipHotkey})";
+    public string RecordTooltip => $"{Localization["CaptureModeRecord"]} ({RecordHotkey})";
+    public string TranslateTooltip => $"{Localization["TranslateHotkey"]} ({TranslateHotkey})";
 
     // Action Hotkeys
 
@@ -830,7 +830,7 @@ public partial class MainWindowViewModel
     // do on the UI thread. The startup hardware probe loads them on the pool and raises these two again.
     public bool IsGifAvailable =>
         !Services.Core.Media.NativeFFmpeg.FFmpegRuntime.IsInitialized || RecordingFormatCapabilities.IsGifAvailable();
-    public string GifUnavailableReason => LocalizationService.Instance["GifUnavailableReason"];
+    public string GifUnavailableReason => Localization["GifUnavailableReason"];
     public string[] AvailableRecordFormats => IsGifAvailable
         ? ["mp4", "mkv", "gif", "webm", "mov"]
         : ["mp4", "mkv", "webm", "mov"];

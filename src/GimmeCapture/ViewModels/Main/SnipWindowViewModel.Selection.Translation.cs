@@ -530,8 +530,8 @@ public partial class SnipWindowViewModel
 
             if (result.ErrorKey != null)
             {
-                var title = LocalizationService.Instance["StatusError"];
-                var message = LocalizationService.Instance[result.ErrorKey];
+                var title = Localization["StatusError"];
+                var message = Localization[result.ErrorKey];
 
                 // Prefer the snip-overlay-owned dialog so the topmost overlay doesn't swallow the
                 // clicks; fall back to the main-window dialog only if the snip action isn't wired.
