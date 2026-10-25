@@ -100,8 +100,20 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
     }
 
 
-    public async Task<byte[]> RemoveBackgroundAsync(byte[] imageBytes, Avalonia.Rect? selectionRect = null)
+    /// <summary>
+    /// Removes the background from <paramref name="source"/>, confined to <paramref name="selectionRect"/>
+    /// (in source pixels) when one is given.
+    /// </summary>
+    /// <remarks>
+    /// Takes and returns pixels rather than encoded PNG. The pin already holds a bitmap and wants one back, so
+    /// a <c>byte[]</c> boundary only bought a PNG encode on the way in and a decode on the way out — and the
+    /// encode alone cost a 4K pin over 2 s. <paramref name="source"/> stays the caller's to dispose, and the
+    /// returned bitmap becomes the caller's.
+    /// </remarks>
+    public async Task<SKBitmap> RemoveBackgroundAsync(SKBitmap source, Avalonia.Rect? selectionRect = null)
     {
+        ArgumentNullException.ThrowIfNull(source);
+
         // Hold the gate across init + inference so the idle-unload can't dispose the session mid-removal.
         await _sessionGate.WaitAsync();
         try
@@ -111,10 +123,8 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
 
         return await Task.Run(() =>
         {
-            using var original = SKBitmap.Decode(imageBytes);
-            if (original == null) return imageBytes;
-
-            SKBitmap targetBmp = original;
+            SKBitmap? cropped = null;
+            SKBitmap targetBmp = source;
             SKRectI? roi = null;
 
             if (selectionRect.HasValue && selectionRect.Value.Width > 1 && selectionRect.Value.Height > 1)
@@ -122,62 +132,65 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
                 // Convert logical Rect to pixel Rect using rounding for better accuracy
                 int x = (int)Math.Round(Math.Max(0, selectionRect.Value.X));
                 int y = (int)Math.Round(Math.Max(0, selectionRect.Value.Y));
-                int w = (int)Math.Round(Math.Min(original.Width - x, selectionRect.Value.Width));
-                int h = (int)Math.Round(Math.Min(original.Height - y, selectionRect.Value.Height));
+                int w = (int)Math.Round(Math.Min(source.Width - x, selectionRect.Value.Width));
+                int h = (int)Math.Round(Math.Min(source.Height - y, selectionRect.Value.Height));
                 roi = new SKRectI(x, y, x + w, y + h);
 
                 // Create cropped version
-                targetBmp = new SKBitmap(w, h);
-                original.ExtractSubset(targetBmp, roi.Value);
+                cropped = new SKBitmap(w, h);
+                source.ExtractSubset(cropped, roi.Value);
+                targetBmp = cropped;
             }
 
-            byte[] processedBytes;
-            SKColor bgColor;
-            
-            // Try edge-based solid background detection first
-            if (IsSolidBackground(targetBmp, out bgColor))
+            try
             {
-                AppLog.Debug("BackgroundRemovalService", $"Solid background detected via edges ({bgColor}). Using Manual Removal.");
-                processedBytes = RemoveSolidBackground(targetBmp, bgColor);
-            }
-            // Try corner-based detection as fallback (better for cropped regions where logo touches edges)
-            else if (TryGetCornerBackgroundColor(targetBmp, out bgColor))
-            {
-                AppLog.Debug("BackgroundRemovalService", $"Solid background detected via corners ({bgColor}). Using Manual Removal.");
-                processedBytes = RemoveSolidBackground(targetBmp, bgColor);
-            }
-            else
-            {
-                AppLog.Debug("BackgroundRemovalService", "Complex background detected. Using AI Removal.");
-                var session = _session;
-                processedBytes = RunAIInference(targetBmp, session!);
-            }
+                SKBitmap processed;
+                SKColor bgColor;
 
-            if (roi.HasValue)
-            {
-                using var processedBmp = SKBitmap.Decode(processedBytes);
-                
-                // We create a new bitmap for the result to ensure transparency is handled correctly
-                var resultBmp = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
-                using (var canvas = new SKCanvas(resultBmp))
+                // Try edge-based solid background detection first
+                if (IsSolidBackground(targetBmp, out bgColor))
                 {
-                    canvas.Clear(SKColors.Transparent);
-                    canvas.DrawBitmap(original, 0, 0);
-                    // Use Src blend mode to replace the ROI with processed transparent version
-                    using var paint = new SKPaint { BlendMode = SKBlendMode.Src };
-                    canvas.DrawBitmap(processedBmp, roi.Value.Left, roi.Value.Top, paint);
+                    AppLog.Debug("BackgroundRemovalService", $"Solid background detected via edges ({bgColor}). Using Manual Removal.");
+                    processed = RemoveSolidBackground(targetBmp, bgColor);
+                }
+                // Try corner-based detection as fallback (better for cropped regions where logo touches edges)
+                else if (TryGetCornerBackgroundColor(targetBmp, out bgColor))
+                {
+                    AppLog.Debug("BackgroundRemovalService", $"Solid background detected via corners ({bgColor}). Using Manual Removal.");
+                    processed = RemoveSolidBackground(targetBmp, bgColor);
+                }
+                else
+                {
+                    AppLog.Debug("BackgroundRemovalService", "Complex background detected. Using AI Removal.");
+                    var session = _session;
+                    processed = RunAIInference(targetBmp, session!);
                 }
 
-                if (targetBmp != original) targetBmp.Dispose();
+                // Whole-image removal: the processed bitmap already covers the source, so hand it straight back.
+                if (roi is not { } region)
+                {
+                    return processed;
+                }
 
-                using var image = SKImage.FromBitmap(resultBmp);
-                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                resultBmp.Dispose();
-                return data.ToArray();
+                using (processed)
+                {
+                    // We create a new bitmap for the result to ensure transparency is handled correctly
+                    var resultBmp = new SKBitmap(source.Width, source.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+                    using (var canvas = new SKCanvas(resultBmp))
+                    {
+                        canvas.Clear(SKColors.Transparent);
+                        canvas.DrawBitmap(source, 0, 0);
+                        // Use Src blend mode to replace the ROI with processed transparent version
+                        using var paint = new SKPaint { BlendMode = SKBlendMode.Src };
+                        canvas.DrawBitmap(processed, region.Left, region.Top, paint);
+                    }
+
+                    return resultBmp;
+                }
             }
-            else
+            finally
             {
-                return processedBytes;
+                cropped?.Dispose();
             }
         });
         }
@@ -335,9 +348,11 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         return false;
     }
 
-    internal static byte[] RemoveSolidBackground(SKBitmap original, SKColor bgColor)
+    /// <summary>Clears pixels close to <paramref name="bgColor"/> to transparent. The returned bitmap is the
+    /// caller's to dispose.</summary>
+    internal static SKBitmap RemoveSolidBackground(SKBitmap original, SKColor bgColor)
     {
-        using var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
         const int tolerance = 60;
 
         for (int y = 0; y < original.Height; y++)
@@ -358,12 +373,11 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
             }
         }
 
-        using var image = SKImage.FromBitmap(result);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        return data.ToArray();
+        return result;
     }
 
-    private byte[] RunAIInference(SKBitmap original, InferenceSession session)
+    /// <summary>Runs U2Net over <paramref name="original"/>. The returned bitmap is the caller's to dispose.</summary>
+    private SKBitmap RunAIInference(SKBitmap original, InferenceSession session)
     {
         // 1. Preprocess (Resize to 320x320 and Normalize)
         // Use High quality (Cubic) for better detail preservation -> Reverted to Linear for safety
@@ -457,14 +471,16 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         }
     }
 
-    internal static byte[] ApplyMask(SKBitmap original, SKBitmap mask, float min, float max)
+    /// <summary>Applies <paramref name="mask"/> as the alpha channel of <paramref name="original"/>. The
+    /// returned bitmap is the caller's to dispose.</summary>
+    internal static SKBitmap ApplyMask(SKBitmap original, SKBitmap mask, float min, float max)
     {
         if (mask.Width != original.Width || mask.Height != original.Height)
         {
             throw new ArgumentException("Mask dimensions must match the source image.", nameof(mask));
         }
 
-        using var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
         var maskColorType = mask.ColorType;
         bool canReadMaskRow = maskColorType is SKColorType.Gray8 or SKColorType.Alpha8 or SKColorType.Bgra8888 or SKColorType.Rgba8888;
 
@@ -489,9 +505,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
             }
         }
 
-        using var image = SKImage.FromBitmap(result);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        return data.ToArray();
+        return result;
     }
 
     private static SKBitmap ResizeGrayMask(SKBitmap source, int width, int height)

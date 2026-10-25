@@ -43,12 +43,10 @@ public class BackgroundRemovalServiceTests
         bitmap.Erase(SKColors.White);
         bitmap.SetPixel(1, 0, SKColors.Black);
 
-        byte[] encoded = BackgroundRemovalService.RemoveSolidBackground(bitmap, SKColors.White);
-        using var decoded = SKBitmap.Decode(encoded);
+        using var result = BackgroundRemovalService.RemoveSolidBackground(bitmap, SKColors.White);
 
-        Assert.NotNull(decoded);
-        Assert.Equal((byte)0, decoded!.GetPixel(0, 0).Alpha);
-        Assert.Equal((byte)255, decoded.GetPixel(1, 0).Alpha);
+        Assert.Equal((byte)0, result.GetPixel(0, 0).Alpha);
+        Assert.Equal((byte)255, result.GetPixel(1, 0).Alpha);
     }
 
     [Fact]
@@ -71,12 +69,10 @@ public class BackgroundRemovalServiceTests
         var tensor = CreateLeftOpaqueMaskTensor();
         using var mask = BackgroundRemovalService.ProcessMask(tensor, bitmap.Width, bitmap.Height, out _, out _);
 
-        byte[] encoded = BackgroundRemovalService.ApplyMask(bitmap, mask, 0, 1);
-        using var decoded = SKBitmap.Decode(encoded);
+        using var result = BackgroundRemovalService.ApplyMask(bitmap, mask, 0, 1);
 
-        Assert.NotNull(decoded);
-        Assert.True(decoded!.GetPixel(20, 2).Alpha > 240);
-        Assert.True(decoded.GetPixel(420, 2).Alpha < 15);
+        Assert.True(result.GetPixel(20, 2).Alpha > 240);
+        Assert.True(result.GetPixel(420, 2).Alpha < 15);
     }
 
     private static DenseTensor<float> CreateLeftOpaqueMaskTensor()
