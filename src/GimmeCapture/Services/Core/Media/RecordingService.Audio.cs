@@ -16,7 +16,7 @@ public partial class RecordingService
     {
         slot?.Dispose();
         slot = null;
-        var rec = new LinuxPulseAudioRecorder(source, wavPath, isMuted);
+        var rec = new LinuxPulseAudioRecorder(source, wavPath, isMuted, () => _audioGateOpen);
         if (rec.Start())
         {
             slot = rec;

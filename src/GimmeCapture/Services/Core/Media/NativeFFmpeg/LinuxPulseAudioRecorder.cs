@@ -12,7 +12,9 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// demuxer and writes a 16-bit PCM WAV — the Linux counterpart of the Windows NAudio WASAPI capture in
 /// RecordingService.Audio.cs. The pulse demuxer delivers raw <c>pcm_s16le</c> packets, so we write the
 /// packet payload straight into the WAV data chunk (no decode). Muting writes equal-length silence so the
-/// WAV keeps the same duration and stays A/V-synced. One background read thread owns the format context.
+/// WAV keeps the same duration and stays A/V-synced. Outside the video's capture — before its first frame,
+/// after stop — packets are still read but dropped, as on Windows. One background read thread owns the
+/// format context.
 /// </summary>
 internal sealed unsafe class LinuxPulseAudioRecorder : IDisposable
 {
@@ -25,6 +27,7 @@ internal sealed unsafe class LinuxPulseAudioRecorder : IDisposable
     private readonly string _source;
     private readonly string _wavPath;
     private readonly Func<bool> _isMuted;
+    private readonly Func<bool> _isGateOpen;
 
     private AVFormatContext* _fmt;
     private FileStream? _wav;
@@ -34,11 +37,13 @@ internal sealed unsafe class LinuxPulseAudioRecorder : IDisposable
     private Thread? _thread;
     private volatile bool _running;
 
-    public LinuxPulseAudioRecorder(string source, string wavPath, Func<bool> isMuted)
+    /// <param name="isGateOpen">Whether the video is capturing, so the audio belongs in the recording right now.</param>
+    public LinuxPulseAudioRecorder(string source, string wavPath, Func<bool> isMuted, Func<bool> isGateOpen)
     {
         _source = source;
         _wavPath = wavPath;
         _isMuted = isMuted;
+        _isGateOpen = isGateOpen;
     }
 
     /// <summary>Opens the source + WAV and starts capturing. Returns false if the source can't be opened.</summary>
@@ -140,7 +145,11 @@ internal sealed unsafe class LinuxPulseAudioRecorder : IDisposable
                 }
 
                 int size = pkt->size;
-                if (size > 0 && _wav != null)
+                // Outside the video's capture the packet is still read — the pulse source buffers, so leaving it
+                // unread would only hand over this same stale audio once the gate opens — but dropped, not written
+                // as silence the way a mute is: there is no picture for it, and keeping its length is exactly what
+                // would put the tracks out of step.
+                if (size > 0 && _wav != null && _isGateOpen())
                 {
                     if (buffer.Length < size)
                     {
