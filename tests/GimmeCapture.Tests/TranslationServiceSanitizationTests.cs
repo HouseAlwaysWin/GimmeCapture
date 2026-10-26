@@ -127,6 +127,61 @@ public sealed class TranslationServiceSanitizationTests
         Assert.True(result);
     }
 
+    // \u3053\u306E\u30DC\u30BF\u30F3\u3092\u62BC\u3059\u3068\u8A2D\u5B9A\u304C\u4FDD\u5B58\u3055\u308C\u307E\u3059\u3002 ("pressing this button saves the settings")
+    private const string ButtonSentence =
+        "\u3053\u306E\u30DC\u30BF\u30F3\u3092\u62BC\u3059\u3068\u8A2D\u5B9A\u304C\u4FDD\u5B58\u3055\u308C\u307E\u3059\u3002";
+
+    [Fact]
+    public void ShouldRetryWithMinimalPrompt_RetriesOutputStillInJapanese_ForChineseTarget()
+    {
+        // The reported failure: it came back as \u4FDD\u5B58\u3057\u3066\u9589\u3058\u308B ("save and close"), still Japanese, and was accepted
+        // and cached because only a Japanese target had a check of its own.
+        bool result = LlamaSharpTranslationEngine.ShouldRetryWithMinimalPrompt(
+            ButtonSentence,
+            "\u4FDD\u5B58\u3057\u3066\u9589\u3058\u308B",
+            TranslationLanguage.TraditionalChinese);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldRetryWithMinimalPrompt_RetriesHalfTranslatedOutput_ForChineseTarget()
+    {
+        // \u30C0\u30A6\u30F3\u30ED\u30FC\u30C9\u304C\u5B8C\u4E86\u3057\u307E\u3057\u305F\u3002 -> \u4E0B\u8F09\u5B8C\u6210\u3057\u307E\u3057\u305F\u3002 : Chinese up front, the Japanese ending left on.
+        bool result = LlamaSharpTranslationEngine.ShouldRetryWithMinimalPrompt(
+            "\u30C0\u30A6\u30F3\u30ED\u30FC\u30C9\u304C\u5B8C\u4E86\u3057\u307E\u3057\u305F\u3002",
+            "\u4E0B\u8F09\u5B8C\u6210\u3057\u307E\u3057\u305F\u3002",
+            TranslationLanguage.TraditionalChinese);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void ShouldRetryWithMinimalPrompt_AcceptsCleanChinese_ForChineseTarget()
+    {
+        // \u9019\u500B\u6309\u9215\u6309\u4E0B\u5F8C\uFF0C\u8A2D\u5B9A\u6703\u88AB\u4FDD\u5B58\u3002 \u2014 the translation it now gives.
+        bool result = LlamaSharpTranslationEngine.ShouldRetryWithMinimalPrompt(
+            ButtonSentence,
+            "\u9019\u500B\u6309\u9215\u6309\u4E0B\u5F8C\uFF0C\u8A2D\u5B9A\u6703\u88AB\u4FDD\u5B58\u3002",
+            TranslationLanguage.TraditionalChinese);
+
+        Assert.False(result);
+    }
+
+    [Theory]
+    [InlineData(TranslationLanguage.SimplifiedChinese)]
+    [InlineData(TranslationLanguage.English)]
+    [InlineData(TranslationLanguage.Korean)]
+    public void ShouldRetryWithMinimalPrompt_RetriesKana_ForEveryNonJapaneseTarget(TranslationLanguage target)
+    {
+        bool result = LlamaSharpTranslationEngine.ShouldRetryWithMinimalPrompt(
+            ButtonSentence,
+            "\u4FDD\u5B58\u3057\u3066\u9589\u3058\u308B",
+            target);
+
+        Assert.True(result);
+    }
+
     [Fact]
     public void SanitizeRecognizedOcrText_RemovesSymbolNoise_AndHiddenCharacters()
     {
@@ -156,6 +211,54 @@ public sealed class TranslationServiceSanitizationTests
         Assert.StartsWith("<start_of_turn>user\n", prompt, StringComparison.Ordinal);
         Assert.Contains("Chinese (zh-TW) to Japanese (ja)", prompt, StringComparison.Ordinal);
         Assert.EndsWith("<end_of_turn>\n<start_of_turn>model\n", prompt, StringComparison.Ordinal);
+    }
+
+    private const string Instructions = "Translate from Japanese to Traditional Chinese.";
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ApplyChatTemplate_WithoutATemplate_LeavesThePromptAsItWas(string? template)
+    {
+        Assert.Equal(Instructions, LlamaSharpTranslationEngine.ApplyChatTemplate(template, Instructions));
+    }
+
+    [Fact]
+    public void ApplyChatTemplate_GemmaTemplate_MakesTheInstructionsAUserTurn()
+    {
+        // The shape of the tokenizer.chat_template a Gemma GGUF carries.
+        const string gemma =
+            "{{ bos_token }}{% for message in messages %}{{ '<start_of_turn>' + message['role'] + '\\n' + message['content'] | trim + '<end_of_turn>\\n' }}{% endfor %}{% if add_generation_prompt %}{{ '<start_of_turn>model\\n' }}{% endif %}";
+
+        string prompt = LlamaSharpTranslationEngine.ApplyChatTemplate(gemma, Instructions);
+
+        Assert.StartsWith("<start_of_turn>user\n", prompt, StringComparison.Ordinal);
+        Assert.Contains(Instructions, prompt, StringComparison.Ordinal);
+        Assert.EndsWith("<start_of_turn>model\n", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyChatTemplate_ChatMlTemplate_UsesThatModelsOwnFormat()
+    {
+        // Qwen-style ChatML: the older presets and custom GGUFs are not all Gemma, so the wrap has to follow the model.
+        const string chatMl =
+            "{% for message in messages %}{{ '<|im_start|>' + message['role'] + '\\n' + message['content'] + '<|im_end|>' + '\\n' }}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\\n' }}{% endif %}";
+
+        string prompt = LlamaSharpTranslationEngine.ApplyChatTemplate(chatMl, Instructions);
+
+        Assert.StartsWith("<|im_start|>user\n", prompt, StringComparison.Ordinal);
+        Assert.Contains(Instructions, prompt, StringComparison.Ordinal);
+        Assert.EndsWith("<|im_start|>assistant\n", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("<start_of_turn>", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyChatTemplate_UnrecognisedTemplate_FallsBackToThePlainPrompt()
+    {
+        Assert.Equal(
+            Instructions,
+            LlamaSharpTranslationEngine.ApplyChatTemplate("this is not a chat template", Instructions));
     }
 
     [Fact]

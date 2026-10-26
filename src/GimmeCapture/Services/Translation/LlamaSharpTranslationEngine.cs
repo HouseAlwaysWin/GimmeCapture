@@ -31,6 +31,9 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
     private ModelParams? _modelParams;
     private StatelessExecutor? _executor;
     private string? _loadedModelPath;
+    // The loaded model's own chat template, read from its GGUF metadata when it loads. Kept as a string so building a
+    // prompt never touches the native model, which the idle unloader can free outside the inference lock.
+    private string? _chatTemplate;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly SemaphoreSlim _inferLock = new(1, 1);
     private volatile bool _disposed;
@@ -78,14 +81,17 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         string targetLangName = GetTargetLanguageName(targetLang);
         string sourceLangName = ResolveSourceLanguageForPrompt(text, sourceLang);
         bool useTranslateGemmaTemplate = IsTranslateGemmaModel();
+        // TranslateGemma has a prompt format of its own. Every other model gets the instructions inside its own chat
+        // template: handed bare text, an instruction-tuned model continues it rather than following it.
+        string? chatTemplate = _chatTemplate;
         string prompt = useTranslateGemmaTemplate
             ? BuildTranslateGemmaPrompt(text, sourceLang, targetLang)
-            : BuildTranslationPrompt(text, sourceLangName, targetLangName, targetLang);
+            : ApplyChatTemplate(chatTemplate, BuildTranslationPrompt(text, sourceLangName, targetLangName, targetLang));
         string result = await TranslateWithPromptAsync(prompt, text, useTranslateGemmaTemplate, ct);
 
         if (!useTranslateGemmaTemplate && ShouldRetryWithMinimalPrompt(text, result, targetLang))
         {
-            string retryPrompt = BuildMinimalRetryPrompt(text, sourceLangName, targetLangName, targetLang);
+            string retryPrompt = ApplyChatTemplate(chatTemplate, BuildMinimalRetryPrompt(text, sourceLangName, targetLangName, targetLang));
             string retried = await TranslateWithPromptAsync(retryPrompt, text, false, ct);
             if (!string.IsNullOrWhiteSpace(retried))
             {
@@ -234,6 +240,10 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         try
         {
             _weights = await LLamaWeights.LoadFromFileAsync(parameters, ct);
+            _chatTemplate = _weights.Metadata.TryGetValue("tokenizer.chat_template", out string? template)
+                && !string.IsNullOrWhiteSpace(template)
+                    ? template
+                    : null;
             _modelParams = parameters;
             _executor = new StatelessExecutor(_weights, parameters);
             _loadedModelPath = modelPath;
@@ -253,7 +263,38 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         _modelParams = null;
         _weights?.Dispose();
         _weights = null;
+        _chatTemplate = null;
         _loadedModelPath = null;
+    }
+
+    /// <summary>
+    /// Wraps <paramref name="prompt"/> as a single user turn in <paramref name="chatTemplate"/> and opens the
+    /// assistant's turn, so the model answers the instructions instead of continuing them as text. A model without a
+    /// template, or with one llama.cpp cannot interpret, gets the bare prompt — what every model got before.
+    /// </summary>
+    /// <remarks>
+    /// Without this, gemma-3-4b-it translated "このボタンを押すと設定が保存されます。" as "保存して閉じる" ("save and close",
+    /// still Japanese) and "変更内容は保存されていません。" (not saved) as "保存しました。" (saved). Takes the template string
+    /// rather than the model so it can run without one loaded, and so tests can call it.
+    /// </remarks>
+    internal static string ApplyChatTemplate(string? chatTemplate, string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(chatTemplate))
+        {
+            return prompt;
+        }
+
+        try
+        {
+            var template = new LLamaTemplate(chatTemplate) { AddAssistant = true };
+            template.Add("user", prompt);
+            return Encoding.UTF8.GetString(template.Apply());
+        }
+        catch (Exception ex)
+        {
+            AppLog.Debug("LlamaSharpTranslation.ChatTemplate", ex);
+            return prompt;
+        }
     }
 
     internal void ReleaseModel()
@@ -483,6 +524,14 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         bool unchanged = normalizedSource.Length > 0
             && string.Equals(normalizedSource, normalizedTranslated, StringComparison.Ordinal);
         if (looksInstructional || looksAssistantReply || unchanged)
+        {
+            return true;
+        }
+
+        // Chinese, Korean and English have no kana, so kana in the output means the text came back still in
+        // Japanese, or half translated. The Japanese-target check below cannot see this; without it such output was
+        // accepted and cached ("このボタンを押すと設定が保存されます。" came back as "保存して閉じる").
+        if (targetLang != TranslationLanguage.Japanese && ContainsJapaneseKana(translated))
         {
             return true;
         }

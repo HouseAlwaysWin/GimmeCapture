@@ -20,7 +20,9 @@ public sealed class LlamaSharpTranslationBenchmarkTests : IDisposable
 {
     private const string ModelVariable = "GIMMECAPTURE_LLAMA_MODEL";
 
-    // The kind of text the app translates: short UI and status strings read off the screen by OCR.
+    // The kind of text the app translates: short UI and status strings read off the screen by OCR. The first six are
+    // the original set (kept first so older timings stay comparable); the rest widen it enough to judge a prompt
+    // change, including Japanese questions, which tempt a chat model to answer instead of translate.
     private static readonly (string Text, OCRLanguage Source)[] Sentences =
     [
         ("Please save your work before closing the application.", OCRLanguage.English),
@@ -29,6 +31,16 @@ public sealed class LlamaSharpTranslationBenchmarkTests : IDisposable
         ("このボタンを押すと設定が保存されます。", OCRLanguage.Japanese),
         ("ダウンロードが完了しました。", OCRLanguage.Japanese),
         ("会議は明日の午後三時に変更されました。", OCRLanguage.Japanese),
+        ("Click here to reset your password.", OCRLanguage.English),
+        ("This file is too large to upload.", OCRLanguage.English),
+        ("Do you want to delete the selected items?", OCRLanguage.English),
+        ("Update available. Restart now to install.", OCRLanguage.English),
+        ("Low battery. Please connect your charger.", OCRLanguage.English),
+        ("パスワードが正しくありません。", OCRLanguage.Japanese),
+        ("ファイルを保存しますか？", OCRLanguage.Japanese),
+        ("ネットワークに接続できません。", OCRLanguage.Japanese),
+        ("変更内容は保存されていません。", OCRLanguage.Japanese),
+        ("次へ進む前に利用規約に同意してください。", OCRLanguage.Japanese),
     ];
 
     private readonly string _baseDir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
@@ -65,17 +77,33 @@ public sealed class LlamaSharpTranslationBenchmarkTests : IDisposable
         _output.WriteLine($"load + warm-up: {sw.Elapsed.TotalMilliseconds,7:F0} ms  -> {warmUp}");
 
         var times = new List<double>();
+        var results = new List<(string Text, OCRLanguage Source, string Result)>();
         foreach (var (text, source) in Sentences)
         {
             sw.Restart();
             string result = await engine.TranslateAsync(text, source, TranslationLanguage.TraditionalChinese);
             double ms = sw.Elapsed.TotalMilliseconds;
             times.Add(ms);
+            results.Add((text, source, result));
             _output.WriteLine($"{ms,7:F0} ms  {text}  ->  {result}");
-            Assert.False(string.IsNullOrWhiteSpace(result), $"No translation for: {text}");
         }
 
         times.Sort();
         _output.WriteLine($"median {times[times.Count / 2]:F0} ms, total {times.Sum():F0} ms over {times.Count} sentences");
+
+        // Checked after every sentence has run, so one bad translation does not hide the others' timings.
+        foreach (var (text, source, result) in results)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(result), $"No translation for: {text}");
+            // Traditional Chinese has no kana: kana in the output means the text came back still in Japanese.
+            Assert.False(
+                source == OCRLanguage.Japanese && result.Any(static c => c is >= '぀' and <= 'ヿ'),
+                $"Came back in Japanese: {text} -> {result}");
+        }
+
+        // The sentence that once came back as the unrelated button label "保存して閉じる" (save and close): it is about
+        // the settings being saved, so a faithful translation has to mention them.
+        var button = results.Single(r => r.Text.StartsWith("このボタン", StringComparison.Ordinal));
+        Assert.Contains("設定", button.Result);
     }
 }
