@@ -98,18 +98,6 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
     }
 
 
-    public async Task SetImageAsync(byte[] imageBytes)
-    {
-        using var original = SKBitmap.Decode(imageBytes);
-        if (original == null) return;
-        await EnsureImagePreparedAsync(original);
-    }
-
-    public async Task SetImageAsync(SKBitmap original)
-    {
-        await EnsureImagePreparedAsync(original);
-    }
-
     public async Task EnsureImagePreparedAsync(SKBitmap original)
     {
         if (!_isInitialized) await InitializeAsync();

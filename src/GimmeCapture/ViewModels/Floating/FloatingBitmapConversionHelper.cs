@@ -264,39 +264,4 @@ internal static class FloatingBitmapConversionHelper
             return false;
         }
     }
-
-    public static Bitmap CreateDetachedBitmapFromEncodedBytes(byte[] encodedBytes)
-    {
-        if (!TryCreateDetachedBitmapFromEncodedBytes(encodedBytes, out var bitmap, out var error))
-            throw new Exception(error ?? "Failed to create detached bitmap.");
-        return bitmap!;
-    }
-
-    public static bool TryCreateDetachedBitmapFromEncodedBytes(byte[]? encodedBytes, out Bitmap? bitmap, out string? error)
-    {
-        bitmap = null;
-        error = null;
-        if (encodedBytes == null || encodedBytes.Length == 0)
-        {
-            error = "Encoded bitmap bytes are empty.";
-            return false;
-        }
-
-        try
-        {
-            using var tempBitmap = SKBitmap.Decode(encodedBytes);
-            if (tempBitmap == null)
-            {
-                error = "Failed to decode encoded bitmap bytes.";
-                return false;
-            }
-
-            return TryCreateDetachedBitmapFromSkBitmap(tempBitmap, out bitmap, out error);
-        }
-        catch (Exception ex)
-        {
-            error = $"Detached bitmap creation failed: {ex.Message}";
-            return false;
-        }
-    }
 }
