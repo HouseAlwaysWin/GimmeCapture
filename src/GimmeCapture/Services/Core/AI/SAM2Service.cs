@@ -14,7 +14,7 @@ namespace GimmeCapture.Services.Core.AI;
 public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 {
     /// <summary>Fixed square input resolution the SAM2 encoder expects (image is stretched to this grid).</summary>
-    private const int Sam2InputSize = 1024;
+    internal const int Sam2InputSize = 1024;
 
     private readonly SAM2RuntimeService _runtimeService;
     private InferenceSession? _encoderSession;
@@ -163,75 +163,25 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
             ResolveEncoderInputMetadata(encoderSession);
             string inputName = _encoderInputName ?? "image";
             int bufferSize = 3 * Sam2InputSize * Sam2InputSize;
-            float[] buffer = new float[bufferSize];
+            // 12 MB of floats per prepared image: pooled instead of a fresh large-object-heap allocation every
+            // time. Rent rounds up to a power of two (4,194,304 floats for this request), so the tensor below is
+            // given an exact-length slice, never the raw array. No clear is needed: both fills write every one of
+            // the bufferSize entries before the encoder reads any.
+            float[] buffer = ArrayPool<float>.Shared.Rent(bufferSize);
 
+            try
             {
                 using var resized = original.Resize(new SKImageInfo(Sam2InputSize, Sam2InputSize), new SKSamplingOptions(SKFilterMode.Linear));
                 if (resized == null)
                     throw new InvalidOperationException("Failed to resize image for SAM2 prepare.");
 
-                if (resized.ColorType == SKColorType.Bgra8888 || resized.ColorType == SKColorType.Rgba8888)
-                {
-                    unsafe
-                    {
-                        byte* ptr = (byte*)resized.GetPixels().ToPointer();
-                        int rowBytes = resized.RowBytes;
-                        bool isBgra = resized.ColorType == SKColorType.Bgra8888;
-                        float inv255 = 1.0f / 255.0f;
-
-                        Parallel.For(0, Sam2InputSize, y =>
-                        {
-                            byte* row = ptr + (y * rowBytes);
-                            int blueOffset = y * Sam2InputSize;
-                            int greenOffset = blueOffset + (Sam2InputSize * Sam2InputSize);
-                            int redOffset = greenOffset + (Sam2InputSize * Sam2InputSize);
-
-                            for (int x = 0; x < Sam2InputSize; x++)
-                            {
-                                byte b, g, r;
-                                if (isBgra)
-                                {
-                                    b = row[x * 4 + 0];
-                                    g = row[x * 4 + 1];
-                                    r = row[x * 4 + 2];
-                                }
-                                else
-                                {
-                                    r = row[x * 4 + 0];
-                                    g = row[x * 4 + 1];
-                                    b = row[x * 4 + 2];
-                                }
-
-                                buffer[blueOffset + x] = b * inv255;
-                                buffer[greenOffset + x] = g * inv255;
-                                buffer[redOffset + x] = r * inv255;
-                            }
-                        });
-                    }
-                }
-                else
-                {
-                    float inv255 = 1.0f / 255.0f;
-                    Parallel.For(0, Sam2InputSize, y =>
-                    {
-                        int blueOffset = y * Sam2InputSize;
-                        int greenOffset = blueOffset + (Sam2InputSize * Sam2InputSize);
-                        int redOffset = greenOffset + (Sam2InputSize * Sam2InputSize);
-                        for (int x = 0; x < Sam2InputSize; x++)
-                        {
-                            var color = resized.GetPixel(x, y);
-                            buffer[blueOffset + x] = color.Blue * inv255;
-                            buffer[greenOffset + x] = color.Green * inv255;
-                            buffer[redOffset + x] = color.Red * inv255;
-                        }
-                    });
-                }
+                FillEncoderInput(resized, buffer);
 
                 // Keep the encoder input shape on the same proven 4D path as the
                 // previously working implementation. Some SAM2 exports report extra
                 // dimensions in metadata, but the runtime still expects the classic
                 // NCHW image tensor here.
-                var inputTensor = new DenseTensor<float>(buffer, new[] { 1, 3, Sam2InputSize, Sam2InputSize });
+                var inputTensor = new DenseTensor<float>(buffer.AsMemory(0, bufferSize), new[] { 1, 3, Sam2InputSize, Sam2InputSize });
 
                 var inputs = new List<NamedOnnxValue>(1) { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
                 using var results = encoderSession.Run(inputs);
@@ -253,8 +203,85 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
                 _highResFeat1 = FindResult<Tensor<float>>(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" })?.ToDenseTensor()
                     ?? throw new Exception($"Encoder Error: Missing feat_1. Got: {string.Join(", ", outputNames)}");
             }
-
+            finally
+            {
+                // Safe here and not before: Run has returned, and the three outputs above were copied out with
+                // ToDenseTensor, so nothing still reads the input buffer.
+                ArrayPool<float>.Shared.Return(buffer);
+            }
         });
+    }
+
+    /// <summary>
+    /// Fills the planar encoder input from a <see cref="Sam2InputSize"/>-square bitmap: three planes of
+    /// <c>Sam2InputSize * Sam2InputSize</c> floats, in B, G, R order, scaled to 0..1.
+    /// </summary>
+    /// <remarks>
+    /// Writes every one of the first <c>3 * Sam2InputSize * Sam2InputSize</c> entries of <paramref name="buffer"/>
+    /// and nothing past them — and the caller depends on the first half of that. The buffer comes from
+    /// <see cref="ArrayPool{T}"/> uncleared, so an entry this skipped would feed the encoder whatever the pool last
+    /// held, and the symptom (a wrong mask, only sometimes) would be about as hard to trace as a bug gets. Internal
+    /// so <c>Sam2EncoderInputFillTests</c> can hold it to that. <paramref name="resized"/> must be exactly
+    /// <see cref="Sam2InputSize"/> square: the fast path reads its rows through a raw pointer.
+    /// </remarks>
+    internal static void FillEncoderInput(SKBitmap resized, float[] buffer)
+    {
+        if (resized.ColorType == SKColorType.Bgra8888 || resized.ColorType == SKColorType.Rgba8888)
+        {
+            unsafe
+            {
+                byte* ptr = (byte*)resized.GetPixels().ToPointer();
+                int rowBytes = resized.RowBytes;
+                bool isBgra = resized.ColorType == SKColorType.Bgra8888;
+                float inv255 = 1.0f / 255.0f;
+
+                Parallel.For(0, Sam2InputSize, y =>
+                {
+                    byte* row = ptr + (y * rowBytes);
+                    int blueOffset = y * Sam2InputSize;
+                    int greenOffset = blueOffset + (Sam2InputSize * Sam2InputSize);
+                    int redOffset = greenOffset + (Sam2InputSize * Sam2InputSize);
+
+                    for (int x = 0; x < Sam2InputSize; x++)
+                    {
+                        byte b, g, r;
+                        if (isBgra)
+                        {
+                            b = row[x * 4 + 0];
+                            g = row[x * 4 + 1];
+                            r = row[x * 4 + 2];
+                        }
+                        else
+                        {
+                            r = row[x * 4 + 0];
+                            g = row[x * 4 + 1];
+                            b = row[x * 4 + 2];
+                        }
+
+                        buffer[blueOffset + x] = b * inv255;
+                        buffer[greenOffset + x] = g * inv255;
+                        buffer[redOffset + x] = r * inv255;
+                    }
+                });
+            }
+        }
+        else
+        {
+            float inv255 = 1.0f / 255.0f;
+            Parallel.For(0, Sam2InputSize, y =>
+            {
+                int blueOffset = y * Sam2InputSize;
+                int greenOffset = blueOffset + (Sam2InputSize * Sam2InputSize);
+                int redOffset = greenOffset + (Sam2InputSize * Sam2InputSize);
+                for (int x = 0; x < Sam2InputSize; x++)
+                {
+                    var color = resized.GetPixel(x, y);
+                    buffer[blueOffset + x] = color.Blue * inv255;
+                    buffer[greenOffset + x] = color.Green * inv255;
+                    buffer[redOffset + x] = color.Red * inv255;
+                }
+            });
+        }
     }
 
     public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32, int maxObjects = 20, int minSize = 20, CancellationToken cancellationToken = default)
