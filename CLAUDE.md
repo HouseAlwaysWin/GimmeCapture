@@ -284,7 +284,9 @@ Three locales are kept in **strict key parity**:
 - A test that cannot run everywhere says so in its attribute, so it is reported as **skipped**:
   `[WindowsFact]` for Windows-only behaviour, `[OptInFact("ENV_VAR", "OTHER=1")]` for tests that
   need a local clip or a probe switch. A test that only needs somewhere to write uses its own
-  temporary folder and runs everywhere. Never gate with an early `return` — that
+  temporary folder and runs everywhere — for settings that means `new AppSettingsService(tempDir)`,
+  which then reads and writes only there; the parameterless constructor is the app's real storage
+  under `%LOCALAPPDATA%\GimmeCapture`. Never gate with an early `return` — that
   counts as a pass for something that was never checked.
 - Benchmarks live in `tests/GimmeCapture.Benchmarks/` (run manually, not in CI).
 
@@ -326,10 +328,8 @@ Three locales are kept in **strict key parity**:
   alarm, not a gate, and a break lands and has to be reverted instead of being blocked. So on
   Windows run `scripts/verify.ps1` (or at least `dotnet build` plus
   `dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj -f net10.0-windows10.0.19041.0`
-  — the `net10.0` head skips the Windows-fenced tests) and push only once it is clean. Two
-  pre-existing local failures are not yours: `AppSettingsLanguagePeekTests.IsNull_OnAFirstRun`,
-  which reads the developer's real `%LOCALAPPDATA%\GimmeCapture\config.json` instead of the
-  injected one (it passes in CI, which has no such file), and `ResourceUseGateTests`, which
-  times out under load. Don't "fix" either by loosening an assertion.
+  — the `net10.0` head skips the Windows-fenced tests) and push only once it is clean. One
+  pre-existing local failure is not yours: `ResourceUseGateTests`, which times out under load.
+  Don't "fix" it by loosening an assertion.
 - Useful background reading: `docs/ARCHITECTURE_REFACTOR_ROADMAP.md` (hotspots and
   target architecture) and `docs/REFACTOR_PLAN.md` (completed/ongoing refactors).

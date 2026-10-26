@@ -25,6 +25,8 @@ public class AppSettingsService : IAppSettingsService
     // v11: Legacy translation engines migrate to LlamaSharp; delayed capture and quick OCR settings added.
     public const int CurrentConfigVersion = 11;
     private readonly string _appVersion;
+    // Set only by the constructor that takes a directory (tests, the designer preview): see FindConfigSource.
+    private readonly bool _hasExplicitDataDirectory;
 
     public string BaseDataDirectory { get; private set; } = RuntimePathProvider.GetExecutableDirectory();
     private string ConfigPath => Path.Combine(BaseDataDirectory, "config.json");
@@ -45,6 +47,7 @@ public class AppSettingsService : IAppSettingsService
     {
         BaseDataDirectory = baseDataDirectory;
         _appVersion = string.IsNullOrWhiteSpace(appVersion) ? AppVersionInfo.CurrentVersion : appVersion;
+        _hasExplicitDataDirectory = true;
     }
     
     public void DebugLog(string message)
@@ -269,6 +272,19 @@ public class AppSettingsService : IAppSettingsService
     // run. Only reads; UseConfigSource applies the choice.
     private ConfigSource? FindConfigSource()
     {
+        // A directory handed to the constructor is the whole answer, unless it is the executable's own, which is the
+        // app's default storage and what the rest of this chain is for. The chain finds and migrates an existing
+        // user's config, so it probes machine-wide locations: from a test or the designer preview it read the
+        // developer's own %LOCALAPPDATA%\GimmeCapture\config.json, and because that legacy source redirects saves
+        // into this executable's versioned AppData folder, the next save wrote a config into the developer's real
+        // AppData as well. The app only ever uses the parameterless constructor, so none of this reached it.
+        if (_hasExplicitDataDirectory && !IsRuntimeDefaultStorage)
+        {
+            return File.Exists(ConfigPath)
+                ? new ConfigSource(ConfigPath, UsesVersionedAppData: false, SaveDirectoryOverride: null)
+                : null;
+        }
+
         if (BaseDataDirectory != RuntimeExecutableDirectory && File.Exists(ConfigPath))
         {
             return new ConfigSource(ConfigPath, UsesVersionedAppData: false, SaveDirectoryOverride: null);
