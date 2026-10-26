@@ -311,13 +311,25 @@ Three locales are kept in **strict key parity**:
   on both TFMs, and
   `dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj -f net10.0 -p:EnableWindowsTargeting=true`
   for the tests that are not Windows-fenced — or rely on the `Linux` workflow, which runs on
-  every `claude/**` push. `verify.ps1`
+  every push to `main`, though that only reports after the code has landed. `verify.ps1`
   (localization parity + coverage gate + publish smoke) and the Windows-only tests still
   require Windows; the app itself runs on a Linux X11 desktop from the `net10.0` head
   (everything except WGC per-window recording). Say which of these actually ran rather than
   claiming a green build from a compile alone.
-- **Git workflow**: develop on the assigned feature branch, commit with clear
-  messages, push with `git push -u origin <branch>`. Do **not** open a PR unless
-  explicitly asked.
+- **Git workflow — commit straight to `main`.** No feature branch, no PR: only the owner and
+  AI assistants touch this repository, so a PR is a record with no reviewer. Commit on `main`
+  with a clear message and `git push`. Do **not** create a `claude/**` branch, open a PR or
+  add branch protection unless explicitly asked (`main` is deliberately unprotected and
+  `allow_auto_merge` is off).
+- **Because of that, `verify.ps1` before you push is not optional.** `ci.yml` runs on the
+  `main` push, which is *after* the code is on the branch everything builds from — CI is an
+  alarm, not a gate, and a break lands and has to be reverted instead of being blocked. So on
+  Windows run `scripts/verify.ps1` (or at least `dotnet build` plus
+  `dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj -f net10.0-windows10.0.19041.0`
+  — the `net10.0` head skips the Windows-fenced tests) and push only once it is clean. Two
+  pre-existing local failures are not yours: `AppSettingsLanguagePeekTests.IsNull_OnAFirstRun`,
+  which reads the developer's real `%LOCALAPPDATA%\GimmeCapture\config.json` instead of the
+  injected one (it passes in CI, which has no such file), and `ResourceUseGateTests`, which
+  times out under load. Don't "fix" either by loosening an assertion.
 - Useful background reading: `docs/ARCHITECTURE_REFACTOR_ROADMAP.md` (hotspots and
   target architecture) and `docs/REFACTOR_PLAN.md` (completed/ongoing refactors).
