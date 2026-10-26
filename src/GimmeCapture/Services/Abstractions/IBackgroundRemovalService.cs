@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using SkiaSharp;
 
 namespace GimmeCapture.Services.Abstractions;
 
@@ -12,5 +13,10 @@ public interface IBackgroundRemovalService : IDisposable
     /// <summary>True once disposed (e.g. by a global AI unload); a reuse holder must recreate a fresh instance.</summary>
     bool IsDisposed { get; }
 
-    Task<byte[]> RemoveBackgroundAsync(byte[] imageBytes, Avalonia.Rect? selectionRect = null);
+    /// <summary>
+    /// Removes the background from <paramref name="source"/>, confined to <paramref name="selectionRect"/>
+    /// (in source pixels) when one is given. <paramref name="source"/> stays the caller's to dispose; the
+    /// returned bitmap becomes the caller's.
+    /// </summary>
+    Task<SKBitmap> RemoveBackgroundAsync(SKBitmap source, Avalonia.Rect? selectionRect = null);
 }

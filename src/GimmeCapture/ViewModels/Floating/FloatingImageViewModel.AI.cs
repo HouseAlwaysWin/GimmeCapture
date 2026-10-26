@@ -588,13 +588,15 @@ public partial class FloatingImageViewModel
             // Save state for Undo
             PushUndoState();
 
-            // 1. Convert Avalonia Bitmap to Bytes, off the UI thread: the PNG of a 4K pin took over 2 s to make.
+            // 1. Copy the Avalonia Bitmap into an SKBitmap, off the UI thread. No PNG in between: the removal
+            // service works on pixels, and encoding one for a 4K pin took over 2 s on its own.
             var source = Image;
             if (source == null) return;
-            var (encoded, imageBytes, encodeError) = await Task.Run(() =>
-                (FloatingBitmapConversionHelper.TryEncodeBitmapToPngBytes(source, out var bytes, out var error), bytes, error));
-            if (!encoded)
-                throw new Exception(encodeError ?? "Failed to serialize image.");
+            var (copied, sourcePixels, copyError) = await Task.Run(() =>
+                (FloatingBitmapConversionHelper.TryCopyToSkBitmap(source, out var bitmap, out var error), bitmap, error));
+            if (!copied || sourcePixels == null)
+                throw new Exception(copyError ?? "Failed to read the image pixels.");
+            using var sourceBitmap = sourcePixels;
 
             // 2. Process — reuse this pin's background-removal service (created once, kept warm ~10s between
             // removals by its own idle scheduler) instead of new'ing/disposing a fresh U2Net session each time.
@@ -623,13 +625,13 @@ public partial class FloatingImageViewModel
                     SelectionRect.Height * scaleY);
             }
 
-            var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes, scaledRect);
+            using var processed = await aiService.RemoveBackgroundAsync(sourceBitmap, scaledRect);
 
-            // 3. Update Image (decoded off the UI thread too)
-            var (decoded, detachedBitmap, decodeError) = await Task.Run(() =>
-                (FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromEncodedBytes(transparentBytes, out var bitmap, out var error), bitmap, error));
-            if (!decoded)
-                throw new Exception(decodeError ?? "Failed to decode processed image.");
+            // 3. Hand the processed pixels to Avalonia, off the UI thread too.
+            var (converted, detachedBitmap, convertError) = await Task.Run(() =>
+                (FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(processed, out var bitmap, out var error), bitmap, error));
+            if (!converted)
+                throw new Exception(convertError ?? "Failed to read the processed image.");
             Image = detachedBitmap;
             
             // Clear selection after processing

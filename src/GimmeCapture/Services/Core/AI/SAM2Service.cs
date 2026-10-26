@@ -455,21 +455,30 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
         });
     }
 
-    public async Task<byte[]> GetMaskAsync(IEnumerable<(double X, double Y, bool IsPositive)> points)
+    /// <summary>
+    /// Runs the decoder for <paramref name="points"/> and returns the winning mask as a Gray8 bitmap at the
+    /// original image size (white = selected), or null when the engine is not ready or produced nothing.
+    /// </summary>
+    /// <remarks>
+    /// Hands the mask back as pixels rather than encoded PNG. The one consumer wants a Gray8 bitmap, so
+    /// encoding the mask and decoding it straight back just to pull a single channel out again was pure
+    /// overhead. The returned bitmap is the caller's to dispose.
+    /// </remarks>
+    public async Task<SKBitmap?> GetMaskBitmapAsync(IReadOnlyList<(double X, double Y, bool IsPositive)> points)
     {
-        if (!_isInitialized || !_isImagePrepared || _decoderSession == null || _imageEmbeddings == null || _highResFeat0 == null || _highResFeat1 == null) 
-            return Array.Empty<byte>();
+        if (!_isInitialized || !_isImagePrepared || _decoderSession == null || _imageEmbeddings == null || _highResFeat0 == null || _highResFeat1 == null)
+            return null;
 
         return await Task.Run(() =>
         {
             var pointList = points.AsValueEnumerable().ToList();
             int n = pointList.Count;
-            if (n == 0) return Array.Empty<byte>();
+            if (n == 0) return (SKBitmap?)null;
 
             // Use scope: keeps the decoder alive and serialised for this click's run (see PrepareImageCoreAsync).
             using var sessionUse = _runtimeService.BeginSessionUse();
             var decoderSession = sessionUse.Decoder;
-            if (decoderSession == null) return Array.Empty<byte>();
+            if (decoderSession == null) return (SKBitmap?)null;
 
             // SAM2 CRITICAL: Points must scale to the 1024-grid (since image is stretched)
             float scaleX = 1024f / (float)_originalWidth;
@@ -639,83 +648,83 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 
             // Extract result & RESIZE BACK TO ORIGINAL (Not 1024)
             using var maskFull = new SKBitmap(mw, mh, SKColorType.Gray8, SKAlphaType.Opaque);
-            for (int y = 0; y < mh; y++)
+            // Gray8 is one byte per pixel, so write the rows straight through: SetPixel would run a colour
+            // conversion for every pixel of a mask that is routinely 1024x1024.
+            unsafe
             {
-                for (int x = 0; x < mw; x++)
+                byte* maskBase = (byte*)maskFull.GetPixels().ToPointer();
+                int maskRowBytes = maskFull.RowBytes;
+                for (int y = 0; y < mh; y++)
                 {
-                    bool isSelected = masksTensor[0, bestIdx, y, x] > finalThreshold;
-                    if (invertMask) isSelected = !isSelected;
-                    maskFull.SetPixel(x, y, isSelected ? SKColors.White : SKColors.Black);
+                    byte* maskRow = maskBase + (y * maskRowBytes);
+                    for (int x = 0; x < mw; x++)
+                    {
+                        bool isSelected = masksTensor[0, bestIdx, y, x] > finalThreshold;
+                        if (invertMask) isSelected = !isSelected;
+                        maskRow[x] = isSelected ? (byte)255 : (byte)0;
+                    }
                 }
             }
 
             // CRITICAL: Resize the mask back to the ORIGINAL dimensions so it aligns in the UI
             using var resizedMask = maskFull.Resize(new SKImageInfo(_originalWidth, _originalHeight), new SKSamplingOptions(SKFilterMode.Linear));
+            if (resizedMask == null)
+                return (SKBitmap?)null;
 
-            using var ms = new MemoryStream();
-            resizedMask.Encode(ms, SKEncodedImageFormat.Png, 100);
-            return ms.ToArray();
+            // Resize targets the platform colour type, so fold the result down to the Gray8 the caller reads
+            // a byte at a time.
+            return NormalizeToGray8(resizedMask);
         });
     }
 
-    public async Task<SKBitmap?> GetMaskBitmapAsync(IReadOnlyList<(double X, double Y, bool IsPositive)> points)
+    /// <summary>
+    /// Copies <paramref name="source"/> into a Gray8 bitmap, reading the grey level from whichever channel its
+    /// colour type keeps it in. The returned bitmap is the caller's to dispose.
+    /// </summary>
+    private static SKBitmap NormalizeToGray8(SKBitmap source)
     {
-        if (!_isInitialized || !_isImagePrepared || points.Count == 0)
-            return null;
+        if (source.ColorType == SKColorType.Gray8)
+            return source.Copy();
 
-        var maskBytes = await GetMaskAsync(points);
-        if (maskBytes.Length == 0)
-            return null;
-
-        return await Task.Run(() =>
+        var normalized = new SKBitmap(source.Width, source.Height, SKColorType.Gray8, SKAlphaType.Opaque);
+        unsafe
         {
-            using var decoded = SKBitmap.Decode(maskBytes);
-            if (decoded == null)
-                return (SKBitmap?)null;
+            byte* dstBase = (byte*)normalized.GetPixels().ToPointer();
+            bool isBgra = source.ColorType == SKColorType.Bgra8888;
+            bool isRgba = source.ColorType == SKColorType.Rgba8888;
 
-            if (decoded.ColorType == SKColorType.Gray8)
-                return decoded.Copy();
-
-            var normalized = new SKBitmap(decoded.Width, decoded.Height, SKColorType.Gray8, SKAlphaType.Opaque);
-            unsafe
+            if (isBgra || isRgba)
             {
-                byte* dstBase = (byte*)normalized.GetPixels().ToPointer();
-                bool isBgra = decoded.ColorType == SKColorType.Bgra8888;
-                bool isRgba = decoded.ColorType == SKColorType.Rgba8888;
-
-                if (isBgra || isRgba)
+                byte* srcBase = (byte*)source.GetPixels().ToPointer();
+                for (int y = 0; y < source.Height; y++)
                 {
-                    byte* srcBase = (byte*)decoded.GetPixels().ToPointer();
-                    for (int y = 0; y < decoded.Height; y++)
+                    byte* srcRow = srcBase + (y * source.RowBytes);
+                    byte* dstRow = dstBase + (y * normalized.RowBytes);
+                    for (int x = 0; x < source.Width; x++)
                     {
-                        byte* srcRow = srcBase + (y * decoded.RowBytes);
-                        byte* dstRow = dstBase + (y * normalized.RowBytes);
-                        for (int x = 0; x < decoded.Width; x++)
-                        {
-                            int pixelOffset = x * 4;
-                            byte value = isBgra
-                                ? srcRow[pixelOffset + 0]
-                                : srcRow[pixelOffset + 2];
-                            dstRow[x] = value;
-                        }
-                    }
-                }
-                else
-                {
-                    for (int y = 0; y < decoded.Height; y++)
-                    {
-                        byte* dstRow = dstBase + (y * normalized.RowBytes);
-                        for (int x = 0; x < decoded.Width; x++)
-                        {
-                            var color = decoded.GetPixel(x, y);
-                            dstRow[x] = color.Red;
-                        }
+                        int pixelOffset = x * 4;
+                        byte value = isBgra
+                            ? srcRow[pixelOffset + 0]
+                            : srcRow[pixelOffset + 2];
+                        dstRow[x] = value;
                     }
                 }
             }
+            else
+            {
+                for (int y = 0; y < source.Height; y++)
+                {
+                    byte* dstRow = dstBase + (y * normalized.RowBytes);
+                    for (int x = 0; x < source.Width; x++)
+                    {
+                        var color = source.GetPixel(x, y);
+                        dstRow[x] = color.Red;
+                    }
+                }
+            }
+        }
 
-            return normalized;
-        });
+        return normalized;
     }
 
     private void ResolveEncoderInputMetadata(InferenceSession encoderSession)

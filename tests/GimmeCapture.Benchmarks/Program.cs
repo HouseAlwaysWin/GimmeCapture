@@ -137,14 +137,18 @@ public class BackgroundRemovalPixelBenchmarks
         => BackgroundRemovalService.IsSolidBackground(_solidBackgroundBitmap, out _);
 
     [Benchmark]
-    public byte[] RemoveSolidBackground()
-        => BackgroundRemovalService.RemoveSolidBackground(_solidBackgroundBitmap, new SKColor(245, 245, 245, 255));
+    public int RemoveSolidBackground()
+    {
+        using var result = BackgroundRemovalService.RemoveSolidBackground(_solidBackgroundBitmap, new SKColor(245, 245, 245, 255));
+        return result.Width;
+    }
 
     [Benchmark]
-    public byte[] ApplyMask()
+    public int ApplyMask()
     {
         using var resizedMask = BackgroundRemovalService.ProcessMask(_maskTensor, _maskBitmap.Width, _maskBitmap.Height, out _, out _);
-        return BackgroundRemovalService.ApplyMask(_maskBitmap, resizedMask, 0f, 1f);
+        using var result = BackgroundRemovalService.ApplyMask(_maskBitmap, resizedMask, 0f, 1f);
+        return result.Width;
     }
 }
 
