@@ -119,12 +119,15 @@
   </ItemGroup>
 
   <!-- ONNX Runtime: DirectML (GPU) on Windows, CPU package elsewhere. Same managed API surface;
-       the DirectML-specific provider call in OnnxProviderConfigurator is behind #if WINDOWS. -->
+       the DirectML-specific provider call in OnnxProviderConfigurator is behind #if WINDOWS.
+       Both heads stay on ONE version so that shared API surface really is shared. The ceiling is
+       the DirectML package: it stopped at 1.24.4 (2026-03-17) while the base package went on to
+       1.31, so going past this line means leaving DirectML, not just bumping a number. -->
   <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.20.1" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
   </ItemGroup>
   <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.24.4" />
   </ItemGroup>
 
 </Project>
