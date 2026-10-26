@@ -9,6 +9,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- FFmpeg.AutoGen is pointer-based: a test that reads a recording's packets directly needs it. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!-- Tests that construct / subclass Windows-only types (fenced out of the app's net10.0 head):
@@ -22,6 +24,7 @@
     <Compile Remove="ViewModels\MainWindowViewModelHotkeyTests.cs" />
     <!-- Pump a WinForms message loop to stand in for the UI thread. -->
     <Compile Remove="RecordingStartUiStallTests.cs" />
+    <Compile Remove="RecordingAvSyncTests.cs" />
     <Compile Remove="GlobalHotkeyHookLatencyTests.cs" />
     <!-- Records with gdigrab and Windows Graphics Capture, and shows WinForms windows to record. -->
     <Compile Remove="LibavRecordingSessionTests.cs" />

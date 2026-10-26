@@ -72,6 +72,9 @@ public partial class RecordingService : ReactiveObject
     private WaveFileWriter? _audioWriter;
     private NAudio.CoreAudioApi.WasapiCapture? _micCapture;
     private WaveFileWriter? _micWriter;
+    // Audio is written only while this segment's video is capturing: shut until its first frame, shut again the
+    // moment stop is requested. See StartSegmentAsync.
+    private volatile bool _audioGateOpen;
     private NAudio.CoreAudioApi.MMDevice? _micDevice;
     private int _startInProgress;
     private string _lastSelectedVideoEncoderName = string.Empty;
@@ -318,6 +321,13 @@ public partial class RecordingService : ReactiveObject
         string segmentFile = Path.Combine(_tempDir, $"segment_{_segments.Count}.mkv");
         _segments.Add(segmentFile);
 
+        // The audio endpoints open before the video, so they are already delivering when the first frame arrives
+        // (opening the loopback alone takes ~60 ms), but nothing is written until that frame: whatever they hand over
+        // during the video's start-up — encoder set-up, the capture source opening, the wait for the first frame —
+        // has no picture to go with. Finalize lines both tracks up at 0, so that audio used to play behind the picture
+        // by the whole start-up: 2.2 s on a first recording after launch.
+        _audioGateOpen = false;
+
         // Calculate physical pixels for high-DPI
         // Keep coordinate conversion consistent with screen capture services:
         // scale logical region first, then apply physical screen offset.
@@ -352,7 +362,12 @@ public partial class RecordingService : ReactiveObject
         }
 
         var started = await StartFfmpegSegmentAsync(segmentFile);
-        if (!started)
+        if (started)
+        {
+            // The session's start-up gate has seen the first frame by now (or timed out and started anyway).
+            _audioGateOpen = true;
+        }
+        else
         {
             StopAudioCapture();
             StopMicCapture();

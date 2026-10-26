@@ -186,6 +186,13 @@ public partial class RecordingService
                 return;
             }
 
+            // Outside the video's capture: dropped, not written as silence the way a mute is. There is no picture for
+            // this audio, so keeping its length is exactly what would put the tracks out of step.
+            if (!_audioGateOpen)
+            {
+                return;
+            }
+
             if (sourceFormat.Encoding == WaveFormatEncoding.IeeeFloat && sourceFormat.BitsPerSample == 32 && targetFormat.BitsPerSample == 16)
             {
                 int sampleCount = bytesRecorded / 4;
@@ -260,6 +267,13 @@ public partial class RecordingService
         try
         {
             if (_audioWriter == null || bytesRecorded <= 0)
+            {
+                return;
+            }
+
+            // Outside the video's capture: dropped, not written as silence the way a mute is. There is no picture for
+            // this audio, so keeping its length is exactly what would put the tracks out of step.
+            if (!_audioGateOpen)
             {
                 return;
             }

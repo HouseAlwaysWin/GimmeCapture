@@ -529,6 +529,9 @@ public partial class RecordingService
 
     private async Task StopCurrentSegmentAsync()
     {
+        // The video stops capturing now; audio from here on would run past its last frame.
+        _audioGateOpen = false;
+
         bool anyTrackSession = _tracks.AsValueEnumerable().Any(t => t.Session != null || t.GdigrabSession != null);
         if (_nativeRecorder == null && _nativeWgcRecorder == null && _nativeWgcCompositeRecorder == null && !anyTrackSession)
         {
