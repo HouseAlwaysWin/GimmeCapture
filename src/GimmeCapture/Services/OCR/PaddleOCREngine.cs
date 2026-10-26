@@ -365,28 +365,58 @@ public class PaddleOCREngine : IOCREngine
 
     private List<SKRectI> FindBoxesFromMask(Tensor<float> mask, int targetW, int targetH, int origW, int origH)
     {
-        var boxes = new List<SKRectI>();
-        if (!TryBuildDetProbabilityMap(mask, out var probMap, out var h, out var w))
+        if (!TryBuildDetProbabilityMap(mask, out float[] probMap, out int h, out int w))
         {
             return new List<SKRectI> { new SKRectI(0, 0, origW, origH) };
         }
 
-        var visited = new bool[h, w];
+        int length = h * w;
+        bool[] visited = ArrayPool<bool>.Shared.Rent(length);
+        try
+        {
+            // Rent hands back whatever the pool last held, NOT a zeroed array: without this clear the flood
+            // fill would treat leftover true values as already-visited and silently drop text regions.
+            Array.Clear(visited, 0, length);
+            var boxes = FindBoxesInProbabilityMap(probMap.AsSpan(0, length), visited.AsSpan(0, length), h, w, origW, origH);
+            return boxes.Count > 0 ? boxes : new List<SKRectI> { new SKRectI(0, 0, origW, origH) };
+        }
+        finally
+        {
+            ArrayPool<bool>.Shared.Return(visited);
+            ArrayPool<float>.Shared.Return(probMap);
+        }
+    }
+
+    /// <summary>
+    /// Connected-component scan over a detection probability map, returning one box per text blob, scaled from
+    /// the map's <paramref name="w"/>x<paramref name="h"/> grid to <paramref name="origW"/>x<paramref name="origH"/>.
+    /// Both spans are row-major (<c>y * w + x</c>); <paramref name="visited"/> must start all-false.
+    /// </summary>
+    /// <remarks>
+    /// Internal so the blob geometry can be exercised against a synthetic map without a model: the thresholds,
+    /// the minimum-area and 3px rejections and the expansion formula all decide what the OCR actually reads.
+    /// </remarks>
+    internal static List<SKRectI> FindBoxesInProbabilityMap(
+        ReadOnlySpan<float> probMap, Span<bool> visited, int h, int w, int origW, int origH)
+    {
+        var boxes = new List<SKRectI>();
         float scaleX = (float)origW / w;
         float scaleY = (float)origH / h;
         float minBlobArea = h * w * DetMinAreaRatio;
+        var queue = new Queue<(int X, int Y)>();
 
         for (int y = 0; y < h; y++)
         {
             for (int x = 0; x < w; x++)
             {
-                if (visited[y, x] || probMap[y, x] <= DetBoxThreshold) continue;
+                int seed = (y * w) + x;
+                if (visited[seed] || probMap[seed] <= DetBoxThreshold) continue;
 
                 int minX = x, maxX = x, minY = y, maxY = y;
                 int area = 0;
-                var queue = new Queue<(int X, int Y)>();
+                queue.Clear();
                 queue.Enqueue((x, y));
-                visited[y, x] = true;
+                visited[seed] = true;
                 while (queue.Count > 0)
                 {
                     var (cx, cy) = queue.Dequeue();
@@ -412,18 +442,27 @@ public class PaddleOCREngine : IOCREngine
                 if (rectW > 6 && rectH > 6)
                 {
                     boxes.Add(new SKRectI(Math.Max(0, rectX), Math.Max(0, rectY), Math.Min(origW, rectX + rectW), Math.Min(origH, rectY + rectH)));
-                    if (boxes.Count >= DetMaxBoxes) break;
+                    if (boxes.Count >= DetMaxBoxes) return boxes;
                 }
             }
-            if (boxes.Count >= DetMaxBoxes) break;
         }
 
-        return boxes.AsValueEnumerable().Any() ? boxes : new List<SKRectI> { new SKRectI(0, 0, origW, origH) };
+        return boxes;
     }
 
-    private bool TryBuildDetProbabilityMap(Tensor<float> mask, out float[,] probMap, out int h, out int w)
+    /// <summary>
+    /// Rents a row-major (<c>y * w + x</c>) probability map of <c>h * w</c> floats and fills it from
+    /// <paramref name="mask"/>. On success the array is the caller's to return to
+    /// <see cref="ArrayPool{T}"/>; on failure nothing is rented.
+    /// </summary>
+    /// <remarks>
+    /// One flat pooled array rather than <c>float[h, w]</c>: a multi-dimensional array cannot be handed out as
+    /// a <see cref="Span{T}"/>, gets no bounds-check elision in the flood fill's inner loop, and at detection
+    /// sizes lands on the large-object heap on every scan.
+    /// </remarks>
+    private bool TryBuildDetProbabilityMap(Tensor<float> mask, out float[] probMap, out int h, out int w)
     {
-        probMap = new float[0, 0]; h = 0; w = 0;
+        probMap = Array.Empty<float>(); h = 0; w = 0;
         if (mask.Dimensions.Length < 2) return false;
 
         if (mask.Dimensions.Length == 4) // NCHW or NHWC
@@ -440,8 +479,9 @@ public class PaddleOCREngine : IOCREngine
         else if (mask.Dimensions.Length == 2) { h = mask.Dimensions[0]; w = mask.Dimensions[1]; }
 
         if (h == 0 || w == 0) return false;
-        probMap = new float[h, w];
-        FillDetProbabilityMap(mask, probMap, h, w);
+        probMap = ArrayPool<float>.Shared.Rent(h * w);
+        // No clear needed: FillDetProbabilityMap writes every one of the h * w entries.
+        FillDetProbabilityMap(mask, probMap.AsSpan(0, h * w), h, w);
         return true;
     }
 
@@ -499,39 +539,39 @@ public class PaddleOCREngine : IOCREngine
         }
     }
 
-    private static void FillDetProbabilityMap(Tensor<float> mask, float[,] probMap, int h, int w)
+    private static void FillDetProbabilityMap(Tensor<float> mask, Span<float> probMap, int h, int w)
     {
         switch (mask.Dimensions.Length)
         {
             case 4 when mask.Dimensions[1] == 1:
                 for (int y = 0; y < h; y++)
                     for (int x = 0; x < w; x++)
-                        probMap[y, x] = ToProbability(mask[0, 0, y, x]);
+                        probMap[(y * w) + x] = ToProbability(mask[0, 0, y, x]);
                 return;
             case 4 when mask.Dimensions[3] == 1:
                 for (int y = 0; y < h; y++)
                     for (int x = 0; x < w; x++)
-                        probMap[y, x] = ToProbability(mask[0, y, x, 0]);
+                        probMap[(y * w) + x] = ToProbability(mask[0, y, x, 0]);
                 return;
             case 4:
                 for (int y = 0; y < h; y++)
                     for (int x = 0; x < w; x++)
-                        probMap[y, x] = ToProbability(mask[0, 0, y, x]);
+                        probMap[(y * w) + x] = ToProbability(mask[0, 0, y, x]);
                 return;
             case 3 when mask.Dimensions[0] == 1:
                 for (int y = 0; y < h; y++)
                     for (int x = 0; x < w; x++)
-                        probMap[y, x] = ToProbability(mask[0, y, x]);
+                        probMap[(y * w) + x] = ToProbability(mask[0, y, x]);
                 return;
             case 3:
                 for (int y = 0; y < h; y++)
                     for (int x = 0; x < w; x++)
-                        probMap[y, x] = ToProbability(mask[y, x, 0]);
+                        probMap[(y * w) + x] = ToProbability(mask[y, x, 0]);
                 return;
             case 2:
                 for (int y = 0; y < h; y++)
                     for (int x = 0; x < w; x++)
-                        probMap[y, x] = ToProbability(mask[y, x]);
+                        probMap[(y * w) + x] = ToProbability(mask[y, x]);
                 return;
         }
     }
@@ -548,11 +588,14 @@ public class PaddleOCREngine : IOCREngine
         data.CopyTo(new Span<byte>(rowPtr, bitmap.Width * 4));
     }
 
-    private static void TryEnqueueBlobNeighbor(int nx, int ny, int width, int height, float[,] probMap, bool[,] visited, Queue<(int X, int Y)> queue)
+    private static void TryEnqueueBlobNeighbor(int nx, int ny, int width, int height, ReadOnlySpan<float> probMap, Span<bool> visited, Queue<(int X, int Y)> queue)
     {
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited[ny, nx] && probMap[ny, nx] > DetBoxThreshold)
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height) return;
+
+        int index = (ny * width) + nx;
+        if (!visited[index] && probMap[index] > DetBoxThreshold)
         {
-            visited[ny, nx] = true;
+            visited[index] = true;
             queue.Enqueue((nx, ny));
         }
     }

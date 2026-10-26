@@ -1,11 +1,20 @@
 # Span / ArrayPool 效能優化分析結論
 
-> **狀態（2026-06）**：本計畫**大部分已實作**。像素處理、frame buffer、OCR tensor fill、
-> bitmap 轉換、PCM 解碼、背景移除皆已採用 `Span`/unsafe row 存取/`ArrayPool`。
-> 最近再補：移除 `AnnotationRenderService.ApplyMosaic` 的整張 `target.Copy()`（就地取樣）、
-> 將 `PaddleOCREngine.EnhanceBitmapForOcr` 每列 `ToArray()` 改為池化緩衝。
-> **仍待辦（高風險、需可執行驗證）**：`ApplyBlur` 雙暫存 `SKBitmap`、OCR 的
-> `probMap`/`visited` 2D→1D 池化、AI mask 的 PNG encode/decode roundtrip 移除。
+> **狀態（2026-10-26）：本計畫已全部實作，無待辦項目。** 以下保留為設計理由與熱路徑清單，
+> 不是待辦清單 —— 要再找效能，請重新量測，不要照這份文件往下做。
+>
+> 像素處理、frame buffer、OCR tensor fill、bitmap 轉換、PCM 解碼、背景移除都已採用
+> `Span`/unsafe row 存取/`ArrayPool`。`AnnotationRenderService.ApplyMosaic` 已改為就地取樣
+> （移除整張 `target.Copy()`），`PaddleOCREngine.EnhanceBitmapForOcr` 每列的 `ToArray()` 已改為池化緩衝。
+>
+> 2026-06 那版列為「仍待辦」的三項，到 2026-10-26 全部完成：
+>
+> - `ApplyBlur` 雙暫存 `SKBitmap` —— 已改為單一目標 buffer，直接把 target 的子矩形畫進去。
+> - **AI mask 的 PNG encode/decode roundtrip** —— 已移除。`BackgroundRemovalService` 與
+>   `SAM2Service` 改為直接傳 `SKBitmap`，整條去背路徑從 3 次 encode + 3 次 decode 降到 0（PR #207）。
+> - **OCR 的 `probMap`/`visited` 2D→1D 池化** —— 已完成。兩者改為 `ArrayPool` 租用的一維陣列、
+>   以 `y * w + x` 索引；注意 `Rent` 不歸零，`visited` 必須 `Array.Clear`，否則殘留的 true 會讓
+>   flood fill 靜默漏掉文字區域。幾何邏輯由 `PaddleOcrBlobDetectionTests` 罩住（在此之前完全無測試）。
 
 ## Summary
 - 這個專案最值得用 `Span<T> / ArrayPool<T> / unsafe + Span 包裝` 的地方，不是 UI、ViewModel 或設定物件，而是三條真正的熱路徑：
