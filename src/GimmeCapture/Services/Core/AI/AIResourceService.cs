@@ -18,26 +18,23 @@ public class AIResourceService : ReactiveObject
     public AIResourceService(
         IAppSettingsService settingsService,
         AIPathService pathService,
-        NativeResolverService resolverService,
         AIModelDownloader downloader)
-        : this(settingsService, pathService, resolverService, downloader, new AIModelCatalog(), null)
+        : this(settingsService, pathService, downloader, new AIModelCatalog(), null)
     {
     }
 
     public AIResourceService(
         IAppSettingsService settingsService,
         AIPathService pathService,
-        NativeResolverService resolverService,
         AIModelDownloader downloader,
         AIModelCatalog modelCatalog)
-        : this(settingsService, pathService, resolverService, downloader, modelCatalog, null)
+        : this(settingsService, pathService, downloader, modelCatalog, null)
     {
     }
 
     public AIResourceService(
         IAppSettingsService settingsService,
         AIPathService pathService,
-        NativeResolverService resolverService,
         AIModelDownloader downloader,
         AIModelCatalog modelCatalog,
         Action? unloadSam2Runtime)
@@ -63,7 +60,6 @@ public class AIResourceService : ReactiveObject
         _orchestrator = new AIResourceOrchestrator(
             settingsService,
             pathService,
-            resolverService,
             _modelCatalog,
             _installer,
             () => RequestGlobalUnload?.Invoke(),
@@ -154,9 +150,4 @@ public class AIResourceService : ReactiveObject
     public virtual async Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default) => await _orchestrator.EnsureOCRAsync(language, ct);
 
     public virtual Task<bool> EnsureAllOcrAsync(CancellationToken ct = default) => _orchestrator.EnsureAllOcrAsync(ct);
-
-    public void SetupNativeResolvers()
-    {
-        _orchestrator.SetupNativeResolvers();
-    }
 }

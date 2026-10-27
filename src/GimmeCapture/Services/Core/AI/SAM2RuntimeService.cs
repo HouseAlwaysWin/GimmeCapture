@@ -30,7 +30,6 @@ public sealed class SAM2RuntimeService : IDisposable
     private static readonly TimeSpan ShutdownUnloadTimeout = TimeSpan.FromSeconds(5);
 
     private readonly AIPathService _pathService;
-    private readonly NativeResolverService _resolverService;
     private InferenceSession? _cachedEncoder;
     private InferenceSession? _cachedDecoder;
     private SAM2Variant? _cachedVariant;
@@ -41,10 +40,9 @@ public sealed class SAM2RuntimeService : IDisposable
     private readonly ResourceUseGate _useGate = new();
     private readonly SemaphoreSlim _inferenceLock = new(1, 1);
 
-    public SAM2RuntimeService(AIPathService pathService, NativeResolverService resolverService)
+    public SAM2RuntimeService(AIPathService pathService)
     {
         _pathService = pathService ?? throw new ArgumentNullException(nameof(pathService));
-        _resolverService = resolverService ?? throw new ArgumentNullException(nameof(resolverService));
     }
 
     public bool IsLoaded => _cachedVariant.HasValue && _cachedEncoder != null && _cachedDecoder != null;
@@ -145,8 +143,6 @@ public sealed class SAM2RuntimeService : IDisposable
             {
                 return;
             }
-
-            _resolverService.SetupNativeResolvers();
 
             var paths = _pathService.GetSAM2Paths(variant);
             if (!File.Exists(paths.Encoder) || !File.Exists(paths.Decoder))

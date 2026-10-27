@@ -24,9 +24,8 @@ public sealed class TranslationSessionServiceTests : IDisposable
         _settingsService.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
 
         var pathService = new AIPathService(_settingsService);
-        var resolver = new NativeResolverService(pathService);
         var downloader = new AIModelDownloader();
-        var aiResourceService = new AIResourceService(_settingsService, pathService, resolver, downloader);
+        var aiResourceService = new AIResourceService(_settingsService, pathService, downloader);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
 
         _sut = new TranslationSessionService(

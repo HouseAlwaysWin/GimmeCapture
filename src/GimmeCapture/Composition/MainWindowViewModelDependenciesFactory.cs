@@ -48,18 +48,16 @@ public static class MainWindowViewModelDependenciesFactory
         var hotkeyMappingService = new HotkeyMappingService();
         var hotkeyRouterService = new HotkeyRouterService();
         var aiPathService = new AIPathService(settingsService);
-        var nativeResolverService = new NativeResolverService(aiPathService);
         var aiModelDownloader = new AIModelDownloader();
         var aiModelCatalog = new AIModelCatalog();
         var resourceQueue = new ResourceQueueService();
         var ffmpegDownloader = new Lazy<FFmpegDownloaderService>(() => new FFmpegDownloaderService(settingsService));
         var recordingService = new Lazy<RecordingService>(() => new RecordingService(ffmpegDownloader.Value, settingsService));
         var updateService = new Lazy<UpdateService>(() => new UpdateService(AppVersionInfo.CurrentVersion));
-        var sam2RuntimeService = new Lazy<SAM2RuntimeService>(() => new SAM2RuntimeService(aiPathService, nativeResolverService));
+        var sam2RuntimeService = new Lazy<SAM2RuntimeService>(() => new SAM2RuntimeService(aiPathService));
         var aiResourceService = new Lazy<AIResourceService>(() => new AIResourceService(
             settingsService,
             aiPathService,
-            nativeResolverService,
             aiModelDownloader,
             aiModelCatalog,
             sam2RuntimeService.Value.UnloadModels));

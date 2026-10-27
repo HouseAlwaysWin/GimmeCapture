@@ -35,10 +35,9 @@ public class MainWindowViewModelConstructionTests
         var recordingService = new RecordingService(ffmpegDownloader, settingsService);
         var updateService = new UpdateService("1.2.3");
         var aiPathService = new AIPathService(settingsService);
-        var nativeResolverService = new NativeResolverService(aiPathService);
         var aiModelCatalog = new AIModelCatalog();
-        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader(), aiModelCatalog);
-        var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
+        var aiResourceService = new AIResourceService(settingsService, aiPathService, new AIModelDownloader(), aiModelCatalog);
+        var sam2RuntimeService = new SAM2RuntimeService(aiPathService);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
         var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Orchestrator);
         var resourceQueue = new ResourceQueueService();

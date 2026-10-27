@@ -22,10 +22,9 @@ public sealed class AIScanSessionServiceTests : IDisposable
         var captureService = new Mock<IScreenCaptureService>();
         var settingsService = new AppSettingsService(_baseDir);
         var pathService = new AIPathService(settingsService);
-        var resolver = new NativeResolverService(pathService);
         var downloader = new Mock<AIModelDownloader>();
-        var aiResourceService = new Mock<AIResourceService>(settingsService, pathService, resolver, downloader.Object);
-        var sam2RuntimeService = new SAM2RuntimeService(pathService, resolver);
+        var aiResourceService = new Mock<AIResourceService>(settingsService, pathService, downloader.Object);
+        var sam2RuntimeService = new SAM2RuntimeService(pathService);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService.Object);
         var ocrEngineFactory = new Mock<IOcrEngineFactory>();
         var ocrEngine = new FakeOcrEngine(new List<SKRectI> { new(10, 12, 40, 36) });
@@ -75,10 +74,9 @@ public sealed class AIScanSessionServiceTests : IDisposable
         var captureService = new Mock<IScreenCaptureService>();
         var settingsService = new AppSettingsService(_baseDir);
         var pathService = new AIPathService(settingsService);
-        var resolver = new NativeResolverService(pathService);
         var downloader = new Mock<AIModelDownloader>();
-        var aiResourceService = new Mock<AIResourceService>(settingsService, pathService, resolver, downloader.Object);
-        var sam2RuntimeService = new SAM2RuntimeService(pathService, resolver);
+        var aiResourceService = new Mock<AIResourceService>(settingsService, pathService, downloader.Object);
+        var sam2RuntimeService = new SAM2RuntimeService(pathService);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService.Object);
         var ocrEngineFactory = new Mock<IOcrEngineFactory>();
         var ocrEngine = new FakeOcrEngine(new List<SKRectI> { new(10, 12, 40, 36) });

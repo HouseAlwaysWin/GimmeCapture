@@ -36,7 +36,6 @@ public sealed class OcrScriptDetectorTests : IDisposable
         _aiResourceService = new AIResourceService(
             settingsService,
             _pathService,
-            new NativeResolverService(_pathService),
             new AIModelDownloader());
     }
 

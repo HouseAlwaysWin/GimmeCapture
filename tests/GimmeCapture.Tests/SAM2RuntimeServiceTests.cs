@@ -18,8 +18,7 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         var settingsService = new AppSettingsService(_baseDir);
         settingsService.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
         var pathService = new AIPathService(settingsService);
-        var resolverService = new NativeResolverService(pathService);
-        using var sut = new SAM2RuntimeService(pathService, resolverService);
+        using var sut = new SAM2RuntimeService(pathService);
 
         await sut.LoadModelsAsync(SAM2Variant.Tiny);
 
@@ -36,8 +35,7 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         var settingsService = new AppSettingsService(_baseDir);
         settingsService.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
         var pathService = new AIPathService(settingsService);
-        var resolverService = new NativeResolverService(pathService);
-        using var sut = new SAM2RuntimeService(pathService, resolverService);
+        using var sut = new SAM2RuntimeService(pathService);
 
         await sut.EnsureLoadedAndWarmedAsync(SAM2Variant.Tiny);
 
@@ -51,8 +49,7 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
     {
         var settingsService = new AppSettingsService(_baseDir);
         var pathService = new AIPathService(settingsService);
-        var resolverService = new NativeResolverService(pathService);
-        using var sut = new SAM2RuntimeService(pathService, resolverService);
+        using var sut = new SAM2RuntimeService(pathService);
 
         sut.UnloadModels();
 
@@ -68,8 +65,7 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
     {
         var settingsService = new AppSettingsService(_baseDir);
         var pathService = new AIPathService(settingsService);
-        var resolverService = new NativeResolverService(pathService);
-        using var sut = new SAM2RuntimeService(pathService, resolverService);
+        using var sut = new SAM2RuntimeService(pathService);
 
         var leaseId = sut.AcquireLease();
         Assert.True(sut.HasActiveLeases);
@@ -89,7 +85,7 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
     {
         var settingsService = new AppSettingsService(_baseDir);
         var pathService = new AIPathService(settingsService);
-        return new SAM2RuntimeService(pathService, new NativeResolverService(pathService));
+        return new SAM2RuntimeService(pathService);
     }
 
     [Fact]

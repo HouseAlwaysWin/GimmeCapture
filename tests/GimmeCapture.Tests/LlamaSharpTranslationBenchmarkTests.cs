@@ -68,7 +68,7 @@ public sealed class LlamaSharpTranslationBenchmarkTests : IDisposable
         settings.Settings.LlamaGpuLayers = 0;
 
         var paths = new AIPathService(settings);
-        var resources = new AIResourceService(settings, paths, new NativeResolverService(paths), new AIModelDownloader());
+        var resources = new AIResourceService(settings, paths, new AIModelDownloader());
         using var engine = new LlamaSharpTranslationEngine(resources, settings, new InMemoryTranslationCache());
 
         // The first call loads the weights: keep that out of the per-sentence figures.

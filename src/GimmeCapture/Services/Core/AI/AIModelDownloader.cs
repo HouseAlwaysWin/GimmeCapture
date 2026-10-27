@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
@@ -70,49 +69,6 @@ public class AIModelDownloader : ReactiveObject
         await _artifactDownloader
             .DownloadAsync(destinationDescriptor, destinationDirectory, progress, cancellationToken)
             .ConfigureAwait(false);
-    }
-
-    public virtual async Task DownloadAndExtractZipAsync(
-        ArtifactDescriptor descriptor,
-        string outputDirectory,
-        double progressOffset,
-        double progressWeight,
-        CancellationToken cancellationToken)
-    {
-        var zipPath = Path.Combine(outputDirectory, descriptor.FileName);
-        await DownloadFileAsync(descriptor, zipPath, progressOffset, progressWeight, cancellationToken)
-            .ConfigureAwait(false);
-
-        try
-        {
-            await Task.Run(() =>
-            {
-                using var archive = ZipFile.OpenRead(zipPath);
-                foreach (var entry in archive.Entries)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (!entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var fileName = Path.GetFileName(entry.FullName);
-                    if (string.IsNullOrWhiteSpace(fileName))
-                    {
-                        continue;
-                    }
-
-                    entry.ExtractToFile(Path.Combine(outputDirectory, fileName), overwrite: true);
-                }
-            }, cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            if (File.Exists(zipPath))
-            {
-                File.Delete(zipPath);
-            }
-        }
     }
 
     private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>

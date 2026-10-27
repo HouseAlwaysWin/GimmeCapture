@@ -489,9 +489,10 @@ public partial class FloatingImageViewModel
 
     public async Task<bool> EnsureAIResourcesAsync()
     {
-        // 1. Check if already ready - Fast path
+        // 1. Check if already ready - Fast path. SAM2 alone: AI Core used to be needed for the ONNX Runtime it
+        // downloaded, and the runtime ships with the app now, so AI Core is only background removal's model.
         var variant = _appSettingsService.Settings.SelectedSAM2Variant;
-        if (_aiResourceService.IsAICoreReady() && _aiResourceService.IsSAM2Ready(variant)) return true;
+        if (_aiResourceService.IsSAM2Ready(variant)) return true;
 
         // 2. Check if already downloading (Background)
         var currentStatus = _resourceQueue.GetSnapshot("AI")?.Status;
@@ -508,10 +509,6 @@ public partial class FloatingImageViewModel
         // 4. Start Download (Fire and Forget from UI perspective)
         _resourceQueue.EnqueueAsync("AI", async ct =>
         {
-             // Download Core and Selected Variant
-             bool coreReady = await _aiResourceService.EnsureAICoreAsync(ct);
-             if (!coreReady) return false;
-             
              var variant = _appSettingsService.Settings.SelectedSAM2Variant;
              return await _aiResourceService.EnsureSAM2Async(variant, ct);
         }).Forget("FloatingImage.EnqueueAI");
@@ -542,8 +539,8 @@ public partial class FloatingImageViewModel
         }
 
         // 3. Not ready, Not downloading -> Ask for permission
-        // Background removal's own question (~300 MB of ONNX Runtime and U2Net); it used to ask interactive
-        // selection's (~100 MB).
+        // Background removal's own question (the ~170 MB U2Net model); it used to ask interactive selection's
+        // (~100 MB).
         var title = Localization["AIDownloadTitle"];
         var msg = Localization["AIDownloadPrompt"];
         bool confirmed = false;

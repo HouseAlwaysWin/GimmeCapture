@@ -46,9 +46,6 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
     {
         if (_isInitialized) return;
 
-        // Ensure we load the native libraries from the custom path
-        _aiResourceService.SetupNativeResolvers();
-
         var baseDir = _aiResourceService.GetAIResourcesPath();
         var modelPath = _pathService.GetAICoreModelPath();
 

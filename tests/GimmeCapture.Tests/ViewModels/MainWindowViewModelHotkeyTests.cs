@@ -25,11 +25,10 @@ public class MainWindowViewModelHotkeyTests
 
         var settingsService = new AppSettingsService(tempDir);
         var aiPathService = new AIPathService(settingsService);
-        var nativeResolverService = new NativeResolverService(aiPathService);
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
         var aiModelCatalog = new AIModelCatalog();
-        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader(), aiModelCatalog);
-        var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
+        var aiResourceService = new AIResourceService(settingsService, aiPathService, new AIModelDownloader(), aiModelCatalog);
+        var sam2RuntimeService = new SAM2RuntimeService(aiPathService);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
         var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Orchestrator);
         var hotkeyCoordinator = new CountingGlobalHotkeySettingsCoordinator();
@@ -132,11 +131,10 @@ public class MainWindowViewModelHotkeyTests
 
         var settingsService = new AppSettingsService(tempDir);
         var aiPathService = new AIPathService(settingsService);
-        var nativeResolverService = new NativeResolverService(aiPathService);
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
         var aiModelCatalog = new AIModelCatalog();
-        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader(), aiModelCatalog);
-        var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
+        var aiResourceService = new AIResourceService(settingsService, aiPathService, new AIModelDownloader(), aiModelCatalog);
+        var sam2RuntimeService = new SAM2RuntimeService(aiPathService);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
         var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Orchestrator);
         var hotkeyCoordinator = new CountingGlobalHotkeySettingsCoordinator();

@@ -100,6 +100,7 @@ internal sealed class AIResourceInstaller
             _callbacks.RequestGlobalUnload();
             _callbacks.UnloadAllSessions();
 
+            // The runtime folder is what versions before the runtime shipped with the app downloaded.
             var runtimeDir = _pathService.GetRuntimeDir();
             var u2net = _pathService.GetAICoreModelPath();
 
@@ -172,39 +173,11 @@ internal sealed class AIResourceInstaller
             _downloader.CurrentDownloadName = "AI Core";
             _downloader.DownloadProgress = 0;
 
-            Directory.CreateDirectory(_pathService.GetRuntimeDir());
             Directory.CreateDirectory(_pathService.GetAIModelsDir());
 
-            var package = _modelCatalog.GetAICorePackage();
-
-            // The AI-Core runtime zip is the Windows-only onnxruntime.dll build; on Linux/macOS the native
-            // runtime ships with the app (libonnxruntime.so/.dylib), so skip it and only fetch the model.
-            if (OperatingSystem.IsWindows())
-            {
-                var onnxDll = _pathService.GetOnnxDllPath();
-                if (!File.Exists(onnxDll))
-                {
-                    await _downloader.DownloadAndExtractZipAsync(package.OnnxRuntimeZip, _pathService.GetRuntimeDir(), 0, 60, ct);
-                }
-                else
-                {
-                    _downloader.DownloadProgress = 60;
-                }
-            }
-            else
-            {
-                _downloader.DownloadProgress = 60;
-            }
-
-            var modelPath = _pathService.GetAICoreModelPath();
-            if (!File.Exists(modelPath))
-            {
-                await _downloader.DownloadFileAsync(package.U2NetModel, modelPath, 60, 40, ct);
-            }
-            else
-            {
-                _downloader.DownloadProgress = 100;
-            }
+            // Only the model: the ONNX Runtime ships with the app on every platform (see AICorePackage).
+            await _downloader.DownloadFileAsync(
+                _modelCatalog.GetAICorePackage().U2NetModel, _pathService.GetAICoreModelPath(), 0, 100, ct);
 
             return _callbacks.IsAICoreReady();
         }

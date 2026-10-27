@@ -16,8 +16,12 @@ public readonly record struct LlamaModelPreset(
     public string FileName => Artifact?.FileName ?? string.Empty;
 }
 
+/// <summary>
+/// The background-removal model. It used to come with onnxruntime-win-x64-gpu-1.20.1.zip, a separate ONNX Runtime
+/// that the app loaded in place of the one it ships. Its 642 MB CUDA provider only ran with CUDA and cuDNN installed,
+/// and once the shipped runtime moved to 1.24.4 the old DLL crashed the app on its first session.
+/// </summary>
 public readonly record struct AICorePackage(
-    ArtifactDescriptor OnnxRuntimeZip,
     ArtifactDescriptor U2NetModel);
 
 public readonly record struct Sam2ModelPackage(
@@ -118,11 +122,6 @@ public sealed class AIModelCatalog
 
     public AICorePackage GetAICorePackage() =>
         new(
-            Descriptor(
-                "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip",
-                "onnxruntime-win-x64-gpu-1.20.1.zip",
-                "3e9658d4aa7c21b3f5cbb5a7ce0356184f3c183c317b52f9cfff23a3f079634e",
-                337_932_991),
             Descriptor(
                 "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx",
                 "u2net.onnx",

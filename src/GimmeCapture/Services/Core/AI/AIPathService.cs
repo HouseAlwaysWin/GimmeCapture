@@ -68,16 +68,13 @@ public class AIPathService
         return Path.Combine(GetAIResourcesPath(), "models", "u2net.onnx");
     }
 
-    public virtual string GetOnnxDllPath()
-    {
-        return Path.Combine(GetAIResourcesPath(), "runtime", "onnxruntime.dll");
-    }
-
     public virtual string GetAIModelsDir()
     {
         return Path.Combine(GetAIResourcesPath(), "models");
     }
 
+    /// <summary>Where versions before the ONNX Runtime shipped with the app downloaded it. Nothing loads it now; only
+    /// removing the module and the storage sweep still look here, to delete it.</summary>
     public virtual string GetRuntimeDir()
     {
         return Path.Combine(GetAIResourcesPath(), "runtime");

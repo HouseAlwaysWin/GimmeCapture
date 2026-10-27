@@ -24,9 +24,8 @@ public class PaddleOCREngineTests
     {
         _mockSettings = new Mock<IAppSettingsService>();
         var mockPath = new Mock<AIPathService>(_mockSettings.Object);
-        var mockResolver = new Mock<NativeResolverService>(mockPath.Object);
         var mockDownloader = new Mock<AIModelDownloader>();
-        _mockAiResource = new Mock<AIResourceService>(_mockSettings.Object, mockPath.Object, mockResolver.Object, mockDownloader.Object);
+        _mockAiResource = new Mock<AIResourceService>(_mockSettings.Object, mockPath.Object, mockDownloader.Object);
         _ocrRuntimeService = new OcrRuntimeService(_mockAiResource.Object);
         _sut = new PaddleOCREngine(_mockAiResource.Object, _mockSettings.Object, _ocrRuntimeService);
     }

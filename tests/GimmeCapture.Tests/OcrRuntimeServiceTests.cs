@@ -28,7 +28,6 @@ public sealed class OcrRuntimeServiceTests : IDisposable
         var aiResourceService = new AIResourceService(
             settingsService,
             pathService,
-            new NativeResolverService(pathService),
             new AIModelDownloader());
 
         _sut = new OcrRuntimeService(aiResourceService);

@@ -12,9 +12,10 @@ public static class PowerShellClipboardCommand
 {
     /// <summary>
     /// Windows PowerShell by its full System32 path. Starting it as a bare <c>"powershell"</c> made Windows search
-    /// for it — and PowerShell does not live in the root of System32, so the search reached PATH, whose FIRST entry
-    /// is the user-writable AI runtime folder (<c>NativeResolverService</c> prepends it). Any
-    /// <c>powershell.exe</c> dropped there would have run in its place on every "copy recording".
+    /// for it — and PowerShell does not live in the root of System32, so the search reached PATH, whose first entry
+    /// was a user-writable folder then (the AI runtime folder, which the app put there until it stopped downloading
+    /// its own ONNX Runtime). Any <c>powershell.exe</c> dropped there would have run in its place on every "copy
+    /// recording".
     /// </summary>
     public static string ExecutablePath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.System),

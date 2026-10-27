@@ -12,7 +12,6 @@ public sealed class AIResourceOrchestrator
 {
     private readonly IAppSettingsService _settingsService;
     private readonly AIPathService _pathService;
-    private readonly NativeResolverService _resolverService;
     private readonly AIModelCatalog _modelCatalog;
     private readonly Action _unloadSam2Runtime;
     private readonly AIResourceInstaller _installer;
@@ -21,7 +20,6 @@ public sealed class AIResourceOrchestrator
     internal AIResourceOrchestrator(
         IAppSettingsService settingsService,
         AIPathService pathService,
-        NativeResolverService resolverService,
         AIModelCatalog modelCatalog,
         AIResourceInstaller installer,
         Action requestGlobalUnload,
@@ -29,7 +27,6 @@ public sealed class AIResourceOrchestrator
     {
         _settingsService = settingsService;
         _pathService = pathService;
-        _resolverService = resolverService;
         _modelCatalog = modelCatalog;
         _installer = installer;
         _requestGlobalUnload = requestGlobalUnload;
@@ -118,19 +115,8 @@ public sealed class AIResourceOrchestrator
         return !string.IsNullOrWhiteSpace(modelPath) && File.Exists(modelPath);
     }
 
-    public bool IsAICoreReady()
-    {
-        var modelPath = _pathService.GetAICoreModelPath();
-        // Windows downloads the ONNX runtime as onnxruntime.dll; on Linux/macOS the native runtime
-        // (libonnxruntime.so/.dylib) is bundled with the app, so only the model needs to be present.
-        if (!OperatingSystem.IsWindows())
-        {
-            return File.Exists(modelPath);
-        }
-
-        var onnxDll = _pathService.GetOnnxDllPath();
-        return File.Exists(modelPath) && File.Exists(onnxDll);
-    }
+    // The ONNX Runtime ships with the app on every platform, so the model is the whole module.
+    public bool IsAICoreReady() => File.Exists(_pathService.GetAICoreModelPath());
 
     public bool IsSAM2Ready(SAM2Variant variant)
     {
@@ -190,11 +176,6 @@ public sealed class AIResourceOrchestrator
     public Task<bool> EnsureLlamaModelAsync(string modelId, CancellationToken ct = default) => _installer.EnsureLlamaModelAsync(modelId, ct);
 
     public bool RemoveLlamaModelPreset(string modelId) => _installer.RemoveLlamaModelPreset(modelId);
-
-    public void SetupNativeResolvers()
-    {
-        _resolverService.SetupNativeResolvers();
-    }
 
     public void RequestGlobalUnload()
     {

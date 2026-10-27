@@ -19,9 +19,8 @@ public class LlamaModelCatalogTests : IDisposable
         _settings.Settings.LlamaModelId = "translategemma-4b-it";
 
         var pathService = new AIPathService(_settings);
-        var resolver = new NativeResolverService(pathService);
         var downloader = new AIModelDownloader();
-        _sut = new AIResourceService(_settings, pathService, resolver, downloader);
+        _sut = new AIResourceService(_settings, pathService, downloader);
     }
 
     [Fact]

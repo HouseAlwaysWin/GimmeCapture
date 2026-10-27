@@ -42,10 +42,9 @@ public class FloatingImageViewModelTests
         mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
         
         var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
-        var mockAiResolver = new Mock<NativeResolverService>(mockAiPath.Object);
         var mockAiDownloader = new Mock<AIModelDownloader>();
-        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiResolver.Object, mockAiDownloader.Object);
-        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object, mockAiResolver.Object);
+        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiDownloader.Object);
+        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object);
         var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object, new ResourceQueueService());
 
         // Act
@@ -63,10 +62,9 @@ public class FloatingImageViewModelTests
         mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
 
         var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
-        var mockAiResolver = new Mock<NativeResolverService>(mockAiPath.Object);
         var mockAiDownloader = new Mock<AIModelDownloader>();
-        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiResolver.Object, mockAiDownloader.Object);
-        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object, mockAiResolver.Object);
+        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiDownloader.Object);
+        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object);
         var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object, new ResourceQueueService());
         var sam2Service = new SAM2Service(sam2Runtime, mockSettings.Object);
 
@@ -89,10 +87,9 @@ public class FloatingImageViewModelTests
         mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
 
         var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
-        var mockAiResolver = new Mock<NativeResolverService>(mockAiPath.Object);
         var mockAiDownloader = new Mock<AIModelDownloader>();
-        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiResolver.Object, mockAiDownloader.Object);
-        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object, mockAiResolver.Object);
+        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiDownloader.Object);
+        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object);
         var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object, new ResourceQueueService());
         var sam2Service = new SAM2Service(sam2Runtime, mockSettings.Object);
 

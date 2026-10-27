@@ -26,7 +26,6 @@ public sealed class LlamaSharpTranslationEngineLifetimeTests : IDisposable
         var aiResourceService = new AIResourceService(
             settingsService,
             pathService,
-            new NativeResolverService(pathService),
             new AIModelDownloader());
 
         _sut = new LlamaSharpTranslationEngine(aiResourceService, settingsService, new InMemoryTranslationCache());
