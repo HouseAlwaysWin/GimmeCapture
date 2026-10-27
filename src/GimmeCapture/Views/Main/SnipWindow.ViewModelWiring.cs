@@ -135,6 +135,14 @@ public partial class SnipWindow : Window
             Close();
         };
 
+        // The same two turns AvaloniaCaptureVisibilityCoordinator takes before a grab: whatever layout and render
+        // work is queued, a newly shown pin's included, runs before the caller goes on.
+        _viewModel.WaitForRenderAction = async () =>
+        {
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(static () => { }, Avalonia.Threading.DispatcherPriority.Render);
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(static () => { }, Avalonia.Threading.DispatcherPriority.Background);
+        };
+
         _viewModel.ForceClearSelectionRegionAction = () =>
         {
             try

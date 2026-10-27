@@ -348,6 +348,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     // Actions
     public Action? CloseAction { get; set; }
+    /// <summary>Assigned by SnipWindow: completes once the UI thread has run the layout and render work already
+    /// queued, so a window just opened is drawn before whatever follows. Null (as in tests) goes on at once.</summary>
+    public Func<Task>? WaitForRenderAction { get; set; }
     /// <summary>Assigned by SnipWindow: forcibly collapses the Win32 selection-border window region to a 1×1 stub
     /// and repaints, so the yellow selection ring can't linger on screen if the overlay isn't torn down.</summary>
     public Action? ForceClearSelectionRegionAction { get; set; }

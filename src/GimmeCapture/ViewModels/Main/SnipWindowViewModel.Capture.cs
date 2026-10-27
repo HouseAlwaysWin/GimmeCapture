@@ -458,12 +458,31 @@ public partial class SnipWindowViewModel
 
     // Pin passes no status key: it opens a floating window immediately and never showed a processing spinner.
     private Task ExecutePinCaptureAsync(bool runAI, bool initialInteractive) =>
-        RunCaptureCommitAsync(null, skBitmap =>
+        RunCaptureCommitAsync(null, async skBitmap =>
         {
-            var avaloniaBitmap = ToAvaloniaBitmap(skBitmap);
+            var avaloniaBitmap = _pinBitmapFactory(skBitmap);
             OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0, null);
-            return Task.CompletedTask;
+
+            // Opening the pin and closing this overlay were one UI job, about 85 ms on a published build, so the pin
+            // was not drawn and no key was handled until the overlay's teardown had finished too. Let the pin's
+            // layout and first frame run first; the close in RunCaptureCommitAsync is then a job of its own.
+            if (WaitForRenderAction != null)
+            {
+                await WaitForRenderAction();
+            }
         });
+
+    private Func<SKBitmap, Avalonia.Media.Imaging.Bitmap> _pinBitmapFactory = ToAvaloniaBitmap;
+
+    /// <summary>
+    /// Test seam, for the same reason as <see cref="UseClipboardPreviewFactoryForTest"/>: the pin's Avalonia bitmap
+    /// needs a render platform the ViewModel tests do not stand up. Production never calls this.
+    /// </summary>
+    internal void UsePinBitmapFactoryForTest(Func<SKBitmap, Avalonia.Media.Imaging.Bitmap> factory) =>
+        _pinBitmapFactory = factory;
+
+    // Test hook: drives the private pin-capture flow directly, like RunCopyCaptureForTestAsync.
+    internal Task RunPinCaptureForTestAsync() => ExecutePinCaptureAsync(runAI: false, initialInteractive: false);
 
     /// <summary>Copies a physical-pixel SKBitmap into an Avalonia bitmap without a PNG stream roundtrip.
     /// The caller keeps ownership of <paramref name="skBitmap"/>.</summary>

@@ -464,6 +464,39 @@ public class SnipWindowViewModelTests
             Times.Never);
     }
 
+    [Fact]
+    public async Task PinCapture_ClosesTheOverlayOnlyAfterThePinHasHadItsRenderTurn()
+    {
+        // Opening the pin and closing the overlay were one UI job, so the pin was not drawn, nor a key handled,
+        // until the overlay's teardown had run as well. The close now waits for the view's render turn.
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object, host: mainVm, settings: mainVm);
+        vm.Surface.UseHeadlessBackdropForTest();
+        vm.Surface.FreezeFromPreOverlayGrab(new SkiaSharp.SKBitmap(800, 600), 1.0);
+        vm.SelectionRect = new Rect(10, 10, 40, 30);
+        vm.UsePinBitmapFactoryForTest(_ => null!);
+
+        var steps = new List<string>();
+        var renderTurn = new TaskCompletionSource();
+        vm.OpenPinWindowAction = (_, _, _, _, _, _, _, _, _) => steps.Add("pin");
+        vm.WaitForRenderAction = () =>
+        {
+            steps.Add("render turn");
+            return renderTurn.Task;
+        };
+        vm.CloseAction = () => steps.Add("close");
+
+        Task pin = vm.RunPinCaptureForTestAsync();
+        Assert.Equal(new[] { "pin", "render turn" }, steps);
+
+        renderTurn.SetResult();
+        await pin;
+        Assert.Equal(new[] { "pin", "render turn", "close" }, steps);
+    }
+
     [Theory]
     [InlineData(true, "StatusCopied")]
     [InlineData(false, "StatusCopyFailed")]

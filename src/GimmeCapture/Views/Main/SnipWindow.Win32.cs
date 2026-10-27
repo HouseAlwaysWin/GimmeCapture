@@ -192,17 +192,24 @@ public partial class SnipWindow : Window
         _llKeyboardThread = null;
         if (thread != null)
         {
-            // The hook thread may be waiting for this thread to route a key. It gives up after UiRouteTimeout and
-            // then runs the unhook, so this waits about that long at most.
-            thread.TryInvoke(() =>
+            // Unhook and end the hook thread without the UI thread waiting for either: that wait cost every overlay
+            // close 20-25 ms on a published build, and longer when the hook thread was itself waiting for this thread
+            // to route a key (it gives up after UiRouteTimeout). The filter above already passes every key straight
+            // through, so the hook does nothing in the meantime; the delegate stays referenced until it is unhooked.
+            var hookProc = _llKeyboardDelegate;
+            Task.Run(() =>
             {
-                if (_llKeyboardHook != IntPtr.Zero)
+                thread.TryInvoke(() =>
                 {
-                    User32.UnhookWindowsHookEx(_llKeyboardHook);
-                    _llKeyboardHook = IntPtr.Zero;
-                }
-            }, TimeSpan.FromMilliseconds(500));
-            thread.Dispose();
+                    if (_llKeyboardHook != IntPtr.Zero)
+                    {
+                        User32.UnhookWindowsHookEx(_llKeyboardHook);
+                        _llKeyboardHook = IntPtr.Zero;
+                    }
+                }, TimeSpan.FromMilliseconds(500));
+                thread.Dispose();
+                GC.KeepAlive(hookProc);
+            }).Forget("SnipHook.Uninstall");
         }
 #endif
         _llKeyboardDelegate = null;
