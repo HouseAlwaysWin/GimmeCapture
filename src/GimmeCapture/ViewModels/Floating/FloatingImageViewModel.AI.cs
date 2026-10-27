@@ -1,5 +1,6 @@
 using Avalonia.Media.Imaging;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System.Reactive;
 using System.Collections.Generic;
 using GimmeCapture.Models;

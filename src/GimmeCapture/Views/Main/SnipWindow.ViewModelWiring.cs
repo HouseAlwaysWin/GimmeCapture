@@ -16,6 +16,7 @@ using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Interop;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using Avalonia.Interactivity;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -426,7 +427,7 @@ public partial class SnipWindow : Window
                 (t1, t2, _, __, ___, ____) => t1)
             .Throttle(TimeSpan.FromMilliseconds(16))
             .ObserveOn(RxSchedulers.MainThreadScheduler)
-            .Subscribe(tuple => UpdateWindowRegion(tuple.Item2, tuple.Item3, tuple.Item4));
+            .Subscribe(values => UpdateWindowRegion(values.Property2, values.Property3, values.Property4));
     }
 
     // Focus, translation persistence, capture-excluded grabs and the save picker.

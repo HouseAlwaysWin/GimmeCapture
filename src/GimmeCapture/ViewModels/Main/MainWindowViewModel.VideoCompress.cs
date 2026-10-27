@@ -12,6 +12,7 @@ using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;

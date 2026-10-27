@@ -1,7 +1,7 @@
 using Avalonia;
 using System;
 using GimmeCapture.Services.Core.Infrastructure;
-using ReactiveUI.Avalonia;
+using ReactiveUI.Avalonia.Reactive;
 
 namespace GimmeCapture;
 

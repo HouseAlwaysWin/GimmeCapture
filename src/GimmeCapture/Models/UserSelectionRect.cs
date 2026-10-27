@@ -1,5 +1,6 @@
 using Avalonia;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Models;
 

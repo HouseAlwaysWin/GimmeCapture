@@ -11,6 +11,7 @@ using GimmeCapture.Services.Core.Rendering;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;

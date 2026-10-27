@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using GimmeCapture.Models;
 
 namespace GimmeCapture.Services.Core.AI;

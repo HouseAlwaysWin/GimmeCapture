@@ -2,6 +2,7 @@ using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using GimmeCapture.Services.Core.Infrastructure;
 using System;
 using System.Threading.Tasks;

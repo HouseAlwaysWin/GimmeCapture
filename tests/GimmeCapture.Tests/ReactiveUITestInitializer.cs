@@ -1,7 +1,8 @@
 using System.Reactive.Concurrency;
 using System.Runtime.CompilerServices;
 using ReactiveUI;
-using ReactiveUI.Builder;
+using ReactiveUI.Reactive;
+using ReactiveUI.Reactive.Builder;
 
 namespace GimmeCapture.Tests;
 

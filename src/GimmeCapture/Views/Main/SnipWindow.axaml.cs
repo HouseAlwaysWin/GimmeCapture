@@ -17,6 +17,7 @@ using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Interop;
 
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using Avalonia.Interactivity;
 using System.Reactive.Linq;
 using System.Threading.Tasks;

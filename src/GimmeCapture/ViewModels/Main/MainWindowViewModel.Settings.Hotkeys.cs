@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.ViewModels.Main;
 

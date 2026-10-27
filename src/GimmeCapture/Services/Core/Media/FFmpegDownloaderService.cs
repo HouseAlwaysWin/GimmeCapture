@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 namespace GimmeCapture.Services.Core.Media;

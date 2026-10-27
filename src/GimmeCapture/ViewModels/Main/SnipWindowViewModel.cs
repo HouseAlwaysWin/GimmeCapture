@@ -3,6 +3,7 @@ using Avalonia.Media;
 using System.Windows.Input;
 using GimmeCapture.Models;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System;
 using System.Reactive;
 using System.Reactive.Linq;

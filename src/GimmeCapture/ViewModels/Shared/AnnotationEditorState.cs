@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.ViewModels.Shared;
 

@@ -9,6 +9,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System.Net.Http;
 using System.Text.Json;
 using System.Collections.ObjectModel;

@@ -8,6 +8,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.ViewModels.Floating;
 

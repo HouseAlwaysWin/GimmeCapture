@@ -103,7 +103,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.4" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4" />
-    <PackageReference Include="ReactiveUI.Avalonia" Version="12.0.3" />
+    <PackageReference Include="ReactiveUI.Avalonia.Reactive" Version="12.1.6" />
     <!-- Rx 7 directly, over the 6.1 ReactiveUI brings: on a Windows TFM, Rx 6 asked for the whole desktop framework,
          so every Windows publish carried WPF (32 files, 45 MB) that nothing here uses. Rx 7 keeps the v6 API at run
          time, so ReactiveUI, built against 6, still binds to it. -->

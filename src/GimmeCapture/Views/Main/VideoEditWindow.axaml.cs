@@ -12,6 +12,7 @@ using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Shared;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Views.Main;
 

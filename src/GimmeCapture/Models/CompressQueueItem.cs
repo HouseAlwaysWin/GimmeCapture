@@ -8,6 +8,7 @@ using System.Threading;
 using Avalonia.Media.Imaging;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Models;
 

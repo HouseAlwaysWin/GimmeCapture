@@ -6,6 +6,7 @@ using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.ViewModels.Main;
 

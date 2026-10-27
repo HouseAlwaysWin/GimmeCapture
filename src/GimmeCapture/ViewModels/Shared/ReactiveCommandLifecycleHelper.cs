@@ -1,4 +1,5 @@
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using GimmeCapture.Services.Core.Infrastructure;
 using System;
 using System.Reactive;

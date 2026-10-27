@@ -7,6 +7,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Rendering;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Shared;

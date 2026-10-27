@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Services.Core.AI;
 

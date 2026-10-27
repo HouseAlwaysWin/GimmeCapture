@@ -4,6 +4,7 @@ using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Rendering;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -55,10 +56,11 @@ public partial class AnnotationControl : UserControl
                 ann.WhenAnyValue(a => a.EndPoint),
                 ann.WhenAnyValue(a => a.DrawingModeSnapshot),
                 ann.WhenAnyValue(a => a.DrawingModeReferenceSize),
-                ann.WhenAnyValue(a => a.EffectSettings.MosaicCellSize),
-                ann.WhenAnyValue(a => a.EffectSettings.BlurRadius),
+                // Effect settings are replaced with a new object, never changed in place, so the replacement is the
+                // change to follow (the settings type raises no notifications of its own).
+                ann.WhenAnyValue(a => a.EffectSettings),
                 this.GetObservable(BoundsProperty),
-                (start, end, snapshot, referenceSize, _, _, bounds) => (start, end, snapshot, referenceSize, bounds))
+                (start, end, snapshot, referenceSize, _, bounds) => (start, end, snapshot, referenceSize, bounds))
                 .Throttle(TimeSpan.FromMilliseconds(16))
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ => RegenerateEffectPreview(ann));

@@ -1,4 +1,5 @@
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using Avalonia;
 using Avalonia.Media;
 using System;

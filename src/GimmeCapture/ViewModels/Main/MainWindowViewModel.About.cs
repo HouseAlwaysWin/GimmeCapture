@@ -1,5 +1,6 @@
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;

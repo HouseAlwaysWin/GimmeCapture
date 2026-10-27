@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Views.Controls;
 

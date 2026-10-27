@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System;
 using System.Buffers;
 using System.Reactive;

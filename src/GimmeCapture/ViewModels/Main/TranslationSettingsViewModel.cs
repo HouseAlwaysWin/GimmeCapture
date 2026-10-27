@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using GimmeCapture.Models;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.ViewModels.Main;
 

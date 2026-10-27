@@ -202,14 +202,6 @@
         "resolved": "8.4.2",
         "contentHash": "2hmtrrU18x6NL3mbuAqwy0KpnoEEJOuK6sH5RKQfD/jHijn2pqvqBUC7WGy9dgNBL9BDA7eOC0kirsNPMp2f4Q=="
       },
-      "DynamicData": {
-        "type": "Transitive",
-        "resolved": "9.4.31",
-        "contentHash": "w2bT92Z5ADtnmtKiC9mzk21h7MtXtZEQKWFyytuHqhPBo7rKPWnvFk/xy1M/VA6XQTbCjRWMNV795w+RizFn4g==",
-        "dependencies": {
-          "System.Reactive": "6.1.0"
-        }
-      },
       "FFmpeg.AutoGen": {
         "type": "Transitive",
         "resolved": "8.0.0.1",
@@ -379,25 +371,116 @@
           "NAudio.Core": "2.2.1"
         }
       },
-      "ReactiveUI": {
+      "ReactiveUI.Avalonia.Reactive": {
         "type": "Transitive",
-        "resolved": "23.2.28",
-        "contentHash": "9sSuHnMcLTLhgMTQpQO6Jhz9Cbub3Pg44i6FS4Ot4UtbV8dpwMH3JGzGjT72oav4aSrJlmzbFyI87gX55oPzLA==",
+        "resolved": "12.1.6",
+        "contentHash": "H3Jrh/XNkKInALQtd/rLuzyH5Rq5Rg3KfoM5VpxDAm2IjcD/Yrvbizgnr3JYrmZVTbSAgw9bkEhi9mf9+aQqhQ==",
         "dependencies": {
-          "DynamicData": "9.4.31",
-          "Splat": "19.4.1",
-          "System.Reactive": "6.1.0"
+          "Avalonia": "12.1.3",
+          "ReactiveUI.Binding.Avalonia.Reactive": "9.1.0",
+          "ReactiveUI.Primitives": "9.0.0",
+          "ReactiveUI.Primitives.Avalonia.Reactive": "9.0.0",
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "ReactiveUI.Reactive": "26.0.1",
+          "Splat": "21.0.0"
         }
       },
-      "ReactiveUI.Avalonia": {
+      "ReactiveUI.Binding.Avalonia.Reactive": {
         "type": "Transitive",
-        "resolved": "12.0.3",
-        "contentHash": "mmUZb8I+0dN7DlJ1Y8KmrB3AK7QH377GjBug1mcbVbMVMlqnokjXVUE0KThn1H0eKpnyjY9CHzrjIf0rCgRgFg==",
+        "resolved": "9.1.0",
+        "contentHash": "uMxSTI3ydYFfOvCpUjpe8QOKZg1QHjw0a6D2QCFixJWNwMvBE3XA9flCstJ3JTMSgbeoy3Ak6okTXrPUH+cUMw==",
         "dependencies": {
-          "Avalonia": "12.0.4",
-          "ReactiveUI": "23.2.28",
-          "Splat": "19.4.1"
+          "Avalonia": "12.1.3",
+          "ReactiveUI.Binding.Reactive": "9.1.0",
+          "ReactiveUI.Primitives.Avalonia.Reactive": "9.0.0",
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "Splat": "21.0.0",
+          "System.Reactive": "7.0.0"
         }
+      },
+      "ReactiveUI.Binding.Reactive": {
+        "type": "Transitive",
+        "resolved": "9.1.0",
+        "contentHash": "NBFC53cWyTE1OEzHgXPqKB4+uHMOP9WVPm+3eHxN2gRU1x89xOYhRnu5jBDP8Anu3DrYhtdonhqs+lOxLac2cA==",
+        "dependencies": {
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "Splat": "21.0.0",
+          "System.Reactive": "7.0.0"
+        }
+      },
+      "ReactiveUI.Core": {
+        "type": "Transitive",
+        "resolved": "26.0.1",
+        "contentHash": "rjUMGExdqKsVw85gLmsyhtwnSeGyOXagNjMfpW6R46W0izvJmJwAVrEllrLCqjaJJzlgE5RvnvQJWDInSqh4fQ==",
+        "dependencies": {
+          "ReactiveUI.Disposables": "9.0.0",
+          "ReactiveUI.Primitives": "9.0.0",
+          "ReactiveUI.Primitives.Core": "9.0.0",
+          "ReactiveUI.SourceGenerators": "4.2.0",
+          "Splat": "21.0.0"
+        }
+      },
+      "ReactiveUI.Disposables": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "gt5vQ9e7yP/qsv1DbTR9AdwViJwqoHseTwyI/7muKetJMDg60QUv7RZShMj3RIjF48LNiHKABtxPq+Or+42bbA=="
+      },
+      "ReactiveUI.Primitives": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "WmfXpHHBun50DJwTHVDLcFyQIHN/WtaoYJ34GrByFW/CsWgOH0UyjC8h9nul551oRkIvbqBGy3xZiijNdchGRw==",
+        "dependencies": {
+          "ReactiveUI.Disposables": "9.0.0",
+          "ReactiveUI.Primitives.Core": "9.0.0"
+        }
+      },
+      "ReactiveUI.Primitives.Avalonia.Reactive": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "fim1c6VruTd0eGP0+nN5L+DTcoU5HwrpdN0PiiEKFnsL0Q3TQd/XA4FwS4gN8yGwJjzyMaH4JeWeFhsHbZLNJA==",
+        "dependencies": {
+          "Avalonia": "12.1.3",
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "System.Reactive": "7.0.0"
+        }
+      },
+      "ReactiveUI.Primitives.Core": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "alULlmIxJycMKxfZeadn5tjjRAP+9+qDX9ryOT9Tg5lQzn0SKQAnmhqMa+9l68ogexrEuK/fUc543KR+kGJCJg==",
+        "dependencies": {
+          "ReactiveUI.Disposables": "9.0.0"
+        }
+      },
+      "ReactiveUI.Primitives.Reactive": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "npVaR5VkmgyLGmgElVdZuLiQcI7iIe58QaR3qaqmhtPrdnKzlKhIHrLDGoSgt2NdGbGBY6IOJqZzhv51GIhDgg==",
+        "dependencies": {
+          "ReactiveUI.Primitives.Core": "9.0.0",
+          "System.Reactive": "7.0.0"
+        }
+      },
+      "ReactiveUI.Reactive": {
+        "type": "Transitive",
+        "resolved": "26.0.1",
+        "contentHash": "+JsAEyZnLCm1xluXsyHBrHF94vezbwCgnHHhwCGjO3OoAOuBSmj9hCOz9wJMDhLEHoP0A8+6bFiz/SMye5++/w==",
+        "dependencies": {
+          "ReactiveUI.Binding.Reactive": "9.1.0",
+          "ReactiveUI.Core": "26.0.1",
+          "ReactiveUI.Disposables": "9.0.0",
+          "ReactiveUI.Primitives": "9.0.0",
+          "ReactiveUI.Primitives.Core": "9.0.0",
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "ReactiveUI.SourceGenerators": "4.2.0",
+          "Splat": "21.0.0",
+          "System.Reactive": "7.0.0"
+        }
+      },
+      "ReactiveUI.SourceGenerators": {
+        "type": "Transitive",
+        "resolved": "4.2.0",
+        "contentHash": "hGXWz3yuC6kCLaLHsR+FwAetLlqAoDVY0nMeeRkzQS7yGbmrrPlZwxvcCBJMSbY+PAbEayeBAuezw6lzsXDBGg=="
       },
       "Serilog": {
         "type": "Transitive",
@@ -443,32 +526,38 @@
       },
       "Splat": {
         "type": "Transitive",
-        "resolved": "19.4.1",
-        "contentHash": "3VJOloRQA3bgbAxyNAi4mvLAR/mKH3h1agN5pIrUXvp9lAA2/rvUgxOYjt+GZ4suouLfXxkeKcS/bRjSclo1LQ==",
+        "resolved": "21.0.0",
+        "contentHash": "famvWFOGoZZ707Rf9EK6kpt+sqhRnky5n0F0X9at/QzWja8KUwEh6pDG/oM3nleyEIUwK1gi9Nw72fDHAsm+og==",
         "dependencies": {
-          "Splat.Builder": "19.4.1",
-          "Splat.Logging": "19.4.1"
+          "ReactiveUI.Disposables": "7.1.0",
+          "Splat.Builder": "21.0.0",
+          "Splat.Logging": "21.0.0"
         }
       },
       "Splat.Builder": {
         "type": "Transitive",
-        "resolved": "19.4.1",
-        "contentHash": "9i0RLWEwfheI8aI17WaW8AJmNlFVi7LaX3XQwAavGqUaJJi7Vp5Eh9umWqVQYBLjs87ztVLmax/OMzMyW2igKQ==",
+        "resolved": "21.0.0",
+        "contentHash": "uUa2VtGjlz/fZrZkbor9uSysP68ZMpA17DbBrIxsbfaRUp6AOdkC5kcxmppx5uuCcG1mQ/wxvqIoYAN4RGrdCw==",
         "dependencies": {
-          "Splat.Core": "19.4.1"
+          "ReactiveUI.Disposables": "7.1.0",
+          "Splat.Core": "21.0.0"
         }
       },
       "Splat.Core": {
         "type": "Transitive",
-        "resolved": "19.4.1",
-        "contentHash": "fOjcUDP9YzJPZnSDI2eBO+NwRoEJVFEkTGlh/tFa7GUXc5mtMcQdwak60Ju4DWvPSAfsxlu2geObmhZAQe1VLg=="
+        "resolved": "21.0.0",
+        "contentHash": "MGsKsMti+M+y1Bq4t8TA/AMp47XGd8/fBhfEZ+EmxgaWLIzRZ2EGXRKEewLx8jKf2RKTqfjcX6hRhG58cU8EFg==",
+        "dependencies": {
+          "ReactiveUI.Disposables": "7.1.0"
+        }
       },
       "Splat.Logging": {
         "type": "Transitive",
-        "resolved": "19.4.1",
-        "contentHash": "bvudJQxxMnHIa9dtZaUUCpvmd96rQxA0yjrZLoB4OSiAJpIxMCDCwnDmG6RhDyW2pS3O0xef2e1STY/oL1PqRw==",
+        "resolved": "21.0.0",
+        "contentHash": "jNnsXXcbksP2rsOMeIFDzm0jputFm11S/1eQxq9U9+dQ7ES4zECl/q7EytG+Z1iogClr4LRDefMlnKiIi7CEsQ==",
         "dependencies": {
-          "Splat.Core": "19.4.1"
+          "ReactiveUI.Disposables": "7.1.0",
+          "Splat.Core": "21.0.0"
         }
       },
       "System.Diagnostics.EventLog": {
@@ -562,7 +651,7 @@
           "LLamaSharp.Backend.Cpu": "[0.30.0, )",
           "Microsoft.ML.OnnxRuntime": "[1.24.4, )",
           "NAudio": "[2.2.1, )",
-          "ReactiveUI.Avalonia": "[12.0.3, )",
+          "ReactiveUI.Avalonia.Reactive": "[12.1.6, )",
           "Serilog": "[4.4.0, )",
           "Serilog.Sinks.File": "[7.0.0, )",
           "SkiaSharp": "[3.119.4, )",
@@ -888,14 +977,6 @@
         "resolved": "8.4.2",
         "contentHash": "2hmtrrU18x6NL3mbuAqwy0KpnoEEJOuK6sH5RKQfD/jHijn2pqvqBUC7WGy9dgNBL9BDA7eOC0kirsNPMp2f4Q=="
       },
-      "DynamicData": {
-        "type": "Transitive",
-        "resolved": "9.4.31",
-        "contentHash": "w2bT92Z5ADtnmtKiC9mzk21h7MtXtZEQKWFyytuHqhPBo7rKPWnvFk/xy1M/VA6XQTbCjRWMNV795w+RizFn4g==",
-        "dependencies": {
-          "System.Reactive": "6.1.0"
-        }
-      },
       "FFmpeg.AutoGen": {
         "type": "Transitive",
         "resolved": "8.0.0.1",
@@ -1074,25 +1155,116 @@
           "NAudio.Core": "2.2.1"
         }
       },
-      "ReactiveUI": {
+      "ReactiveUI.Avalonia.Reactive": {
         "type": "Transitive",
-        "resolved": "23.2.28",
-        "contentHash": "9sSuHnMcLTLhgMTQpQO6Jhz9Cbub3Pg44i6FS4Ot4UtbV8dpwMH3JGzGjT72oav4aSrJlmzbFyI87gX55oPzLA==",
+        "resolved": "12.1.6",
+        "contentHash": "H3Jrh/XNkKInALQtd/rLuzyH5Rq5Rg3KfoM5VpxDAm2IjcD/Yrvbizgnr3JYrmZVTbSAgw9bkEhi9mf9+aQqhQ==",
         "dependencies": {
-          "DynamicData": "9.4.31",
-          "Splat": "19.4.1",
-          "System.Reactive": "6.1.0"
+          "Avalonia": "12.1.3",
+          "ReactiveUI.Binding.Avalonia.Reactive": "9.1.0",
+          "ReactiveUI.Primitives": "9.0.0",
+          "ReactiveUI.Primitives.Avalonia.Reactive": "9.0.0",
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "ReactiveUI.Reactive": "26.0.1",
+          "Splat": "21.0.0"
         }
       },
-      "ReactiveUI.Avalonia": {
+      "ReactiveUI.Binding.Avalonia.Reactive": {
         "type": "Transitive",
-        "resolved": "12.0.3",
-        "contentHash": "mmUZb8I+0dN7DlJ1Y8KmrB3AK7QH377GjBug1mcbVbMVMlqnokjXVUE0KThn1H0eKpnyjY9CHzrjIf0rCgRgFg==",
+        "resolved": "9.1.0",
+        "contentHash": "uMxSTI3ydYFfOvCpUjpe8QOKZg1QHjw0a6D2QCFixJWNwMvBE3XA9flCstJ3JTMSgbeoy3Ak6okTXrPUH+cUMw==",
         "dependencies": {
-          "Avalonia": "12.0.4",
-          "ReactiveUI": "23.2.28",
-          "Splat": "19.4.1"
+          "Avalonia": "12.1.3",
+          "ReactiveUI.Binding.Reactive": "9.1.0",
+          "ReactiveUI.Primitives.Avalonia.Reactive": "9.0.0",
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "Splat": "21.0.0",
+          "System.Reactive": "7.0.0"
         }
+      },
+      "ReactiveUI.Binding.Reactive": {
+        "type": "Transitive",
+        "resolved": "9.1.0",
+        "contentHash": "NBFC53cWyTE1OEzHgXPqKB4+uHMOP9WVPm+3eHxN2gRU1x89xOYhRnu5jBDP8Anu3DrYhtdonhqs+lOxLac2cA==",
+        "dependencies": {
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "Splat": "21.0.0",
+          "System.Reactive": "7.0.0"
+        }
+      },
+      "ReactiveUI.Core": {
+        "type": "Transitive",
+        "resolved": "26.0.1",
+        "contentHash": "rjUMGExdqKsVw85gLmsyhtwnSeGyOXagNjMfpW6R46W0izvJmJwAVrEllrLCqjaJJzlgE5RvnvQJWDInSqh4fQ==",
+        "dependencies": {
+          "ReactiveUI.Disposables": "9.0.0",
+          "ReactiveUI.Primitives": "9.0.0",
+          "ReactiveUI.Primitives.Core": "9.0.0",
+          "ReactiveUI.SourceGenerators": "4.2.0",
+          "Splat": "21.0.0"
+        }
+      },
+      "ReactiveUI.Disposables": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "gt5vQ9e7yP/qsv1DbTR9AdwViJwqoHseTwyI/7muKetJMDg60QUv7RZShMj3RIjF48LNiHKABtxPq+Or+42bbA=="
+      },
+      "ReactiveUI.Primitives": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "WmfXpHHBun50DJwTHVDLcFyQIHN/WtaoYJ34GrByFW/CsWgOH0UyjC8h9nul551oRkIvbqBGy3xZiijNdchGRw==",
+        "dependencies": {
+          "ReactiveUI.Disposables": "9.0.0",
+          "ReactiveUI.Primitives.Core": "9.0.0"
+        }
+      },
+      "ReactiveUI.Primitives.Avalonia.Reactive": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "fim1c6VruTd0eGP0+nN5L+DTcoU5HwrpdN0PiiEKFnsL0Q3TQd/XA4FwS4gN8yGwJjzyMaH4JeWeFhsHbZLNJA==",
+        "dependencies": {
+          "Avalonia": "12.1.3",
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "System.Reactive": "7.0.0"
+        }
+      },
+      "ReactiveUI.Primitives.Core": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "alULlmIxJycMKxfZeadn5tjjRAP+9+qDX9ryOT9Tg5lQzn0SKQAnmhqMa+9l68ogexrEuK/fUc543KR+kGJCJg==",
+        "dependencies": {
+          "ReactiveUI.Disposables": "9.0.0"
+        }
+      },
+      "ReactiveUI.Primitives.Reactive": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "npVaR5VkmgyLGmgElVdZuLiQcI7iIe58QaR3qaqmhtPrdnKzlKhIHrLDGoSgt2NdGbGBY6IOJqZzhv51GIhDgg==",
+        "dependencies": {
+          "ReactiveUI.Primitives.Core": "9.0.0",
+          "System.Reactive": "7.0.0"
+        }
+      },
+      "ReactiveUI.Reactive": {
+        "type": "Transitive",
+        "resolved": "26.0.1",
+        "contentHash": "+JsAEyZnLCm1xluXsyHBrHF94vezbwCgnHHhwCGjO3OoAOuBSmj9hCOz9wJMDhLEHoP0A8+6bFiz/SMye5++/w==",
+        "dependencies": {
+          "ReactiveUI.Binding.Reactive": "9.1.0",
+          "ReactiveUI.Core": "26.0.1",
+          "ReactiveUI.Disposables": "9.0.0",
+          "ReactiveUI.Primitives": "9.0.0",
+          "ReactiveUI.Primitives.Core": "9.0.0",
+          "ReactiveUI.Primitives.Reactive": "9.0.0",
+          "ReactiveUI.SourceGenerators": "4.2.0",
+          "Splat": "21.0.0",
+          "System.Reactive": "7.0.0"
+        }
+      },
+      "ReactiveUI.SourceGenerators": {
+        "type": "Transitive",
+        "resolved": "4.2.0",
+        "contentHash": "hGXWz3yuC6kCLaLHsR+FwAetLlqAoDVY0nMeeRkzQS7yGbmrrPlZwxvcCBJMSbY+PAbEayeBAuezw6lzsXDBGg=="
       },
       "Serilog": {
         "type": "Transitive",
@@ -1132,32 +1304,38 @@
       },
       "Splat": {
         "type": "Transitive",
-        "resolved": "19.4.1",
-        "contentHash": "3VJOloRQA3bgbAxyNAi4mvLAR/mKH3h1agN5pIrUXvp9lAA2/rvUgxOYjt+GZ4suouLfXxkeKcS/bRjSclo1LQ==",
+        "resolved": "21.0.0",
+        "contentHash": "famvWFOGoZZ707Rf9EK6kpt+sqhRnky5n0F0X9at/QzWja8KUwEh6pDG/oM3nleyEIUwK1gi9Nw72fDHAsm+og==",
         "dependencies": {
-          "Splat.Builder": "19.4.1",
-          "Splat.Logging": "19.4.1"
+          "ReactiveUI.Disposables": "7.1.0",
+          "Splat.Builder": "21.0.0",
+          "Splat.Logging": "21.0.0"
         }
       },
       "Splat.Builder": {
         "type": "Transitive",
-        "resolved": "19.4.1",
-        "contentHash": "9i0RLWEwfheI8aI17WaW8AJmNlFVi7LaX3XQwAavGqUaJJi7Vp5Eh9umWqVQYBLjs87ztVLmax/OMzMyW2igKQ==",
+        "resolved": "21.0.0",
+        "contentHash": "uUa2VtGjlz/fZrZkbor9uSysP68ZMpA17DbBrIxsbfaRUp6AOdkC5kcxmppx5uuCcG1mQ/wxvqIoYAN4RGrdCw==",
         "dependencies": {
-          "Splat.Core": "19.4.1"
+          "ReactiveUI.Disposables": "7.1.0",
+          "Splat.Core": "21.0.0"
         }
       },
       "Splat.Core": {
         "type": "Transitive",
-        "resolved": "19.4.1",
-        "contentHash": "fOjcUDP9YzJPZnSDI2eBO+NwRoEJVFEkTGlh/tFa7GUXc5mtMcQdwak60Ju4DWvPSAfsxlu2geObmhZAQe1VLg=="
+        "resolved": "21.0.0",
+        "contentHash": "MGsKsMti+M+y1Bq4t8TA/AMp47XGd8/fBhfEZ+EmxgaWLIzRZ2EGXRKEewLx8jKf2RKTqfjcX6hRhG58cU8EFg==",
+        "dependencies": {
+          "ReactiveUI.Disposables": "7.1.0"
+        }
       },
       "Splat.Logging": {
         "type": "Transitive",
-        "resolved": "19.4.1",
-        "contentHash": "bvudJQxxMnHIa9dtZaUUCpvmd96rQxA0yjrZLoB4OSiAJpIxMCDCwnDmG6RhDyW2pS3O0xef2e1STY/oL1PqRw==",
+        "resolved": "21.0.0",
+        "contentHash": "jNnsXXcbksP2rsOMeIFDzm0jputFm11S/1eQxq9U9+dQ7ES4zECl/q7EytG+Z1iogClr4LRDefMlnKiIi7CEsQ==",
         "dependencies": {
-          "Splat.Core": "19.4.1"
+          "ReactiveUI.Disposables": "7.1.0",
+          "Splat.Core": "21.0.0"
         }
       },
       "System.Diagnostics.EventLog": {
@@ -1251,7 +1429,7 @@
           "LLamaSharp.Backend.Cpu": "[0.30.0, )",
           "Microsoft.ML.OnnxRuntime.DirectML": "[1.24.4, )",
           "NAudio": "[2.2.1, )",
-          "ReactiveUI.Avalonia": "[12.0.3, )",
+          "ReactiveUI.Avalonia.Reactive": "[12.1.6, )",
           "Serilog": "[4.4.0, )",
           "Serilog.Sinks.File": "[7.0.0, )",
           "SkiaSharp": "[3.119.4, )",

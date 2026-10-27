@@ -10,6 +10,7 @@ using System;
 using GimmeCapture.Services.Core;
 using System.Reactive;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Views.Main;
 

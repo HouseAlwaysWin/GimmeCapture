@@ -4,6 +4,7 @@ using System.Reactive;
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Floating;

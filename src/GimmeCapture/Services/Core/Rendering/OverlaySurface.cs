@@ -5,6 +5,7 @@ using Avalonia;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.Rendering;

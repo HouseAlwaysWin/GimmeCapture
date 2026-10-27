@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using GimmeCapture.Services.Abstractions;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
     public enum Language

@@ -3,6 +3,7 @@ using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System;
 using System.Collections.ObjectModel;
 using System.Reactive;

@@ -2,6 +2,7 @@ using System.Reactive;
 using Avalonia.Media;
 using GimmeCapture.Models;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.ViewModels.Shared;
 

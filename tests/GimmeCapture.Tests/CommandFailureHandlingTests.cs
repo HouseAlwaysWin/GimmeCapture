@@ -5,13 +5,16 @@ using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Tests;
 
 /// <summary>
 /// A failing command has to cost the user one action, not the app. Two things used to turn any command failure
 /// into a crash: 89 call sites ran <c>Execute().Subscribe()</c> with no error handler (Rx rethrows OnError on the
-/// UI thread), and ReactiveUI's default handler for commands nobody observes rethrows as well.
+/// UI thread), and ReactiveUI's default handler for commands nobody observes rethrows as well. Since ReactiveUI 26
+/// the first no longer crashes: the command catches what a bare subscriber rethrows and sends it back through
+/// <c>ThrownExceptions</c>, so the one failure is reported twice. The second still rethrows.
 /// </summary>
 public class CommandFailureHandlingTests
 {
@@ -21,13 +24,19 @@ public class CommandFailureHandlingTests
             outputScheduler: ImmediateScheduler.Instance);
 
     [Fact]
-    public void ABareSubscribeRethrowsTheFailure()
+    public void ABareSubscribeReportsTheFailureTwiceInsteadOfRethrowing()
     {
-        // The hazard itself, kept as a control: this is what every `Execute().Subscribe()` call site used to do.
+        // The old hazard, kept as a control: what every `Execute().Subscribe()` call site used to do. Since
+        // ReactiveUI 26 it no longer throws, but the same failure reaches ThrownExceptions twice.
         var command = FailingCommand();
-        using var observed = command.ThrownExceptions.Subscribe(_ => { });
+        var reported = new List<Exception>();
+        using var observed = command.ThrownExceptions.Subscribe(reported.Add);
 
-        Assert.ThrowsAny<Exception>(() => command.Execute().Subscribe());
+        var failure = Record.Exception(() => command.Execute().Subscribe());
+
+        Assert.Null(failure);
+        Assert.Equal(2, reported.Count);
+        Assert.Same(reported[0], reported[1]);
     }
 
     [Fact]

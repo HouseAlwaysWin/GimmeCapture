@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Media;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 

@@ -12,6 +12,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;

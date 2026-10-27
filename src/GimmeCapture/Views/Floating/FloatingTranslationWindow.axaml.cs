@@ -7,6 +7,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Interop;
 using GimmeCapture.ViewModels.Floating;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;

@@ -16,6 +16,7 @@ using System.Reactive.Linq;
 using Avalonia.Media.Imaging;
 using System.Collections.Generic;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Views.Floating;
 

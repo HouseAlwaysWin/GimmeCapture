@@ -9,6 +9,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 
 namespace GimmeCapture.Services.Core.AI;
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using ReactiveUI;
+using ReactiveUI.Reactive;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
