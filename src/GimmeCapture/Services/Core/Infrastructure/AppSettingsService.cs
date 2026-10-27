@@ -529,67 +529,51 @@ public class AppSettingsService : IAppSettingsService
 
     private void NormalizeAIResourcesDirectory(AppSettings settings)
     {
-        string sharedAiDirectory = AppStoragePaths.GetSharedAIResourcesDirectory(RuntimeExecutableDirectory);
-        TryMigrateLegacyExecutableAiDirectory(sharedAiDirectory);
-
-        if (string.IsNullOrWhiteSpace(settings.AIResourcesDirectory))
-        {
-            settings.AIResourcesDirectory = sharedAiDirectory;
-            return;
-        }
-
-        if (!AppStoragePaths.TryMapVersionScopedAIResourcesDirectory(settings.AIResourcesDirectory, out string mappedSharedDirectory))
-        {
-            return;
-        }
-
-        string sourceDirectory = settings.AIResourcesDirectory;
-        if (!string.Equals(
-                Path.GetFullPath(sourceDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                Path.GetFullPath(mappedSharedDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase))
-        {
-            TryMigrateAIResourceDirectory(sourceDirectory, mappedSharedDirectory);
-        }
-
-        settings.AIResourcesDirectory = mappedSharedDirectory;
+        settings.AIResourcesDirectory = ResolveAIResourcesDirectory(
+            settings.AIResourcesDirectory,
+            AppStoragePaths.GetSharedAIResourcesDirectory(RuntimeExecutableDirectory),
+            Path.Combine(RuntimeExecutableDirectory, "AI"));
     }
 
-    private void TryMigrateLegacyExecutableAiDirectory(string targetDirectory)
+    /// <summary>
+    /// The AI resources folder a loaded config uses: the install's shared folder when the config names none, the
+    /// shared folder too for a version-scoped one (an older layout, whose files move there), otherwise the folder the
+    /// config names. Older versions kept AI resources in the executable's own AI folder, which moves into the shared
+    /// folder only while that is the folder in use. When the config names a folder of its own (older versions saved
+    /// the executable's AI folder there), that folder is the one in use, and copying it into the shared folder on
+    /// every load, as this used to, kept an unused second copy of every model there: 3.4 GB on one machine.
+    /// </summary>
+    internal static string ResolveAIResourcesDirectory(
+        string? configuredDirectory, string sharedDirectory, string legacyExecutableDirectory)
     {
-        string legacyExecutableAiDirectory = Path.Combine(RuntimeExecutableDirectory, "AI");
-        if (string.Equals(
-                Path.GetFullPath(legacyExecutableAiDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                Path.GetFullPath(targetDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase))
+        string directory = sharedDirectory;
+        if (!string.IsNullOrWhiteSpace(configuredDirectory))
         {
-            return;
-        }
-
-        try
-        {
-            if (!Directory.Exists(legacyExecutableAiDirectory))
+            if (AppStoragePaths.TryMapVersionScopedAIResourcesDirectory(configuredDirectory, out string mappedSharedDirectory))
             {
-                return;
+                TryMigrateAIResourceDirectory(configuredDirectory, mappedSharedDirectory);
+                directory = mappedSharedDirectory;
             }
+            else
+            {
+                directory = configuredDirectory;
+            }
+        }
 
-            Directory.CreateDirectory(targetDirectory);
-            CopyDirectoryContents(legacyExecutableAiDirectory, targetDirectory);
-            DebugLog($"Merged legacy executable AI resources from {legacyExecutableAiDirectory} into {targetDirectory}");
-        }
-        catch (Exception ex)
+        if (SamePath(directory, sharedDirectory) && !SamePath(legacyExecutableDirectory, sharedDirectory))
         {
-            DebugLog($"Legacy executable AI merge skipped from {legacyExecutableAiDirectory} to {targetDirectory}: {ex.Message}");
+            TryMigrateAIResourceDirectory(legacyExecutableDirectory, sharedDirectory);
         }
+
+        return directory;
     }
 
-    private void TryMigrateAIResourceDirectory(string sourceDirectory, string targetDirectory)
+    private static void TryMigrateAIResourceDirectory(string sourceDirectory, string targetDirectory)
     {
         try
         {
             if (!Directory.Exists(sourceDirectory))
             {
-                Directory.CreateDirectory(targetDirectory);
                 return;
             }
 
@@ -601,14 +585,16 @@ public class AppSettingsService : IAppSettingsService
                 Directory.Delete(sourceDirectory, false);
             }
 
-            DebugLog($"Migrated AI resources from {sourceDirectory} to {targetDirectory}");
+            AppLog.Information("Settings.MigrateAIResources", $"moved {sourceDirectory} into {targetDirectory}");
         }
         catch (Exception ex)
         {
-            DebugLog($"AI resource migration skipped from {sourceDirectory} to {targetDirectory}: {ex.Message}");
+            AppLog.Warning("Settings.MigrateAIResources", ex);
         }
     }
 
+    // Moves what the target lacks, and drops what it already has at the same size: the copies earlier versions made
+    // instead of moving. A file the target holds at another size stays put, since neither is provably the one to keep.
     private static void MoveDirectoryContents(string sourceDirectory, string targetDirectory)
     {
         foreach (string directory in Directory.GetDirectories(sourceDirectory))
@@ -626,35 +612,22 @@ public class AppSettingsService : IAppSettingsService
         foreach (string file in Directory.GetFiles(sourceDirectory))
         {
             string targetFile = Path.Combine(targetDirectory, Path.GetFileName(file));
-            if (File.Exists(targetFile))
+            if (!File.Exists(targetFile))
             {
-                continue;
+                File.Move(file, targetFile);
             }
-
-            File.Move(file, targetFile);
+            else if (new FileInfo(targetFile).Length == new FileInfo(file).Length)
+            {
+                File.Delete(file);
+            }
         }
     }
 
-    private static void CopyDirectoryContents(string sourceDirectory, string targetDirectory)
-    {
-        foreach (string directory in Directory.GetDirectories(sourceDirectory))
-        {
-            string targetSubDirectory = Path.Combine(targetDirectory, Path.GetFileName(directory));
-            Directory.CreateDirectory(targetSubDirectory);
-            CopyDirectoryContents(directory, targetSubDirectory);
-        }
-
-        foreach (string file in Directory.GetFiles(sourceDirectory))
-        {
-            string targetFile = Path.Combine(targetDirectory, Path.GetFileName(file));
-            if (File.Exists(targetFile))
-            {
-                continue;
-            }
-
-            File.Copy(file, targetFile, overwrite: false);
-        }
-    }
+    private static bool SamePath(string a, string b) =>
+        string.Equals(
+            Path.GetFullPath(a).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            Path.GetFullPath(b).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase);
 
 
     public async Task SaveAsync()

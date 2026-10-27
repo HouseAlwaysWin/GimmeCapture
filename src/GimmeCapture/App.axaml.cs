@@ -82,6 +82,8 @@ public partial class App : Application
             // reclaim). Decoupled from the window-shown activity so it isn't immediately cancelled; the scheduler
             // still skips it if the user is interacting. Note: while the main window is open and rendering,
             // Windows keeps its working set resident, so this reaches a lower baseline (not the tray <10MB).
+            AppBootstrapper bootstrapper = _bootstrapper;
+            var settingsLoad = _bootstrapper.InitialSettingsLoadTask;
             _ = System.Threading.Tasks.Task.Run(async () =>
             {
                 await System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
@@ -90,6 +92,13 @@ public partial class App : Application
                 TempWorkspaceCleaner.SweepOrphans();
                 // Up to 478 MB per earlier version, unpacked by single-file builds and never removed.
                 BundleExtractionCleaner.SweepStaleCopies();
+                // Empty instance folders, AI files of features that are gone, and the copy of every model older
+                // versions kept beside the AI folder in use: GBs per install. The settings name that folder.
+                await settingsLoad.ConfigureAwait(System.Threading.Tasks.ConfigureAwaitOptions.SuppressThrowing);
+                if (settingsLoad.IsCompletedSuccessfully)
+                {
+                    InstanceStorageCleaner.Sweep(bootstrapper.GetAIResourcesDirectoryInUse());
+                }
                 // No explicit delay any more: the trim waits out the idle window the service enforces, so a user
                 // who captures something in the first minutes never pays for a trim they are about to undo.
                 await ProcessMemoryTrimService.RequestIdleTrimAsync("startup-settled").ConfigureAwait(false);

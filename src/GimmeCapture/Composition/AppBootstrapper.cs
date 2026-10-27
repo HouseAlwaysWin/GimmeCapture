@@ -1,4 +1,5 @@
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
@@ -72,6 +73,9 @@ public sealed class AppBootstrapper : IAsyncDisposable
 
     /// <summary>The main view model's first settings load: the saved settings are applied once it completes.</summary>
     internal Task InitialSettingsLoadTask => _mainWindowViewModel.Value.InitialSettingsLoadTask;
+
+    /// <summary>The AI resources folder the settings use. Only meaningful once <see cref="InitialSettingsLoadTask"/> is done.</summary>
+    internal string GetAIResourcesDirectoryInUse() => new AIPathService(_settingsService).GetAIResourcesPath();
 
     public MainWindow CreateMainWindow()
     {
