@@ -5,11 +5,11 @@ using System.Text.Json;
 namespace GimmeCapture.Services.Core.Infrastructure;
 
 /// <summary>
-/// Which folder an instance folder's install runs from. The instance key is a one-way hash of that folder, so without
-/// this record nothing can tell another install's data from an install that is gone: every build folder, publish
-/// folder and copy the app ever ran from keeps its own settings and AI modules there. Each start writes its own.
+/// Which executable an instance folder's install runs. The instance key is a one-way hash of that executable's folder,
+/// so without this record nothing can tell another install's data from an install that is gone: every build folder,
+/// publish folder and copy the app ever ran from keeps its own settings and AI modules there. Each start writes its own.
 /// </summary>
-internal sealed record InstallInstanceRecord(string AppDirectory, string Version, DateTime LastRunUtc)
+internal sealed record InstallInstanceRecord(string ExecutablePath, string Version, DateTime LastRunUtc)
 {
     public const string FileName = "install.json";
 
@@ -27,9 +27,10 @@ internal sealed record InstallInstanceRecord(string AppDirectory, string Version
         string path = Path.Combine(instanceDirectory, FileName);
         try
         {
-            return File.Exists(path)
+            var record = File.Exists(path)
                 ? JsonSerializer.Deserialize<InstallInstanceRecord>(File.ReadAllText(path), Options)
                 : null;
+            return string.IsNullOrWhiteSpace(record?.ExecutablePath) ? null : record;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {

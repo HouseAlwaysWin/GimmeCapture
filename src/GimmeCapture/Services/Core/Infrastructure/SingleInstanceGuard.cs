@@ -66,6 +66,26 @@ internal sealed class SingleInstanceGuard : IDisposable
         }
     }
 
+    /// <summary>Whether the install with <paramref name="key"/> is running in this session now. True as well when its
+    /// mutex exists but cannot be opened: the answer that keeps a caller from deleting a running install's data.</summary>
+    public static bool IsRunning(string key)
+    {
+        try
+        {
+            if (!Mutex.TryOpenExisting(MutexName(key), out var mutex))
+            {
+                return false;
+            }
+
+            mutex.Dispose();
+            return true;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.IO.IOException)
+        {
+            return true;
+        }
+    }
+
     /// <summary>Second-instance side: ask the running instance to show its main window (Windows only).</summary>
     public static void SignalRunningInstance(string? key = null)
     {

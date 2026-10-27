@@ -90,6 +90,7 @@ public partial class MainWindow
                 if (DataContext is MainWindowViewModel vm)
                 {
                     vm.EnsureModulesInitialized();
+                    vm.OtherInstalls.RefreshAsync().Forget("Modules.OtherInstalls");
                 }
 
                 _modulesTabHost ??= this.FindControl<ContentControl>("ModulesTabHost");

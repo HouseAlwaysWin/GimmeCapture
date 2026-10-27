@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -27,9 +26,6 @@ public static class InstanceStorageCleaner
 
     // A download in progress keeps writing its file. One untouched this long belongs to a download that was killed.
     private static readonly TimeSpan PartialDownloadMinimumAge = TimeSpan.FromHours(12);
-
-    // AppStoragePaths.GetInstallInstanceKey: 16 lowercase hex digits. Anything else under instances\ is left alone.
-    private static readonly Regex InstanceKeyPattern = new("^[0-9a-f]{16}$", RegexOptions.CultureInvariant);
 
     // What AI Core unpacked into runtime\, and the zip it downloaded (temp_ai.zip before the downloader named files).
     private static readonly HashSet<string> RuntimeFiles = new(StringComparer.OrdinalIgnoreCase)
@@ -75,7 +71,8 @@ public static class InstanceStorageCleaner
             string instanceDirectory = AppStoragePaths.GetInstallInstanceDirectory(appDirectory);
             InstallInstanceRecord.Write(
                 instanceDirectory,
-                new InstallInstanceRecord(appDirectory, AppVersionInfo.CurrentVersion, DateTime.UtcNow));
+                new InstallInstanceRecord(
+                    RuntimePathProvider.GetExecutablePath(), AppVersionInfo.CurrentVersion, DateTime.UtcNow));
 
             var result = Sweep(
                 new Layout(
@@ -124,7 +121,7 @@ public static class InstanceStorageCleaner
         foreach (string instance in Directory.EnumerateDirectories(instancesDirectory).ToList())
         {
             string key = Path.GetFileName(instance);
-            if (!InstanceKeyPattern.IsMatch(key) || string.Equals(key, currentKey, StringComparison.OrdinalIgnoreCase))
+            if (!AppStoragePaths.IsInstallInstanceKey(key) || string.Equals(key, currentKey, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -128,6 +129,11 @@ internal static class AppStoragePaths
         byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
         return Convert.ToHexString(bytes[..8]).ToLowerInvariant();
     }
+
+    /// <summary>Whether a folder under instances\ is named like <see cref="GetInstallInstanceKey"/>'s keys. What
+    /// clean-ups there touch; anything else under that folder is left alone.</summary>
+    internal static bool IsInstallInstanceKey(string name) =>
+        name.Length == 16 && name.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static string NormalizeSegment(string value)
     {

@@ -182,10 +182,10 @@ public sealed class InstanceStorageCleanerTests : IDisposable
     {
         InstanceStorageCleaner.Sweep(Path.Combine(_root, "AI"));
 
-        string appDirectory = RuntimePathProvider.GetExecutableDirectory();
-        var record = InstallInstanceRecord.Read(AppStoragePaths.GetInstallInstanceDirectory(appDirectory));
+        var record = InstallInstanceRecord.Read(
+            AppStoragePaths.GetInstallInstanceDirectory(RuntimePathProvider.GetExecutableDirectory()));
         Assert.NotNull(record);
-        Assert.Equal(appDirectory, record.AppDirectory);
+        Assert.Equal(RuntimePathProvider.GetExecutablePath(), record.ExecutablePath);
         Assert.Equal(AppVersionInfo.CurrentVersion, record.Version);
     }
 }

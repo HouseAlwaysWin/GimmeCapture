@@ -27,6 +27,40 @@
                 </StackPanel>
             </Border>
 
+            <!-- Settings and AI modules other copies of the app keep in the data folder -->
+            <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Padding="15"
+                    IsVisible="{Binding OtherInstalls.HasAny}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{Binding [OtherInstallsTitle], Source={x:Static services:LocalizationService.Instance}}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource ThemeAccentBrush}"/>
+                    <TextBlock Text="{Binding OtherInstalls.Summary}"
+                               TextWrapping="Wrap"
+                               Opacity="0.7"
+                               FontSize="12"/>
+                    <ItemsControl ItemsSource="{Binding OtherInstalls.Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*, Auto" Margin="0,6,0,0">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Location}" TextWrapping="Wrap" FontSize="13"/>
+                                        <TextBlock Text="{Binding Details}" TextWrapping="Wrap" Opacity="0.7" FontSize="11"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1"
+                                            Content="{Binding [RemoveModule], Source={x:Static services:LocalizationService.Instance}}"
+                                            Command="{Binding RemoveCommand}"
+                                            IsVisible="{Binding CanRemove}"
+                                            Theme="{StaticResource SmallGothicMetalButton}"
+                                            MinWidth="80"
+                                            VerticalAlignment="Center"
+                                            Margin="20,0,0,0"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
             <ItemsControl ItemsSource="{Binding Modules}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
