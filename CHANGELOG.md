@@ -143,6 +143,28 @@
   was, which understated a freeze by up to a second — the recording-start freeze above was logged as 698 ms — and
   could miss one under 1.25 s entirely. It now ticks every 100 ms.
 
+### 💾 Storage
+
+- **The data folder no longer only grows.** Every folder GimmeCapture runs from keeps its own settings and AI modules
+  under `%LOCALAPPDATA%\GimmeCapture\instances`, and nothing was ever removed from there: 6.5 GB on one machine.
+  A few seconds after start-up the app now deletes:
+  - instance folders with nothing in them. Reading the update state created one for every folder the app or its
+    tests ever ran from (203 on that machine). It no longer does, and test runs keep their data in a temporary folder.
+  - what AI features that are gone left behind: the downloaded ONNX Runtime (671 MB per AI folder), the MarianMT
+    translator, the Vosk speech models and MobileSAM, plus downloads a closed app left half done.
+  - the second copy of every model in the instance folder, when your settings use another AI folder. Each start
+    used to copy the app folder's `AI` folder there, although nothing read the copy: 3.4 GB on that machine. When
+    the instance folder is the one in use, the app folder's `AI` folder is moved into it once, not copied.
+- **AI Core is a 176 MB download instead of 514 MB.** It also fetched a separate ONNX Runtime with CUDA and
+  TensorRT providers, which needed CUDA 12 and cuDNN 9 to use the GPU at all, and which replaced the app's own
+  runtime for the rest of the session once background removal or smart selection had loaded it. The app ships its
+  own ONNX Runtime, so AI Core is now the U2Net model alone, as on Linux. Smart selection no longer asks for AI Core
+  first.
+- **The Modules tab shows what other copies of GimmeCapture keep here.** A copy that was moved, reinstalled
+  elsewhere or deleted leaves its settings and AI modules behind. The tab lists each other copy: where it runs (or
+  that it is no longer there), its size and when it was last used. It removes one you pick after asking, but not a
+  copy that is running.
+
 ### 🖼️ Interface
 
 - **A pinned image's questions and messages use the app's own dialog.** Asking whether to download AI modules
@@ -188,6 +210,8 @@
   entry is a folder any program running as you can write to (the AI runtime folder), so a `powershell.exe` planted
   there would have run instead. File names containing `[` or `]` are copied too now; they were read as wildcards
   and silently skipped.
+- **That folder is no longer on `PATH` at all.** It was put there for the ONNX Runtime AI Core downloaded, which the
+  app no longer downloads or loads.
 - **Every build bundles exactly the same FFmpeg.** Builds used to download whatever BtbN's rolling "latest" FFmpeg
   was that day, unchecked. They now fetch one exact build — FFmpeg n8.1.3 (2026-09-22), mirrored in this
   repository's releases — and refuse anything whose SHA-256 differs. THIRD-PARTY-NOTICES.md names that exact
