@@ -52,6 +52,25 @@ public class SingleInstanceGuardTests
         again!.Dispose();
     }
 
+    // The Modules tab deletes another copy's data only when this says that copy is not running. Gone once released is
+    // checked on Windows only: how soon Unix forgets a named mutex after its last handle closes is the runtime's call.
+    [Fact]
+    public void IsRunning_WhileAnInstallHoldsItsGuard()
+    {
+        string key = Guid.NewGuid().ToString("N");
+        Assert.False(SingleInstanceGuard.IsRunning(key));
+
+        var guard = SingleInstanceGuard.TryAcquire(key);
+        Assert.NotNull(guard);
+        Assert.True(SingleInstanceGuard.IsRunning(key));
+
+        guard!.Dispose();
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.False(SingleInstanceGuard.IsRunning(key));
+        }
+    }
+
     [Fact]
     public void SignalRunningInstance_WithNoListener_DoesNotThrow()
     {
