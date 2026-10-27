@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -16,6 +17,10 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
 {
     /// <summary>Fixed square input resolution required by the U2Net background-removal model.</summary>
     private const int U2NetInputSize = 320;
+
+    // What a canvas writes for each channel value of a drawn pixel, by alpha; see DrawnChannels. Built on first use.
+    private static readonly Lazy<byte[]> s_drawnPremulChannels = new(() => BuildDrawnChannels(SKAlphaType.Premul));
+    private static readonly Lazy<byte[]> s_drawnUnpremulChannels = new(() => BuildDrawnChannels(SKAlphaType.Unpremul));
 
     private InferenceSession? _session;
     private readonly AIResourceService _aiResourceService;
@@ -164,18 +169,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
 
                 using (processed)
                 {
-                    // We create a new bitmap for the result to ensure transparency is handled correctly
-                    var resultBmp = new SKBitmap(source.Width, source.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
-                    using (var canvas = new SKCanvas(resultBmp))
-                    {
-                        canvas.Clear(SKColors.Transparent);
-                        canvas.DrawBitmap(source, 0, 0);
-                        // Use Src blend mode to replace the ROI with processed transparent version
-                        using var paint = new SKPaint { BlendMode = SKBlendMode.Src };
-                        canvas.DrawBitmap(processed, region.Left, region.Top, paint);
-                    }
-
-                    return resultBmp;
+                    return ComposeSelection(source, processed, region);
                 }
             }
             finally
@@ -342,28 +336,152 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
     /// caller's to dispose.</summary>
     internal static SKBitmap RemoveSolidBackground(SKBitmap original, SKColor bgColor)
     {
-        var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        int width = original.Width;
+        int height = original.Height;
+        var result = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
         const int tolerance = 60;
 
-        for (int y = 0; y < original.Height; y++)
+        ForEachRowBand(height, (firstRow, endRow) =>
         {
-            ReadOnlySpan<byte> srcRow = GetPixelRowSpan(original, y);
-            Span<byte> dstRow = GetPixelRowSpan(result, y);
-            for (int offset = 0; offset < srcRow.Length; offset += 4)
+            for (int y = firstRow; y < endRow; y++)
             {
-                byte blue = srcRow[offset];
-                byte green = srcRow[offset + 1];
-                byte red = srcRow[offset + 2];
-                byte alpha = srcRow[offset + 3];
-
-                dstRow[offset] = blue;
-                dstRow[offset + 1] = green;
-                dstRow[offset + 2] = red;
-                dstRow[offset + 3] = ColorsAreSimilar(new SKColor(red, green, blue, alpha), bgColor, tolerance) ? (byte)0 : alpha;
+                ReadOnlySpan<uint> srcRow = GetPixelRowWords(original, y);
+                Span<uint> dstRow = GetPixelRowWords(result, y);
+                for (int x = 0; x < dstRow.Length; x++)
+                {
+                    // A BGRA pixel read as one little-endian word is 0xAARRGGBB, SKColor's own layout.
+                    uint pixel = srcRow[x];
+                    dstRow[x] = ColorsAreSimilar(new SKColor(pixel), bgColor, tolerance) ? pixel & 0x00FFFFFFu : pixel;
+                }
             }
+        });
+
+        return result;
+    }
+
+    /// <summary>A copy of <paramref name="source"/> with <paramref name="processed"/> in place of
+    /// <paramref name="region"/>. The returned bitmap is the caller's to dispose.</summary>
+    /// <remarks>
+    /// The bytes are those of drawing both onto a canvas over the result: the source, then the region with Src.
+    /// For BGRA bitmaps that fit, the usual case, they are copied through <see cref="DrawnChannels"/> instead,
+    /// which skips the canvas's per-pixel work (0.08-0.17 s on a 4K pin). <c>BackgroundRemovalServiceTests</c>
+    /// hold the two to each other.
+    /// </remarks>
+    internal static SKBitmap ComposeSelection(SKBitmap source, SKBitmap processed, SKRectI region)
+    {
+        var result = new SKBitmap(source.Width, source.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        if (source.ColorType == SKColorType.Bgra8888 && source.AlphaType is SKAlphaType.Premul or SKAlphaType.Unpremul
+            && processed.ColorType == SKColorType.Bgra8888 && processed.AlphaType == SKAlphaType.Unpremul
+            && region.Left >= 0 && region.Top >= 0 && region.Right <= source.Width && region.Bottom <= source.Height
+            && processed.Width == region.Width && processed.Height == region.Height)
+        {
+            CopyAsDrawn(source, result, 0, 0);
+            CopyAsDrawn(processed, result, region.Left, region.Top);
+            return result;
+        }
+
+        using (var canvas = new SKCanvas(result))
+        {
+            canvas.Clear(SKColors.Transparent);
+            canvas.DrawBitmap(source, 0, 0);
+            // Use Src blend mode to replace the ROI with processed transparent version
+            using var paint = new SKPaint { BlendMode = SKBlendMode.Src };
+            canvas.DrawBitmap(processed, region.Left, region.Top, paint);
         }
 
         return result;
+    }
+
+    /// <summary>Writes the BGRA <paramref name="bitmap"/> into <paramref name="target"/> at
+    /// (<paramref name="left"/>, <paramref name="top"/>) as a canvas over it would draw it.</summary>
+    private static void CopyAsDrawn(SKBitmap bitmap, SKBitmap target, int left, int top)
+    {
+        int width = bitmap.Width;
+        int height = bitmap.Height;
+        var alphaType = bitmap.AlphaType;
+        ForEachRowBand(height, (firstRow, endRow) =>
+        {
+            byte[]? drawn = null;
+            for (int y = firstRow; y < endRow; y++)
+            {
+                ReadOnlySpan<uint> from = GetPixelRowWords(bitmap, y);
+                Span<uint> to = GetPixelRowWords(target, top + y).Slice(left, width);
+                int x = 0;
+                while (x < width)
+                {
+                    // A draw leaves a pixel with alpha 255, a word of 0xFF000000 or more, as it is: copy those runs.
+                    int opaqueRun = from[x..].IndexOfAnyInRange(0u, 0xFEFFFFFFu);
+                    if (opaqueRun < 0)
+                    {
+                        opaqueRun = width - x;
+                    }
+
+                    from.Slice(x, opaqueRun).CopyTo(to.Slice(x, opaqueRun));
+                    x += opaqueRun;
+                    if (x == width)
+                    {
+                        break;
+                    }
+
+                    drawn ??= DrawnChannels(alphaType);
+                    for (; x < width && from[x] < 0xFF000000u; x++)
+                    {
+                        uint pixel = from[x];
+                        int alphaRow = (int)(pixel >> 24) << 8;
+                        to[x] = (pixel & 0xFF000000u)
+                            | ((uint)drawn[alphaRow | (int)((pixel >> 16) & 0xFF)] << 16)
+                            | ((uint)drawn[alphaRow | (int)((pixel >> 8) & 0xFF)] << 8)
+                            | drawn[alphaRow | (int)(pixel & 0xFF)];
+                    }
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// What a canvas over an unpremultiplied BGRA bitmap writes for a colour channel of a pixel it draws, at
+    /// <c>[alpha * 256 + value]</c>, for bitmaps of <paramref name="alphaType"/>. The pixel's alpha comes through
+    /// as it is.
+    /// </summary>
+    /// <remarks>
+    /// The canvas converts to premultiplied alpha and back in floating point: where alpha is 0 the colour comes
+    /// out as 0, and a premultiplied pixel is divided by its alpha, clamped and rounded the way this CPU's Skia
+    /// code rounds. Rather than copy that arithmetic, the table is read back from Skia itself, from one draw of
+    /// every alpha against every value, so it is the canvas's own answer.
+    /// </remarks>
+    private static byte[] DrawnChannels(SKAlphaType alphaType) =>
+        alphaType == SKAlphaType.Premul ? s_drawnPremulChannels.Value : s_drawnUnpremulChannels.Value;
+
+    private static byte[] BuildDrawnChannels(SKAlphaType alphaType)
+    {
+        using var everyPixel = new SKBitmap(256, 256, SKColorType.Bgra8888, alphaType);
+        for (int alpha = 0; alpha < 256; alpha++)
+        {
+            Span<uint> row = GetPixelRowWords(everyPixel, alpha);
+            for (int value = 0; value < 256; value++)
+            {
+                row[value] = ((uint)alpha << 24) | ((uint)value * 0x010101u);
+            }
+        }
+
+        using var drawn = new SKBitmap(256, 256, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        using (var canvas = new SKCanvas(drawn))
+        using (var paint = new SKPaint { BlendMode = SKBlendMode.Src })
+        {
+            canvas.DrawBitmap(everyPixel, 0, 0, paint);
+        }
+
+        var table = new byte[256 * 256];
+        for (int alpha = 0; alpha < 256; alpha++)
+        {
+            ReadOnlySpan<uint> row = GetPixelRowWords(drawn, alpha);
+            for (int value = 0; value < 256; value++)
+            {
+                table[(alpha << 8) | value] = (byte)row[value];
+            }
+        }
+
+        return table;
     }
 
     /// <summary>Runs U2Net over <paramref name="original"/>. The returned bitmap is the caller's to dispose.</summary>
@@ -395,44 +513,45 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
 
     internal static DenseTensor<float> ExtractPixels(SKBitmap bitmap)
     {
-        var tensor = new DenseTensor<float>(new[] { 1, 3, U2NetInputSize, U2NetInputSize });
+        const int planeSize = U2NetInputSize * U2NetInputSize;
+        // Filled through the flat array rather than the tensor's indexer, which takes its indices as a params
+        // array: an allocation per write, three per pixel.
+        var data = new float[3 * planeSize];
         for (int y = 0; y < U2NetInputSize; y++)
         {
             ReadOnlySpan<byte> row = GetPixelRowSpan(bitmap, y);
-            for (int x = 0; x < U2NetInputSize; x++)
+            int index = y * U2NetInputSize;
+            for (int x = 0; x < U2NetInputSize; x++, index++)
             {
                 int offset = x * 4;
                 float blue = row[offset] / 255f;
                 float green = row[offset + 1] / 255f;
                 float red = row[offset + 2] / 255f;
-                tensor[0, 0, y, x] = (red - 0.485f) / 0.229f;
-                tensor[0, 1, y, x] = (green - 0.456f) / 0.224f;
-                tensor[0, 2, y, x] = (blue - 0.406f) / 0.225f;
+                data[index] = (red - 0.485f) / 0.229f;
+                data[planeSize + index] = (green - 0.456f) / 0.224f;
+                data[(2 * planeSize) + index] = (blue - 0.406f) / 0.225f;
             }
         }
-        return tensor;
+        return new DenseTensor<float>(data, new[] { 1, 3, U2NetInputSize, U2NetInputSize });
     }
 
     internal static SKBitmap ProcessMask(Tensor<float> tensor, int width, int height, out float minOut, out float maxOut)
     {
+        const int planeSize = U2NetInputSize * U2NetInputSize;
         var mask320 = new SKBitmap(U2NetInputSize, U2NetInputSize, SKColorType.Gray8, SKAlphaType.Opaque);
-        float[] probabilities = ArrayPool<float>.Shared.Rent(U2NetInputSize * U2NetInputSize);
+        float[] probabilities = ArrayPool<float>.Shared.Rent(planeSize);
         float minProb = float.MaxValue;
         float maxProb = float.MinValue;
 
         try
         {
-            for (int y = 0; y < U2NetInputSize; y++)
+            ReadOnlySpan<float> logits = GetMaskPlane(tensor, probabilities);
+            for (int i = 0; i < planeSize; i++)
             {
-                int rowOffset = y * U2NetInputSize;
-                for (int x = 0; x < U2NetInputSize; x++)
-                {
-                    float val = tensor[0, 0, y, x];
-                    float prob = (float)(1.0 / (1.0 + Math.Exp(-val)));
-                    probabilities[rowOffset + x] = prob;
-                    if (prob < minProb) minProb = prob;
-                    if (prob > maxProb) maxProb = prob;
-                }
+                float prob = (float)(1.0 / (1.0 + Math.Exp(-logits[i])));
+                probabilities[i] = prob;
+                if (prob < minProb) minProb = prob;
+                if (prob > maxProb) maxProb = prob;
             }
 
             AppLog.Debug("BackgroundRemovalService", $"AI Mask Prob Range: Min={minProb}, Max={maxProb}");
@@ -461,41 +580,99 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         }
     }
 
+    /// <summary>The model output's first 320x320 plane, the mask's logits.</summary>
+    /// <remarks>Read straight from the buffer of the dense tensor ONNX Runtime returns. Any other tensor is copied
+    /// into <paramref name="scratch"/> through its indexer, which allocates a params array per read.</remarks>
+    private static ReadOnlySpan<float> GetMaskPlane(Tensor<float> tensor, float[] scratch)
+    {
+        const int planeSize = U2NetInputSize * U2NetInputSize;
+        if (tensor is DenseTensor<float> { IsReversedStride: false, Rank: 4 } dense
+            && dense.Dimensions[2] == U2NetInputSize && dense.Dimensions[3] == U2NetInputSize)
+        {
+            return dense.Buffer.Span[..planeSize];
+        }
+
+        for (int y = 0; y < U2NetInputSize; y++)
+        {
+            for (int x = 0; x < U2NetInputSize; x++)
+            {
+                scratch[(y * U2NetInputSize) + x] = tensor[0, 0, y, x];
+            }
+        }
+
+        return scratch.AsSpan(0, planeSize);
+    }
+
     /// <summary>Applies <paramref name="mask"/> as the alpha channel of <paramref name="original"/>. The
     /// returned bitmap is the caller's to dispose.</summary>
     internal static SKBitmap ApplyMask(SKBitmap original, SKBitmap mask, float min, float max)
     {
-        if (mask.Width != original.Width || mask.Height != original.Height)
+        // Every size and colour type below is read once: each is a call into Skia, and reading them in the pixel
+        // loop made a 4K removal spend most of its time there.
+        int width = original.Width;
+        int height = original.Height;
+        if (mask.Width != width || mask.Height != height)
         {
             throw new ArgumentException("Mask dimensions must match the source image.", nameof(mask));
         }
 
-        var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        var result = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
         var maskColorType = mask.ColorType;
-        bool canReadMaskRow = maskColorType is SKColorType.Gray8 or SKColorType.Alpha8 or SKColorType.Bgra8888 or SKColorType.Rgba8888;
+        bool isByteMask = maskColorType is SKColorType.Gray8 or SKColorType.Alpha8;
+        bool canReadMaskRow = isByteMask || maskColorType is SKColorType.Bgra8888 or SKColorType.Rgba8888;
 
-        for (int y = 0; y < original.Height; y++)
+        ForEachRowBand(height, (firstRow, endRow) =>
         {
-            ReadOnlySpan<byte> srcRow = GetPixelRowSpan(original, y);
-            ReadOnlySpan<byte> maskRow = canReadMaskRow ? GetBitmapRowSpan(mask, y) : default;
-            Span<byte> dstRow = GetPixelRowSpan(result, y);
-
-            for (int x = 0; x < original.Width; x++)
+            for (int y = firstRow; y < endRow; y++)
             {
-                int offset = x * 4;
-                byte maskAlpha = ReadMaskAlpha(mask, maskRow, x, y);
-                byte alpha = (byte)Math.Min(srcRow[offset + 3], maskAlpha);
-                if (alpha < 10) alpha = 0;
-                if (alpha > 240) alpha = srcRow[offset + 3];
+                ReadOnlySpan<uint> srcRow = GetPixelRowWords(original, y);
+                Span<uint> dstRow = GetPixelRowWords(result, y);
 
-                dstRow[offset] = srcRow[offset];
-                dstRow[offset + 1] = srcRow[offset + 1];
-                dstRow[offset + 2] = srcRow[offset + 2];
-                dstRow[offset + 3] = alpha;
+                if (isByteMask)
+                {
+                    ReadOnlySpan<byte> maskRow = GetGrayRowSpan(mask, y);
+                    for (int x = 0; x < dstRow.Length; x++)
+                    {
+                        dstRow[x] = MaskPixel(srcRow[x], maskRow[x]);
+                    }
+
+                    continue;
+                }
+
+                ReadOnlySpan<byte> wideMaskRow = canReadMaskRow ? GetBitmapRowSpan(mask, y) : default;
+                for (int x = 0; x < dstRow.Length; x++)
+                {
+                    dstRow[x] = MaskPixel(srcRow[x], ReadMaskAlpha(mask, maskColorType, wideMaskRow, x, y));
+                }
             }
-        }
+        });
 
         return result;
+    }
+
+    /// <summary>Runs <paramref name="body"/> over bands of rows [first, end) that together cover
+    /// [0, <paramref name="rows"/>), on every core.</summary>
+    /// <remarks>The full-size passes are memory-bound: one core spends ~30 ms on each at 4K, every core together
+    /// ~6 ms. No row depends on another, so the bytes are the same either way.</remarks>
+    private static void ForEachRowBand(int rows, Action<int, int> body)
+    {
+        if (rows <= 0)
+        {
+            return;
+        }
+
+        Parallel.ForEach(Partitioner.Create(0, rows), band => body(band.Item1, band.Item2));
+    }
+
+    /// <summary>One BGRA pixel with the mask applied: the lower of its alpha and the mask's, cut to transparent
+    /// below 10, and back to the pixel's own alpha above 240.</summary>
+    private static uint MaskPixel(uint pixel, uint maskAlpha)
+    {
+        uint sourceAlpha = pixel >> 24;
+        uint alpha = Math.Min(sourceAlpha, maskAlpha);
+        if (alpha < 10) alpha = 0;
+        if (alpha > 240) alpha = sourceAlpha;
+        return (pixel & 0x00FFFFFFu) | (alpha << 24);
     }
 
     private static SKBitmap ResizeGrayMask(SKBitmap source, int width, int height)
@@ -505,46 +682,102 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
             throw new ArgumentException("Source mask must be Gray8.", nameof(source));
         }
 
+        int sourceWidth = source.Width;
+        int sourceHeight = source.Height;
         var resized = new SKBitmap(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
-        if (width == source.Width && height == source.Height)
+        if (width == sourceWidth && height == sourceHeight)
         {
             source.CopyTo(resized);
             return resized;
         }
 
-        double scaleX = source.Width / (double)width;
-        double scaleY = source.Height / (double)height;
+        double scaleX = sourceWidth / (double)width;
+        double scaleY = sourceHeight / (double)height;
 
-        for (int y = 0; y < height; y++)
+        // A target column reads the same two source columns at the same weight on every row: work them out once.
+        var leftColumns = new int[width];
+        var rightColumns = new int[width];
+        var columnWeights = new double[width];
+        for (int x = 0; x < width; x++)
         {
-            double sourceY = ((y + 0.5d) * scaleY) - 0.5d;
-            int y0 = Math.Clamp((int)Math.Floor(sourceY), 0, source.Height - 1);
-            int y1 = Math.Min(y0 + 1, source.Height - 1);
-            double fy = Math.Clamp(sourceY - y0, 0d, 1d);
-
-            ReadOnlySpan<byte> sourceRow0 = GetGrayRowSpan(source, y0);
-            ReadOnlySpan<byte> sourceRow1 = GetGrayRowSpan(source, y1);
-            Span<byte> resizedRow = GetWritableGrayRowSpan(resized, y);
-
-            for (int x = 0; x < width; x++)
-            {
-                double sourceX = ((x + 0.5d) * scaleX) - 0.5d;
-                int x0 = Math.Clamp((int)Math.Floor(sourceX), 0, source.Width - 1);
-                int x1 = Math.Min(x0 + 1, source.Width - 1);
-                double fx = Math.Clamp(sourceX - x0, 0d, 1d);
-
-                double top = sourceRow0[x0] + ((sourceRow0[x1] - sourceRow0[x0]) * fx);
-                double bottom = sourceRow1[x0] + ((sourceRow1[x1] - sourceRow1[x0]) * fx);
-                resizedRow[x] = (byte)Math.Clamp((int)Math.Round(top + ((bottom - top) * fy)), 0, 255);
-            }
+            double sourceX = ((x + 0.5d) * scaleX) - 0.5d;
+            int x0 = Math.Clamp((int)Math.Floor(sourceX), 0, sourceWidth - 1);
+            leftColumns[x] = x0;
+            rightColumns[x] = Math.Min(x0 + 1, sourceWidth - 1);
+            columnWeights[x] = Math.Clamp(sourceX - x0, 0d, 1d);
         }
+
+        ForEachRowBand(height, (firstRow, endRow) =>
+        {
+            // Interpolating along a source row gives the same values for every target row that blends it in, and
+            // a screen-sized target reads each of the 320 rows for several in a row: keep the two the current one
+            // needs.
+            double[] top = ArrayPool<double>.Shared.Rent(width);
+            double[] bottom = ArrayPool<double>.Shared.Rent(width);
+            int topRow = -1;
+            int bottomRow = -1;
+
+            try
+            {
+                for (int y = firstRow; y < endRow; y++)
+                {
+                    double sourceY = ((y + 0.5d) * scaleY) - 0.5d;
+                    int y0 = Math.Clamp((int)Math.Floor(sourceY), 0, sourceHeight - 1);
+                    int y1 = Math.Min(y0 + 1, sourceHeight - 1);
+                    double fy = Math.Clamp(sourceY - y0, 0d, 1d);
+
+                    if (y0 != topRow)
+                    {
+                        if (y0 == bottomRow)
+                        {
+                            (top, bottom) = (bottom, top);
+                            bottomRow = topRow;
+                        }
+                        else
+                        {
+                            InterpolateRow(GetGrayRowSpan(source, y0), leftColumns, rightColumns, columnWeights, top);
+                        }
+
+                        topRow = y0;
+                    }
+
+                    if (y1 != bottomRow)
+                    {
+                        InterpolateRow(GetGrayRowSpan(source, y1), leftColumns, rightColumns, columnWeights, bottom);
+                        bottomRow = y1;
+                    }
+
+                    Span<byte> resizedRow = GetWritableGrayRowSpan(resized, y);
+                    for (int x = 0; x < resizedRow.Length; x++)
+                    {
+                        resizedRow[x] = (byte)Math.Clamp((int)Math.Round(top[x] + ((bottom[x] - top[x]) * fy)), 0, 255);
+                    }
+                }
+            }
+            finally
+            {
+                ArrayPool<double>.Shared.Return(top);
+                ArrayPool<double>.Shared.Return(bottom);
+            }
+        });
 
         return resized;
     }
 
-    private static byte ReadMaskAlpha(SKBitmap mask, ReadOnlySpan<byte> row, int x, int y)
+    /// <summary>Interpolates <paramref name="sourceRow"/> at every target column into the start of
+    /// <paramref name="row"/>, which may be longer.</summary>
+    private static void InterpolateRow(ReadOnlySpan<byte> sourceRow, int[] leftColumns, int[] rightColumns, double[] weights, double[] row)
     {
-        return mask.ColorType switch
+        for (int x = 0; x < leftColumns.Length; x++)
+        {
+            int x0 = leftColumns[x];
+            row[x] = sourceRow[x0] + ((sourceRow[rightColumns[x]] - sourceRow[x0]) * weights[x]);
+        }
+    }
+
+    private static byte ReadMaskAlpha(SKBitmap mask, SKColorType colorType, ReadOnlySpan<byte> row, int x, int y)
+    {
+        return colorType switch
         {
             SKColorType.Gray8 or SKColorType.Alpha8 => row[x],
             SKColorType.Bgra8888 => row[(x * 4) + 2],
@@ -619,6 +852,13 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
     {
         byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
         return new Span<byte>(rowPtr, bitmap.Width * 4);
+    }
+
+    /// <summary>A 32-bit row as one word per pixel: a BGRA pixel reads as 0xAARRGGBB.</summary>
+    private static unsafe Span<uint> GetPixelRowWords(SKBitmap bitmap, int row)
+    {
+        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
+        return new Span<uint>(rowPtr, bitmap.Width);
     }
 
     private static unsafe ReadOnlySpan<byte> GetGrayRowSpan(SKBitmap bitmap, int row)

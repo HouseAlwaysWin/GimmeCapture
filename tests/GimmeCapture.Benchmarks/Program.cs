@@ -104,16 +104,26 @@ public class BackgroundRemovalPixelBenchmarks
     private SKBitmap _maskBitmap = null!;
     private float[] _maskTensorData = null!;
     private DenseTensor<float> _maskTensor = null!;
+    private SKBitmap _processedSelection = null!;
+    private SKRectI _selection;
+
+    // The model's input size, where the mask needs no resize, and a 4K pin, where every pass over the image costs
+    // the most.
+    [Params("320x320", "3840x2400")]
+    public string Size { get; set; } = "320x320";
 
     [GlobalSetup]
     public void Setup()
     {
-        _solidBackgroundBitmap = new SKBitmap(320, 320, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        string[] size = Size.Split('x');
+        int width = int.Parse(size[0]);
+        int height = int.Parse(size[1]);
+        _solidBackgroundBitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
         _solidBackgroundBitmap.Erase(new SKColor(245, 245, 245, 255));
 
         using var canvas = new SKCanvas(_solidBackgroundBitmap);
         using var paint = new SKPaint { Color = new SKColor(32, 48, 96, 255), Style = SKPaintStyle.Fill };
-        canvas.DrawCircle(160, 160, 80, paint);
+        canvas.DrawCircle(width / 2f, height / 2f, Math.Min(width, height) / 4f, paint);
 
         _maskBitmap = _solidBackgroundBitmap.Copy(SKColorType.Bgra8888);
         _maskTensorData = new float[320 * 320];
@@ -123,6 +133,11 @@ public class BackgroundRemovalPixelBenchmarks
         }
 
         _maskTensor = new DenseTensor<float>(_maskTensorData, new[] { 1, 1, 320, 320 });
+
+        _selection = SKRectI.Create(width / 5, height / 5, width * 3 / 5, height * 3 / 5);
+        using var cropped = new SKBitmap();
+        _maskBitmap.ExtractSubset(cropped, _selection);
+        _processedSelection = BackgroundRemovalService.RemoveSolidBackground(cropped, new SKColor(245, 245, 245, 255));
     }
 
     [GlobalCleanup]
@@ -130,6 +145,7 @@ public class BackgroundRemovalPixelBenchmarks
     {
         _solidBackgroundBitmap.Dispose();
         _maskBitmap.Dispose();
+        _processedSelection.Dispose();
     }
 
     [Benchmark]
@@ -148,6 +164,13 @@ public class BackgroundRemovalPixelBenchmarks
     {
         using var resizedMask = BackgroundRemovalService.ProcessMask(_maskTensor, _maskBitmap.Width, _maskBitmap.Height, out _, out _);
         using var result = BackgroundRemovalService.ApplyMask(_maskBitmap, resizedMask, 0f, 1f);
+        return result.Width;
+    }
+
+    [Benchmark]
+    public int ComposeSelection()
+    {
+        using var result = BackgroundRemovalService.ComposeSelection(_maskBitmap, _processedSelection, _selection);
         return result.Width;
     }
 }

@@ -153,6 +153,14 @@
   (1.0 s instead of 1.45 s at 3840×2400). The first removal after a pause still loads the model, which takes longer
   on the GPU (about 0.8 s against 0.45 s), so it is about as fast as before at 1920×1200 (1.5–1.6 s) and 0.3 s
   faster at 3840×2400. `BackgroundRemoval.SessionCreated` in the log says what each load runs on.
+- **Background removal no longer spends most of its time after the model.** Once the model ran on the GPU, the pixel
+  work around it was most of a removal: about 0.8 s of 0.95 s at 3840×2400. Resizing the mask to the image and
+  applying it asked Skia for the image's size and format again at every pixel, and a selection was put back into
+  the picture by drawing it. That work now takes about 20 ms there, spread over the CPU's cores, and gives the same
+  bytes as before. Trying again on the same pin takes 0.15 s instead of 0.95 s at 3840×2400 and 0.15 s instead of
+  0.35 s at 1920×1200; inside a selection, 0.15 s instead of 0.57 s and 0.10 s instead of 0.25 s. The first removal
+  after a pause, which also loads the model, saves the same work. On a pin with a one-colour background, which skips
+  the model, the removal itself takes 4 ms instead of 50 ms at 3840×2400.
 
 ### 💾 Storage
 
