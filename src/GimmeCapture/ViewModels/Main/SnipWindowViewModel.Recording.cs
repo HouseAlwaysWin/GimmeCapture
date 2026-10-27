@@ -34,6 +34,9 @@ public partial class SnipWindowViewModel
     // Folder holding the per-window files when recording multiple windows to separate files; null otherwise.
     private string? _separateRecordingFolder;
 
+    // Whether this recording went to the temp folder, unsaved, rather than straight into the fixed video folder.
+    private bool _recordingToTempFolder;
+
     // Per-output logical bounds for separate-window recording, captured at START (index-aligned with the output
     // files). Snapshotted because the pin path runs after ClearRecordingSelectionVisuals() empties
     // _recordWindowHandles (via SelectionRect=default), so SeparateOutputBoundsForIndex can no longer look them up.
@@ -278,7 +281,7 @@ public partial class SnipWindowViewModel
         string tempDir = _settings.TempDirectory;
         if (string.IsNullOrEmpty(tempDir))
         {
-            tempDir = System.IO.Path.Combine(_services.SettingsService.BaseDataDirectory, "Temp");
+            tempDir = RecordingTempDirectory.For(_services.SettingsService.BaseDataDirectory);
         }
 
         FileLocationService.EnsureDirectory(tempDir, "SnipRecording.EnsureTempDirectory");
@@ -289,10 +292,13 @@ public partial class SnipWindowViewModel
             FileLocationService.EnsureDirectory(_settings.RecordingSettings.VideoSaveDirectory, "SnipRecording.EnsureVideoDirectory");
             string fileName = CaptureFileNameService.BuildFileName(format, _settings.FileNameTemplate);
             _currentRecordingPath = System.IO.Path.Combine(_settings.RecordingSettings.VideoSaveDirectory, fileName);
+            _recordingToTempFolder = false;
         }
         else
         {
-            _currentRecordingPath = System.IO.Path.Combine(tempDir, $"GimmeCapture_{Guid.NewGuid()}.{format}");
+            // Named so that RecordingTempCleaner can tell it from anything else in a temp folder the user picked.
+            _currentRecordingPath = System.IO.Path.Combine(tempDir, RecordingTempDirectory.NewRecordingFileName(format));
+            _recordingToTempFolder = true;
         }
 
         bool useWindowsExcludeFromCapture = OperatingSystem.IsWindows() && Annotations.Count == 0;
@@ -464,8 +470,13 @@ public partial class SnipWindowViewModel
         string? actualOutputPath = await ResolveRecordingFilePathAsync(_recordingService.OutputFilePath ?? _currentRecordingPath);
         string? revealPath = null;
 
+        // No dialog to ask with either when the overlay closed mid-recording, which disposes this view model first.
+        // That case revealed the temp file itself as the result, which RecordingTempCleaner deletes once it is a day
+        // old, so it is moved into the video folder like an unattended stop.
+        bool unattended = suppressSaveDialog || PickSaveFileAction == null;
+
         // Check if we need to prompt
-        if (suppressSaveDialog && !_settings.RecordingSettings.UseFixedRecordPath
+        if (unattended && !_settings.RecordingSettings.UseFixedRecordPath
             && !string.IsNullOrEmpty(actualOutputPath) && System.IO.File.Exists(actualOutputPath))
         {
             // Unattended finish: move the temp file into the configured video folder (or MyVideos)
@@ -509,6 +520,9 @@ public partial class SnipWindowViewModel
                     catch (Exception ex)
                     {
                         AppLog.Error("Recording.MoveOutput", ex);
+                        // Show the user where the recording still is: left unmentioned in the temp folder, it would
+                        // be gone a day later (RecordingTempCleaner).
+                        revealPath = actualOutputPath;
                     }
                 }
                 else
@@ -593,7 +607,8 @@ public partial class SnipWindowViewModel
             {
                 try
                 {
-                    OpenPinnedVideoWindowAction(file, pw, ph, ow, oh, SelectionBorderColor, SelectionBorderThickness, hideDecoration, hideBorder);
+                    // Not a temp recording: the windows' files go to a folder of their own, the one Save reveals.
+                    OpenPinnedVideoWindowAction(file, pw, ph, ow, oh, SelectionBorderColor, SelectionBorderThickness, hideDecoration, hideBorder, null);
                 }
                 catch
                 {
@@ -821,6 +836,9 @@ public partial class SnipWindowViewModel
                 {
                     try
                     {
+                        // A recording in the temp folder is the pin's from here: it deletes the file when it closes,
+                        // unless the file itself went to the clipboard. When no pin opens, the file is revealed
+                        // instead and stays.
                         OpenPinnedVideoWindowAction(
                             pinSource,
                             pixelWidth,
@@ -830,7 +848,8 @@ public partial class SnipWindowViewModel
                             SelectionBorderColor,
                             SelectionBorderThickness,
                             hideDecoration,
-                            hideBorder);
+                            hideBorder,
+                            _recordingToTempFolder ? new UnsavedRecording(recordingPath, _services?.CaptureHistory) : null);
                     }
                     catch
                     {

@@ -98,6 +98,9 @@ public partial class App : Application
                 if (settingsLoad.IsCompletedSuccessfully)
                 {
                     InstanceStorageCleaner.Sweep(bootstrapper.GetAIResourcesDirectoryInUse());
+                    // Recordings nobody saved: copied to the clipboard, left by a crash, or in the Temp folder of a
+                    // version since updated. A pinned one goes when its pin closes; the settings name the folders.
+                    await bootstrapper.SweepLeftoverRecordingsAsync().ConfigureAwait(false);
                 }
                 // No explicit delay any more: the trim waits out the idle window the service enforces, so a user
                 // who captures something in the first minutes never pays for a trim they are about to undo.

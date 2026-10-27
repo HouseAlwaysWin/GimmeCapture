@@ -201,7 +201,7 @@ public partial class RecordingService : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _finalizationProgress, value);
     }
 
-    public string BaseTempDir => Path.Combine(_settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory, "Temp", "Recordings");
+    public string BaseTempDir => Path.Combine(RecordingTempDirectory.For(_settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory), "Recordings");
 
     public RecordingService(FFmpegDownloaderService downloader, IAppSettingsService? settingsService = null)
     {
@@ -298,7 +298,7 @@ public partial class RecordingService : ReactiveObject
 
         // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
         var baseDataDir = _settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
-        _tempDir = Path.Combine(baseDataDir, "Temp", $"Recordings_{Guid.NewGuid()}");
+        _tempDir = Path.Combine(RecordingTempDirectory.For(baseDataDir), RecordingTempDirectory.NewSessionDirectoryName());
 
         // Ensure temp dir is clean (it's new so it should be, but just in case)
         try
@@ -311,7 +311,15 @@ public partial class RecordingService : ReactiveObject
         }
         Directory.CreateDirectory(_tempDir);
 
-        return await StartSegmentAsync().ConfigureAwait(false);
+        bool started = await StartSegmentAsync().ConfigureAwait(false);
+        if (!started)
+        {
+            // Nothing was recorded, so nothing in the session folder is worth keeping. Every failed start used to
+            // leave one behind.
+            CleanupTempDirectory();
+        }
+
+        return started;
     }
 
     /// <summary>Opens the audio captures and the video session for one segment. Blocks on native initialization

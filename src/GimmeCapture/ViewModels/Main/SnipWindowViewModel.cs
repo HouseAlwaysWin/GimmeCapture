@@ -411,7 +411,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     // Last param: the scrollable content size (logical px) — non-null only for a long scrolling-capture pin,
     // where `rect` is the fixed viewport (original selection) and the full stitch scrolls inside it.
     public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool, bool, string?, double, Avalonia.Size?>? OpenPinWindowAction { get; set; }
-    public Action<string, int, int, double, double, Color, double, bool, bool>? OpenPinnedVideoWindowAction { get; set; }
+    // Last param: the recording the user has not saved, which the pin owns from then on (null for a saved file).
+    public Action<string, int, int, double, double, Color, double, bool, bool, UnsavedRecording?>? OpenPinnedVideoWindowAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
     public IEnumerable<Color> PresetColors => PresetColorPalette.DefaultColors;
 

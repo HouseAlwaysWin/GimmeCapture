@@ -46,6 +46,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     }
 
     public string VideoPath { get; }
+
+    // The temporary files this pin plays from, deleted once the pin and every save, copy or crop reading them are done.
+    private readonly PinSourceFiles _sourceFiles;
+
     public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
 
     // Toolbar export-format picker: drives the Save/Copy output format. Defaults to the main-menu recording
@@ -449,9 +453,12 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         return Math.Max(1, 1000 / safeFps);
     }
 
-    public FloatingVideoViewModel(string videoPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, IAppSettingsService? appSettingsService)
+    /// <param name="unsavedRecording">The recording the user has not saved, when this pin plays one: the pin owns it
+    /// from here on, and deletes it when it closes.</param>
+    public FloatingVideoViewModel(string videoPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, IAppSettingsService? appSettingsService, GimmeCapture.Services.Core.Media.UnsavedRecording? unsavedRecording = null)
     {
         VideoPath = videoPath;
+        _sourceFiles = new PinSourceFiles(videoPath, unsavedRecording);
         // Toolbar export format defaults to the main-menu recording format (synced with the app setting), else
         // the clip's own container. The user can change it per-pin.
         _selectedExportFormat = DefaultExportFormatFor(videoPath, appSettingsService?.Settings.RecordFormat);
@@ -573,10 +580,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             _latestFrameLength = 0;
         }
 
-        // The native player released the file handle above; if this pin's source is a temp file we created in
-        // %TEMP%/GimmeCapture_Pins (a cropped-clip copy or a GIF-recording audio sidecar), delete it now so it
-        // doesn't accumulate. No-op for any normal (non-temp) source path.
-        GimmeCapture.Services.Core.Media.PinTempDirectory.TryDeleteOwnedFile(VideoPath);
+        // The native player released the file handle above. The pin's temporary files (an unsaved recording, a
+        // cropped-clip copy or a GIF recording's audio sidecar in %TEMP%/GimmeCapture_Pins) go now, or once a save or
+        // copy still reading them finishes, so they don't accumulate. No-op for any normal (non-temp) source path.
+        _sourceFiles.Dispose();
     }
 
     private static async Task<bool> WaitForTaskOrTimeoutAsync(Task task, TimeSpan timeout, string operation)

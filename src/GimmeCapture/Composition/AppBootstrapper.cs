@@ -77,6 +77,27 @@ public sealed class AppBootstrapper : IAsyncDisposable
     /// <summary>The AI resources folder the settings use. Only meaningful once <see cref="InitialSettingsLoadTask"/> is done.</summary>
     internal string GetAIResourcesDirectoryInUse() => new AIPathService(_settingsService).GetAIResourcesPath();
 
+    /// <summary>
+    /// Deletes the recordings earlier runs left unsaved in the temp folders (<see cref="RecordingTempCleaner"/>), and
+    /// the history entries pointing at them. Call off the UI thread, once <see cref="InitialSettingsLoadTask"/> is
+    /// done: the settings name those folders. Never throws.
+    /// </summary>
+    internal async Task SweepLeftoverRecordingsAsync()
+    {
+        try
+        {
+            var removed = RecordingTempCleaner.Sweep(_settingsService.BaseDataDirectory, _settingsService.Settings.TempDirectory);
+            if (removed.Count > 0)
+            {
+                await _mainWindowViewModel.Value.CaptureHistory.ForgetAsync(removed).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("RecordingTemp.Sweep", ex);
+        }
+    }
+
     public MainWindow CreateMainWindow()
     {
         return _mainWindow ??= new MainWindow(

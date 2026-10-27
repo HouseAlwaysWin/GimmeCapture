@@ -84,6 +84,7 @@ public partial class FloatingVideoViewModel
 
         IsProcessing = true;
         ProcessingText = Localization["StatusProcessing"] ?? "Processing...";
+        using var readingSource = _sourceFiles.Use(); // Crop closes this pin while the export still reads its file
         try
         {
             string? exported = await ExportCroppedRegionAsync(crop, Path.GetExtension(VideoPath));
@@ -229,6 +230,7 @@ public partial class FloatingVideoViewModel
         // This is the "standard" way to avoid PlatformImpl null or focus issues.
         Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
         {
+            using var readingSource = _sourceFiles.Use();
             try
             {
                 ProcessingText = Localization["StatusExportingVideo"] ?? "Exporting Video...";
@@ -244,7 +246,12 @@ public partial class FloatingVideoViewModel
                     bool copied = thumb != null
                         ? await _clipboardService.CopyFileAndImageAsync(produced, thumb)
                         : await _clipboardService.CopyFileAsync(produced);
-                    if (!copied)
+                    if (copied)
+                    {
+                        // An unedited clip goes to the clipboard as the pin's own file, which must outlive the pin.
+                        _sourceFiles.CopiedToClipboard(produced);
+                    }
+                    else
                     {
                         // The write lost the race for the clipboard, so the clipboard still holds its previous
                         // content — record that rather than letting the "copied" log line imply success.
@@ -584,6 +591,8 @@ public partial class FloatingVideoViewModel
         // IMPORTANT: Let the UI event finish (menu close) before opening another modal dialog.
         Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
         {
+            // From before the dialog: a pin closed while it is open still has its file when the user picks a place.
+            using var readingSource = _sourceFiles.Use();
             var targetPath = await PickSaveFileAction.Invoke();
             if (string.IsNullOrEmpty(targetPath)) return;
 
@@ -598,6 +607,7 @@ public partial class FloatingVideoViewModel
                 if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
                 {
                     System.IO.File.Copy(produced, targetPath, true);
+                    await _sourceFiles.SavedAsAsync(targetPath);
                     FileLocationService.RevealInFileExplorer(targetPath);
                     return;
                 }

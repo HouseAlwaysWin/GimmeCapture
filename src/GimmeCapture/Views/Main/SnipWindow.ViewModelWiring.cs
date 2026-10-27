@@ -545,7 +545,7 @@ public partial class SnipWindow : Window
     {
         if (_viewModel == null) return; // only wired with one; the lambdas read the current _viewModel
 
-        _viewModel.OpenPinnedVideoWindowAction = (recordingPath, pixelWidth, pixelHeight, originalWidth, originalHeight, color, thickness, hideDecoration, hideBorder) =>
+        _viewModel.OpenPinnedVideoWindowAction = (recordingPath, pixelWidth, pixelHeight, originalWidth, originalHeight, color, thickness, hideDecoration, hideBorder, unsavedRecording) =>
         {
             var vm = new FloatingVideoViewModel(
                 recordingPath,
@@ -558,7 +558,8 @@ public partial class SnipWindow : Window
                 hideDecoration,
                 hideBorder,
                 _clipboardService,
-                _viewModel.Services?.SettingsService);
+                _viewModel.Services?.SettingsService,
+                unsavedRecording);
 
             // Copying a clip from the pin persists a managed copy into History (like image copy),
             // so the copied/trimmed video shows up in the history panel.

@@ -42,4 +42,21 @@ public class HistoryItemsMergeTests
         Assert.Empty(created);
         Assert.Same(first[1], Assert.Single(removed));
     }
+
+    // A pinned recording saved from its pin keeps its entry, which now points at the saved file. The card showing the
+    // temp file it was would open and reveal a file that is about to be deleted.
+    [Fact]
+    public void AnEntryWhoseFileMoved_GetsANewViewModel()
+    {
+        var (first, _, _) = MainWindowViewModel.MergeHistoryItems([], Entries("a", "b"), Create);
+        var entries = Entries("a", "b");
+        entries[1].FilePath = "D:/Videos/saved.mp4";
+
+        var (second, created, removed) = MainWindowViewModel.MergeHistoryItems(first, entries, Create);
+
+        Assert.Same(first[0], second[0]);
+        Assert.Same(Assert.Single(created), second[1]);
+        Assert.Equal("b", second[1].Id);
+        Assert.Same(first[1], Assert.Single(removed));
+    }
 }

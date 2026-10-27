@@ -25,6 +25,8 @@ public partial class RecordingService
         if (validSegments.Count == 0)
         {
             AppLog.Debug("RecordingService.Finalize", "No valid segments to finalize!");
+            // No video was written, so there is no recording to recover from the session folder either.
+            CleanupTempDirectory();
             return;
         }
 
@@ -759,7 +761,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            AppLog.Debug("Recording.DeleteFile", ex); // TempWorkspaceCleaner sweeps what is left
+            AppLog.Debug("Recording.DeleteFile", ex); // it is in the session folder, which goes after finalize
         }
     }
 
@@ -768,12 +770,12 @@ public partial class RecordingService
         try
         {
             string baseDataDir = _settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
-            string expectedParent = Path.Combine(baseDataDir, "Temp");
+            string expectedParent = RecordingTempDirectory.For(baseDataDir);
             RecordingTempDirectory.TryDeleteSessionDirectory(_tempDir, expectedParent);
         }
         catch (Exception ex)
         {
-            AppLog.Debug("Recording.CleanupTempDir", ex); // TempWorkspaceCleaner sweeps what is left
+            AppLog.Debug("Recording.CleanupTempDir", ex); // RecordingTempCleaner sweeps what is left
         }
     }
 

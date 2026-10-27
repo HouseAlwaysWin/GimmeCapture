@@ -165,4 +165,67 @@ public class CaptureHistoryServiceTests
         var service2 = new CaptureHistoryService(settings, rootDirectoryOverride: tempDir);
         Assert.Empty(await service2.GetItemsAsync());
     }
+
+    // An unsaved recording's pin, or the start-up sweep, deletes the file: its entry and thumbnail go with it, at once
+    // rather than at the next launch, and an open history panel refreshes.
+    [Fact]
+    public async Task Forget_DropsTheEntryAndItsThumbnail_ButLeavesTheFileAlone()
+    {
+        var tempDir = NewTempDir();
+        var service = new CaptureHistoryService(new AppSettingsService(tempDir), rootDirectoryOverride: tempDir);
+        var forgotten = WritePng(tempDir, "forgotten.png");
+        var kept = WritePng(tempDir, "kept.png");
+        await service.AddImageAsync(forgotten);
+        await service.AddImageAsync(kept);
+        var entry = (await service.GetItemsAsync()).Single(i => i.FilePath == forgotten);
+        int raised = 0;
+        service.Changed += () => raised++;
+
+        // However the path is spelled.
+        await service.ForgetAsync(Path.Combine(tempDir, ".", "forgotten.png"));
+
+        Assert.Equal(kept, Assert.Single(await service.GetItemsAsync()).FilePath);
+        Assert.False(File.Exists(entry.ThumbnailPath!));
+        Assert.True(File.Exists(forgotten));
+        Assert.Equal(1, raised);
+        Assert.Single(await new CaptureHistoryService(new AppSettingsService(tempDir), rootDirectoryOverride: tempDir).GetItemsAsync());
+    }
+
+    [Fact]
+    public async Task Forget_WithNoHistoryWritten_CreatesNothing()
+    {
+        var tempDir = NewTempDir();
+        var service = new CaptureHistoryService(new AppSettingsService(tempDir), rootDirectoryOverride: tempDir);
+        int raised = 0;
+        service.Changed += () => raised++;
+
+        await service.ForgetAsync(Path.Combine(tempDir, "recording.mp4"));
+        await service.RetargetAsync(Path.Combine(tempDir, "recording.mp4"), Path.Combine(tempDir, "saved.mp4"));
+
+        Assert.False(Directory.Exists(Path.Combine(tempDir, "history")));
+        Assert.Equal(0, raised);
+    }
+
+    // A pinned recording saved from its pin: the entry follows it there, so deleting the temp copy keeps it listed.
+    [Fact]
+    public async Task Retarget_MovesTheEntryToTheSavedFile_KeepingItsThumbnailAndCaptureTime()
+    {
+        var tempDir = NewTempDir();
+        var settings = new AppSettingsService(tempDir);
+        var service = new CaptureHistoryService(settings, rootDirectoryOverride: tempDir);
+        var temp = WritePng(tempDir, "temp.png");
+        await service.AddImageAsync(temp);
+        var before = Assert.Single(await service.GetItemsAsync());
+        var saved = Path.Combine(tempDir, "saved.png");
+        File.Copy(temp, saved);
+
+        await service.RetargetAsync(temp, saved);
+        File.Delete(temp);
+
+        var after = Assert.Single(await new CaptureHistoryService(settings, rootDirectoryOverride: tempDir).GetItemsAsync());
+        Assert.Equal(before.Id, after.Id);
+        Assert.Equal(saved, after.FilePath);
+        Assert.Equal(before.ThumbnailPath, after.ThumbnailPath);
+        Assert.Equal(before.CapturedAtUtc, after.CapturedAtUtc);
+    }
 }

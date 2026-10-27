@@ -125,6 +125,12 @@ public sealed class CaptureHistoryService
         await _gate.WaitAsync(ct).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         try
         {
+            // A pinned recording closed while this waited for the gate has been deleted (UnsavedRecording).
+            if (!File.Exists(filePath))
+            {
+                return;
+            }
+
             await EnsureLoadedAsync().ConfigureAwait(false);
             string id = Guid.NewGuid().ToString("N");
             string? thumbPath = await GenerateVideoThumbnailAsync(filePath, id, pixelWidth, pixelHeight, ct).ConfigureAwait(false);
@@ -194,6 +200,102 @@ public sealed class CaptureHistoryService
         }
 
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Drops the entries for these files and their thumbnails, leaving the files alone: they have been deleted, or are
+    /// about to be (an unsaved recording whose pin closed, a leftover the start-up sweep removed). An entry being added
+    /// for one of them meanwhile is finished first. Never throws.
+    /// </summary>
+    public async Task ForgetAsync(IReadOnlyCollection<string> filePaths)
+    {
+        if (filePaths.Count == 0) return;
+
+        bool changed = false;
+        await _gate.WaitAsync().ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        try
+        {
+            if (!HasIndex()) return;
+
+            await EnsureLoadedAsync().ConfigureAwait(false);
+            var forgotten = _items!.Where(i => filePaths.Any(path => SamePath(i.FilePath, path))).ToList();
+            foreach (var item in forgotten)
+            {
+                _items!.Remove(item);
+                DeleteThumbnail(item);
+            }
+
+            changed = forgotten.Count > 0;
+            if (changed)
+            {
+                await SaveIndexLockedAsync().ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("CaptureHistory.Forget", ex);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (changed) Changed?.Invoke();
+    }
+
+    public Task ForgetAsync(string filePath) => ForgetAsync(new[] { filePath });
+
+    /// <summary>
+    /// Points the entries for <paramref name="oldPath"/> at <paramref name="newPath"/>, keeping their capture time and
+    /// thumbnail: the capture was saved there, and the copy at the old path is about to go. Never throws.
+    /// </summary>
+    public async Task RetargetAsync(string oldPath, string newPath)
+    {
+        bool changed = false;
+        await _gate.WaitAsync().ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        try
+        {
+            if (!HasIndex()) return;
+
+            await EnsureLoadedAsync().ConfigureAwait(false);
+            foreach (var item in _items!.Where(i => SamePath(i.FilePath, oldPath)))
+            {
+                item.FilePath = newPath;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                await SaveIndexLockedAsync().ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("CaptureHistory.Retarget", ex);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (changed) Changed?.Invoke();
+    }
+
+    // Whether there is anything to change: loading the index of a history never written would create its folders.
+    private bool HasIndex() => _items != null || File.Exists(_indexPath);
+
+    private static bool SamePath(string a, string b)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+
+        try
+        {
+            return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 
     public async Task ClearAsync(bool deleteSourceFiles = false)

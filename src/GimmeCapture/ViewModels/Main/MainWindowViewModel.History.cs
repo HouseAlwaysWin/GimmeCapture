@@ -189,8 +189,9 @@ public partial class MainWindowViewModel
 
     /// <summary>
     /// Pairs the history just read with the view models already shown: an entry keeps its view model, a new one gets
-    /// one from <paramref name="create"/>. Returns the list in index order, the view models created, and the ones no
-    /// longer listed, which the caller disposes once they are off screen.
+    /// one from <paramref name="create"/>, and so does one whose file moved (a pinned recording saved from its pin).
+    /// Returns the list in index order, the view models created, and the ones no longer listed, which the caller
+    /// disposes once they are off screen.
     /// </summary>
     internal static (List<HistoryItemViewModel> Items, List<HistoryItemViewModel> Created, List<HistoryItemViewModel> Removed)
         MergeHistoryItems(
@@ -206,12 +207,18 @@ public partial class MainWindowViewModel
 
         var items = new List<HistoryItemViewModel>(entries.Count);
         var created = new List<HistoryItemViewModel>();
+        var moved = new List<HistoryItemViewModel>();
         foreach (var entry in entries)
         {
             if (shown.Remove(entry.Id, out var kept))
             {
-                items.Add(kept);
-                continue;
+                if (string.Equals(kept.FilePath, entry.FilePath, StringComparison.Ordinal))
+                {
+                    items.Add(kept);
+                    continue;
+                }
+
+                moved.Add(kept);
             }
 
             var added = create(entry);
@@ -219,7 +226,7 @@ public partial class MainWindowViewModel
             created.Add(added);
         }
 
-        return (items, created, shown.Values.ToList());
+        return (items, created, shown.Values.Concat(moved).ToList());
     }
 
     private void ApplyHistoryFilter()
