@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -56,44 +57,36 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         {
             try
             {
-                var options = new SessionOptions();
-                bool cudaSuccess = false;
-                try
-                {
-                    // Try CUDA first (4070 Super)
-                    options.AppendExecutionProvider_CUDA(0);
-                    cudaSuccess = true;
-                }
-                catch (Exception ex)
-                {
-                    AppLog.Debug("BackgroundRemoval.Cuda", ex); // no CUDA is the usual case: CPU it is
-                }
-                
-                try
-                {
-                     _session = new InferenceSession(modelPath, options);
-                }
-                catch (Exception ex) when (cudaSuccess)
-                {
-                    // If CUDA was appended but session creation failed (e.g. missing cuDNN), try again with CPU
-                     AppLog.Warning("BackgroundRemoval.CudaSession", ex);
-                     options = new SessionOptions(); // Reset options
-                     _session = new InferenceSession(modelPath, options);
-                }
-                
+                _session = CreateSession(modelPath, out _);
                 _isInitialized = true;
             }
             catch (TypeInitializationException ex)
             {
-                // Most common error: Missing Native DLL or CUDA dependencies
+                // Most common error: the native ONNX Runtime library is missing or failed to load
                 var inner = ex.InnerException?.Message ?? "No inner exception";
-                throw new Exception($"ONNX Runtime failed to initialize. Make sure you have the required native libraries and CUDA 12.x/cuDNN 9.x (if using GPU). \nInner Error: {inner}", ex);
+                throw new Exception($"ONNX Runtime failed to initialize. Make sure you have the required native libraries. \nInner Error: {inner}", ex);
             }
             catch (Exception ex)
             {
                 throw new Exception($"Failed to initialize AI model: {ex.Message}", ex);
             }
         });
+    }
+
+    /// <summary>
+    /// Builds the U2Net session: on DirectML on Windows, on the CPU elsewhere, and on the CPU too when the DirectML
+    /// session fails to build. <paramref name="provider"/> says which.
+    /// </summary>
+    internal static InferenceSession CreateSession(string modelPath, out string provider)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var session = OnnxProviderConfigurator.CreateWithCpuFallback(
+            () => new SessionOptions(),
+            options => new InferenceSession(modelPath, options),
+            "BackgroundRemoval",
+            out provider);
+        AppLog.Information("BackgroundRemoval.SessionCreated", $"{provider} in {stopwatch.ElapsedMilliseconds} ms");
+        return session;
     }
 
 

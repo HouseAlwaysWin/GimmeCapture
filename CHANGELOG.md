@@ -142,6 +142,13 @@
 - **`UiStall` log lines give a freeze's real length.** The watchdog ticked once a second and logged how late the tick
   was, which understated a freeze by up to a second — the recording-start freeze above was logged as 698 ms — and
   could miss one under 1.25 s entirely. It now ticks every 100 ms.
+- **Background removal runs on the GPU.** It asked ONNX Runtime only for CUDA, which the runtime the app ships does not
+  have, so it ran on the CPU on every PC. It now uses DirectML, as OCR and smart selection do, and falls back to the
+  CPU when the GPU session cannot be built. On a laptop's Radeon graphics the model runs in about 0.09 s instead of
+  0.3–0.5 s and leaves the CPU alone, so trying again on the same pin takes 0.38 s instead of 0.82 s at 1920×1200
+  (1.0 s instead of 1.45 s at 3840×2400). The first removal after a pause still loads the model, which takes longer
+  on the GPU (about 0.8 s against 0.45 s), so it is about as fast as before at 1920×1200 (1.5–1.6 s) and 0.3 s
+  faster at 3840×2400. `BackgroundRemoval.SessionCreated` in the log says what each load runs on.
 
 ### 💾 Storage
 
