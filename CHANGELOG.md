@@ -155,6 +155,17 @@
   - the second copy of every model in the instance folder, when your settings use another AI folder. Each start
     used to copy the app folder's `AI` folder there, although nothing read the copy: 3.4 GB on that machine. When
     the instance folder is the one in use, the app folder's `AI` folder is moved into it once, not copied.
+- **Recordings you never saved no longer pile up.** A pinned recording waits, unsaved, in the app's `Temp` folder, and
+  closing the pin left it there for good, as did saving from it, which makes a copy: about 100 MB on one machine.
+  Every update also left the previous version's whole `Temp` folder behind. The pin now deletes its recording once
+  it is closed and any save or copy it started is done. A recording copied to the clipboard as a file stays, and one
+  saved from its pin keeps its History entry, which now points at the saved file; one closed unsaved leaves History
+  too. A few seconds after start-up the app also removes what earlier runs left in this install's `Temp` folders,
+  with their History entries: recordings a day old or more, which includes every recording pinned and never saved
+  before this version, and the raw segments a failed save keeps for recovery once they are a week old. In a temp
+  folder you picked, it touches only its own recordings (`GimmeCapture_<id>.mp4` and the like). A recording still
+  going when the capture overlay is closed goes to your video folder, as one stopped by the length limit does, and a
+  recording that fails to start no longer leaves an empty folder behind.
 - **AI Core is a 176 MB download instead of 514 MB.** It also fetched a separate ONNX Runtime with CUDA and
   TensorRT providers, which needed CUDA 12 and cuDNN 9 to use the GPU at all, and which replaced the app's own
   runtime for the rest of the session once background removal or smart selection had loaded it. The app ships its
