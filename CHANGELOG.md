@@ -63,6 +63,10 @@
   no longer leaves the previous one (hundreds of MB to about 1 GB) stranded in memory.
 - **Switching or unloading the translation model mid-translation no longer crashes:** the model is freed only after
   the translation using it has finished.
+- **Smart selection works where the graphics card cannot run it.** On some Windows 10 PCs DirectML starts but then
+  fails to build the smart-selection model on the graphics card (an older DirectX 12 driver), and smart selection did
+  not work there at all. It now falls back to the CPU, as OCR already did: slower, but it works.
+  `Sam2Runtime.Loaded` and `OcrRuntime.SessionCreated` in the log say what each runs on and how long loading took.
 
 ### ⚡ Performance
 

@@ -39,6 +39,19 @@ internal static class OnnxProviderConfigurator
     }
 
     /// <summary>
+    /// Holds the GPU device open until the result is disposed. DirectML closes its device with the last session or
+    /// options using it, and opening it again costs about 0.2 s, so a caller replacing its sessions holds one across
+    /// the swap: the new sessions then take over the device the old ones had. Holds nothing where no GPU provider
+    /// appends.
+    /// </summary>
+    public static IDisposable HoldGpuDevice()
+    {
+        var options = new SessionOptions();
+        AppendGpuProvidersWithFallback(options);
+        return options;
+    }
+
+    /// <summary>
     /// Builds a session on the GPU providers and, when one was appended but the session then fails to build, builds it
     /// again on the CPU alone. DirectML can append cleanly and still fail inside the session constructor (Windows 10
     /// with an older DX12 driver). A session that fails with no GPU provider in it is not retried: the CPU attempt
@@ -84,5 +97,40 @@ internal static class OnnxProviderConfigurator
         T cpuSession = createSession(cpuOptions);
         provider = CpuProvider;
         return cpuSession;
+    }
+
+    /// <summary>
+    /// Builds two sessions that only work together, OCR's detection and recognition or SAM2's encoder and decoder, from
+    /// the same options, so both run on the same provider. Given to <c>CreateWithCpuFallback</c> as one factory, a
+    /// failure of either on the GPU builds both again on the CPU. When the second fails, the first is disposed before
+    /// the failure goes on, so a GPU attempt that fails halfway leaves no session holding the device.
+    /// </summary>
+    public static (InferenceSession First, InferenceSession Second) CreateSessionPair(
+        SessionOptions options,
+        string firstModelPath,
+        string secondModelPath)
+        => CreateSessionPair(
+            options,
+            pairOptions => new InferenceSession(firstModelPath, pairOptions),
+            pairOptions => new InferenceSession(secondModelPath, pairOptions));
+
+    /// <summary>The overload above with the sessions built by <paramref name="createFirst"/> and
+    /// <paramref name="createSecond"/>, so tests can stand in for them.</summary>
+    internal static (T First, T Second) CreateSessionPair<T>(
+        SessionOptions options,
+        Func<SessionOptions, T> createFirst,
+        Func<SessionOptions, T> createSecond)
+        where T : IDisposable
+    {
+        T first = createFirst(options);
+        try
+        {
+            return (first, createSecond(options));
+        }
+        catch
+        {
+            first.Dispose();
+            throw;
+        }
     }
 }

@@ -115,4 +115,82 @@ public class OnnxProviderConfiguratorTests
         Assert.Equal("cpu failure", ex.Message);
         Assert.Equal(2, attempts);
     }
+
+    [Fact]
+    public void CreateSessionPair_BuildsBothFromTheSameOptions()
+    {
+        using var options = new SessionOptions();
+
+        var (first, second) = OnnxProviderConfigurator.CreateSessionPair(
+            options,
+            pairOptions => new FakeSession(pairOptions),
+            pairOptions => new FakeSession(pairOptions));
+
+        Assert.Same(options, first.Options);
+        Assert.Same(options, second.Options);
+        Assert.False(first.IsDisposed);
+        Assert.False(second.IsDisposed);
+    }
+
+    [Fact]
+    public void CreateSessionPair_DisposesTheFirst_WhenTheSecondFails()
+    {
+        // Left alive, a GPU encoder whose decoder failed would hold the device while the CPU attempt builds both again.
+        FakeSession? first = null;
+        using var options = new SessionOptions();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => OnnxProviderConfigurator.CreateSessionPair<FakeSession>(
+            options,
+            pairOptions => first = new FakeSession(pairOptions),
+            _ => throw new InvalidOperationException("decoder failed")));
+
+        Assert.Equal("decoder failed", ex.Message);
+        Assert.NotNull(first);
+        Assert.True(first.IsDisposed);
+    }
+
+    [Fact]
+    public void CreateWithCpuFallback_BuildsBothSessionsAgainOnTheCpu_WhenOnlyTheSecondGpuSessionFails()
+    {
+        // The way OCR and SAM2 build their pairs. The GPU's first session must not be kept beside a CPU second one:
+        // the pair always runs on one provider.
+        var firstSessions = new List<FakeSession>();
+        int secondAttempts = 0;
+
+        var (first, second) = OnnxProviderConfigurator.CreateWithCpuFallback(
+            () => new SessionOptions(),
+            options => OnnxProviderConfigurator.CreateSessionPair(
+                options,
+                pairOptions =>
+                {
+                    var session = new FakeSession(pairOptions);
+                    firstSessions.Add(session);
+                    return session;
+                },
+                pairOptions => ++secondAttempts == 1
+                    ? throw new InvalidOperationException("DirectML session failed")
+                    : new FakeSession(pairOptions)),
+            "Test",
+            _ => "DirectML",
+            out string provider);
+
+        Assert.Equal(OnnxProviderConfigurator.CpuProvider, provider);
+        Assert.Equal(2, firstSessions.Count);
+        Assert.True(firstSessions[0].IsDisposed);
+        Assert.Same(firstSessions[1], first);
+        Assert.False(first.IsDisposed);
+        Assert.False(second.IsDisposed);
+        Assert.Same(first.Options, second.Options);
+        Assert.NotSame(firstSessions[0].Options, first.Options);
+    }
+
+    /// <summary>Stands in for an <see cref="InferenceSession"/>: remembers the options it was built from.</summary>
+    private sealed class FakeSession(SessionOptions options) : IDisposable
+    {
+        public SessionOptions Options { get; } = options;
+
+        public bool IsDisposed { get; private set; }
+
+        public void Dispose() => IsDisposed = true;
+    }
 }

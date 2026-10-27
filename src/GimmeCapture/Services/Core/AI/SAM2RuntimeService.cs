@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -169,19 +170,13 @@ public sealed class SAM2RuntimeService : IDisposable
                     bool releasedOldPair = DisposeSessions();
                     try
                     {
-                        var options = new SessionOptions
-                        {
-                            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_BASIC,
-                            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
-                        };
-
-                        OnnxProviderConfigurator.AppendGpuProvidersWithFallback(options);
-
-                        _cachedEncoder = new InferenceSession(paths.Encoder, options);
-                        _cachedDecoder = new InferenceSession(paths.Decoder, options);
+                        var stopwatch = Stopwatch.StartNew();
+                        (_cachedEncoder, _cachedDecoder) = CreateSessionsWithCpuFallback(paths.Encoder, paths.Decoder, out string provider);
                         _cachedVariant = variant;
                         _isWarmedUp = false;
-                        AppLog.Information($"Sam2Runtime.Loaded: {variant}{(releasedOldPair ? " (replaced the previous variant)" : string.Empty)}");
+                        AppLog.Information(
+                            "Sam2Runtime.Loaded",
+                            $"{variant} on {provider} in {stopwatch.ElapsedMilliseconds} ms{(releasedOldPair ? " (replaced the previous variant)" : string.Empty)}");
                     }
                     catch (Exception ex)
                     {
@@ -199,6 +194,26 @@ public sealed class SAM2RuntimeService : IDisposable
             _modelLoadingLock.Release();
         }
     }
+
+    /// <summary>
+    /// Builds the encoder and decoder on the GPU (DirectML on Windows) and, when a GPU provider was appended but the
+    /// sessions fail to build, again on the CPU alone: DirectML can append cleanly and still fail inside the session
+    /// constructor on some Windows 10 configurations, and without the CPU attempt smart selection fails outright there.
+    /// Both sessions share one provider path so the encoder and decoder never split across backends.
+    /// </summary>
+    private static (InferenceSession Encoder, InferenceSession Decoder) CreateSessionsWithCpuFallback(
+        string encoderPath,
+        string decoderPath,
+        out string provider)
+        => OnnxProviderConfigurator.CreateWithCpuFallback(
+            () => new SessionOptions
+            {
+                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_BASIC,
+                LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
+            },
+            options => OnnxProviderConfigurator.CreateSessionPair(options, encoderPath, decoderPath),
+            "Sam2Runtime",
+            out provider);
 
     public async Task EnsureLoadedAndWarmedAsync(SAM2Variant variant)
     {
