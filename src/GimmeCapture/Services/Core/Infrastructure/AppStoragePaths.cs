@@ -7,12 +7,23 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 
 internal static class AppStoragePaths
 {
+    // Set only by the test assembly, which points every path here at a temporary folder for the whole run.
+    private static string? _rootDirectoryOverride;
+
     private static string RootDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GimmeCapture");
+        _rootDirectoryOverride
+        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GimmeCapture");
 
     public static string GetRootDirectory()
     {
         return RootDirectory;
+    }
+
+    /// <summary>Points every path here at <paramref name="rootDirectory"/> instead of the user's data folder. Tests
+    /// only: code under test that reaches for the real folder would otherwise read and write the developer's own.</summary>
+    internal static void UseRootDirectoryForTests(string rootDirectory)
+    {
+        _rootDirectoryOverride = rootDirectory;
     }
 
     public static string GetLegacyConfigPath()

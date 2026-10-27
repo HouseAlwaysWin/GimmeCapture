@@ -760,20 +760,20 @@ exit /b 1
         return extractRoot;
     }
 
-    private static string GetPendingUpdateStatePath(string appDirectory)
-    {
-        var path = AppStoragePaths.GetPendingUpdateStatePath(appDirectory);
-        var directory = Path.GetDirectoryName(path)!;
-        Directory.CreateDirectory(directory);
-        return path;
-    }
+    // Only a path: reading must not create the install's instance folder. Every start and every UpdateService reads
+    // this state, and these getters used to create the folder, so each build or test folder that ever ran left an
+    // empty instances\<key> behind (203 of them on one machine). WriteInstanceFile creates it when there is something
+    // to write.
+    private static string GetPendingUpdateStatePath(string appDirectory) =>
+        AppStoragePaths.GetPendingUpdateStatePath(appDirectory);
 
-    private static string GetFailedVerificationReportPath(string appDirectory)
+    private static string GetFailedVerificationReportPath(string appDirectory) =>
+        AppStoragePaths.GetFailedVerificationReportPath(appDirectory);
+
+    private static void WriteInstanceFile(string path, string contents)
     {
-        var path = AppStoragePaths.GetFailedVerificationReportPath(appDirectory);
-        var directory = Path.GetDirectoryName(path)!;
-        Directory.CreateDirectory(directory);
-        return path;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, contents);
     }
 
     private static string GetCurrentAppDirectory()
@@ -807,7 +807,7 @@ exit /b 1
 
     private static void WriteCachedDownloadState(string appDirectory, CachedDownloadState state)
     {
-        File.WriteAllText(GetCachedDownloadStatePath(appDirectory), JsonSerializer.Serialize(state, PendingStateSerializerOptions));
+        WriteInstanceFile(GetCachedDownloadStatePath(appDirectory), JsonSerializer.Serialize(state, PendingStateSerializerOptions));
     }
 
     private static CachedDownloadState? ReadCachedDownloadState(string appDirectory)
@@ -859,7 +859,7 @@ exit /b 1
 
     private static void WritePendingUpdateState(PendingUpdateState state)
     {
-        File.WriteAllText(GetPendingUpdateStatePath(state.AppDirectory), JsonSerializer.Serialize(state, PendingStateSerializerOptions));
+        WriteInstanceFile(GetPendingUpdateStatePath(state.AppDirectory), JsonSerializer.Serialize(state, PendingStateSerializerOptions));
     }
 
     private static PendingUpdateState? ReadPendingUpdateState(string appDirectory)
@@ -1005,6 +1005,6 @@ exit /b 1
                    + $"ExpectedExePath: {state.ExpectedExePath}{Environment.NewLine}"
                    + $"AppDirectory: {state.AppDirectory}{Environment.NewLine}"
                    + failureMessage;
-        File.WriteAllText(GetFailedVerificationReportPath(state.AppDirectory), report);
+        WriteInstanceFile(GetFailedVerificationReportPath(state.AppDirectory), report);
     }
 }

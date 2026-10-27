@@ -11,8 +11,8 @@ namespace GimmeCapture.Tests;
 // "first run" came back in Chinese on a machine set to Chinese. And because that legacy source redirects saves to the
 // running executable's versioned AppData folder, a test's next save wrote a config into the developer's real AppData:
 // three instance folders there turned out to belong to the test runner. These pin the given directory as the whole
-// answer. They can only show the bug on a machine that has a legacy config, since the data root is not redirectable
-// and writing a fake legacy config into the real AppData would be the same damage on purpose.
+// answer. They cannot plant a legacy config to show the bug: the data root is one folder for the whole test run
+// (TestStorageRoot), and a config there would reach every other test that loads settings.
 public sealed class AppSettingsDirectoryIsolationTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));

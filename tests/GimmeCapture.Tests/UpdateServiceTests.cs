@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 
@@ -152,6 +153,41 @@ public class UpdateServiceTests
         Assert.Equal(ArtifactDownloadStage.Cancelled, service.DownloadStage);
         Assert.False(service.IsDownloading);
     }
+
+    // Every start reads the update state, and reading it used to create the install's instance folder, so each build
+    // or test folder that ever ran left an empty instances\<key> behind. A folder no install used has no instance yet.
+    [Fact]
+    public void ReadingTheUpdateStateAtStart_CreatesNoInstanceFolder()
+    {
+        string appDirectory = NewAppDirectory();
+        string exePath = Path.Combine(appDirectory, "GimmeCapture.exe");
+
+        Assert.False(UpdateService.TryRedirectToPendingUpdatedInstance("1.0.0", exePath));
+        Assert.False(UpdateService.VerifyPendingUpdateOnStartup("1.0.0", exePath).HasPendingUpdate);
+
+        Assert.False(Directory.Exists(AppStoragePaths.GetInstallInstanceDirectory(appDirectory)));
+    }
+
+    [Fact]
+    public void AnUpdateThatDidNotArrive_IsStillReported()
+    {
+        string appDirectory = NewAppDirectory();
+        string exePath = Path.Combine(appDirectory, "GimmeCapture.exe");
+        string statePath = AppStoragePaths.GetPendingUpdateStatePath(appDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
+        File.WriteAllText(statePath, JsonSerializer.Serialize(
+            new PendingUpdateState { TargetVersion = "2.0.0", ExpectedExePath = exePath, AppDirectory = appDirectory },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        var result = UpdateService.VerifyPendingUpdateOnStartup("1.0.0", exePath);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Expected version: 2.0.0", File.ReadAllText(AppStoragePaths.GetFailedVerificationReportPath(appDirectory)));
+    }
+
+    // Under the test run's storage root (TestStorageRoot), and new each time so no other test shares its instance key.
+    private static string NewAppDirectory() =>
+        Path.Combine(TestStorageRoot.RootDirectory, "apps", Guid.NewGuid().ToString("N"));
 
     private static ReleaseInfo CreateRelease(string tagName, bool hasZip, bool prerelease = false, bool draft = false)
     {
