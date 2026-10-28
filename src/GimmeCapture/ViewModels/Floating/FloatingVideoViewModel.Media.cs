@@ -185,8 +185,9 @@ public partial class FloatingVideoViewModel
         CancelPlaybackInBackground();
         var generation = Interlocked.Increment(ref _playbackGeneration);
 
-        // Timeline edit: clamp the restart point to the first kept piece; otherwise the whole clip.
-        var keptForStart = KeptSegments();
+        // Timeline edit: clamp the restart point to the first kept piece; otherwise the whole clip. The loop gets the
+        // pieces as they are now (a change is otherwise handed over once the UI work that made it is done).
+        var keptForStart = _keptForPlayback.Refresh();
         var effectiveEnd = TotalDuration;
         double effectiveStart = keptForStart.Length > 0 ? keptForStart[0].SourceStart : 0;
 
@@ -225,8 +226,9 @@ public partial class FloatingVideoViewModel
                 bool playSingleFrame = !_isPlaybackActive;
                 // Walk the KEPT pieces (one or many), skipping dropped ones. A single kept piece just
                 // plays its [start,end] range (= a trim). Independent of IsTimelineMode, so a collapsed
-                // panel still previews the edit.
-                VideoEditSegment[] kept = KeptSegments();
+                // panel still previews the edit. From the UI thread's copy: this runs on the pool, and
+                // EditSegments is the UI thread's to change.
+                VideoEditSegment[] kept = _keptForPlayback.Kept;
                 bool multi = !playSingleFrame && kept.Length >= 1;
 
                 double startSeconds = nextStartSeconds;
@@ -278,7 +280,7 @@ public partial class FloatingVideoViewModel
 
                 try
                 {
-                    UpdateAudioStateFromPlayback(startSeconds);
+                    UpdateAudioStateFromPlayback(startSeconds, kept);
                     await _nativeFramePlayer.PlayFramesAsync(
                         VideoPath,
                         _width,
@@ -403,7 +405,8 @@ public partial class FloatingVideoViewModel
         return -1;
     }
 
-    private void UpdateAudioStateFromPlayback(double fromSeconds)
+    // `kept` is the pieces the playback plays (a pass's own, or the latest the UI thread handed over).
+    private void UpdateAudioStateFromPlayback(double fromSeconds, VideoEditSegment[] kept)
     {
         if (_isDisposed || !_isPlaybackActive || IsMuted)
         {
@@ -411,11 +414,11 @@ public partial class FloatingVideoViewModel
             return;
         }
 
-        StartAudioPlayback(fromSeconds);
+        StartAudioPlayback(fromSeconds, kept);
     }
 
     // Returns at once: the audio player opens the file and the device on its own worker (Start replaces what played).
-    private void StartAudioPlayback(double fromSeconds)
+    private void StartAudioPlayback(double fromSeconds, VideoEditSegment[] kept)
     {
         if (_isDisposed || IsMuted || !_isPlaybackActive)
         {
@@ -426,7 +429,7 @@ public partial class FloatingVideoViewModel
         // Preview audio must honor the per-segment speed too (the timeline blocks' 1.5×/0.5×/2×),
         // not just the global playback-speed button — otherwise a sped-up segment's video runs fast
         // while its audio stays at the global rate. Mirrors the video's effectivePlaybackSpeed.
-        _audioPreview.Start(VideoPath, Math.Max(0, fromSeconds), EffectiveAudioSpeed(fromSeconds));
+        _audioPreview.Start(VideoPath, Math.Max(0, fromSeconds), EffectiveAudioSpeed(fromSeconds, kept));
     }
 
     /// <summary>
@@ -434,10 +437,9 @@ public partial class FloatingVideoViewModel
     /// under the playhead at <paramref name="atSeconds"/> (1× when not in a timeline segment). Matches the
     /// video's effectivePlaybackSpeed so audio and video stay in sync across per-segment speed changes.
     /// </summary>
-    private double EffectiveAudioSpeed(double atSeconds)
+    private double EffectiveAudioSpeed(double atSeconds, VideoEditSegment[] kept)
     {
         double pieceSpeed = 1.0;
-        VideoEditSegment[] kept = KeptSegments();
         if (_isPlaybackActive && kept.Length >= 1)
         {
             double s = Math.Max(0, atSeconds);

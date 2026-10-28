@@ -13,6 +13,11 @@
 
 ### 🛡️ Reliability
 
+- **Editing a playing video pin's timeline can no longer stop the clip.** The playback, on a thread of its own, read the
+  timeline's pieces straight from the list the timeline strip shows, at the start of every piece and loop. An edit
+  landing at that moment could stop playback with an error, or play one pass with the edit half applied. It now plays a
+  copy the UI thread hands over once each edit is complete. As before, the piece already playing finishes as it was, and
+  the next one plays the edit.
 - **A playing video pin's time, seek bar and redaction boxes now update on the UI thread.** The decoder moved the
   playhead from its own thread on every frame, and with it rebuilt the redaction preview boxes off the UI thread, which
   Avalonia controls don't allow. The playhead now moves on the UI thread, 15 times a second by default. Pausing,

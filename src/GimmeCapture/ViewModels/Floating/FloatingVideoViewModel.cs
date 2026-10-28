@@ -31,6 +31,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     // Each decoded frame, and the time it shows, on the way from the decode thread to the UI thread.
     private readonly LatestFrameHandoff _frameHandoff = new();
     private readonly PlayheadHandoff _decodedPlayhead = new();
+    // The kept timeline pieces, on the way from the UI thread to the playback loop, which must not read EditSegments.
+    private readonly KeptSegmentsHandoff _keptForPlayback;
     private long _lastFrameUiPostTimestampMs;
     private long _lastTimeUiPostTimestampMs;
     private int _isFrameUiPostPending;
@@ -203,7 +205,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             if (_isMuted == value) return;
             this.RaiseAndSetIfChanged(ref _isMuted, value);
             this.RaisePropertyChanged(nameof(MuteTooltip));
-            UpdateAudioStateFromPlayback(PlayheadSeconds());
+            UpdateAudioStateFromPlayback(PlayheadSeconds(), _keptForPlayback.Kept);
         }
     }
 
@@ -477,6 +479,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         _appSettingsService = appSettingsService;
         _uiFrameUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackUiFps ?? 30, 30);
         _uiTimeUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackTimelineFps ?? 15, 15);
+        _keptForPlayback = new KeptSegmentsHandoff(EditSegments, action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
 
         // Apply Default Toolbar Visibility
         ShowToolbar = !(_appSettingsService?.Settings.DefaultHideRecordToolbar ?? false);
