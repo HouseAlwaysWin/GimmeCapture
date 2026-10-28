@@ -4,7 +4,6 @@ using System.Runtime.Versioning;
 using GimmeCapture.Services.Interop;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX.Direct3D11;
-using Windows.Graphics.Imaging;
 using WinRT;
 
 namespace GimmeCapture.Services.Platforms.Windows;
@@ -12,8 +11,8 @@ namespace GimmeCapture.Services.Platforms.Windows;
 /// <summary>
 /// Low-level Windows Graphics Capture (WGC) interop shared by the capture sources. Wraps the small bits
 /// of DirectX/WinRT plumbing that the projections don't surface directly: creating a D3D11-backed
-/// <see cref="IDirect3DDevice"/>, building a <see cref="GraphicsCaptureItem"/> for an HWND, and reading a
-/// captured <see cref="SoftwareBitmap"/> back into a tightly-packed BGRA byte buffer.
+/// <see cref="IDirect3DDevice"/> and building a <see cref="GraphicsCaptureItem"/> for an HWND. Reading
+/// captured frames back is <see cref="WgcSurfaceReader"/>'s.
 /// </summary>
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal static class WgcInterop
@@ -184,43 +183,6 @@ internal static class WgcInterop
         }
     }
 
-    /// <summary>
-    /// Copies a BGRA <see cref="SoftwareBitmap"/> into a freshly-allocated, tightly-packed (stride ==
-    /// width*4) managed byte buffer. A new array is returned each call so a background capture thread can
-    /// hand off the latest frame without the reader racing a buffer it is reused into.
-    /// </summary>
-    public static unsafe byte[]? CopyBgra(SoftwareBitmap softwareBitmap, out int width, out int height)
-    {
-        width = 0;
-        height = 0;
-        using var buffer = softwareBitmap.LockBuffer(BitmapBufferAccessMode.Read);
-        var plane = buffer.GetPlaneDescription(0);
-        using var reference = buffer.CreateReference();
-
-        var byteAccess = reference.As<IMemoryBufferByteAccess>();
-        byteAccess.GetBuffer(out byte* dataPtr, out uint capacity);
-        if (dataPtr == null || capacity == 0 || plane.Width <= 0 || plane.Height <= 0)
-        {
-            return null;
-        }
-
-        int w = plane.Width;
-        int h = plane.Height;
-        int rowBytes = w * 4;
-        var managed = new byte[rowBytes * h];
-        fixed (byte* dst = managed)
-        {
-            for (int row = 0; row < h; row++)
-            {
-                Buffer.MemoryCopy(dataPtr + (long)row * plane.Stride, dst + (long)row * rowBytes, rowBytes, rowBytes);
-            }
-        }
-
-        width = w;
-        height = h;
-        return managed;
-    }
-
     [DllImport("d3d11.dll", ExactSpelling = true)]
     private static extern int D3D11CreateDevice(
         IntPtr pAdapter, uint driverType, IntPtr software, uint flags,
@@ -287,13 +249,5 @@ internal static class WgcInterop
     {
         IntPtr CreateForWindow([In] IntPtr window, [In] ref Guid iid);
         IntPtr CreateForMonitor([In] IntPtr monitor, [In] ref Guid iid);
-    }
-
-    [ComImport]
-    [Guid("5B0D3235-4DBA-4D44-865E-8F1D0E4FD04D")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMemoryBufferByteAccess
-    {
-        unsafe void GetBuffer(out byte* buffer, out uint capacity);
     }
 }

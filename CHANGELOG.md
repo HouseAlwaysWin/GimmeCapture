@@ -111,6 +111,13 @@
 
 ### ⚡ Performance
 
+- **Recording a single window takes about half the CPU and no longer keeps the garbage collector busy.** Each frame
+  Windows delivered was read back into a new bitmap and a new array of the frame's size, 2 MB for a 1000×550 window, and
+  the bitmaps' memory accounting set off a full garbage collection about every three frames of a window that kept
+  changing. The recorder then copied every frame twice more and converted it again, even when the window had not
+  changed. Frames are now read back through one reused GPU texture into reused buffers, and converted only when they are
+  new. Recording a window that changed 60 times a second for 4 s allocated 416 MB, with 56 full collections and 1.5–1.9
+  s of CPU; now it allocates 0.7 MB, with no collections and 0.5–0.8 s of CPU.
 - **Opening a file in the Compress editor no longer decodes a picture nothing shows.** Each time the editor opened on
   another file, the app also opened that file again, brought up a GPU decoder and decoded a 360-pixel frame for a
   preview the Compress tab stopped showing when its Edit tab went away, and applying an edit then rotated that hidden
@@ -341,6 +348,9 @@
 
 ### 🧹 Maintenance
 
+- **A window recording's log no longer gets a line every 300 frames.** After the first three, the "frame arrived" line
+  is written only with `GIMMECAPTURE_DEBUG_LOG=1`. The line a window recording ends with also says how many frames were
+  read back and how many were converted.
 - **A pinned recording without sound no longer logs a warning at every play and seek.** Starting its preview audio
   failed in Media Foundation, which was logged as a warning, and so went into a bug report's error summary. It then
   failed again in FFmpeg; one user's log had 16 of these in a day. The first failure now checks whether the clip has an

@@ -19,7 +19,9 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 ///
 /// The output is constant-rate: a stopwatch-paced loop samples the latest captured frame at the target
 /// fps (re-emitting the last frame when the window is static or minimized), which keeps the video length
-/// aligned to wall-clock time so it stays in sync with the separately-recorded audio segments.
+/// aligned to wall-clock time so it stays in sync with the separately-recorded audio segments. A new frame
+/// is converted straight from the capture source's buffer; a frame that has not changed is not converted
+/// again, since the encoder's frame still holds it.
 /// </summary>
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class LibavWgcMkvSession : LibavRecordingSession
@@ -48,6 +50,18 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
     /// session and skip straight to the gdigrab fallback (avoids paying the first-frame timeout every recording).
     /// </summary>
     public bool TimedOutWaitingForFrame { get; private set; }
+
+    private volatile WgcWindowCaptureSource? _source; // the current or last recording's, for FramesReadBack
+    private long _framesConverted;
+
+    /// <summary>Frames read back from the window so far, in the current or last recording. For tests.</summary>
+    internal long FramesReadBack => _source?.FramesReadBack ?? 0;
+
+    /// <summary>
+    /// Frames converted for the encoder so far, in the current or last recording: one for each new frame read back that
+    /// it got to. Every other frame it encoded repeated a picture that had not changed. For the log and tests.
+    /// </summary>
+    internal long FramesConverted => Interlocked.Read(ref _framesConverted);
 
     // Backstop above bring-up + first-frame: the worker's prime loop / bring-up guard normally fail fast on
     // their own, but if WGC start/dispose blocks somewhere we never reached, still report failure so the
@@ -87,9 +101,10 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
         TaskCompletionSource<bool> firstFrameTcs)
     {
         SwsContext* sws = null;
-        AVFrame* bgraFrame = null;
         int lastSrcW = 0;
         int lastSrcH = 0;
+        _source = null;
+        Interlocked.Exchange(ref _framesConverted, 0);
 
         // A window that is gone (closed since it was picked) fails here, before any WGC work and outside the timed
         // bring-up below. A bring-up that runs late is how a wedged WGC is recognized, and turns WGC off for the
@@ -103,6 +118,7 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
         // on a detached background thread (see the outer finally) — that keeps THIS worker completing promptly so
         // the startup gate / stop / gdigrab fallback never block on a wedged teardown.
         var source = new WgcWindowCaptureSource(hwnd, drawMouse);
+        _source = source;
         bool sourceAbandoned = false;
         try
         {
@@ -164,15 +180,13 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
             }
             LogNative($"Selected encoder: {writer.EncoderName} ({encWidth}x{encHeight}@{fps})");
 
-            byte[]? buf = null;
-
             // Prime: wait for the first captured frame so the encoder sees real content from pts 0. If WGC
             // never delivers a frame (the dual-monitor failure mode) bail out fast so the start is reported as
             // failed and the caller falls back to gdigrab, instead of blocking here forever.
             var primeClock = Stopwatch.StartNew();
             while (!ct.IsCancellationRequested)
             {
-                if (source.TryCopyLatest(ref buf, out _, out _) && buf != null)
+                if (source.FramesReadBack > 0)
                 {
                     AppLog.Information($"Wgc.FirstFrame hwnd=0x{hwnd.ToInt64():X} arrivedMs={primeClock.ElapsedMilliseconds} size={source.InitialWidth}x{source.InitialHeight}");
                     break;
@@ -188,6 +202,14 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
                 Thread.Sleep(5);
             }
 
+            // sws_scale takes managed arrays, and FFmpeg.AutoGen's conversion from a frame's fixed arrays makes new
+            // ones on every call, so these are filled in place instead.
+            var srcData = new byte*[4];
+            var srcStride = new int[4];
+            var dstData = new byte*[4];
+            var dstStride = new int[4];
+            long convertedSequence = 0; // the captured frame the encoder's frame holds; 0 before the first
+
             var clock = Stopwatch.StartNew();
             while (!ct.IsCancellationRequested)
             {
@@ -196,50 +218,54 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
                     continue;
                 }
 
-                if (!source.TryCopyLatest(ref buf, out int srcW, out int srcH) || buf == null || srcW <= 0 || srcH <= 0)
+                // A new frame is converted straight from the source's buffer, which the source does not write again
+                // until the lease is disposed. With nothing new, the encoder's frame still holds the last picture, so
+                // it is encoded again as it is: copying and converting the same picture again cost two copies of it
+                // and a conversion for every frame of a window that did not change.
+                if (source.TryReadFrameAfter(convertedSequence, out WgcFrameExchange.FrameLease frame))
                 {
-                    Thread.Sleep(2);
+                    using (frame)
+                    {
+                        if (sws == null || frame.Width != lastSrcW || frame.Height != lastSrcH)
+                        {
+                            if (sws != null)
+                            {
+                                ffmpeg.sws_freeContext(sws);
+                                sws = null;
+                            }
+
+                            sws = ffmpeg.sws_getContext(
+                                frame.Width, frame.Height, AVPixelFormat.AV_PIX_FMT_BGRA,
+                                encCtx->width, encCtx->height, encCtx->pix_fmt,
+                                (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                            if (sws == null)
+                            {
+                                throw new InvalidOperationException($"sws_getContext failed for BGRA {frame.Width}x{frame.Height} -> {encCtx->pix_fmt} {encCtx->width}x{encCtx->height}.");
+                            }
+
+                            lastSrcW = frame.Width;
+                            lastSrcH = frame.Height;
+                        }
+
+                        AVFrame* encFrame = writer.FrameToFill();
+                        srcData[0] = (byte*)frame.Pixels;
+                        srcStride[0] = frame.Stride;
+                        for (uint plane = 0; plane < 4; plane++)
+                        {
+                            dstData[plane] = encFrame->data[plane];
+                            dstStride[plane] = encFrame->linesize[plane];
+                        }
+
+                        ffmpeg.sws_scale(sws, srcData, srcStride, 0, frame.Height, dstData, dstStride);
+                        convertedSequence = frame.Sequence;
+                        Interlocked.Increment(ref _framesConverted);
+                    }
+                }
+                else if (convertedSequence == 0)
+                {
+                    Thread.Sleep(2); // no picture to encode yet
                     continue;
                 }
-
-                if (sws == null || srcW != lastSrcW || srcH != lastSrcH)
-                {
-                    if (sws != null)
-                    {
-                        ffmpeg.sws_freeContext(sws);
-                        sws = null;
-                    }
-                    if (bgraFrame != null)
-                    {
-                        var old = bgraFrame;
-                        ffmpeg.av_frame_free(&old);
-                        bgraFrame = null;
-                    }
-
-                    sws = ffmpeg.sws_getContext(
-                        srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
-                        encCtx->width, encCtx->height, encCtx->pix_fmt,
-                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
-                    if (sws == null)
-                    {
-                        throw new InvalidOperationException($"sws_getContext failed for BGRA {srcW}x{srcH} -> {encCtx->pix_fmt} {encCtx->width}x{encCtx->height}.");
-                    }
-
-                    bgraFrame = ffmpeg.av_frame_alloc();
-                    bgraFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
-                    bgraFrame->width = srcW;
-                    bgraFrame->height = srcH;
-                    ThrowIfErr(ffmpeg.av_frame_get_buffer(bgraFrame, 32), "frame_get_buffer(bgra)");
-
-                    lastSrcW = srcW;
-                    lastSrcH = srcH;
-                }
-
-                ThrowIfErr(ffmpeg.av_frame_make_writable(bgraFrame), "frame_make_writable(bgra)");
-                CopyBgraIntoFrame(buf, srcW, srcH, bgraFrame);
-
-                AVFrame* encFrame = writer.FrameToFill();
-                ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, srcH, encFrame->data, encFrame->linesize);
 
                 if (writer.FrameCount == 0)
                 {
@@ -257,13 +283,12 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
                 throw new InvalidOperationException("WGC recording pipeline produced zero frames.");
             }
 
-            AppLog.Information($"Wgc.Stop hwnd=0x{hwnd.ToInt64():X} frames={writer.FrameCount} packets={writer.PacketCount}");
+            AppLog.Information($"Wgc.Stop hwnd=0x{hwnd.ToInt64():X} frames={writer.FrameCount} readBack={source.FramesReadBack} converted={FramesConverted} packets={writer.PacketCount}");
             AppLog.Debug("LibavWgcMkvSession", $"[LibavWgc] segment done: frames={writer.FrameCount}, packets={writer.PacketCount}, output='{outputPath}'");
         }
         finally
         {
             writer?.Dispose();
-            SafeFreeFrame(&bgraFrame);
 
             if (sws != null)
             {
@@ -283,36 +308,5 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
         }
     }
 
-    /// <summary>Copies a tightly-packed BGRA buffer into a libav BGRA frame, respecting its padded stride.</summary>
-    private static unsafe void CopyBgraIntoFrame(byte[] buf, int width, int height, AVFrame* bgraFrame)
-    {
-        int rowBytes = width * 4;
-        int stride = bgraFrame->linesize[0];
-        byte* dstBase = bgraFrame->data[0];
-        fixed (byte* srcBase = buf)
-        {
-            for (int row = 0; row < height; row++)
-            {
-                Buffer.MemoryCopy(srcBase + (long)row * rowBytes, dstBase + (long)row * stride, rowBytes, rowBytes);
-            }
-        }
-    }
-
     private static int MakeEven(int value) => value % 2 == 0 ? value : value - 1;
-
-    private static unsafe void SafeFreeFrame(AVFrame** frame)
-    {
-        if (frame != null && *frame != null)
-        {
-            ffmpeg.av_frame_free(frame);
-        }
-    }
-
-    private static void ThrowIfErr(int err, string ctx)
-    {
-        if (err < 0)
-        {
-            throw FFmpegErrors.ToException(err, ctx);
-        }
-    }
 }

@@ -8,19 +8,17 @@ using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
-using Windows.Graphics.Imaging;
 
 namespace GimmeCapture.Services.Platforms.Windows;
 
 /// <summary>
 /// Continuously captures a single top-level window via Windows Graphics Capture (WGC), keeping only the
-/// latest frame as a tightly-packed BGRA buffer (lock-protected). The recording encode loop polls
-/// <see cref="TryCopyLatest"/> to pull frames. Because WGC captures the window's own composited surface,
-/// the recording follows the window as it moves/resizes and keeps recording it even when occluded — the
-/// gap that the gdigrab desktop-region path could not fill.
-///
-/// Mirrors the latest-frame-under-a-lock shape of
-/// <see cref="GimmeCapture.Services.Core.Media.NativeFFmpeg.WebcamCaptureSource"/>.
+/// latest frame, as BGRA, in a <see cref="WgcFrameExchange"/> (read back from the GPU by a
+/// <see cref="WgcSurfaceReader"/>). The single-window encoder reads each new frame in place
+/// (<see cref="TryReadFrameAfter"/>); the multi-window one copies the latest (<see cref="TryCopyLatest"/>).
+/// Because WGC captures the window's own composited surface, the recording follows the window as it
+/// moves/resizes and keeps recording it even when occluded — the gap that the gdigrab desktop-region path
+/// could not fill.
 /// </summary>
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class WgcWindowCaptureSource : IDisposable
@@ -37,11 +35,9 @@ internal sealed class WgcWindowCaptureSource : IDisposable
     private GraphicsCaptureSession? _session;
     private SizeInt32 _poolSize;
 
-    private readonly object _frameLock = new();    // guards _latest / _width / _height
     private readonly object _readbackLock = new();  // serializes FrameArrived readback (no reentrancy)
-    private byte[]? _latest;                          // BGRA, tightly packed (stride == width*4)
-    private int _width;
-    private int _height;
+    private readonly WgcFrameExchange _frames = new();
+    private volatile WgcSurfaceReader? _reader;
 
     private int _frameArrivedCount;                   // diagnostic: how many FrameArrived callbacks fired
     private int _readbackInFlight;                     // 0/1 guard: at most one off-thread readback at a time
@@ -84,6 +80,7 @@ internal sealed class WgcWindowCaptureSource : IDisposable
 
         _device = WgcInterop.CreateDirect3DDevice(out string adapterDescription);
         AdapterDescription = adapterDescription;
+        _reader = new WgcSurfaceReader(_device);
         _poolSize = size;
         _framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(_device, PixelFormat, FramePoolBuffers, size);
         _session = _framePool.CreateCaptureSession(_item);
@@ -94,37 +91,34 @@ internal sealed class WgcWindowCaptureSource : IDisposable
         return true;
     }
 
+    /// <summary>How many frames have been read back so far: it changes whenever a new frame is in.</summary>
+    public long FramesReadBack => _frames.Sequence;
+
     /// <summary>Copies the latest captured frame (BGRA, tightly packed) into a caller buffer. False if none yet.</summary>
-    public bool TryCopyLatest(ref byte[]? buffer, out int width, out int height)
-    {
-        lock (_frameLock)
-        {
-            if (_latest == null)
-            {
-                width = 0;
-                height = 0;
-                return false;
-            }
+    public bool TryCopyLatest(ref byte[]? buffer, out int width, out int height) =>
+        _frames.TryCopyLatest(ref buffer, out width, out height);
 
-            if (buffer == null || buffer.Length < _latest.Length)
-            {
-                buffer = new byte[_latest.Length];
-            }
-
-            Array.Copy(_latest, buffer, _latest.Length);
-            width = _width;
-            height = _height;
-            return true;
-        }
-    }
+    /// <summary>
+    /// The latest captured frame if it came in after the one numbered <paramref name="afterSequence"/> (0: any), to
+    /// read in place: its buffer is not written again until <paramref name="frame"/> is disposed. One at a time.
+    /// </summary>
+    public bool TryReadFrameAfter(long afterSequence, out WgcFrameExchange.FrameLease frame) =>
+        _frames.TryRead(afterSequence, out frame);
 
     private void OnFrameArrived(Direct3D11CaptureFramePool sender, object args)
     {
         int n = Interlocked.Increment(ref _frameArrivedCount);
-        if (n <= 3 || n % 300 == 0)
+        if (n <= 3)
         {
             AppLog.Information(
                 $"Wgc.Source.FrameArrived#{n} thread={Environment.CurrentManagedThreadId} apt={Thread.CurrentThread.GetApartmentState()}");
+        }
+        else if (n % 300 == 0)
+        {
+            // Still arriving: worth a line when chasing a problem, not in every recording's log.
+            AppLog.Debug(
+                "Wgc.Source.FrameArrived",
+                $"#{n} thread={Environment.CurrentManagedThreadId} apt={Thread.CurrentThread.GetApartmentState()}");
         }
 
         Direct3D11CaptureFrame? frame = null;
@@ -165,13 +159,13 @@ internal sealed class WgcWindowCaptureSource : IDisposable
             return;
         }
 
-        // The readback MUST NOT run synchronously on this free-threaded WGC callback thread. The old code did
-        // `SoftwareBitmap.CreateCopyFromSurfaceAsync(...).GetAwaiter().GetResult()` right here — blocking the
-        // callback thread on a WinRT async whose completion is marshaled back to a thread we are blocking. On the
-        // dual-monitor repro that deadlocks: the handler never returns, _latest is never set, and it looks exactly
-        // like "WGC delivers no frames". (A removed probe that ran the readback OFF this thread captured fine on
-        // the same hardware.) So hand the newest frame to a thread-pool readback and return immediately. While a
-        // readback is in flight we drop newer frames — only the latest matters and the pool has limited buffers.
+        // The readback does not run on this free-threaded WGC callback thread. It once did, as
+        // `SoftwareBitmap.CreateCopyFromSurfaceAsync(...).GetAwaiter().GetResult()` — blocking the callback thread on
+        // a WinRT async whose completion is marshaled back to a thread we are blocking. On the dual-monitor repro that
+        // deadlocked: the handler never returned, no frame was ever published, and it looked exactly like "WGC
+        // delivers no frames". The readback is plain D3D now, but it still waits for the GPU, so the newest frame
+        // goes to a thread-pool readback and this returns at once. While a readback is in flight we drop newer
+        // frames — only the latest matters and the pool has limited buffers.
         if (Interlocked.CompareExchange(ref _readbackInFlight, 1, 0) != 0)
         {
             frame.Dispose();
@@ -180,9 +174,9 @@ internal sealed class WgcWindowCaptureSource : IDisposable
 
         Direct3D11CaptureFrame readbackFrame = frame;
         int seq = n;
-        _ = Task.Run(async () =>
+        _ = Task.Run(() =>
         {
-            var rbSw = Stopwatch.StartNew();
+            long started = Stopwatch.GetTimestamp();
             if (seq <= 3)
             {
                 AppLog.Information($"Wgc.Source.Readback.Begin#{seq}");
@@ -190,24 +184,17 @@ internal sealed class WgcWindowCaptureSource : IDisposable
 
             try
             {
-                // Inside Task.Run there is no captured SynchronizationContext, so this continuation resumes on a
-                // thread-pool thread — never the (blocked) WGC callback thread. This is the shape the probe proved.
-                using var softwareBitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(
-                    readbackFrame.Surface, BitmapAlphaMode.Premultiplied);
-                var bgra = WgcInterop.CopyBgra(softwareBitmap, out int w, out int h);
-                if (bgra != null)
-                {
-                    lock (_frameLock)
-                    {
-                        _latest = bgra;
-                        _width = w;
-                        _height = h;
-                    }
-                }
-
+                // Into a buffer the encoder is not reading, reused frame after frame. Each frame used to be a new
+                // SoftwareBitmap and a new array of the frame's size, and the bitmap's GC memory pressure set off a
+                // gen2 collection every three frames of a window that kept changing.
+                int w = 0;
+                int h = 0;
+                WgcSurfaceReader? reader = _reader;
+                bool read = reader != null && reader.TryRead(readbackFrame.Surface, _frames, out w, out h);
                 if (seq <= 3)
                 {
-                    AppLog.Information($"Wgc.Source.Readback.End#{seq} tookMs={rbSw.ElapsedMilliseconds} {w}x{h}");
+                    AppLog.Information(
+                        $"Wgc.Source.Readback.End#{seq} tookMs={(long)Stopwatch.GetElapsedTime(started).TotalMilliseconds} {w}x{h} read={read}");
                 }
             }
             catch (Exception ex)
@@ -354,9 +341,9 @@ internal sealed class WgcWindowCaptureSource : IDisposable
             _item = null;
         }
 
-        lock (_frameLock)
-        {
-            _latest = null;
-        }
+        // After a readback still in flight, which publishes into nothing; a frame the encoder is reading stays valid
+        // until it is released.
+        _reader?.Dispose();
+        _frames.Dispose();
     }
 }
