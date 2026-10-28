@@ -310,6 +310,8 @@
 
 ### 🌐 Localization
 
+- **A pinned video's failed save is reported in the app's language.** "Save Failed:" before the reason was English in
+  every language.
 - **Chinese labels on the small gothic buttons use the Chinese font.** Their font chain put the Japanese font ahead of
   the Chinese one for every language, so Chinese text took Japanese glyph forms, and a Chinese UI loaded both CJK
   fonts (12.9 MB and 16.8 MB). The chain now follows the app language.

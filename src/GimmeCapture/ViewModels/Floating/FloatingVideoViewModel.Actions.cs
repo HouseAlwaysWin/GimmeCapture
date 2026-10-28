@@ -666,7 +666,7 @@ public partial class FloatingVideoViewModel
     // How the pin reports a failed save: the reason on its processing overlay, for two seconds.
     private async Task ShowSaveFailedAsync(Exception ex)
     {
-        ProcessingText = "Save Failed: " + ex.Message;
+        ProcessingText = string.Format(Localization["StatusSaveFailed"], ex.Message);
         IsProcessing = true;
         await Task.Delay(2000);
     }

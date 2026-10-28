@@ -230,6 +230,7 @@
   "StatusProcessing": "Processing...",
   "StatusSaving": "Saving...",
   "StatusExportFailed": "Export failed",
+  "StatusSaveFailed": "Save failed: {0}",
   "SaveSettings": "Save",
   "ResetDefault": "Reset Defaults",
   "UnsavedTitle": "Unsaved Changes",
