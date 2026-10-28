@@ -13,6 +13,10 @@
 
 ### 🛡️ Reliability
 
+- **A save dialog that fails no longer closes the app from a pinned video.** The pin opened its save dialog outside the
+  Save command, where nothing caught an error: one from the dialog ended the process, and the command counted as done
+  before anything was saved. Such a failure now shows "Save Failed" on the pin, as a failed save already did, and goes
+  to the log.
 - **Turning AI off no longer freezes the app.** Switching off *Enable AI Features* frees the smart-selection model, and
   that waited for anything still running on it, up to 30 s, with the whole app stopped. It is freed in the background
   now. Smart selection started right after waits for that to finish instead of picking up a model on its way out.

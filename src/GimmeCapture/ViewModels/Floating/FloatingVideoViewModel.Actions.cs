@@ -586,62 +586,86 @@ public partial class FloatingVideoViewModel
 
     private async Task SaveAsync()
     {
-        if (PickSaveFileAction == null || IsProcessing) return;
+        var pickSaveFile = PickSaveFileAction;
+        if (pickSaveFile == null || IsProcessing) return;
 
-        // IMPORTANT: Let the UI event finish (menu close) before opening another modal dialog.
-        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+        // Let the UI event that ran this (a menu closing) finish before another modal dialog opens. Awaited: posted and
+        // forgotten, the save ran outside the command, which reported done before the dialog had opened, and a failure
+        // in it (the dialog's included) went to the dispatcher, which ends the process.
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(
+            () => SaveToPickedFileAsync(pickSaveFile),
+            Avalonia.Threading.DispatcherPriority.Default);
+    }
+
+    private async Task SaveToPickedFileAsync(Func<Task<string?>> pickSaveFile)
+    {
+        // From before the dialog: a pin closed while it is open still has its file when the user picks a place.
+        using var readingSource = _sourceFiles.Use();
+
+        string? targetPath;
+        try
         {
-            // From before the dialog: a pin closed while it is open still has its file when the user picks a place.
-            using var readingSource = _sourceFiles.Use();
-            var targetPath = await PickSaveFileAction.Invoke();
-            if (string.IsNullOrEmpty(targetPath)) return;
+            targetPath = await pickSaveFile();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("FloatingVideo.SaveDialog", ex);
+            await ShowSaveFailedAsync(ex);
+            IsProcessing = false;
+            return;
+        }
 
-            IsProcessing = true;
-            ProcessingText = Localization["StatusProcessing"] ?? "Processing...";
+        if (string.IsNullOrEmpty(targetPath)) return;
 
-            try
+        IsProcessing = true;
+        ProcessingText = Localization["StatusProcessing"] ?? "Processing...";
+
+        try
+        {
+            // The Save dialog's chosen extension (defaulted from the toolbar format) decides the container.
+            string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
+            var produced = await ProduceExportFileAsync(targetExt);
+            if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
             {
-                // The Save dialog's chosen extension (defaulted from the toolbar format) decides the container.
-                string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
-                var produced = await ProduceExportFileAsync(targetExt);
-                if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
+                System.IO.File.Copy(produced, targetPath, true);
+                await _sourceFiles.SavedAsAsync(targetPath);
+                FileLocationService.RevealInFileExplorer(targetPath);
+                return;
+            }
+
+            // No produced file. If there's no source clip (a freeze-frame pin), save the current frame image.
+            if (string.IsNullOrEmpty(VideoPath) || !System.IO.File.Exists(VideoPath))
+            {
+                var bitmap = await GetFlattenedBitmapAsync();
+                if (bitmap != null)
                 {
-                    System.IO.File.Copy(produced, targetPath, true);
-                    await _sourceFiles.SavedAsAsync(targetPath);
+                    using var stream = new System.IO.FileStream(targetPath, System.IO.FileMode.Create);
+                    bitmap.Save(stream, PngBitmapEncoderOptions.Default);
                     FileLocationService.RevealInFileExplorer(targetPath);
                     return;
                 }
+            }
 
-                // No produced file. If there's no source clip (a freeze-frame pin), save the current frame image.
-                if (string.IsNullOrEmpty(VideoPath) || !System.IO.File.Exists(VideoPath))
-                {
-                    var bitmap = await GetFlattenedBitmapAsync();
-                    if (bitmap != null)
-                    {
-                        using var stream = new System.IO.FileStream(targetPath, System.IO.FileMode.Create);
-                        bitmap.Save(stream, PngBitmapEncoderOptions.Default);
-                        FileLocationService.RevealInFileExplorer(targetPath);
-                        return;
-                    }
-                }
+            ProcessingText = Localization["StatusExportFailed"] ?? "Export failed";
+            await Task.Delay(2000);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("FloatingVideo.Save", ex);
+            await ShowSaveFailedAsync(ex);
+        }
+        finally
+        {
+            IsProcessing = false;
+        }
+    }
 
-                ProcessingText = Localization["StatusExportFailed"] ?? "Export failed";
-                await Task.Delay(2000);
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("FloatingVideo.Save", ex);
-                ProcessingText = "Save Failed: " + ex.Message;
-                IsProcessing = true;
-                await Task.Delay(2000);
-            }
-            finally
-            {
-                IsProcessing = false;
-            }
-        });
-        
-        await Task.CompletedTask;
+    // How the pin reports a failed save: the reason on its processing overlay, for two seconds.
+    private async Task ShowSaveFailedAsync(Exception ex)
+    {
+        ProcessingText = "Save Failed: " + ex.Message;
+        IsProcessing = true;
+        await Task.Delay(2000);
     }
 
     private async Task<Bitmap?> GetFlattenedBitmapAsync()
