@@ -13,6 +13,10 @@
 
 ### 🛡️ Reliability
 
+- **Choosing a SAM2 or Llama model on the Modules tab can no longer close the app.** Each choice saved the settings with
+  nothing to catch an error, and a choice made while the previous one was still saving saved alongside it, so the
+  earlier choice could be the one left on disk. Choices now save one at a time, in the order made, and a failure goes to
+  the log.
 - **Text translated again after its cached translation expired stays cached.** Caching it again gave the cache a second
   record of that text. The older record then threw the new translation out as if it were the oldest, so the next request
   ran the model again, and those extra records piled up in memory while the app ran.

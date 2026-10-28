@@ -66,15 +66,10 @@ public partial class MainWindowViewModel
         };
 
         sam2.WhenAnyValue(x => x.SelectedVariant)
-            .Subscribe(async v => 
-            {
-                if (!_isDataLoading && Enum.TryParse<SAM2Variant>(v, out var variant))
-                {
-                    _settingsService.Settings.SelectedSAM2Variant = variant;
-                    await SaveSettingsAsync(); 
-                    sam2.IsInstalled = _moduleInstallCoordinator.IsSam2Installed(variant);
-                }
-            });
+            .Where(_ => !_isDataLoading)
+            .Select(v => Observable.FromAsync(() => ApplySam2VariantAsync(sam2, v), RxSchedulers.MainThreadScheduler))
+            .Concat()
+            .SubscribeLoggingErrors("Modules.SAM2Variant");
 
         // PaddleOCR v5 Module
         var ocr = new ModuleItem("PaddleOCR v5", "ModuleOCRDescription")
@@ -129,13 +124,10 @@ public partial class MainWindowViewModel
         }
 
         llama.WhenAnyValue(x => x.SelectedVariant)
-            .Subscribe(async modelId =>
-            {
-                if (_isDataLoading || string.IsNullOrWhiteSpace(modelId)) return;
-                _settingsService.Settings.LlamaModelId = modelId;
-                await SaveSettingsAsync();
-                llama.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(modelId);
-            });
+            .Where(_ => !_isDataLoading)
+            .Select(modelId => Observable.FromAsync(() => ApplyLlamaVariantAsync(llama, modelId), RxSchedulers.MainThreadScheduler))
+            .Concat()
+            .SubscribeLoggingErrors("Modules.LlamaVariant");
 
         _moduleInstallCoordinator.ObserveDownloadProgress()
             .ObserveOn(RxSchedulers.MainThreadScheduler)
@@ -178,6 +170,49 @@ public partial class MainWindowViewModel
                     llama.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(llama.SelectedVariant);
                 }
             });
+    }
+
+    // A variant pick saves the settings, one pick at a time and in order (the Concat above). With an async Subscribe a
+    // second pick started saving while the first still was, so the first could be the one left on disk, and a failure
+    // escaped to the dispatcher, which ends the process. FromAsync needs the scheduler to start the next pick on the UI
+    // thread; without one, Rx starts it on the thread pool.
+    private async Task ApplySam2VariantAsync(ModuleItem sam2, string variantName)
+    {
+        if (!Enum.TryParse<SAM2Variant>(variantName, out var variant))
+        {
+            return;
+        }
+
+        try
+        {
+            _settingsService.Settings.SelectedSAM2Variant = variant;
+            await SaveSettingsAsync();
+            sam2.IsInstalled = _moduleInstallCoordinator.IsSam2Installed(variant);
+        }
+        catch (Exception ex)
+        {
+            // Handled here: a failure reaching the subscription would end it, and later picks would not be saved.
+            AppLog.Warning("Modules.SAM2Variant", ex);
+        }
+    }
+
+    private async Task ApplyLlamaVariantAsync(ModuleItem llama, string modelId)
+    {
+        if (string.IsNullOrWhiteSpace(modelId))
+        {
+            return;
+        }
+
+        try
+        {
+            _settingsService.Settings.LlamaModelId = modelId;
+            await SaveSettingsAsync();
+            llama.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(modelId);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Modules.LlamaVariant", ex);
+        }
     }
 
     public async Task InstallModuleAsync(string type)
