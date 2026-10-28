@@ -1,6 +1,8 @@
 using System;
 using Avalonia.Controls;
 using Avalonia;
+using Avalonia.Layout;
+using Avalonia.Threading;
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Dialogs;
@@ -65,13 +67,11 @@ public partial class MainWindow
                 _recordTabHost!.Content ??= new SettingsRecordTab();
                 break;
             case 3:
-                if (DataContext is MainWindowViewModel compressVm)
-                {
-                    compressVm.EnsureCompressInitialized();
-                }
-
                 _compressTabHost ??= this.FindControl<ContentControl>("CompressTabHost");
-                _compressTabHost!.Content ??= new SettingsCompressTab();
+                if (_compressTabHost!.Content == null)
+                {
+                    ShowCompressTabAsync(_compressTabHost).Forget("Compress.ShowTab");
+                }
                 break;
             case 4:
                 if (DataContext is MainWindowViewModel translationVm)
@@ -110,5 +110,49 @@ public partial class MainWindow
                 _aboutTabHost!.Content ??= new SettingsAboutTab();
                 break;
         }
+    }
+
+    // The read usually takes a blink; a progress bar shown for that long would only flash.
+    private static readonly TimeSpan CompressTabProgressDelay = TimeSpan.FromMilliseconds(300);
+
+    // The Compress tab's saved queue and settings are read from disk in the background the first time it is shown, and
+    // the tab is built only once they are in: earlier, it would offer an empty queue to act on, and settings the restore
+    // then overwrites. A progress bar holds its place meanwhile, visible once the read takes long enough to notice.
+    private async Task ShowCompressTabAsync(ContentControl host)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            Task ready = vm.EnsureCompressInitializedAsync();
+            IDisposable? revealProgress = null;
+            if (!ready.IsCompleted)
+            {
+                var progress = new ProgressBar
+                {
+                    IsIndeterminate = true,
+                    IsVisible = false,
+                    Width = 160,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                host.Content = progress; // also keeps a second visit from starting this again
+                revealProgress = DispatcherTimer.RunOnce(() => progress.IsVisible = true, CompressTabProgressDelay);
+            }
+
+            try
+            {
+                await ready;
+            }
+            catch (Exception ex)
+            {
+                // Still show the tab: whatever part of the restore failed is in the log.
+                AppLog.Error("Compress.Initialize", ex);
+            }
+            finally
+            {
+                revealProgress?.Dispose();
+            }
+        }
+
+        host.Content = new SettingsCompressTab();
     }
 }

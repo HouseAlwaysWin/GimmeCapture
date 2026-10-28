@@ -228,7 +228,7 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
   `ConfigureAwaitOptions.ForceYielding`. Missing this caused the OCR-session, history-thumbnail and recording-start
   freezes. `UiStall` warnings in the log (any freeze over ~0.35 s, with its length) are where these show up.
 - Every settings tab except General is built the first time it is shown (`EnsureLazyTabContent` in
-  `MainWindow.Tabs.cs`), and set-up only one tab needs belongs there too (`EnsureCompressInitialized`).
+  `MainWindow.Tabs.cs`), and set-up only one tab needs belongs there too (`EnsureCompressInitializedAsync`).
   `Startup.Timings` in the log breaks a launch down by stage.
 
 ### Accessibility

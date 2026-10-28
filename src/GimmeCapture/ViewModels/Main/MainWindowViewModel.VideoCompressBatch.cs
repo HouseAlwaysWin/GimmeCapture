@@ -181,69 +181,131 @@ public partial class MainWindowViewModel
         RefreshCategoryChoices(); // seed the row category dropdown (just the default until an area is active)
     }
 
-    private bool _compressInitialized;
+    private Task? _compressInitTask;
 
     /// <summary>
     /// Sets the Compress tab up the first time it is shown: its commands, presets and last-used settings, then the
     /// queue saved last session (per-file edit/done state, working directories, the active directory's videos).
     /// Nothing outside that tab reaches any of it, and doing it at start-up cost every launch about a quarter of a
-    /// second on the UI thread.
+    /// second on the UI thread. The files are read on a worker thread and the result applied on the caller's; the
+    /// view builds the tab once this completes, so it never offers an empty queue in the meantime.
     /// </summary>
-    internal void EnsureCompressInitialized()
+    internal Task EnsureCompressInitializedAsync() => _compressInitTask ??= InitializeCompressAsync();
+
+    private async Task InitializeCompressAsync()
     {
-        if (_compressInitialized)
-        {
-            return;
-        }
+        // Reading the saved state and the active folder, and sweeping abandoned resume chunks, held the UI thread for
+        // up to 0.45 s on the tab's first open.
+        CompressStartupState saved = await Task.Run(LoadCompressStartupState);
+        ApplyCompressStartupState(saved);
+    }
 
-        _compressInitialized = true;
-        InitializeVideoCompress();
+    // Everything the Compress tab's first open reads from disk.
+    private sealed record CompressStartupState(
+        IReadOnlyList<CompressPreset> Presets,
+        CompressSessionState Session,
+        Dictionary<string, CompressItemState> ItemStates,
+        IReadOnlyList<string> WorkingDirectories,
+        string? ActiveWorkingDirectory,
+        IReadOnlyList<string> Categories,
+        IReadOnlyList<string> Videos);
 
-        // Restore the persisted per-file edit/done state BEFORE any queue items are created below.
-        _itemStates = CompressItemStateService.Load();
+    // Worker thread: reads the saved presets, settings, per-file state and working directories, and lists the active
+    // directory (the saved one, else the first) — its categories and its videos.
+    private static CompressStartupState LoadCompressStartupState()
+    {
+        List<CompressPreset> presets = CompressPresetService.Load();
+        CompressSessionState session = CompressSessionService.Load();
+        Dictionary<string, CompressItemState> itemStates = CompressItemStateService.Load();
         CompressSegmentStore.PruneOrphans(); // drop abandoned resume chunks from crashed/old sessions
 
-        // Restore saved working directories; auto-switch to the active one (loads its videos into the queue).
         CompressWorkingDirsState dirState = CompressWorkingDirsService.Load();
-        foreach (string dir in dirState.Directories)
+        string? active = dirState.Directories
+            .FirstOrDefault(d => string.Equals(d, dirState.Active, StringComparison.OrdinalIgnoreCase))
+            ?? dirState.Directories.FirstOrDefault();
+        if (active != null && !string.Equals(active, dirState.Active, StringComparison.Ordinal))
+        {
+            // Record the directory the queue falls back to (this also rewrites a legacy file in the current format).
+            CompressWorkingDirsService.Save(new CompressWorkingDirsState { Directories = dirState.Directories, Active = active });
+        }
+
+        return new CompressStartupState(
+            presets, session, itemStates, dirState.Directories, active,
+            ListCategoryFolders(active), ListVideoFiles(active));
+    }
+
+    // UI thread: wires the tab up with what LoadCompressStartupState read, then fills the queue with the active
+    // directory's videos (what switching to it does, minus the file reads).
+    private void ApplyCompressStartupState(CompressStartupState saved)
+    {
+        InitializeVideoCompress(saved.Presets, saved.Session);
+
+        // The persisted per-file edit/done state, BEFORE any queue items are created below.
+        _itemStates = saved.ItemStates;
+
+        foreach (string dir in saved.WorkingDirectories)
         {
             CompressWorkingDirectories.Add(dir);
         }
-        RefreshCategoryChoices();
 
-        string? startupDir = dirState.Directories
-            .FirstOrDefault(d => string.Equals(d, dirState.Active, StringComparison.OrdinalIgnoreCase))
-            ?? dirState.Directories.FirstOrDefault();
-        if (startupDir != null)
+        if (saved.ActiveWorkingDirectory != null)
         {
-            SwitchToWorkingDir(startupDir);
+            ActiveWorkingDir = saved.ActiveWorkingDirectory;
+            ResetCategoryChoices(saved.Categories);
+            AddFilesToQueue(saved.Videos);
         }
     }
 
     // Rebuilds the per-row category dropdown for the ACTIVE working area: an empty "default" sentinel followed by
     // that area's immediate subfolders (categories). Called on switch / startup / active-area removal — the queue
     // is either empty or its items get reset alongside, so a full rebuild never silently drops a live selection.
-    private void RefreshCategoryChoices()
+    private void RefreshCategoryChoices() => ResetCategoryChoices(ListCategoryFolders(_activeWorkingDir));
+
+    private void ResetCategoryChoices(IEnumerable<string> categories)
     {
         CompressCategoryChoices.Clear();
         CompressCategoryChoices.Add(string.Empty); // index 0 = "default (global / next to source)"
+        foreach (string category in categories)
+        {
+            CompressCategoryChoices.Add(category);
+        }
+    }
 
-        string? area = _activeWorkingDir;
+    // A working area's categories: its immediate subfolders, sorted. Empty without an area or when it can't be read.
+    private static List<string> ListCategoryFolders(string? area)
+    {
         if (string.IsNullOrEmpty(area))
         {
-            return;
+            return new List<string>();
         }
 
         try
         {
-            foreach (string sub in Directory.GetDirectories(area).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
-            {
-                CompressCategoryChoices.Add(sub);
-            }
+            return Directory.GetDirectories(area).OrderBy(d => d, StringComparer.OrdinalIgnoreCase).ToList();
         }
         catch (Exception ex)
         {
             AppLog.Error("Compress.RefreshCategories", ex); // unreadable/removed area — just the default remains
+            return new List<string>();
+        }
+    }
+
+    // The videos directly inside a working directory, listed now (ExpandToVideoFiles enumerates lazily).
+    private static List<string> ListVideoFiles(string? dir)
+    {
+        if (string.IsNullOrEmpty(dir))
+        {
+            return new List<string>();
+        }
+
+        try
+        {
+            return ExpandToVideoFiles(dir).ToList();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.QueueExpand", ex);
+            return new List<string>();
         }
     }
 
@@ -557,113 +619,155 @@ public partial class MainWindowViewModel
             return;
         }
 
+        AddFilesToQueue(paths.Where(path => !string.IsNullOrWhiteSpace(path)).SelectMany(ExpandToVideoFiles));
+    }
+
+    // Adds video files to the queue, skipping ones already in it, and has them probed.
+    private void AddFilesToQueue(IEnumerable<string> files)
+    {
         var existing = new HashSet<string>(
             CompressQueue.Select(i => i.Path), StringComparer.OrdinalIgnoreCase);
         var added = new List<CompressQueueItem>();
 
-        foreach (string path in paths)
+        foreach (string file in files)
         {
-            if (string.IsNullOrWhiteSpace(path))
+            if (existing.Add(file))
             {
-                continue;
-            }
-
-            foreach (string file in ExpandToVideoFiles(path))
-            {
-                if (existing.Add(file))
+                var item = new CompressQueueItem(file)
                 {
-                    var item = new CompressQueueItem(file)
+                    SelectedPreset = _currentSettingsChoice, // "current settings" by default
+                    StartRequested = StartCompressItem,
+                    EstimateRequested = EstimateQueueItem,
+                    PauseWarningRequested = ShowPauseNoResumeWarning
+                };
+                ApplySavedItemState(item);
+                // Persist on output-name edits and on pause/resume (fires on the UI thread; survives a
+                // close even without completing). Skip(1) ignores the value emitted on subscribe.
+                item.WhenAnyValue(x => x.OutputName)
+                    .Skip(1)
+                    .Subscribe(_ => PersistItemState(item));
+                item.WhenAnyValue(x => x.IsPaused)
+                    .Skip(1)
+                    .Subscribe(_ => PersistItemState(item));
+                // Per-item output folder persists on pick (and when a removed working dir resets it to Default),
+                // so a configure-many-then-run-later batch keeps each row's chosen folder across a restart.
+                item.WhenAnyValue(x => x.SelectedOutputDir)
+                    .Skip(1)
+                    .Subscribe(_ => PersistItemState(item));
+                // Edits persist and re-estimate (trim/speed/crop/rotation all change the estimated output size).
+                item.WhenAnyValue(x => x.TrimEnabled, x => x.KeptSegments, x => x.Crop, x => x.Rotation)
+                    .Skip(1)
+                    .Subscribe(_ =>
                     {
-                        SelectedPreset = _currentSettingsChoice, // "current settings" by default
-                        StartRequested = StartCompressItem,
-                        EstimateRequested = EstimateQueueItem,
-                        PauseWarningRequested = ShowPauseNoResumeWarning
-                    };
-                    ApplySavedItemState(item);
-                    // Persist on output-name edits and on pause/resume (fires on the UI thread; survives a
-                    // close even without completing). Skip(1) ignores the value emitted on subscribe.
-                    item.WhenAnyValue(x => x.OutputName)
-                        .Skip(1)
-                        .Subscribe(_ => PersistItemState(item));
-                    item.WhenAnyValue(x => x.IsPaused)
-                        .Skip(1)
-                        .Subscribe(_ => PersistItemState(item));
-                    // Per-item output folder persists on pick (and when a removed working dir resets it to Default),
-                    // so a configure-many-then-run-later batch keeps each row's chosen folder across a restart.
-                    item.WhenAnyValue(x => x.SelectedOutputDir)
-                        .Skip(1)
-                        .Subscribe(_ => PersistItemState(item));
-                    // Edits persist and re-estimate (trim/speed/crop/rotation all change the estimated output size).
-                    item.WhenAnyValue(x => x.TrimEnabled, x => x.KeptSegments, x => x.Crop, x => x.Rotation)
-                        .Skip(1)
-                        .Subscribe(_ =>
-                        {
-                            PersistItemState(item);
-                            item.EstimatedText = BuildItemEstimate(item);
-                        });
-                    // Burn-in layers persist too (they don't change the size estimate meaningfully).
-                    item.WhenAnyValue(x => x.Annotations, x => x.RedactionTracks)
-                        .Skip(1)
-                        .Subscribe(_ => PersistItemState(item));
-                    // Re-estimate this item when its output-settings bundle changes.
-                    item.WhenAnyValue(x => x.SelectedPreset)
-                        .Skip(1)
-                        .Subscribe(_ => item.EstimatedText = BuildItemEstimate(item));
-                    CompressQueue.Add(item);
-                    added.Add(item);
-                }
+                        PersistItemState(item);
+                        item.EstimatedText = BuildItemEstimate(item);
+                    });
+                // Burn-in layers persist too (they don't change the size estimate meaningfully).
+                item.WhenAnyValue(x => x.Annotations, x => x.RedactionTracks)
+                    .Skip(1)
+                    .Subscribe(_ => PersistItemState(item));
+                // Re-estimate this item when its output-settings bundle changes.
+                item.WhenAnyValue(x => x.SelectedPreset)
+                    .Skip(1)
+                    .Subscribe(_ => item.EstimatedText = BuildItemEstimate(item));
+                CompressQueue.Add(item);
+                added.Add(item);
             }
         }
 
         CompressQueueCount = CompressQueue.Count;
 
         // Probe each new file (off the UI thread) so its per-row size estimate can be shown.
+        CancellationToken queueToken = _probeCts.Token;
         foreach (CompressQueueItem item in added)
         {
-            _ = ProbeQueueItemAsync(item);
+            _ = ProbeQueueItemAsync(item, queueToken);
         }
     }
 
-    // Probes a queued file's resolution / fps / duration, then refreshes its "≈ size" estimate.
-    private async Task ProbeQueueItemAsync(CompressQueueItem item)
+    // A probe opens its file twice — metadata, then the first frame for the row thumbnail, through a GPU decoder — and
+    // adding a folder started one for every video at once. Two at a time keeps the disk and the GPU free for the rest.
+    private readonly SemaphoreSlim _probeSlots = new(2, 2);
+
+    // Cancelled when the queue is cleared or replaced: probes still waiting for a slot then never run.
+    private CancellationTokenSource _probeCts = new();
+
+    // Probes a queued file's resolution / fps / duration, then refreshes its "≈ size" estimate and decodes its
+    // thumbnail. Continuations run on the UI thread, which owns the item.
+    private async Task ProbeQueueItemAsync(CompressQueueItem item, CancellationToken queueToken)
     {
         try
         {
-            using var probe = new LibavVideoFramePlayer();
-            var info = await probe.ProbeAsync(item.Path); // one open+scan for duration/size/fps (was 3)
-            item.ProbedDuration = info.Duration;
-            item.ProbedWidth = info.Width;
-            item.ProbedHeight = info.Height;
-            item.ProbedFps = info.Fps;
+            await _probeSlots.WaitAsync(queueToken);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            AppLog.Error("Compress.ProbeQueueItem", ex);
+            return; // the queue was cleared before this file's turn
         }
 
-        item.RaiseEditSummary(); // ProbedDuration now known → the edit summary reflects the real length
-
-        item.EstimatedText = BuildItemEstimate(item);
-
-        // First-frame thumbnail for the picker row (small; reuses the preview decode at a row-sized scale).
-        if (item.Thumbnail == null && item.ProbedWidth > 0 && item.ProbedHeight > 0)
+        try
         {
-            double scale = Math.Min(1.0, 96.0 / Math.Max(item.ProbedWidth, item.ProbedHeight));
-            int tw = Math.Max(2, (int)(item.ProbedWidth * scale)); tw -= tw & 1;
-            int th = Math.Max(2, (int)(item.ProbedHeight * scale)); th -= th & 1;
-            Bitmap? thumb = await DecodeFirstFrameAsync(item.Path, tw, th);
-            if (thumb != null)
+            try
             {
+                using var probe = new LibavVideoFramePlayer();
+                var info = await probe.ProbeAsync(item.Path, queueToken); // one open+scan for duration/size/fps (was 3)
+                item.ProbedDuration = info.Duration;
+                item.ProbedWidth = info.Width;
+                item.ProbedHeight = info.Height;
+                item.ProbedFps = info.Fps;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Compress.ProbeQueueItem", ex);
+            }
+
+            if (queueToken.IsCancellationRequested)
+            {
+                return; // the queue was cleared while probing: the item is gone
+            }
+
+            item.RaiseEditSummary(); // ProbedDuration now known → the edit summary reflects the real length
+
+            item.EstimatedText = BuildItemEstimate(item);
+
+            // First-frame thumbnail for the picker row (small; reuses the preview decode at a row-sized scale).
+            if (item.Thumbnail == null && item.ProbedWidth > 0 && item.ProbedHeight > 0)
+            {
+                double scale = Math.Min(1.0, 96.0 / Math.Max(item.ProbedWidth, item.ProbedHeight));
+                int tw = Math.Max(2, (int)(item.ProbedWidth * scale)); tw -= tw & 1;
+                int th = Math.Max(2, (int)(item.ProbedHeight * scale)); th -= th & 1;
+                Bitmap? thumb = await DecodeFirstFrameAsync(item.Path, tw, th, queueToken);
+                if (thumb == null)
+                {
+                    return;
+                }
+
+                if (queueToken.IsCancellationRequested)
+                {
+                    thumb.Dispose(); // the item was disposed with its queue and would never release it
+                    return;
+                }
+
                 item.Thumbnail = thumb;
             }
+        }
+        finally
+        {
+            _probeSlots.Release();
         }
     }
 
     // Decodes a video's first frame into an Avalonia Bitmap at the given (even) dimensions, cancelling right after
-    // the first frame so it doesn't decode the whole clip. Returns null if there is no frame or the file is unreadable.
-    private static async Task<Bitmap?> DecodeFirstFrameAsync(string path, int width, int height)
+    // the first frame so it doesn't decode the whole clip. Returns null if there is no frame, the file is unreadable,
+    // or <paramref name="cancellationToken"/> is cancelled.
+    private static async Task<Bitmap?> DecodeFirstFrameAsync(
+        string path, int width, int height, CancellationToken cancellationToken)
     {
-        using var cts = new CancellationTokenSource();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         byte[]? frame = null;
         try
         {
@@ -686,7 +790,7 @@ public partial class MainWindowViewModel
             AppLog.Error("Compress.ThumbDecode", ex);
         }
 
-        if (frame == null)
+        if (frame == null || cancellationToken.IsCancellationRequested)
         {
             return null;
         }
@@ -731,6 +835,11 @@ public partial class MainWindowViewModel
 
     private void ClearCompressQueue()
     {
+        // Probes still waiting belong to the queue going away. The old source is left to the GC (it holds no wait
+        // handle): a probe running now still reads its token.
+        _probeCts.Cancel();
+        _probeCts = new CancellationTokenSource();
+
         foreach (CompressQueueItem item in CompressQueue)
         {
             item.Dispose();

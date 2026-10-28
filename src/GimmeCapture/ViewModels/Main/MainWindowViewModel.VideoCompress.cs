@@ -471,7 +471,8 @@ public partial class MainWindowViewModel
         CompressDropAudio = p.DropAudio;
     }
 
-    private void InitializeVideoCompress()
+    // The saved presets and last-used settings are read off the UI thread by EnsureCompressInitializedAsync.
+    private void InitializeVideoCompress(IReadOnlyList<CompressPreset> savedPresets, CompressSessionState savedSession)
     {
         _selectedCompressResolution = CompressResolutionOptions[0]; // Original
         _selectedCompressFps = CompressFpsOptions[0]; // source rate
@@ -518,7 +519,7 @@ public partial class MainWindowViewModel
             this.WhenAnyValue(x => x.SelectedSavedPreset, x => x.IsBusy,
                 (sel, busy) => sel != null && !busy));
 
-        foreach (CompressPreset preset in CompressPresetService.Load())
+        foreach (CompressPreset preset in savedPresets)
         {
             CompressPresets.Add(preset);
         }
@@ -530,7 +531,7 @@ public partial class MainWindowViewModel
             .Subscribe(_ => RecomputeQueueEstimates());
 
         // Restore last-used settings before the queue is populated, so estimates use them from the start.
-        RestoreCompressSession();
+        RestoreCompressSession(savedSession);
 
         InitializeCompressBatch();
 
@@ -683,9 +684,8 @@ public partial class MainWindowViewModel
     // Bump when the built-in default encode settings change and existing users should be upgraded once.
     private const int CompressDefaultsVersion = 1;
 
-    private void RestoreCompressSession()
+    private void RestoreCompressSession(CompressSessionState session)
     {
-        CompressSessionState session = CompressSessionService.Load();
         // One-time upgrade: a session from before the current defaults keeps the new code defaults (skip
         // applying its saved encode settings); batch options are still restored.
         bool upgrade = session.Version < CompressDefaultsVersion;
