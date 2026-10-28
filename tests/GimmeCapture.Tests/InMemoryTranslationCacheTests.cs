@@ -150,4 +150,77 @@ public sealed class InMemoryTranslationCacheTests
         Assert.True(cache.TryGet(key, out string value));
         Assert.Equal("你好", value);
     }
+
+    [Fact]
+    public void Set_RewritingAKey_KeepsOnePlaceInTheEvictionOrder()
+    {
+        var cache = new InMemoryTranslationCache();
+
+        for (int i = 0; i < 5000; i++)
+        {
+            cache.Set("key", $"value {i}");
+        }
+
+        // The order used to gain a place per write, so a cache that never filled up grew without bound.
+        Assert.Equal(1, cache.OrderCountForTest);
+        Assert.True(cache.TryGet("key", out string value));
+        Assert.Equal("value 4999", value);
+    }
+
+    [Fact]
+    public void Set_PastCapacity_EvictsTheEntryWrittenLongestAgo()
+    {
+        var cache = new InMemoryTranslationCache(maxEntries: 3, () => DateTime.UtcNow);
+        cache.Set("a", "1");
+        cache.Set("b", "2");
+        cache.Set("c", "3");
+
+        cache.Set("d", "4");
+
+        Assert.False(cache.TryGet("a", out _));
+        Assert.True(cache.TryGet("b", out _));
+        Assert.True(cache.TryGet("c", out _));
+        Assert.True(cache.TryGet("d", out _));
+        Assert.Equal(3, cache.OrderCountForTest);
+    }
+
+    [Fact]
+    public void Set_RewritingAKey_MovesItBehindEveryOtherEntry()
+    {
+        var cache = new InMemoryTranslationCache(maxEntries: 3, () => DateTime.UtcNow);
+        cache.Set("a", "1");
+        cache.Set("b", "2");
+        cache.Set("c", "3");
+
+        cache.Set("a", "1 again");
+        cache.Set("d", "4");
+
+        // "b" is the oldest write now. The old queue still held "a"'s first place, and evicted the value just written.
+        Assert.True(cache.TryGet("a", out string rewritten));
+        Assert.Equal("1 again", rewritten);
+        Assert.False(cache.TryGet("b", out _));
+        Assert.True(cache.TryGet("c", out _));
+        Assert.True(cache.TryGet("d", out _));
+    }
+
+    [Fact]
+    public void TryGet_ExpiredEntry_LeavesNoPlaceBehindToEvictItsRewriteEarly()
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var cache = new InMemoryTranslationCache(maxEntries: 2, () => now);
+        cache.Set("a", "1");
+        now += TimeSpan.FromMinutes(11);
+
+        Assert.False(cache.TryGet("a", out _));
+        Assert.Equal(0, cache.OrderCountForTest);
+
+        cache.Set("b", "2");
+        cache.Set("a", "1 again");
+        cache.Set("c", "3");
+
+        Assert.False(cache.TryGet("b", out _));
+        Assert.True(cache.TryGet("a", out string rewritten));
+        Assert.Equal("1 again", rewritten);
+        Assert.True(cache.TryGet("c", out _));
+    }
 }

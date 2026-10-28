@@ -4,14 +4,48 @@ using GimmeCapture.Models;
 
 namespace GimmeCapture.Services.Translation;
 
+/// <summary>
+/// Translations already made, kept for <see cref="EntryTtl"/> after they were written and at most
+/// <see cref="DefaultMaxEntries"/> of them. Past that, the entry written longest ago goes first. Writing a key again
+/// counts as a new write: it gets a fresh lifetime and goes to the back of that order. Reading changes neither.
+/// </summary>
 public class InMemoryTranslationCache : ITranslationCache
 {
-    private const int MaxEntries = 1000;
+    private const int DefaultMaxEntries = 1000;
     private static readonly TimeSpan EntryTtl = TimeSpan.FromMinutes(10);
 
     private readonly object _lock = new();
-    private readonly Dictionary<string, (string Value, DateTime ExpiresAtUtc)> _items = new(StringComparer.Ordinal);
-    private readonly Queue<string> _order = new();
+    private readonly int _maxEntries;
+    private readonly Func<DateTime> _utcNow;
+    private readonly Dictionary<string, (string Value, DateTime ExpiresAtUtc, LinkedListNode<string> Order)> _items = new(StringComparer.Ordinal);
+
+    // One place per cached key, oldest write first. A queue that got a second place for a rewritten key grew without
+    // bound, and evicting that key's old place threw out the value just written as if it were the oldest.
+    private readonly LinkedList<string> _order = new();
+
+    public InMemoryTranslationCache()
+        : this(DefaultMaxEntries, static () => DateTime.UtcNow)
+    {
+    }
+
+    internal InMemoryTranslationCache(int maxEntries, Func<DateTime> utcNow)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxEntries, 1);
+        _maxEntries = maxEntries;
+        _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
+    }
+
+    /// <summary>Places in the eviction order, which should hold one per cached key.</summary>
+    internal int OrderCountForTest
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _order.Count;
+            }
+        }
+    }
 
     public bool TryGet(string key, out string value)
     {
@@ -19,13 +53,13 @@ public class InMemoryTranslationCache : ITranslationCache
         {
             if (_items.TryGetValue(key, out var entry))
             {
-                if (entry.ExpiresAtUtc > DateTime.UtcNow)
+                if (entry.ExpiresAtUtc > _utcNow())
                 {
                     value = entry.Value;
                     return true;
                 }
 
-                _items.Remove(key);
+                Remove(key, entry.Order);
             }
         }
 
@@ -39,15 +73,28 @@ public class InMemoryTranslationCache : ITranslationCache
 
         lock (_lock)
         {
-            _items[key] = (value, DateTime.UtcNow.Add(EntryTtl));
-            _order.Enqueue(key);
-
-            while (_items.Count > MaxEntries && _order.Count > 0)
+            DateTime expiresAtUtc = _utcNow().Add(EntryTtl);
+            if (_items.TryGetValue(key, out var existing))
             {
-                var oldestKey = _order.Dequeue();
-                _items.Remove(oldestKey);
+                _order.Remove(existing.Order);
+                _order.AddLast(existing.Order);
+                _items[key] = (value, expiresAtUtc, existing.Order);
+                return;
+            }
+
+            _items[key] = (value, expiresAtUtc, _order.AddLast(key));
+            while (_items.Count > _maxEntries)
+            {
+                var oldest = _order.First!;
+                Remove(oldest.Value, oldest);
             }
         }
+    }
+
+    private void Remove(string key, LinkedListNode<string> order)
+    {
+        _order.Remove(order);
+        _items.Remove(key);
     }
 
     public string BuildKey(TranslationEngine engine, OCRLanguage sourceLang, TranslationLanguage targetLang, string text)

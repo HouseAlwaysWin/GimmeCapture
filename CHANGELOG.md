@@ -13,6 +13,9 @@
 
 ### 🛡️ Reliability
 
+- **Text translated again after its cached translation expired stays cached.** Caching it again gave the cache a second
+  record of that text. The older record then threw the new translation out as if it were the oldest, so the next request
+  ran the model again, and those extra records piled up in memory while the app ran.
 - **A save dialog that fails no longer closes the app from a pinned video.** The pin opened its save dialog outside the
   Save command, where nothing caught an error: one from the dialog ended the process, and the command counted as done
   before anything was saved. Such a failure now shows "Save Failed" on the pin, as a failed save already did, and goes
