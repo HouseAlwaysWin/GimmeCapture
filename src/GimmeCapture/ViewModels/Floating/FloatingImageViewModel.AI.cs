@@ -367,30 +367,8 @@ public partial class FloatingImageViewModel
                     ? new SkiaSharp.SKColor(0, 255, 100, 150)   // Green for "Keep mode" (Shift+Click)
                     : new SkiaSharp.SKColor(255, 80, 80, 150);  // Red for "Remove mode" (Normal)
 
-                // Declared as what the overlay words below are, BGRA and unpremultiplied: the canvas draws the markers by
-                // the declared form, and the hand-off to Avalonia converts by it. Declared RGBA, red markers showed blue;
-                // declared premultiplied, the overlay drew brighter than its alpha.
-                using var coloredMask = new SkiaSharp.SKBitmap(cleanMask.Width, cleanMask.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Unpremul);
-                unsafe
-                {
-                    byte* grayBase = (byte*)cleanMask.GetPixels().ToPointer();
-                    uint* colorBase = (uint*)coloredMask.GetPixels().ToPointer();
-                    uint overlayRaw = (uint)overlayColor.Blue
-                        | ((uint)overlayColor.Green << 8)
-                        | ((uint)overlayColor.Red << 16)
-                        | ((uint)overlayColor.Alpha << 24);
+                using var coloredMask = InteractiveMaskPixels.CreateOverlay(cleanMask, overlayColor);
 
-                    for (int y = 0; y < cleanMask.Height; y++)
-                    {
-                        byte* grayRow = grayBase + (y * cleanMask.RowBytes);
-                        uint* colorRow = (uint*)((byte*)colorBase + (y * coloredMask.RowBytes));
-                        for (int x = 0; x < cleanMask.Width; x++)
-                        {
-                            colorRow[x] = grayRow[x] > 127 ? overlayRaw : 0u;
-                        }
-                    }
-                }
-                
                 using (var canvas = new SkiaSharp.SKCanvas(coloredMask))
                 {
                     var posPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.LimeGreen, Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
@@ -675,40 +653,7 @@ public partial class FloatingImageViewModel
 
                 using (originalBmp)
                 {
-                    // Premultiplied, like the pin's pixels it is copied from.
-                    using var resultBmp = new SkiaSharp.SKBitmap(originalBmp.Width, originalBmp.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
-                    var maskScaleX = (double)cleanMaskBitmap.Width / originalBmp.Width;
-                    var maskScaleY = (double)cleanMaskBitmap.Height / originalBmp.Height;
-
-                    unsafe
-                    {
-                        uint* srcBase = (uint*)originalBmp.GetPixels().ToPointer();
-                        uint* dstBase = (uint*)resultBmp.GetPixels().ToPointer();
-                        byte* maskBase = (byte*)cleanMaskBitmap.GetPixels().ToPointer();
-
-                        for (int y = 0; y < originalBmp.Height; y++)
-                        {
-                            uint* srcRow = (uint*)((byte*)srcBase + (y * originalBmp.RowBytes));
-                            uint* dstRow = (uint*)((byte*)dstBase + (y * resultBmp.RowBytes));
-                            int maskY = Math.Clamp((int)(y * maskScaleY), 0, cleanMaskBitmap.Height - 1);
-                            byte* maskRow = maskBase + (maskY * cleanMaskBitmap.RowBytes);
-
-                            for (int x = 0; x < originalBmp.Width; x++)
-                            {
-                                uint src = srcRow[x];
-                                int maskX = Math.Clamp((int)(x * maskScaleX), 0, cleanMaskBitmap.Width - 1);
-                                bool isSelected = maskRow[maskX] > 127;
-                                if (_interactiveSession.IsKeepSelectedMode)
-                                {
-                                    isSelected = !isSelected;
-                                }
-
-                                // A removed pixel is all zero: its colour kept at alpha 0 would be drawn added to what
-                                // lies behind, not hidden.
-                                dstRow[x] = isSelected ? 0u : src;
-                            }
-                        }
-                    }
+                    using var resultBmp = InteractiveMaskPixels.ApplyToImage(originalBmp, cleanMaskBitmap, _interactiveSession.IsKeepSelectedMode);
 
                     if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(resultBmp, out var detachedBitmap, out var detachError) || detachedBitmap == null)
                         throw new Exception(detachError ?? "Failed to materialize interactive output.");

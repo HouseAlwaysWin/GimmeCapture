@@ -161,6 +161,12 @@
   0.35 s at 1920×1200; inside a selection, 0.15 s instead of 0.57 s and 0.10 s instead of 0.25 s. The first removal
   after a pause, which also loads the model, saves the same work. On a pin with a one-colour background, which skips
   the model, the removal itself takes 4 ms instead of 50 ms at 3840×2400.
+- **Smart selection keeps up on a large pin.** Its pixel work asked Skia for the image's size at every pixel too. On
+  a 3840×2400 pin, each click spent about 0.18 s preparing the mask and then 0.2 s colouring in the selection, which
+  held the UI thread; confirming spent 0.36 s applying it. Each of these now takes 5–9 ms and gives the same pixels.
+  A click shows its selection in about 0.3 s instead of 0.7 s (0.14 s instead of 0.22 s at 1920×1200); most of what
+  remains is resizing the mask to the pin. OCR's passes over each line of text did the same; fixing them saves about
+  40 ms on a page of text, a small part of reading it.
 
 ### 💾 Storage
 

@@ -696,41 +696,46 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
     /// Copies <paramref name="source"/> into a Gray8 bitmap, reading the grey level from whichever channel its
     /// colour type keeps it in. The returned bitmap is the caller's to dispose.
     /// </summary>
-    private static SKBitmap NormalizeToGray8(SKBitmap source)
+    /// <remarks>
+    /// Sizes, row strides and the colour type are read once: each is a call into Skia, and reading the width at every
+    /// pixel cost 0.18 s of each click on a 4K pin. Internal so <c>Sam2MaskNormalizeTests</c> can check the channels.
+    /// </remarks>
+    internal static SKBitmap NormalizeToGray8(SKBitmap source)
     {
-        if (source.ColorType == SKColorType.Gray8)
+        var colorType = source.ColorType;
+        if (colorType == SKColorType.Gray8)
             return source.Copy();
 
-        var normalized = new SKBitmap(source.Width, source.Height, SKColorType.Gray8, SKAlphaType.Opaque);
+        int width = source.Width;
+        int height = source.Height;
+        var normalized = new SKBitmap(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
         unsafe
         {
             byte* dstBase = (byte*)normalized.GetPixels().ToPointer();
-            bool isBgra = source.ColorType == SKColorType.Bgra8888;
-            bool isRgba = source.ColorType == SKColorType.Rgba8888;
+            int dstRowBytes = normalized.RowBytes;
 
-            if (isBgra || isRgba)
+            if (colorType is SKColorType.Bgra8888 or SKColorType.Rgba8888)
             {
+                // Byte 0 of a BGRA pixel, byte 2 of an RGBA one: blue either way.
+                int channel = colorType == SKColorType.Bgra8888 ? 0 : 2;
                 byte* srcBase = (byte*)source.GetPixels().ToPointer();
-                for (int y = 0; y < source.Height; y++)
+                int srcRowBytes = source.RowBytes;
+                for (int y = 0; y < height; y++)
                 {
-                    byte* srcRow = srcBase + (y * source.RowBytes);
-                    byte* dstRow = dstBase + (y * normalized.RowBytes);
-                    for (int x = 0; x < source.Width; x++)
+                    byte* srcRow = srcBase + (y * srcRowBytes) + channel;
+                    byte* dstRow = dstBase + (y * dstRowBytes);
+                    for (int x = 0; x < width; x++)
                     {
-                        int pixelOffset = x * 4;
-                        byte value = isBgra
-                            ? srcRow[pixelOffset + 0]
-                            : srcRow[pixelOffset + 2];
-                        dstRow[x] = value;
+                        dstRow[x] = srcRow[x * 4];
                     }
                 }
             }
             else
             {
-                for (int y = 0; y < source.Height; y++)
+                for (int y = 0; y < height; y++)
                 {
-                    byte* dstRow = dstBase + (y * normalized.RowBytes);
-                    for (int x = 0; x < source.Width; x++)
+                    byte* dstRow = dstBase + (y * dstRowBytes);
+                    for (int x = 0; x < width; x++)
                     {
                         var color = source.GetPixel(x, y);
                         dstRow[x] = color.Red;

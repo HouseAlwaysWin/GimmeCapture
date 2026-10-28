@@ -144,16 +144,21 @@ public class PaddleOCREngine : IOCREngine
     // Single per-pixel luminance pass producing both the average (for the invert decision) and the
     // min/max spread (for the contrast decision). Folds the former AnalyzeLuminance + AnalyzeContrast;
     // the per-pixel luminance expression and the average's (long)-truncation semantics are unchanged.
-    private static void AnalyzeLuminanceAndContrast(SKBitmap bitmap, out float averageLuminance, out int contrast)
+    // The size and row stride are read once: each is a call into Skia, and this read the width at every pixel.
+    internal static void AnalyzeLuminanceAndContrast(SKBitmap bitmap, out float averageLuminance, out int contrast)
     {
         long totalLuminous = 0;
         byte min = byte.MaxValue;
         byte max = byte.MinValue;
+        int width = bitmap.Width;
+        int height = bitmap.Height;
+        IntPtr pixels = bitmap.GetPixels();
+        int rowBytes = bitmap.RowBytes;
 
-        for (int y = 0; y < bitmap.Height; y++)
+        for (int y = 0; y < height; y++)
         {
-            var row = GetPixelRowSpan(bitmap, y);
-            for (int x = 0; x < bitmap.Width; x++)
+            var row = GetPixelRowSpan(pixels, rowBytes, width, y);
+            for (int x = 0; x < width; x++)
             {
                 int offset = x * 4;
                 byte blue = row[offset];
@@ -167,7 +172,7 @@ public class PaddleOCREngine : IOCREngine
             }
         }
 
-        averageLuminance = totalLuminous / (float)(bitmap.Width * bitmap.Height);
+        averageLuminance = totalLuminous / (float)(width * height);
         contrast = max - min;
     }
 
@@ -275,15 +280,21 @@ public class PaddleOCREngine : IOCREngine
         return score;
     }
 
-    private static void EnhanceBitmapForOcr(SKBitmap bitmap)
+    // Stretches the luminance to the full 0-255 range, as grey, in place. Sizes are read once, as in
+    // AnalyzeLuminanceAndContrast.
+    internal static void EnhanceBitmapForOcr(SKBitmap bitmap)
     {
         byte min = byte.MaxValue;
         byte max = byte.MinValue;
+        int width = bitmap.Width;
+        int height = bitmap.Height;
+        IntPtr pixels = bitmap.GetPixels();
+        int rowBytes = bitmap.RowBytes;
 
-        for (int y = 0; y < bitmap.Height; y++)
+        for (int y = 0; y < height; y++)
         {
-            var row = GetPixelRowSpan(bitmap, y);
-            for (int x = 0; x < bitmap.Width; x++)
+            var row = GetPixelRowSpan(pixels, rowBytes, width, y);
+            for (int x = 0; x < width; x++)
             {
                 int offset = x * 4;
                 byte blue = row[offset];
@@ -296,37 +307,25 @@ public class PaddleOCREngine : IOCREngine
         }
 
         float range = Math.Max(1f, max - min);
-        // Reuse a single pooled row buffer instead of allocating one per row.
-        int rowLength = bitmap.Width * 4;
-        byte[] scratch = ArrayPool<byte>.Shared.Rent(rowLength);
-        try
+        for (int y = 0; y < height; y++)
         {
-            Span<byte> writableRow = scratch.AsSpan(0, rowLength);
-            for (int y = 0; y < bitmap.Height; y++)
+            // Rewritten where it lies: each pixel is read before it is written, and reads no other.
+            var row = GetPixelRowSpan(pixels, rowBytes, width, y);
+            for (int x = 0; x < width; x++)
             {
-                GetPixelRowSpan(bitmap, y).CopyTo(writableRow);
-                for (int x = 0; x < bitmap.Width; x++)
-                {
-                    int offset = x * 4;
-                    byte blue = writableRow[offset];
-                    byte green = writableRow[offset + 1];
-                    byte red = writableRow[offset + 2];
-                    float luminance = (red * 0.2126f) + (green * 0.7152f) + (blue * 0.0722f);
-                    float normalized = ((luminance - min) / range) * 255f;
-                    byte value = (byte)Math.Clamp(MathF.Round(normalized), 0f, 255f);
+                int offset = x * 4;
+                byte blue = row[offset];
+                byte green = row[offset + 1];
+                byte red = row[offset + 2];
+                float luminance = (red * 0.2126f) + (green * 0.7152f) + (blue * 0.0722f);
+                float normalized = ((luminance - min) / range) * 255f;
+                byte value = (byte)Math.Clamp(MathF.Round(normalized), 0f, 255f);
 
-                    writableRow[offset] = value;
-                    writableRow[offset + 1] = value;
-                    writableRow[offset + 2] = value;
-                    writableRow[offset + 3] = 255;
-                }
-
-                WritePixelRow(bitmap, y, writableRow);
+                row[offset] = value;
+                row[offset + 1] = value;
+                row[offset + 2] = value;
+                row[offset + 3] = 255;
             }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(scratch);
         }
     }
 
@@ -492,11 +491,13 @@ public class PaddleOCREngine : IOCREngine
     {
         int width = bitmap.Width;
         int height = bitmap.Height;
+        IntPtr pixels = bitmap.GetPixels();
+        int rowBytes = bitmap.RowBytes;
         Span<float> buffer = input.Buffer.Span;
         int plane = height * width;
         for (int y = 0; y < height; y++)
         {
-            var row = GetPixelRowSpan(bitmap, y);
+            var row = GetPixelRowSpan(pixels, rowBytes, width, y);
             int rBase = y * width;              // channel 0 (red)
             int gBase = plane + rBase;          // channel 1 (green)
             int bBase = (2 * plane) + rBase;    // channel 2 (blue)
@@ -518,11 +519,13 @@ public class PaddleOCREngine : IOCREngine
     {
         int width = bitmap.Width;
         int height = bitmap.Height;
+        IntPtr pixels = bitmap.GetPixels();
+        int rowBytes = bitmap.RowBytes;
         Span<float> buffer = input.Buffer.Span;
         int plane = height * width;
         for (int y = 0; y < height; y++)
         {
-            var row = GetPixelRowSpan(bitmap, y);
+            var row = GetPixelRowSpan(pixels, rowBytes, width, y);
             int rBase = y * width;
             int gBase = plane + rBase;
             int bBase = (2 * plane) + rBase;
@@ -576,16 +579,12 @@ public class PaddleOCREngine : IOCREngine
         }
     }
 
-    private static unsafe ReadOnlySpan<byte> GetPixelRowSpan(SKBitmap bitmap, int row)
+    // Row `row` of 32-bit pixels, from the bitmap's pixel address, row stride and width, which its callers read once:
+    // each is a call into Skia.
+    private static unsafe Span<byte> GetPixelRowSpan(IntPtr pixels, int rowBytes, int width, int row)
     {
-        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
-        return new ReadOnlySpan<byte>(rowPtr, bitmap.Width * 4);
-    }
-
-    private static unsafe void WritePixelRow(SKBitmap bitmap, int row, ReadOnlySpan<byte> data)
-    {
-        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
-        data.CopyTo(new Span<byte>(rowPtr, bitmap.Width * 4));
+        byte* rowPtr = (byte*)pixels + (row * rowBytes);
+        return new Span<byte>(rowPtr, width * 4);
     }
 
     private static void TryEnqueueBlobNeighbor(int nx, int ny, int width, int height, ReadOnlySpan<float> probMap, Span<bool> visited, Queue<(int X, int Y)> queue)
