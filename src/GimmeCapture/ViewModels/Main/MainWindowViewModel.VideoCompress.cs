@@ -499,7 +499,7 @@ public partial class MainWindowViewModel
             this.WhenAnyValue(x => x.CompressOutputFolder, x => x.IsBusy,
                 (folder, busy) => !string.IsNullOrEmpty(folder) && !busy));
 
-        // Advanced video editing: per-item (parameter) with the tab's selection as fallback; idle queue only.
+        // Advanced video editing for the queue row it is given; idle queue only.
         OpenEditorCommand = ReactiveCommand.Create<CompressQueueItem?>(
             OpenEditor,
             this.WhenAnyValue(x => x.IsBusy, (bool busy) => !busy));
@@ -831,16 +831,9 @@ public partial class MainWindowViewModel
         ShowToastAction?.Invoke(Localization["CompressPauseNoResume"], ToastSeverity.Info);
 
     // Builds a CompareViewModel for the given file with the current encode settings, anchored at the editor's
-    // playhead and using the editor's live rotation. Returns null if there is no item. The editor hosts the
-    // result inline (no separate window).
-    private CompareViewModel? BuildCompareVm(CompressQueueItem? target, double anchorSeconds, int rotationDegrees)
+    // playhead and using the editor's live rotation. The editor hosts the result inline (no separate window).
+    private CompareViewModel BuildCompareVm(CompressQueueItem item, double anchorSeconds, int rotationDegrees)
     {
-        CompressQueueItem? item = target ?? SelectedQueueItem;
-        if (item == null)
-        {
-            return null;
-        }
-
         CompressSettingsSnapshot snap = BuildSettingsSnapshot();
         int targetKbps = snap.UseTargetSize && item.ProbedDuration > 0
             ? CompressEncodeMath.ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, item.ProbedDuration)
@@ -854,17 +847,14 @@ public partial class MainWindowViewModel
             options, rotationDegrees, anchorSeconds);
     }
 
-    // Opens the 進階影片編輯 window for the selected file; on Apply writes the whole edit (kept runs with speed,
+    // Opens the 進階影片編輯 window for a queue row's file; on Apply writes the whole edit (kept runs with speed,
     // crop, rotation) back to the item (the property sets trigger the existing persist + re-estimate + summary).
-    private void OpenEditor(CompressQueueItem? target)
+    private void OpenEditor(CompressQueueItem? item)
     {
-        CompressQueueItem? item = target ?? SelectedQueueItem;
         if (item == null || OpenEditorAction == null || item.ProbedDuration <= 0)
         {
             return;
         }
-
-        SelectedQueueItem = item; // keep the tab's selection in sync with the row that was acted on
 
         var initial = new VideoEditResult(
             item.EffectiveKeptRuns().Select(r => new VideoEditSegment(r.Start, r.End, r.Speed)).ToList(),
@@ -895,7 +885,6 @@ public partial class MainWindowViewModel
                 {
                     item.OutputName = editorVm.OutputFileName;
                 }
-                RefreshSelectedPreview(item);
             },
             CloneBitmapForEditor(item.Thumbnail)); // placeholder preview while the first frame decodes. A CLONE,
         // not the shared instance: the queue item owns its Thumbnail and may be disposed (e.g. 清空) while this
@@ -910,7 +899,7 @@ public partial class MainWindowViewModel
     }
 
     // Independent copy of a queue-item thumbnail for the editor's placeholder preview, so disposing the item's
-    // own Thumbnail (on 清空) can't free a bitmap the still-open editor is rendering. Small (~360px) → cheap.
+    // own Thumbnail (on 清空) can't free a bitmap the still-open editor is rendering. Small (96 px) → cheap.
     private static Avalonia.Media.Imaging.Bitmap? CloneBitmapForEditor(Avalonia.Media.Imaging.Bitmap? src)
     {
         if (src == null)

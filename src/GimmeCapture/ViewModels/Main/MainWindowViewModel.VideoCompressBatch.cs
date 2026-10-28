@@ -95,25 +95,6 @@ public partial class MainWindowViewModel
     // loop). Extracted from this VM; the VM keeps only the bindable queue/settings and delegates the run.
     private readonly CompressBatchRunner _batchRunner = new();
 
-    // The queue item shown in the "Edit" accordion (first-frame preview + rotation).
-    private CompressQueueItem? _selectedQueueItem;
-    public CompressQueueItem? SelectedQueueItem
-    {
-        get => _selectedQueueItem;
-        set => this.RaiseAndSetIfChanged(ref _selectedQueueItem, value);
-    }
-
-    // The selected file's first frame, rotated to the chosen angle, for the preview Image.
-    private Bitmap? _previewBitmap;
-    public Bitmap? PreviewBitmap
-    {
-        get => _previewBitmap;
-        private set => this.RaiseAndSetIfChanged(ref _previewBitmap, value);
-    }
-
-    private Bitmap? _rawPreview;            // the un-rotated decoded first frame
-    private CancellationTokenSource? _previewCts;
-
     public ReactiveCommand<Unit, Unit> AddCompressFilesCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearCompressQueueCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CompressQueueCommand { get; private set; } = null!;
@@ -151,9 +132,6 @@ public partial class MainWindowViewModel
         EstimateAllCompressQueueCommand = ReactiveCommand.CreateFromTask(
             EstimateAllAsync,
             this.WhenAnyValue(x => x.CompressQueueCount, x => x.IsBatchRunning, (count, busy) => count > 0 && !busy));
-
-        // Load the first-frame preview when the selected file changes.
-        this.WhenAnyValue(x => x.SelectedQueueItem).Subscribe(item => _ = LoadPreviewAsync(item));
 
         AddCompressFilesCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueAddFiles", ex));
         ClearCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueClear", ex));
@@ -421,15 +399,6 @@ public partial class MainWindowViewModel
         Active = _activeWorkingDir
     });
 
-    // Re-rotate the tab preview to match an edit just applied to the selected item (from the 進階影片編輯 window).
-    internal void RefreshSelectedPreview(CompressQueueItem item)
-    {
-        if (ReferenceEquals(item, SelectedQueueItem))
-        {
-            PreviewBitmap = FloatingBitmapConversionHelper.TransformBitmap(_rawPreview, item.Rotation, false, false);
-        }
-    }
-
     // Applies any persisted rotation / output name / done-state to a freshly created queue item.
     private void ApplySavedItemState(CompressQueueItem item)
     {
@@ -503,94 +472,6 @@ public partial class MainWindowViewModel
                 : null
         };
         CompressItemStateService.Save(_itemStates);
-    }
-
-    // Decodes the selected file's first frame into _rawPreview and shows it rotated to the file's angle.
-    private async Task LoadPreviewAsync(CompressQueueItem? item)
-    {
-        _previewCts?.Cancel();
-        _previewCts?.Dispose();
-        _previewCts = null;
-        _rawPreview = null;
-        PreviewBitmap = null;
-
-        if (item == null)
-        {
-            return;
-        }
-
-        var cts = new CancellationTokenSource();
-        _previewCts = cts;
-
-        // Make sure we know the source dims (probe now if the add-time probe hasn't finished yet).
-        if (item.ProbedWidth <= 0 || item.ProbedHeight <= 0)
-        {
-            try
-            {
-                using var sizeProbe = new LibavVideoFramePlayer();
-                var info = await sizeProbe.ProbeAsync(item.Path, cts.Token); // single open fills dims (+ duration/fps)
-                item.ProbedWidth = info.Width;
-                item.ProbedHeight = info.Height;
-                if (item.ProbedDuration <= 0) item.ProbedDuration = info.Duration;
-                if (item.ProbedFps <= 0) item.ProbedFps = info.Fps;
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("Compress.PreviewProbe", ex);
-            }
-        }
-
-        if (cts != _previewCts || item.ProbedWidth <= 0 || item.ProbedHeight <= 0)
-        {
-            return; // a newer selection superseded us, or the file is unreadable
-        }
-
-        // Thumbnail dims: fit the source into ~360px, even (encoder/sws friendly).
-        double scale = Math.Min(1.0, 360.0 / Math.Max(item.ProbedWidth, item.ProbedHeight));
-        int tw = Math.Max(2, (int)(item.ProbedWidth * scale)); tw -= tw & 1;
-        int th = Math.Max(2, (int)(item.ProbedHeight * scale)); th -= th & 1;
-
-        byte[]? frame = null;
-        try
-        {
-            using var player = new LibavVideoFramePlayer();
-            await player.PlayAsync(item.Path, tw, th, 0, 1.0, false, (data, _) =>
-            {
-                if (frame == null)
-                {
-                    frame = (byte[])data.Clone(); // grab just the first frame, then stop
-                    cts.Cancel();
-                }
-            }, cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // expected — we cancel right after the first frame
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Compress.PreviewDecode", ex);
-        }
-
-        if (frame == null || cts != _previewCts) // null = no frame, or a newer selection superseded us
-        {
-            return;
-        }
-
-        try
-        {
-            using var sk = new SKBitmap(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul));
-            Marshal.Copy(frame, 0, sk.GetPixels(), Math.Min(frame.Length, tw * th * 4));
-            if (FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(sk, out Bitmap? raw, out _))
-            {
-                _rawPreview = raw;
-                PreviewBitmap = FloatingBitmapConversionHelper.TransformBitmap(raw, item.Rotation, false, false);
-            }
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Compress.PreviewBuild", ex);
-        }
     }
 
     private async Task AddCompressFilesAsync()

@@ -103,6 +103,10 @@
 
 ### ⚡ Performance
 
+- **Opening a file in the Compress editor no longer decodes a picture nothing shows.** Each time the editor opened on
+  another file, the app also opened that file again, brought up a GPU decoder and decoded a 360-pixel frame for a
+  preview the Compress tab stopped showing when its Edit tab went away, and applying an edit then rotated that hidden
+  picture on the UI thread. That work is gone, so the editor's own first frame no longer competes with it.
 - **Seeking, changing speed or muting a playing video pin no longer stalls the app.** Each of these opened the clip's
   audio and the audio device again on the UI thread, and closing the previous device waited there too. That now happens
   in the background. A seek made while the audio is still opening waits its turn, and audio that a newer seek replaced
