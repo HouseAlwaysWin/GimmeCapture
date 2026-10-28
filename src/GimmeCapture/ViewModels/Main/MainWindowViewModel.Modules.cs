@@ -206,6 +206,9 @@ public partial class MainWindowViewModel
         try
         {
             _settingsService.Settings.LlamaModelId = modelId;
+            // The save writes this view model's own copy (the Translation tab's model) over the settings, so it has to
+            // carry the pick too, as the install path does; otherwise the pick was undone by its own save.
+            LlamaModelId = modelId;
             await SaveSettingsAsync();
             llama.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(modelId);
         }

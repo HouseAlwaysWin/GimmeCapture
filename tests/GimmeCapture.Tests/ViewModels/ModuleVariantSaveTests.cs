@@ -41,15 +41,37 @@ public sealed class ModuleVariantSaveTests
         Assert.Equal(Enum.Parse<SAM2Variant>(picks[1]), viewModel.AppSettingsService.Settings.SelectedSAM2Variant);
     }
 
+    [Fact]
+    public async Task ALlamaPick_IsWhatItsSaveWrites()
+    {
+        // The save writes the view model's own copy of the model (the Translation tab's) over the settings, so a pick
+        // that set only the settings was undone by its own save, and the next start showed the old model again.
+        var persistence = new HeldSettingsPersistence();
+        persistence.ReleaseAll();
+        var viewModel = new MainWindowViewModel(
+            MainWindowViewModel.CreateDesignDependencies() with { SettingsPersistenceService = persistence });
+        await viewModel.InitialSettingsLoadTask;
+        viewModel.EnsureModulesInitialized();
+        int savesOnOpen = persistence.SavesStarted;
+
+        var llama = viewModel.Modules.Single(m => m.Name == "Llama Models");
+        string pick = llama.Variants!.First(variant => variant != llama.SelectedVariant);
+        llama.SelectedVariant = pick;
+        await persistence.WaitForSavesStartedAsync(savesOnOpen + 1);
+
+        Assert.Equal(pick, persistence.LlamaModelIdsSaved[^1]);
+    }
+
     /// <summary>
-    /// Records the SAM2 variant each save would write, without writing it (the design-time settings folder is shared),
-    /// and holds every save until <see cref="ReleaseAll"/>.
+    /// Records the SAM2 variant and Llama model each save would write, without writing them (the design-time settings
+    /// folder is shared), and holds every save until <see cref="ReleaseAll"/>.
     /// </summary>
     private sealed class HeldSettingsPersistence : IMainWindowSettingsPersistenceService
     {
         private readonly MainWindowSettingsPersistenceService _real = new();
         private readonly object _gate = new();
         private readonly List<SAM2Variant> _sam2VariantsSaved = new();
+        private readonly List<string> _llamaModelIdsSaved = new();
         private readonly List<TaskCompletionSource> _held = new();
         private bool _holding = true;
 
@@ -75,6 +97,18 @@ public sealed class ModuleVariantSaveTests
             }
         }
 
+        // What the real save would write: the snapshot's model replaces the settings' one (snapshot.ApplyTo).
+        public IReadOnlyList<string> LlamaModelIdsSaved
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _llamaModelIdsSaved.ToArray();
+                }
+            }
+        }
+
         public Task<MainWindowSettingsSnapshot> LoadAsync(IAppSettingsService settingsService) =>
             _real.LoadAsync(settingsService);
 
@@ -83,6 +117,7 @@ public sealed class ModuleVariantSaveTests
             lock (_gate)
             {
                 _sam2VariantsSaved.Add(settingsService.Settings.SelectedSAM2Variant);
+                _llamaModelIdsSaved.Add(snapshot.LlamaModelId);
                 if (!_holding)
                 {
                     return Task.CompletedTask;

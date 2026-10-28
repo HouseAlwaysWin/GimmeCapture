@@ -13,6 +13,8 @@
 
 ### 🛡️ Reliability
 
+- **A Llama model picked on the Modules tab now stays picked.** Saving the choice wrote the model still selected on the
+  Translation tab back over it, so the next start showed the old model again. The choice now updates both.
 - **Choosing a SAM2 or Llama model on the Modules tab can no longer close the app.** Each choice saved the settings with
   nothing to catch an error, and a choice made while the previous one was still saving saved alongside it, so the
   earlier choice could be the one left on disk. Choices now save one at a time, in the order made, and a failure goes to
