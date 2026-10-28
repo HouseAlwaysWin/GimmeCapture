@@ -207,6 +207,10 @@
   appears in its own small window over the video, so a small pin can't clip it, and it doesn't take focus. An
   export that finishes within 0.3 s doesn't show it at all. It also stays up for the whole export: a GIF or WebM
   export with a cut used to lose it halfway, as soon as the trim before the transcode was done.
+- **What smart selection removes from a pinned image is transparent.** The removed part showed as a white wash over
+  the pin's transparency checkerboard instead of the checkerboard: its pixels kept their colour at full
+  transparency, and drawing the pin added that colour to what lay behind instead of hiding it. Smart selection's
+  preview also drew the red marks of points that exclude an area in blue, and its tint brighter than intended.
 
 ### ♿ Accessibility
 

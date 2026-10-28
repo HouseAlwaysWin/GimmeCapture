@@ -219,6 +219,10 @@ internal static class FloatingBitmapConversionHelper
         }
     }
 
+    /// <summary>
+    /// A premultiplied BGRA Avalonia bitmap with a copy of <paramref name="skBitmap"/>'s pixels, which stays the
+    /// caller's. Pixels in any other form are converted on the way (<see cref="TryCopyAsPremulBgra"/>).
+    /// </summary>
     public static bool TryCreateDetachedBitmapFromSkBitmap(SKBitmap? skBitmap, out Bitmap? bitmap, out string? error)
     {
         bitmap = null;
@@ -237,22 +241,16 @@ internal static class FloatingBitmapConversionHelper
                 PixelFormat.Bgra8888,
                 AlphaFormat.Premul);
 
-            using var locked = result.Lock();
-            unsafe
+            bool copied;
+            using (var locked = result.Lock())
             {
-                byte* srcBase = (byte*)skBitmap.GetPixels();
-                byte* dstBase = (byte*)locked.Address;
-                int rows = Math.Min(skBitmap.Height, locked.Size.Height);
-                int bytesPerRow = Math.Min(skBitmap.RowBytes, locked.RowBytes);
+                copied = TryCopyAsPremulBgra(skBitmap, locked.Address, locked.RowBytes, locked.Size.Height, out error);
+            }
 
-                for (int row = 0; row < rows; row++)
-                {
-                    Buffer.MemoryCopy(
-                        srcBase + (row * skBitmap.RowBytes),
-                        dstBase + (row * locked.RowBytes),
-                        locked.RowBytes,
-                        bytesPerRow);
-                }
+            if (!copied)
+            {
+                result.Dispose();
+                return false;
             }
 
             bitmap = result;
@@ -263,5 +261,51 @@ internal static class FloatingBitmapConversionHelper
             error = $"Detached bitmap creation from SKBitmap failed: {ex.Message}";
             return false;
         }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="source"/> to <paramref name="destination"/> as premultiplied BGRA, the form of the
+    /// bitmaps made here: copied as it is when it already has that form or is opaque, converted otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Background removal hands back unpremultiplied pixels, and a pixel it cleared keeps its colour at alpha 0.
+    /// Copied byte for byte, a premultiplied draw adds that colour to whatever lies behind instead of hiding it: a pin
+    /// showed its removed background as a white wash over the transparency checkerboard, and the images saved from it
+    /// had bright fringes.
+    /// </remarks>
+    internal static unsafe bool TryCopyAsPremulBgra(
+        SKBitmap source, IntPtr destination, int destinationRowBytes, int destinationRows, out string? error)
+    {
+        error = null;
+        // Each of these is a call into Skia: read them once.
+        int width = source.Width;
+        int rows = Math.Min(source.Height, destinationRows);
+        if (source.ColorType == SKColorType.Bgra8888 && source.AlphaType is SKAlphaType.Premul or SKAlphaType.Opaque)
+        {
+            int sourceRowBytes = source.RowBytes;
+            int bytesPerRow = Math.Min(sourceRowBytes, destinationRowBytes);
+            byte* sourceBase = (byte*)source.GetPixels();
+            byte* destinationBase = (byte*)destination;
+            for (int row = 0; row < rows; row++)
+            {
+                Buffer.MemoryCopy(
+                    sourceBase + (row * sourceRowBytes),
+                    destinationBase + (row * destinationRowBytes),
+                    destinationRowBytes,
+                    bytesPerRow);
+            }
+
+            return true;
+        }
+
+        using var pixmap = source.PeekPixels();
+        var premultiplied = new SKImageInfo(width, rows, SKColorType.Bgra8888, SKAlphaType.Premul);
+        if (pixmap == null || !pixmap.ReadPixels(premultiplied, destination, destinationRowBytes))
+        {
+            error = $"Cannot convert {source.ColorType} {source.AlphaType} pixels to premultiplied BGRA.";
+            return false;
+        }
+
+        return true;
     }
 }

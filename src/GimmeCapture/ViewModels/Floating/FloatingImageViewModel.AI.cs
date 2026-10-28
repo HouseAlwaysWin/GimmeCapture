@@ -367,7 +367,10 @@ public partial class FloatingImageViewModel
                     ? new SkiaSharp.SKColor(0, 255, 100, 150)   // Green for "Keep mode" (Shift+Click)
                     : new SkiaSharp.SKColor(255, 80, 80, 150);  // Red for "Remove mode" (Normal)
 
-                using var coloredMask = new SkiaSharp.SKBitmap(cleanMask.Width, cleanMask.Height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul);
+                // Declared as what the overlay words below are, BGRA and unpremultiplied: the canvas draws the markers by
+                // the declared form, and the hand-off to Avalonia converts by it. Declared RGBA, red markers showed blue;
+                // declared premultiplied, the overlay drew brighter than its alpha.
+                using var coloredMask = new SkiaSharp.SKBitmap(cleanMask.Width, cleanMask.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Unpremul);
                 unsafe
                 {
                     byte* grayBase = (byte*)cleanMask.GetPixels().ToPointer();
@@ -672,7 +675,8 @@ public partial class FloatingImageViewModel
 
                 using (originalBmp)
                 {
-                    using var resultBmp = new SkiaSharp.SKBitmap(originalBmp.Width, originalBmp.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Unpremul);
+                    // Premultiplied, like the pin's pixels it is copied from.
+                    using var resultBmp = new SkiaSharp.SKBitmap(originalBmp.Width, originalBmp.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
                     var maskScaleX = (double)cleanMaskBitmap.Width / originalBmp.Width;
                     var maskScaleY = (double)cleanMaskBitmap.Height / originalBmp.Height;
 
@@ -699,8 +703,9 @@ public partial class FloatingImageViewModel
                                     isSelected = !isSelected;
                                 }
 
-                                byte alpha = isSelected ? byte.MinValue : (byte)(src >> 24);
-                                dstRow[x] = (src & 0x00FFFFFFu) | ((uint)alpha << 24);
+                                // A removed pixel is all zero: its colour kept at alpha 0 would be drawn added to what
+                                // lies behind, not hidden.
+                                dstRow[x] = isSelected ? 0u : src;
                             }
                         }
                     }
