@@ -13,6 +13,10 @@
 
 ### 🛡️ Reliability
 
+- **`UiStall` log lines say what the UI thread was doing.** A freeze's length alone could not tell a UI thread that was
+  working from one that was waiting, or one held by a garbage collection. Each line now gives the UI thread's CPU time
+  (Windows) and the GC's pauses and collections during the freeze, and calls it busy, blocked or GC. A freeze still
+  going after 2 s is logged at once, so one the app does not survive still leaves a line.
 - **A Llama model picked on the Modules tab now stays picked.** Saving the choice wrote the model still selected on the
   Translation tab back over it, so the next start showed the old model again. The choice now updates both.
 - **Choosing a SAM2 or Llama model on the Modules tab can no longer close the app.** Each choice saved the settings with

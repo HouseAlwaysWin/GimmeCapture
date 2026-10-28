@@ -52,6 +52,9 @@ public partial class App : Application
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
             desktop.Exit += (_, _) =>
                 _bootstrapper.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            // After that dispose, which the stall watchdog still covers: past it the UI thread stops pumping for good,
+            // and the watchdog would report the rest of the exit as a stall.
+            desktop.Exit += (_, _) => UiThreadStallMonitor.Stop();
             var hotkeyHost = _bootstrapper.CreateTrayHostWindow();
             StartupTrace.Mark("viewModel");
             TraceSettingsAppliedAsync(_bootstrapper.InitialSettingsLoadTask).Forget("Startup.Trace");

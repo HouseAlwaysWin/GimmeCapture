@@ -205,9 +205,6 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private static extern IntPtr OpenProcess(uint dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, uint dwProcessId);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr GetCurrentProcess();
-
-    [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(IntPtr hObject);
 
@@ -771,7 +768,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         _selfIntegrityResolved = true;
         _selfIntegrityLevel = SECURITY_MANDATORY_MEDIUM_RID;
 
-        if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, out IntPtr hToken))
+        if (OpenProcessToken(Kernel32.GetCurrentProcess(), TOKEN_QUERY, out IntPtr hToken))
         {
             try
             {
