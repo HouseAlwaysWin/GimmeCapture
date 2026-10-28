@@ -4,7 +4,6 @@ using Avalonia.Platform;
 using ReactiveUI;
 using ReactiveUI.Reactive;
 using System;
-using System.Buffers;
 using System.Reactive;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
@@ -28,11 +27,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private bool _isDisposed;
     private Task? _disposeTask;
     private Task? _bootMediaTask;
-    private readonly object _latestFrameLock = new();
     private readonly object _videoBitmapLock = new();
-    private byte[]? _latestFrameData;
-    private int _latestFrameLength;
-    private int _latestFrameGeneration;
+    // Each decoded frame, and the time it shows, on the way from the decode thread to the UI thread.
+    private readonly LatestFrameHandoff _frameHandoff = new();
+    private readonly PlayheadHandoff _decodedPlayhead = new();
     private long _lastFrameUiPostTimestampMs;
     private long _lastTimeUiPostTimestampMs;
     private int _isFrameUiPostPending;
@@ -154,6 +152,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         }
     }
 
+    // The playhead, and everything bound to it, belong to the UI thread: the decoder records each frame's time in
+    // _decodedPlayhead, and the throttled time refresh moves the playhead from there (ApplyDecodedPlayhead).
     private TimeSpan _currentTime = TimeSpan.Zero;
     public TimeSpan CurrentTime
     {
@@ -188,7 +188,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             // Speed change entails seeking from current point to avoid restart
             if (_isPlaybackActive)
             {
-                _seekTargetSeconds = _currentTime.TotalSeconds;
+                _seekTargetSeconds = PlayheadSeconds();
                 StartPlayback();
             }
         }
@@ -203,7 +203,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             if (_isMuted == value) return;
             this.RaiseAndSetIfChanged(ref _isMuted, value);
             this.RaisePropertyChanged(nameof(MuteTooltip));
-            UpdateAudioStateFromPlayback();
+            UpdateAudioStateFromPlayback(PlayheadSeconds());
         }
     }
 
@@ -570,15 +570,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             _videoBitmap = null;
         }
         oldBitmap?.Dispose();
-        lock (_latestFrameLock)
-        {
-            if (_latestFrameData != null)
-            {
-                ArrayPool<byte>.Shared.Return(_latestFrameData);
-            }
-            _latestFrameData = null;
-            _latestFrameLength = 0;
-        }
+        _frameHandoff.Dispose();
 
         // The native player released the file handle above. The pin's temporary files (an unsaved recording, a
         // cropped-clip copy or a GIF recording's audio sidecar in %TEMP%/GimmeCapture_Pins) go now, or once a save or
@@ -614,9 +606,19 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private async Task DebounceSeekAsync(double value, CancellationToken cancellationToken)
     {
         await Task.Delay(300, cancellationToken).ConfigureAwait(false);
-        _isDraggingSlider = false;
-        _seekTargetSeconds = value;
-        StartPlayback();
+
+        // On the UI thread, which owns the playhead the seek moves.
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (cancellationToken.IsCancellationRequested || _isDisposed)
+            {
+                return;
+            }
+
+            _isDraggingSlider = false;
+            _seekTargetSeconds = value;
+            StartPlayback();
+        });
     }
 
     private void PausePlaybackForPreciseInteraction()

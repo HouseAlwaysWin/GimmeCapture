@@ -13,6 +13,11 @@
 
 ### 🛡️ Reliability
 
+- **A playing video pin's time, seek bar and redaction boxes now update on the UI thread.** The decoder moved the
+  playhead from its own thread on every frame, and with it rebuilt the redaction preview boxes off the UI thread, which
+  Avalonia controls don't allow. The playhead now moves on the UI thread, 15 times a second by default. Pausing,
+  reaching the end and every seek while paused now show the frame they stopped on and its time; the last frame or two
+  could be skipped before. Dragging the seek bar while the clip plays no longer makes it jump back.
 - **`UiStall` log lines say what the UI thread was doing.** A freeze's length alone could not tell a UI thread that was
   working from one that was waiting, or one held by a garbage collection. Each line now gives the UI thread's CPU time
   (Windows) and the GC's pauses and collections during the freeze, and calls it busy, blocked or GC. A freeze still
@@ -98,6 +103,10 @@
 
 ### ⚡ Performance
 
+- **A playing video pin does less work per frame, and never shows a frame that is half one and half the next.** Each
+  frame was copied three times on its way to the screen, one copy up to twice the frame's size, and the screen read it
+  while the next frame was being written into it. Each frame is now copied twice, at its own size, and the two copies
+  never overlap.
 - **Editing a file in the Compress queue no longer writes to disk on the UI thread.** Every change to a queue item
   rewrote the whole saved-state file there, up to seven times in a row when the editor's edits were applied. Changes are
   now saved in the background, a burst of them in one write, and anything still waiting is written when the app exits.
@@ -312,6 +321,9 @@
 
 ### 🧹 Maintenance
 
+- **A playing pin no longer adds log lines at every seek and loop.** Which decoder the player used, and a file that
+  opens slowly, were logged each time the clip was opened, and a pin does that at every seek, segment and loop pass.
+  Each is now logged once, and the decoder again when it changes. Repeats appear only with `GIMMECAPTURE_DEBUG_LOG=1`.
 - **The log no longer gains two lines for every translation.** Each uncached translation, OCR run and SAM2 click wrote
   two `MemoryTrim.Activity` lines. A line is now written only when that activity calls off a waiting memory trim; every
   one is written with `GIMMECAPTURE_DEBUG_LOG=1`.

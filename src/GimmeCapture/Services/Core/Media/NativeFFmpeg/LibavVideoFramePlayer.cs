@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,19 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 internal sealed class LibavVideoFramePlayer : IDisposable
 {
     internal readonly record struct MediaInfo(double Duration, int Width, int Height, int Fps, bool HasAudio, int AudioChannels);
+
+    /// <summary>
+    /// One decoded frame for <see cref="PlayFramesAsync"/>: outputWidth × outputHeight BGRA pixels with the rows packed,
+    /// exactly that many bytes long. It points into the decoder's own memory and is only valid during the call.
+    /// </summary>
+    public delegate void BgraFrameHandler(ReadOnlySpan<byte> bgra, double seconds);
+
+    // PlayFramesAsync runs again for every seek, segment, loop pass, thumbnail and frame step, and each run logged its
+    // decode path, and every slow open, at Information. Now the decode path is logged when it changes for a codec, and
+    // a file that is slow to open once; the repeats go to Debug.
+    private static readonly ConcurrentDictionary<AVCodecID, string> LastDecodePathByCodec = new();
+    private static readonly ConcurrentDictionary<string, byte> FilesReportedSlowToOpen = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxFilesReportedSlowToOpen = 256;
 
     /// <summary>
     /// Global opt-out for GPU (D3D11VA) hardware decode. Default on; the composition root sets it from
@@ -73,6 +87,25 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         double safeSpeed = Math.Max(0.1, speed);
         double scheduledWall = Math.Max(0, frameSeconds - startedAtSeconds) / safeSpeed;
         return elapsedWallSeconds - scheduledWall > LateFrameThresholdSeconds;
+    }
+
+    // True the first time a codec decodes this way, and whenever its way changes (say the GPU path starts failing).
+    internal static bool IsNewDecodePath(ConcurrentDictionary<AVCodecID, string> lastByCodec, AVCodecID codec, string decodePath)
+    {
+        bool isNew = !lastByCodec.TryGetValue(codec, out string? last) || last != decodePath;
+        lastByCodec[codec] = decodePath;
+        return isNew;
+    }
+
+    // True the first time a file is slow to open. The memory is bounded; once full it starts over.
+    internal static bool IsFirstSlowOpen(ConcurrentDictionary<string, byte> reported, string videoPath)
+    {
+        if (reported.Count >= MaxFilesReportedSlowToOpen)
+        {
+            reported.Clear();
+        }
+
+        return reported.TryAdd(videoPath, 0);
     }
 
     // Attempts to attach a D3D11VA hardware device to the decoder context. Returns the created device ref (which
@@ -279,9 +312,10 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     long findMs = probeStage.ElapsedMilliseconds;
                     if (openMs + findMs > 250)
                     {
+                        // The two-part overload: a single event name is cut at 120 characters, which lost the timings.
                         AppLog.Information(
-                            $"LibavVideoFramePlayer.ProbeAsync slow probe {System.IO.Path.GetFileName(videoPath)}: " +
-                            $"open_input={openMs}ms find_stream_info={findMs}ms");
+                            "LibavVideoFramePlayer.ProbeAsync",
+                            $"slow probe {System.IO.Path.GetFileName(videoPath)}: open_input={openMs}ms find_stream_info={findMs}ms");
                     }
 
                     double duration = fmt->duration > 0 ? fmt->duration / (double)ffmpeg.AV_TIME_BASE : 0;
@@ -342,11 +376,11 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         try
         {
             using var player = new LibavVideoFramePlayer();
-            await player.PlayAsync(videoPath, width, height, Math.Max(0, seconds), 1.0, false, (data, _) =>
+            await player.PlayFramesAsync(videoPath, width, height, Math.Max(0, seconds), 1.0, false, (bgra, _) =>
             {
                 if (frame == null)
                 {
-                    frame = (byte[])data.Clone(); // first frame at/after the seek point
+                    frame = bgra.ToArray(); // first frame at/after the seek point
                     stop.Cancel();
                 }
             }, stop.Token);
@@ -359,6 +393,11 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         return frame;
     }
 
+    /// <summary>
+    /// <see cref="PlayFramesAsync"/> for callers that want each frame as an array: the same rented array every time,
+    /// whose first outputWidth × outputHeight × 4 bytes are the frame (it can be longer). That costs a copy of every
+    /// frame into it, which PlayFramesAsync does not make.
+    /// </summary>
     public async Task PlayAsync(
         string videoPath,
         int outputWidth,
@@ -367,6 +406,41 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         double speed,
         bool loop,
         Action<byte[], double> onFrame,
+        CancellationToken ct,
+        Action<double>? onDurationKnown = null)
+    {
+        byte[]? frameBuffer = null;
+        try
+        {
+            await PlayFramesAsync(videoPath, outputWidth, outputHeight, startSeconds, speed, loop, (bgra, seconds) =>
+            {
+                frameBuffer ??= ArrayPool<byte>.Shared.Rent(bgra.Length);
+                bgra.CopyTo(frameBuffer);
+                onFrame(frameBuffer, seconds);
+            }, ct, onDurationKnown).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (frameBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(frameBuffer);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Decodes <paramref name="videoPath"/> from <paramref name="startSeconds"/>, scaled to outputWidth × outputHeight
+    /// BGRA, and hands each frame to <paramref name="onFrame"/> on the decode thread at its presentation time. The
+    /// frame is the scaler's own output, not a copy: a caller that keeps it copies what it needs during the call.
+    /// </summary>
+    public async Task PlayFramesAsync(
+        string videoPath,
+        int outputWidth,
+        int outputHeight,
+        double startSeconds,
+        double speed,
+        bool loop,
+        BgraFrameHandler onFrame,
         CancellationToken ct,
         Action<double>? onDurationKnown = null)
     {
@@ -447,9 +521,18 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     decCtx->thread_type = ffmpeg.FF_THREAD_FRAME | ffmpeg.FF_THREAD_SLICE;
                     ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "open_decoder");
                     long codecMs = openStage.ElapsedMilliseconds; openStage.Restart();
-                    AppLog.Information(hardwareDecode
-                        ? "LibavVideoFramePlayer.PlayAsync D3D11VA hardware decode"
-                        : $"LibavVideoFramePlayer.PlayAsync software decode ({hwReason ?? "hw unavailable"})");
+                    string decodePath = hardwareDecode
+                        ? "D3D11VA hardware decode"
+                        : $"software decode ({hwReason ?? "hw unavailable"})";
+                    string decodePathMessage = $"{decodePath}, {par->codec_id}";
+                    if (IsNewDecodePath(LastDecodePathByCodec, par->codec_id, decodePath))
+                    {
+                        AppLog.Information("LibavVideoFramePlayer.PlayAsync", decodePathMessage);
+                    }
+                    else
+                    {
+                        AppLog.Debug("LibavVideoFramePlayer.PlayAsync", decodePathMessage);
+                    }
 
                     pkt = ffmpeg.av_packet_alloc();
                     decFrame = ffmpeg.av_frame_alloc();
@@ -476,19 +559,29 @@ internal sealed class LibavVideoFramePlayer : IDisposable
 
                     // One diagnostic line only when the open is slow (so fast opens stay silent). The stage that
                     // dominates tells us why: open_input = moov/index read (large / non-faststart file), the rest is
-                    // stream analysis / codec+GPU init / keyframe seek.
+                    // stream analysis / codec+GPU init / keyframe seek. A file slow to open is slow at every seek and
+                    // loop pass, so it is reported once; the repeats go to Debug.
                     long openTotalMs = openMs + findMs + codecMs + seekMs;
                     if (openTotalMs > 250)
                     {
-                        AppLog.Information(
-                            $"LibavVideoFramePlayer.PlayAsync slow open {System.IO.Path.GetFileName(videoPath)} " +
+                        string slowOpenMessage =
+                            $"slow open {System.IO.Path.GetFileName(videoPath)} " +
                             $"{par->width}x{par->height} {par->codec_id} hw={hardwareDecode}: total={openTotalMs}ms " +
-                            $"open_input={openMs}ms find_stream_info={findMs}ms codec/hw={codecMs}ms seek={seekMs}ms");
+                            $"open_input={openMs}ms find_stream_info={findMs}ms codec/hw={codecMs}ms seek={seekMs}ms";
+                        if (IsFirstSlowOpen(FilesReportedSlowToOpen, videoPath))
+                        {
+                            AppLog.Information("LibavVideoFramePlayer.PlayAsync", slowOpenMessage);
+                        }
+                        else
+                        {
+                            AppLog.Debug("LibavVideoFramePlayer.PlayAsync", slowOpenMessage);
+                        }
                     }
 
                     double loopStartSeconds = Math.Max(0, startSeconds);
                     int frameSize = outputWidth * outputHeight * 4;
-                    byte[] frameBuffer = ArrayPool<byte>.Shared.Rent(frameSize);
+                    int packedRowBytes = outputWidth * 4;
+                    byte[]? packedFrame = null; // only if the scaler's rows ever come padded
                     bool decoderDraining = false;
                     bool shouldResetLoop = false;
                     double startedAtSeconds = -1;
@@ -636,8 +729,21 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                     outFrame->data,
                                     outFrame->linesize);
 
-                                CopyBgraFrame(outFrame, outputWidth, outputHeight, frameBuffer.AsSpan(0, frameSize));
-                                onFrame(frameBuffer, seconds);
+                                // outFrame's buffer was allocated with 1-byte alignment, so its rows are packed and the
+                                // scaler's output already is the frame: hand it over without copying it first.
+                                ReadOnlySpan<byte> bgra;
+                                if (outFrame->linesize[0] == packedRowBytes)
+                                {
+                                    bgra = new ReadOnlySpan<byte>(outFrame->data[0], frameSize);
+                                }
+                                else
+                                {
+                                    packedFrame ??= ArrayPool<byte>.Shared.Rent(frameSize);
+                                    CopyBgraFrame(outFrame, outputWidth, outputHeight, packedFrame.AsSpan(0, frameSize));
+                                    bgra = packedFrame.AsSpan(0, frameSize);
+                                }
+
+                                onFrame(bgra, seconds);
                             }
 
                             if (shouldResetLoop && !ct.IsCancellationRequested)
@@ -659,7 +765,11 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     }
                     finally
                     {
-                        ArrayPool<byte>.Shared.Return(frameBuffer);
+                        if (packedFrame != null)
+                        {
+                            ArrayPool<byte>.Shared.Return(packedFrame);
+                        }
+
                         frameWaiter.Dispose();
                     }
                 }
