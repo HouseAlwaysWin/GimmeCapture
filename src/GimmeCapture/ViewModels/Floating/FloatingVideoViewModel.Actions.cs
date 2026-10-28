@@ -226,84 +226,87 @@ public partial class FloatingVideoViewModel
         if (IsProcessing) return;
         IsProcessing = true;
 
-        // Use Dispatcher.Post to ensure we run AFTER the ContextMenu has fully closed.
-        // This is the "standard" way to avoid PlatformImpl null or focus issues.
-        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
-        {
-            using var readingSource = _sourceFiles.Use();
-            try
-            {
-                ProcessingText = Localization["StatusExportingVideo"] ?? "Exporting Video...";
+        // Run once the UI event that started this (a context menu closing) has finished: copying from inside it could
+        // meet a null PlatformImpl or lost focus. Awaited, at the priority Post used: posted and forgotten, the copy ran
+        // outside the command, which reported done before anything was copied.
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(
+            CopyToClipboardAsync,
+            Avalonia.Threading.DispatcherPriority.Default);
+    }
 
-                // Copy honors the toolbar's export format (previously fixed to the source container).
-                string copyExt = SelectedExportFormat.StartsWith('.') ? SelectedExportFormat : "." + SelectedExportFormat;
-                var produced = await ProduceExportFileAsync(copyExt);
-                if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
+    private async Task CopyToClipboardAsync()
+    {
+        using var readingSource = _sourceFiles.Use();
+        try
+        {
+            ProcessingText = Localization["StatusExportingVideo"] ?? "Exporting Video...";
+
+            // Copy honors the toolbar's export format (previously fixed to the source container).
+            string copyExt = SelectedExportFormat.StartsWith('.') ? SelectedExportFormat : "." + SelectedExportFormat;
+            var produced = await ProduceExportFileAsync(copyExt);
+            if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
+            {
+                // Put the clip on the clipboard as a file (+ a best-effort thumbnail). Never let a null
+                // thumbnail stop the file copy, or a stale prior clipboard entry would paste instead.
+                var thumb = await GetFlattenedBitmapAsync() ?? VideoBitmap;
+                bool copied = thumb != null
+                    ? await _clipboardService.CopyFileAndImageAsync(produced, thumb)
+                    : await _clipboardService.CopyFileAsync(produced);
+                if (copied)
                 {
-                    // Put the clip on the clipboard as a file (+ a best-effort thumbnail). Never let a null
-                    // thumbnail stop the file copy, or a stale prior clipboard entry would paste instead.
-                    var thumb = await GetFlattenedBitmapAsync() ?? VideoBitmap;
-                    bool copied = thumb != null
-                        ? await _clipboardService.CopyFileAndImageAsync(produced, thumb)
-                        : await _clipboardService.CopyFileAsync(produced);
-                    if (copied)
+                    // An unedited clip goes to the clipboard as the pin's own file, which must outlive the pin.
+                    _sourceFiles.CopiedToClipboard(produced);
+                }
+                else
+                {
+                    // The write lost the race for the clipboard, so the clipboard still holds its previous
+                    // content — record that rather than letting the "copied" log line imply success.
+                    AppLog.Warning(
+                        "FloatingVideo.Copy",
+                        new InvalidOperationException(
+                            "Clipboard write did not land — the clipboard still holds its previous content."));
+                }
+
+                AppLog.Information($"FloatingVideo.Copy -> {Path.GetFileName(produced)} ({new FileInfo(produced).Length} bytes, clipboard={(copied ? "ok" : "FAILED")})");
+
+                // Persist a newly-produced clip (trimmed/converted/transcoded) into History; skip when the
+                // source file itself was copied unchanged.
+                if (AddClipToHistoryAsync != null && !string.Equals(produced, VideoPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    await AddClipToHistoryAsync(produced, (int)OriginalWidth, (int)OriginalHeight);
+                }
+                return;
+            }
+
+            // No produced file. If there's no source clip (a freeze-frame pin), copy the current frame image.
+            if (string.IsNullOrEmpty(VideoPath) || !System.IO.File.Exists(VideoPath))
+            {
+                var bitmapToCopy = await GetFlattenedBitmapAsync();
+                if (bitmapToCopy != null)
+                {
+                    if (!await _clipboardService.CopyImageAsync(bitmapToCopy))
                     {
-                        // An unedited clip goes to the clipboard as the pin's own file, which must outlive the pin.
-                        _sourceFiles.CopiedToClipboard(produced);
-                    }
-                    else
-                    {
-                        // The write lost the race for the clipboard, so the clipboard still holds its previous
-                        // content — record that rather than letting the "copied" log line imply success.
                         AppLog.Warning(
-                            "FloatingVideo.Copy",
+                            "FloatingVideo.CopyFrame",
                             new InvalidOperationException(
                                 "Clipboard write did not land — the clipboard still holds its previous content."));
                     }
 
-                    AppLog.Information($"FloatingVideo.Copy -> {Path.GetFileName(produced)} ({new FileInfo(produced).Length} bytes, clipboard={(copied ? "ok" : "FAILED")})");
-
-                    // Persist a newly-produced clip (trimmed/converted/transcoded) into History; skip when the
-                    // source file itself was copied unchanged.
-                    if (AddClipToHistoryAsync != null && !string.Equals(produced, VideoPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        await AddClipToHistoryAsync(produced, (int)OriginalWidth, (int)OriginalHeight);
-                    }
                     return;
                 }
-
-                // No produced file. If there's no source clip (a freeze-frame pin), copy the current frame image.
-                if (string.IsNullOrEmpty(VideoPath) || !System.IO.File.Exists(VideoPath))
-                {
-                    var bitmapToCopy = await GetFlattenedBitmapAsync();
-                    if (bitmapToCopy != null)
-                    {
-                        if (!await _clipboardService.CopyImageAsync(bitmapToCopy))
-                        {
-                            AppLog.Warning(
-                                "FloatingVideo.CopyFrame",
-                                new InvalidOperationException(
-                                    "Clipboard write did not land — the clipboard still holds its previous content."));
-                        }
-
-                        return;
-                    }
-                }
-
-                ProcessingText = Localization["StatusExportFailed"] ?? "Export failed";
-                await Task.Delay(2000);
             }
-            catch (Exception ex)
-            {
-                AppLog.Error("FloatingVideo.Copy", ex);
-            }
-            finally
-            {
-                IsProcessing = false;
-            }
-        });
-        
-        await Task.CompletedTask;
+
+            ProcessingText = Localization["StatusExportFailed"] ?? "Export failed";
+            await Task.Delay(2000);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("FloatingVideo.Copy", ex);
+        }
+        finally
+        {
+            IsProcessing = false;
+        }
     }
 
     // Trim/cut export is supported in-process when there are no annotations to burn in and the target is
