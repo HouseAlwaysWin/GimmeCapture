@@ -692,10 +692,11 @@ public partial class MainWindowViewModel
                 _settingsService.Settings.EnableAI = value;
                 QueueSettingsSave();
 
-                // 使用者關閉 AI 時，主動釋放 SAM2 模型記憶體
+                // Turning AI off frees SAM2's models. Not here on the UI thread: the unload waits for an inference
+                // still running on them, up to 30 s. A load asked for meanwhile waits for it to finish.
                 if (!value)
                 {
-                    SAM2RuntimeService.UnloadModels();
+                    SAM2RuntimeService.UnloadModelsAsync().Forget("Settings.EnableAI.UnloadSam2");
                 }
             }
         }

@@ -40,6 +40,9 @@ public sealed class SAM2RuntimeService : IDisposable
     private readonly HashSet<string> _activeLeases = new();
     private readonly ResourceUseGate _useGate = new();
     private readonly SemaphoreSlim _inferenceLock = new(1, 1);
+    private readonly object _queuedUnloadsLock = new();
+    // The unloads UnloadModelsAsync started, chained so this one finishes after every one before it.
+    private Task _queuedUnloads = Task.CompletedTask;
 
     public SAM2RuntimeService(AIPathService pathService)
     {
@@ -91,7 +94,7 @@ public sealed class SAM2RuntimeService : IDisposable
         {
             // Off the caller's thread: the last lease is typically released from the UI (Esc, tool switch, pin
             // closing), and the unload now waits for an inference still in flight — seconds for an encoder run on CPU.
-            Task.Run(() => UnloadModels()).Forget("Sam2Runtime.IdleUnload");
+            UnloadModelsAsync().Forget("Sam2Runtime.IdleUnload");
         }
     }
 
@@ -132,6 +135,18 @@ public sealed class SAM2RuntimeService : IDisposable
     public async Task LoadModelsAsync(SAM2Variant variant)
     {
         ProcessMemoryTrimService.NotifyActivity("sam2");
+
+        // An unload asked for before this load finishes first. Otherwise turning AI off and on again, or leaving smart
+        // selection and going straight back in, could find the sessions that unload was about to free, take them,
+        // and be left with none a moment later.
+        Task queuedUnloads;
+        lock (_queuedUnloadsLock)
+        {
+            queuedUnloads = _queuedUnloads;
+        }
+
+        await queuedUnloads;
+
         if (_cachedVariant == variant && _cachedEncoder != null && _cachedDecoder != null)
         {
             return;
@@ -246,6 +261,37 @@ public sealed class SAM2RuntimeService : IDisposable
     public (InferenceSession? Encoder, InferenceSession? Decoder) GetSessions()
     {
         return (_cachedEncoder, _cachedDecoder);
+    }
+
+    /// <summary>
+    /// Frees the sessions as <see cref="UnloadModels()"/> does, for callers that must not wait. Returns at once; the
+    /// unload runs on the thread pool, after any unload started before it, and a load asked for meanwhile waits for it.
+    /// </summary>
+    /// <remarks>
+    /// The unload waits for an inference still running, up to <see cref="SwapTimeout"/>. Turning AI off ran it on the
+    /// UI thread, which froze the settings window for as long. The returned task never faults: a failed unload is logged.
+    /// </remarks>
+    public Task UnloadModelsAsync()
+    {
+        lock (_queuedUnloadsLock)
+        {
+            _queuedUnloads = UnloadAfterAsync(_queuedUnloads);
+            return _queuedUnloads;
+        }
+
+        async Task UnloadAfterAsync(Task previous)
+        {
+            // Forced to yield even when nothing is queued, so the caller's thread is left before the unload waits.
+            await previous.ConfigureAwait(ConfigureAwaitOptions.ForceYielding | ConfigureAwaitOptions.SuppressThrowing);
+            try
+            {
+                UnloadModels(SwapTimeout);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warning("Sam2Runtime.Unload", ex);
+            }
+        }
     }
 
     public void UnloadModels() => UnloadModels(SwapTimeout);

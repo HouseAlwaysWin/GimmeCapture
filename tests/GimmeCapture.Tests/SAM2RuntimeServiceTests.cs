@@ -120,6 +120,83 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         Assert.Equal(1, sut.ActiveSessionUses);
     }
 
+    /// <summary>How long a test waits for something that should happen; a regression fails rather than hangs.</summary>
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>A runtime whose model folder is this test's own empty one: a load finds no model files and returns.</summary>
+    private SAM2RuntimeService CreateRuntimeWithoutModels()
+    {
+        var settingsService = new AppSettingsService(_baseDir);
+        settingsService.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
+        return new SAM2RuntimeService(new AIPathService(settingsService));
+    }
+
+    [Fact]
+    public async Task UnloadModelsAsync_ReturnsWithoutWaitingForTheRunningInference()
+    {
+        // Turning AI off unloaded on the UI thread, and the unload waits up to 30 s for an inference in flight: the
+        // settings window froze for as long.
+        using var sut = CreateRuntime();
+        var runningInference = sut.BeginSessionUse();
+
+        // StartNew, not Run: Run would unwrap the returned task and wait for the unload itself. On a worker, so a
+        // call that blocks fails here instead of hanging the test until the unload gives up.
+        var call = Task.Factory.StartNew(sut.UnloadModelsAsync, CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
+        Assert.Same(call, await Task.WhenAny(call, Task.Delay(Timeout)));
+
+        var unload = await call;
+        Assert.False(unload.IsCompleted, "the unload finished while the inference it has to wait for was still running");
+
+        runningInference.Dispose();
+        await unload.WaitAsync(Timeout);
+    }
+
+    [Fact]
+    public async Task ALoad_WaitsForTheUnloadAskedForBeforeIt()
+    {
+        // Turning AI off and straight back on: a load that did not wait could take the sessions the unload was about
+        // to free, and be left with none.
+        using var sut = CreateRuntimeWithoutModels();
+        var runningInference = sut.BeginSessionUse();
+        var unload = sut.UnloadModelsAsync();
+
+        // With no model files a load returns as soon as it starts, so one still pending has not started.
+        var load = sut.LoadModelsAsync(SAM2Variant.Tiny);
+        Assert.NotSame(load, await Task.WhenAny(load, Task.Delay(Settle)));
+
+        runningInference.Dispose();
+        await load.WaitAsync(Timeout);
+        Assert.True(unload.IsCompleted);
+    }
+
+    [Fact]
+    public async Task ALoad_WaitsForTheUnloadTheLastLeaseLeftBehind()
+    {
+        // Leaving smart selection and going straight back in: the same race, through the idle unload.
+        using var sut = CreateRuntimeWithoutModels();
+        var lease = sut.AcquireLease();
+        var runningInference = sut.BeginSessionUse();
+        sut.ReleaseLease(lease);
+
+        var load = sut.LoadModelsAsync(SAM2Variant.Tiny);
+        Assert.NotSame(load, await Task.WhenAny(load, Task.Delay(Settle)));
+
+        runningInference.Dispose();
+        await load.WaitAsync(Timeout);
+    }
+
+    [Fact]
+    public async Task ALoad_DoesNotWaitWhenNoUnloadIsPending()
+    {
+        using var sut = CreateRuntimeWithoutModels();
+        await sut.UnloadModelsAsync().WaitAsync(Timeout);
+
+        var load = sut.LoadModelsAsync(SAM2Variant.Tiny);
+
+        Assert.True(load.IsCompleted, "a load waited although every unload before it had finished");
+        await load;
+    }
+
     [Fact]
     public void ASessionUseReleasesExactlyOnce()
     {

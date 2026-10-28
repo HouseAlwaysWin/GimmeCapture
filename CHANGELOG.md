@@ -13,6 +13,11 @@
 
 ### 🛡️ Reliability
 
+- **Turning AI off no longer freezes the app.** Switching off *Enable AI Features* frees the smart-selection model, and
+  that waited for anything still running on it, up to 30 s, with the whole app stopped. It is freed in the background
+  now. Smart selection started right after waits for that to finish instead of picking up a model on its way out.
+  Before, leaving smart selection and going straight back in could do that, and then every click failed until the tool
+  was switched again.
 - **Pinning a recording no longer leaves its "Processing recording…" bar on screen.** Since the ReactiveUI 26 update,
   the bar a recording shows while it is finished stayed up after a pinned recording, one more with every recording,
   until the app quit. ReactiveUI 26 queues work the app hands it on the UI thread instead of running it at once, and
