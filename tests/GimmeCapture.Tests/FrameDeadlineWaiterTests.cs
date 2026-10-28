@@ -9,17 +9,9 @@ namespace GimmeCapture.Tests;
 
 // The pinned-video player busy-waited through the last 20 ms before every frame, which kept about half a core busy
 // while a pin played at 60 fps. It now waits on a timer: these pin down that the timer keeps time and cancels.
+// That Windows gets the high-resolution timer is in FrameDeadlineWaiterWindowsTests, which only the Windows head builds.
 public class FrameDeadlineWaiterTests
 {
-    [WindowsFact]
-    public void OnWindows_ItIsAHighResolutionTimer()
-    {
-        using var waiter = FrameDeadlineWaiter.Create(CancellationToken.None);
-
-        // Named rather than referenced: the type only exists in the Windows build.
-        Assert.Equal("HighResolutionTimerWaiter", waiter.GetType().Name);
-    }
-
     [Fact]
     public void AWait_LastsAboutAsLongAsAsked()
     {

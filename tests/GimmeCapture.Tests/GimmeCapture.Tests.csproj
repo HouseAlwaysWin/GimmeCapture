@@ -22,6 +22,8 @@
     <Compile Remove="WindowDetectionServiceTests.cs" />
     <Compile Remove="ViewModels\MainWindowViewModelConstructionTests.cs" />
     <Compile Remove="ViewModels\MainWindowViewModelHotkeyTests.cs" />
+    <!-- Names HighResolutionTimerWaiter: a net10.0 build gets the sleep fallback even on Windows. -->
+    <Compile Remove="FrameDeadlineWaiterWindowsTests.cs" />
     <!-- Pump a WinForms message loop to stand in for the UI thread. -->
     <Compile Remove="RecordingStartUiStallTests.cs" />
     <Compile Remove="RecordingAvSyncTests.cs" />
