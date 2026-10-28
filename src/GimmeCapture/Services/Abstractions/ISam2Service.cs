@@ -13,6 +13,8 @@ public interface ISam2Service : IDisposable
 {
     string LastIouInfo { get; }
     string ModelVariantName { get; }
+    /// <summary>Whether an image is prepared; false after <see cref="InvalidatePreparedImage"/> and a switch of model.</summary>
+    bool IsImagePrepared { get; }
 
     Task InitializeAsync();
     Task EnsureImagePreparedAsync(SKBitmap original);

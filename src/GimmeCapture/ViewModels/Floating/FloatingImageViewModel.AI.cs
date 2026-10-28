@@ -9,6 +9,7 @@ using GimmeCapture.Services.Core;
 using System.Reactive.Linq;
 using System.Reactive.Disposables;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.ViewModels.Shared;
 
@@ -361,49 +362,27 @@ public partial class FloatingImageViewModel
 
             if (cleanMask != null)
             {
-                _interactiveSession.SetCleanMaskBitmap(cleanMask);
-
                 SkiaSharp.SKColor overlayColor = _interactiveSession.IsKeepSelectedMode
                     ? new SkiaSharp.SKColor(0, 255, 100, 150)   // Green for "Keep mode" (Shift+Click)
                     : new SkiaSharp.SKColor(255, 80, 80, 150);  // Red for "Remove mode" (Normal)
+                (double X, double Y, bool IsPositive)[] points = [.. _interactiveSession.Points];
+                int imageWidth = Image?.PixelSize.Width ?? 1;
+                int imageHeight = Image?.PixelSize.Height ?? 1;
 
-                using var coloredMask = InteractiveMaskPixels.CreateOverlay(cleanMask, overlayColor);
-
-                using (var canvas = new SkiaSharp.SKCanvas(coloredMask))
+                // The preview is drawn and handed to Avalonia off the UI thread, which spent about 18 ms of every
+                // click on it at 3840x2400. It works from copies of what the UI thread can change meanwhile, and the
+                // session gets the mask only after, since the session disposes it when the next point comes in.
+                Bitmap interactiveMaskBitmap;
+                try
                 {
-                    var posPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.LimeGreen, Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
-                    var negPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Red, Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
-                    
-                    // Scale points to match the mask bitmap size
-                    float scaleX = (float)coloredMask.Width / (Image?.PixelSize.Width ?? 1);
-                    float scaleY = (float)coloredMask.Height / (Image?.PixelSize.Height ?? 1);
-
-                    foreach (var pt in _interactiveSession.Points)
-                    {
-                        var px = (float)pt.X * scaleX;
-                        var py = (float)pt.Y * scaleY;
-                        
-                        // Draw point circle
-                        canvas.DrawCircle(px, py, 6, pt.IsPositive ? posPaint : negPaint);
-                        
-                        // DRAW CALIBRATION CROSSHAIR
-                        using var crossPaint = new SkiaSharp.SKPaint { 
-                            Color = pt.IsPositive ? SkiaSharp.SKColors.Lime : SkiaSharp.SKColors.DeepPink, 
-                            StrokeWidth = 2, 
-                            Style = SkiaSharp.SKPaintStyle.Stroke,
-                            IsAntialias = true
-                        };
-                        canvas.DrawLine(px - 20, py, px + 20, py, crossPaint);
-                        canvas.DrawLine(px, py - 20, px, py + 20, crossPaint);
-                        
-                        // Draw a tiny center dot
-                        using var dotPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Black.WithAlpha(180), Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
-                        canvas.DrawCircle(px, py, 1.5f, dotPaint);
-                    }
+                    interactiveMaskBitmap = await Task.Run(() =>
+                        CreateInteractiveMaskPreview(cleanMask, overlayColor, points, imageWidth, imageHeight));
+                }
+                finally
+                {
+                    _interactiveSession.SetCleanMaskBitmap(cleanMask);
                 }
 
-                if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(coloredMask, out var interactiveMaskBitmap, out var interactiveMaskError))
-                    throw new Exception(interactiveMaskError ?? "Failed to create interactive mask preview.");
                 InteractiveMask = interactiveMaskBitmap;
                 RaiseInteractiveStateChanged();
             }
@@ -416,6 +395,68 @@ public partial class FloatingImageViewModel
         finally
         {
             IsProcessing = false;
+        }
+    }
+
+    /// <summary>
+    /// A click's preview as Avalonia shows it: <paramref name="mask"/> coloured in, with a marker at each of
+    /// <paramref name="points"/>. Only pixel work, so it runs off the UI thread.
+    /// </summary>
+    private static Bitmap CreateInteractiveMaskPreview(
+        SkiaSharp.SKBitmap mask,
+        SkiaSharp.SKColor overlayColor,
+        IReadOnlyList<(double X, double Y, bool IsPositive)> points,
+        int imageWidth,
+        int imageHeight)
+    {
+        using var coloredMask = InteractiveMaskPixels.CreateOverlay(mask, overlayColor);
+        DrawPointMarkers(coloredMask, points, imageWidth, imageHeight);
+
+        if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(coloredMask, out var preview, out var error) || preview == null)
+            throw new Exception(error ?? "Failed to create interactive mask preview.");
+        return preview;
+    }
+
+    /// <summary>
+    /// Marks each of <paramref name="points"/> on <paramref name="preview"/>. The points are in the pin's pixels
+    /// (<paramref name="imageWidth"/> by <paramref name="imageHeight"/>) and scaled to the preview's. Internal for
+    /// <c>FloatingImageSmartSelectionTests</c>.
+    /// </summary>
+    internal static void DrawPointMarkers(
+        SkiaSharp.SKBitmap preview,
+        IReadOnlyList<(double X, double Y, bool IsPositive)> points,
+        int imageWidth,
+        int imageHeight)
+    {
+        using var canvas = new SkiaSharp.SKCanvas(preview);
+        using var posPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.LimeGreen, Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
+        using var negPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Red, Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
+
+        // Scale points to match the mask bitmap size
+        float scaleX = (float)preview.Width / imageWidth;
+        float scaleY = (float)preview.Height / imageHeight;
+
+        foreach (var pt in points)
+        {
+            var px = (float)pt.X * scaleX;
+            var py = (float)pt.Y * scaleY;
+
+            // Draw point circle
+            canvas.DrawCircle(px, py, 6, pt.IsPositive ? posPaint : negPaint);
+
+            // DRAW CALIBRATION CROSSHAIR
+            using var crossPaint = new SkiaSharp.SKPaint {
+                Color = pt.IsPositive ? SkiaSharp.SKColors.Lime : SkiaSharp.SKColors.DeepPink,
+                StrokeWidth = 2,
+                Style = SkiaSharp.SKPaintStyle.Stroke,
+                IsAntialias = true
+            };
+            canvas.DrawLine(px - 20, py, px + 20, py, crossPaint);
+            canvas.DrawLine(px, py - 20, px, py + 20, crossPaint);
+
+            // Draw a tiny center dot
+            using var dotPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Black.WithAlpha(180), Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
+            canvas.DrawCircle(px, py, 1.5f, dotPaint);
         }
     }
 
@@ -708,25 +749,51 @@ public partial class FloatingImageViewModel
         return _sam2Service;
     }
 
+    // The pin bitmap the SAM2 service last prepared, and which service. Every click used to copy the whole pin on the
+    // UI thread (about 10 ms and 37 MB at 3840x2400) only for the service to find its seven sample pixels unchanged.
+    private sealed record Sam2PreparedImage(ISam2Service Service, Bitmap Image);
+    private Sam2PreparedImage? _sam2PreparedImage;
+    // One prepare at a time, so the bitmap remembered is the one the service prepared last.
+    private readonly SemaphoreSlim _sam2PrepareGate = new(1, 1);
+
     private async Task<bool> PrepareCurrentImageForSam2Async(ISam2Service sam2)
     {
-        using var skImage = FloatingBitmapConversionHelper.ToSkBitmap(Image);
-        if (skImage == null)
-        {
-            DiagnosticText = "AI prepare failed: image conversion failed.";
-            return false;
-        }
-
+        await _sam2PrepareGate.WaitAsync();
         try
         {
-            await sam2.EnsureImagePreparedAsync(skImage);
-            return true;
+            // Nothing to copy while the service holds this very bitmap: HandleImageChangedForSam2 forgets it whenever
+            // Image changes, and the service lets go of it when the model is switched.
+            var image = Image;
+            if (image != null && sam2.IsImagePrepared && _sam2PreparedImage is { } prepared
+                && ReferenceEquals(prepared.Service, sam2) && ReferenceEquals(prepared.Image, image))
+            {
+                return true;
+            }
+
+            // Off the UI thread, as background removal's copy is.
+            using var skImage = image == null ? null : await Task.Run(() => FloatingBitmapConversionHelper.ToSkBitmap(image));
+            if (image == null || skImage == null)
+            {
+                DiagnosticText = "AI prepare failed: image conversion failed.";
+                return false;
+            }
+
+            try
+            {
+                await sam2.EnsureImagePreparedAsync(skImage);
+                _sam2PreparedImage = new Sam2PreparedImage(sam2, image);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("FloatingImage.PrepareImageForSam2", ex);
+                DiagnosticText = $"AI prepare failed: {ex.Message}";
+                return false;
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            AppLog.Error("FloatingImage.PrepareImageForSam2", ex);
-            DiagnosticText = $"AI prepare failed: {ex.Message}";
-            return false;
+            _sam2PrepareGate.Release();
         }
     }
 

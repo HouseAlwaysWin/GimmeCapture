@@ -168,6 +168,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     internal void HandleImageChangedForSam2()
     {
         _sam2Service?.InvalidatePreparedImage();
+        _sam2PreparedImage = null;
         ResetInteractivePoints();
     }
     internal void EnsureSam2Lease()
@@ -178,6 +179,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     {
         _sam2Service?.Dispose();
         _sam2Service = null;
+        _sam2PreparedImage = null;
 
         if (_sam2LeaseId != null)
         {

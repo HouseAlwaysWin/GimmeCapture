@@ -39,6 +39,7 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
     public string LastIouInfo => _lastIouInfo;
     public string ModelInfo => GetModelInfo();
     public string ModelVariantName { get; private set; } = "Unknown";
+    public bool IsImagePrepared => _isImagePrepared;
     internal bool IsInitializedForTesting => _isInitialized;
     internal bool IsImagePreparedForTesting => _isImagePrepared;
     internal string? PreparedImageKeyForTesting => _preparedImageKey;

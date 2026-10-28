@@ -111,6 +111,11 @@
 
 ### ⚡ Performance
 
+- **Smart selection on a large pin no longer holds up the app at every click.** Each click and each undo copied the
+  whole pinned image on the UI thread, only for the model to find it unchanged, then coloured in the selection and
+  handed it to the screen there too: about 30 ms of every click at 3840×2400, with a 37 MB copy. The image is now copied
+  only when it has changed since the model last read it, and that copy and the colouring run in the background. A click
+  now holds the UI thread about 2 ms (under 1 ms at 1920×1200, down from 9) and shows the same selection.
 - **Recording a single window takes about half the CPU and no longer keeps the garbage collector busy.** Each frame
   Windows delivered was read back into a new bitmap and a new array of the frame's size, 2 MB for a 1000×550 window, and
   the bitmaps' memory accounting set off a full garbage collection about every three frames of a window that kept
