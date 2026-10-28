@@ -328,8 +328,10 @@ Three locales are kept in **strict key parity**:
   alarm, not a gate, and a break lands and has to be reverted instead of being blocked. So on
   Windows run `scripts/verify.ps1` (or at least `dotnet build` plus
   `dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj -f net10.0-windows10.0.19041.0`
-  — the `net10.0` head skips the Windows-fenced tests) and push only once it is clean. One
-  pre-existing local failure is not yours: `ResourceUseGateTests`, which times out under load.
-  Don't "fix" it by loosening an assertion.
+  — the `net10.0` head skips the Windows-fenced tests) and push only once it is clean. A test
+  that times a call which blocks on purpose runs it with `OwnThread.Run` and times its waits with
+  `OwnThread.Delay`, not `Task.Run`/`Task.Delay`: the rest of the suite keeps the thread pool
+  busy, which is how `ResourceUseGateTests` came to time out under load. Don't "fix" such a test
+  by loosening an assertion.
 - Useful background reading: `docs/ARCHITECTURE_REFACTOR_ROADMAP.md` (hotspots and
   target architecture) and `docs/REFACTOR_PLAN.md` (completed/ongoing refactors).

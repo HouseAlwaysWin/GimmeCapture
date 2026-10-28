@@ -59,14 +59,15 @@ public class ResourceUseGateTests
         var gate = new ResourceUseGate();
         var use = gate.BeginUse();
 
-        var exclusive = Task.Run(() =>
+        var exclusive = OwnThread.Run(() =>
         {
             bool acquired = gate.TryBeginExclusive(Timeout, out var scope);
             scope?.Dispose();
             return acquired;
         });
 
-        Assert.False(exclusive.Wait(Settle), "exclusive access started while a use was still in flight");
+        var finished = await Task.WhenAny(exclusive, OwnThread.Delay(Settle));
+        Assert.False(finished == exclusive, "exclusive access started while a use was still in flight");
 
         use.Dispose();
 
@@ -80,13 +81,14 @@ public class ResourceUseGateTests
         Assert.True(gate.TryBeginExclusive(Timeout, out var exclusive));
 
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var use = Task.Run(() =>
+        var use = OwnThread.Run(() =>
         {
             using var scope = gate.BeginUse();
             started.TrySetResult();
         });
 
-        Assert.False(started.Task.Wait(Settle), "a use started while the resource was being swapped out");
+        var finished = await Task.WhenAny(started.Task, OwnThread.Delay(Settle));
+        Assert.False(finished == started.Task, "a use started while the resource was being swapped out");
 
         exclusive!.Dispose();
 
@@ -99,14 +101,15 @@ public class ResourceUseGateTests
         var gate = new ResourceUseGate();
         Assert.True(gate.TryBeginExclusive(Timeout, out var first));
 
-        var second = Task.Run(() =>
+        var second = OwnThread.Run(() =>
         {
             bool acquired = gate.TryBeginExclusive(Timeout, out var scope);
             scope?.Dispose();
             return acquired;
         });
 
-        Assert.False(second.Wait(Settle));
+        var finished = await Task.WhenAny(second, OwnThread.Delay(Settle));
+        Assert.False(finished == second);
 
         first!.Dispose();
 
@@ -123,7 +126,7 @@ public class ResourceUseGateTests
         Assert.False(gate.TryBeginExclusive(TimeSpan.FromMilliseconds(100), out var scope));
         Assert.Null(scope);
 
-        var laterUse = Task.Run(() =>
+        var laterUse = OwnThread.Run(() =>
         {
             using var use = gate.BeginUse();
             return true;
@@ -152,7 +155,7 @@ public class ResourceUseGateTests
         var firstUse = gate.BeginUse();
 
         var exclusiveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var exclusive = Task.Run(() =>
+        var exclusive = OwnThread.Run(() =>
         {
             bool acquired = gate.TryBeginExclusive(Timeout, out var scope);
             exclusiveStarted.TrySetResult();
@@ -162,15 +165,16 @@ public class ResourceUseGateTests
         });
 
         // Give the exclusive waiter time to register its intent before a new use arrives.
-        await Task.Delay(Settle);
+        await OwnThread.Delay(Settle);
 
-        var queuedUse = Task.Run(() =>
+        var queuedUse = OwnThread.Run(() =>
         {
             using var scope = gate.BeginUse();
             return true;
         });
 
-        Assert.False(queuedUse.Wait(Settle), "a new use jumped ahead of a waiting swap");
+        var finished = await Task.WhenAny(queuedUse, OwnThread.Delay(Settle));
+        Assert.False(finished == queuedUse, "a new use jumped ahead of a waiting swap");
 
         firstUse.Dispose();
 

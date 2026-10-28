@@ -96,8 +96,8 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         using var sut = CreateRuntime();
         var runningInference = sut.BeginSessionUse();
 
-        var unload = Task.Run(() => sut.UnloadModels());
-        var first = await Task.WhenAny(unload, Task.Delay(Settle));
+        var unload = OwnThread.Run(() => sut.UnloadModels());
+        var first = await Task.WhenAny(unload, OwnThread.Delay(Settle));
         Assert.NotSame(unload, first);
 
         runningInference.Dispose();
@@ -111,8 +111,8 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         using var sut = CreateRuntime();
         var first = sut.BeginSessionUse();
 
-        var second = Task.Run(() => sut.BeginSessionUse());
-        var winner = await Task.WhenAny(second, Task.Delay(Settle));
+        var second = OwnThread.Run(() => sut.BeginSessionUse());
+        var winner = await Task.WhenAny(second, OwnThread.Delay(Settle));
         Assert.NotSame(second, winner);
 
         first.Dispose();
@@ -139,10 +139,10 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         using var sut = CreateRuntime();
         var runningInference = sut.BeginSessionUse();
 
-        // StartNew, not Run: Run would unwrap the returned task and wait for the unload itself. On a worker, so a
-        // call that blocks fails here instead of hanging the test until the unload gives up.
-        var call = Task.Factory.StartNew(sut.UnloadModelsAsync, CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
-        Assert.Same(call, await Task.WhenAny(call, Task.Delay(Timeout)));
+        // On a thread of its own, so a call that blocks fails here instead of hanging the test until the unload gives
+        // up. OwnThread.Run, unlike Task.Run, does not unwrap the returned task, which would wait for the unload itself.
+        var call = OwnThread.Run<Task>(sut.UnloadModelsAsync);
+        Assert.Same(call, await Task.WhenAny(call, OwnThread.Delay(Timeout)));
 
         var unload = await call;
         Assert.False(unload.IsCompleted, "the unload finished while the inference it has to wait for was still running");
@@ -162,7 +162,7 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
 
         // With no model files a load returns as soon as it starts, so one still pending has not started.
         var load = sut.LoadModelsAsync(SAM2Variant.Tiny);
-        Assert.NotSame(load, await Task.WhenAny(load, Task.Delay(Settle)));
+        Assert.NotSame(load, await Task.WhenAny(load, OwnThread.Delay(Settle)));
 
         runningInference.Dispose();
         await load.WaitAsync(Timeout);
@@ -179,7 +179,7 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         sut.ReleaseLease(lease);
 
         var load = sut.LoadModelsAsync(SAM2Variant.Tiny);
-        Assert.NotSame(load, await Task.WhenAny(load, Task.Delay(Settle)));
+        Assert.NotSame(load, await Task.WhenAny(load, OwnThread.Delay(Settle)));
 
         runningInference.Dispose();
         await load.WaitAsync(Timeout);

@@ -41,13 +41,14 @@ public sealed class OcrRuntimeServiceTests : IDisposable
         // scan (Esc) leaves its inference running while the replacement scan begins.
         var first = _sut.BeginSessionUse();
 
-        var second = Task.Run(() =>
+        var second = OwnThread.Run(() =>
         {
             using var use = _sut.BeginSessionUse();
             return true;
         });
 
-        Assert.False(second.Wait(Settle), "a second inference started while the first was still running");
+        var finished = await Task.WhenAny(second, OwnThread.Delay(Settle));
+        Assert.False(finished == second, "a second inference started while the first was still running");
 
         first.Dispose();
 
@@ -63,13 +64,14 @@ public sealed class OcrRuntimeServiceTests : IDisposable
 
         // A double release would have raised the semaphore's count, letting two callers in at once from then on.
         var first = _sut.BeginSessionUse();
-        var second = Task.Run(() =>
+        var second = OwnThread.Run(() =>
         {
             using var scope = _sut.BeginSessionUse();
             return true;
         });
 
-        Assert.False(second.Wait(Settle));
+        var finished = await Task.WhenAny(second, OwnThread.Delay(Settle));
+        Assert.False(finished == second);
 
         first.Dispose();
         Assert.True(await second.WaitAsync(Timeout));
