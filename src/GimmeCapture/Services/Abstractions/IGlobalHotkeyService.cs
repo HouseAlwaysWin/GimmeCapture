@@ -1,11 +1,11 @@
 using System;
-using Avalonia.Controls;
 
 namespace GimmeCapture.Services.Abstractions;
 
 public interface IGlobalHotkeyService : IDisposable
 {
-    void Initialize(Window window);
+    /// <summary>Starts the service; hotkeys registered before this take effect here.</summary>
+    void Initialize();
     void Register(int id, string hotkey);
     void Unregister(int id);
     void SuspendAll();

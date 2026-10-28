@@ -829,7 +829,7 @@ public partial class MainWindowViewModel
     }
 
     // Optimistic until FFmpeg is loaded: answering means loading ~150 MB of native libraries, which a binding must not
-    // do on the UI thread. The startup hardware probe loads them on the pool and raises these two again.
+    // do on the UI thread. The hardware probe (StartHardwareProbe) loads them on the pool and raises these two again.
     public bool IsGifAvailable =>
         !Services.Core.Media.NativeFFmpeg.FFmpegRuntime.IsInitialized || RecordingFormatCapabilities.IsGifAvailable();
     public string GifUnavailableReason => Localization["GifUnavailableReason"];
@@ -837,19 +837,34 @@ public partial class MainWindowViewModel
         ? ["mp4", "mkv", "gif", "webm", "mov"]
         : ["mp4", "mkv", "webm", "mov"];
 
+    private int _hardwareProbeStarted;
+
+    /// <summary>
+    /// Starts the hardware probe, once. Which codecs this machine can record is known only after loading FFmpeg and
+    /// test-opening the AV1 hardware encoders: 1.75 s, measured on the UI thread at startup when the codec list did it
+    /// for itself. It runs on the pool; the codec list and GIF availability catch up when it answers. Not at start-up
+    /// either: on a cold start it overlapped the main window's creation by 1.3–1.5 s, so the app starts it once the
+    /// window has drawn its first frame, and the Record tab if it is opened first.
+    /// </summary>
+    internal void StartHardwareProbe()
+    {
+        if (Interlocked.Exchange(ref _hardwareProbeStarted, 1) != 0)
+        {
+            return;
+        }
+
+        ApplyHardwareProbeWhenDoneAsync(
+                Task.Run(Services.Core.Media.NativeFFmpeg.LibavRecordingEncoder.HasUsableHardwareAv1Encoder))
+            .Forget("Startup.HardwareProbe");
+    }
+
     public async Task LoadSettingsAsync()
     {
         _isDataLoading = true;
         try
         {
-            // Which codecs this machine can record is known only after loading FFmpeg and test-opening the AV1
-            // hardware encoders: 1.75 s, measured on the UI thread at startup when the codec list did it for itself.
-            // It runs on the pool alongside the settings read; the codec list and GIF availability catch up when it
-            // answers, whichever of the two finishes first.
-            ApplyHardwareProbeWhenDoneAsync(
-                    Task.Run(Services.Core.Media.NativeFFmpeg.LibavRecordingEncoder.HasUsableHardwareAv1Encoder))
-                .Forget("Startup.HardwareProbe");
-
+            // Already read on the thread pool when Program.Main started it (SettingsPreload): then this completes at once,
+            // and the settings are applied, hotkeys included, while the view model is built.
             var snapshot = await _settingsPersistenceService.LoadAsync(_settingsService);
             ApplySettingsSnapshot(snapshot);
 
@@ -910,7 +925,14 @@ public partial class MainWindowViewModel
                 EnableAI = true;
             }
 
-            if (AutoCheckUpdates) _ = CheckForUpdates(true);
+            // Behind start-up's own work: this load now usually finishes while the view model is built, before any
+            // window, and the check's set-up (the update service, its first request) can wait until the window is up.
+            if (AutoCheckUpdates)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(
+                    () => CheckForUpdates(true).Forget("Update.AutoCheck"),
+                    Avalonia.Threading.DispatcherPriority.Background);
+            }
         }
     }
 

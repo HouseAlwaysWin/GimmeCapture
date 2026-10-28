@@ -10,18 +10,22 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// Stage timings from launch to the main window's first frame, logged once as <c>Startup.Timings</c>. The window's
 /// first show held the UI thread for 0.8–1 s and the log never said where the time went. Each stage reports how long
 /// it took after the previous one; <c>beforeMain</c> is the runtime's own start-up and <c>settingsAppliedAt</c>
-/// (since Main) is when the saved settings were applied, which runs alongside the rest.
+/// (since Main) is when the saved settings were applied, which runs alongside the rest. <c>hotkeysAt</c> (since Main)
+/// is when the global hotkeys started working: the later of that and the hotkey service starting. A press before then
+/// is lost, not delayed.
 /// </summary>
 internal static class StartupTrace
 {
     private const string FirstFrame = "firstFrame";
     private const string SettingsApplied = "settingsApplied";
+    private const string HotkeysInitialized = "hotkeysInitialized";
 
     private static readonly object Gate = new();
     private static readonly List<(string Stage, long Timestamp)> Stages = new();
     private static long _mainTimestamp;
     private static double? _beforeMainMs;
     private static long _settingsAppliedTimestamp;
+    private static long _hotkeysInitializedTimestamp;
     private static bool _expectFirstFrame = true;
     private static string _launch = "window";
     private static bool _written;
@@ -66,6 +70,10 @@ internal static class StartupTrace
             {
                 _settingsAppliedTimestamp = now;
             }
+            else if (stage == HotkeysInitialized)
+            {
+                _hotkeysInitializedTimestamp = now;
+            }
             else
             {
                 Stages.Add((stage, now));
@@ -84,11 +92,14 @@ internal static class StartupTrace
 
     internal static void MarkSettingsApplied() => Mark(SettingsApplied);
 
+    internal static void MarkHotkeysInitialized() => Mark(HotkeysInitialized);
+
     // Under Gate. Null until the stages the line reports have all happened.
     private static string? TryBuildLine()
     {
         bool hasFrame = Stages.Count > 0 && Stages[^1].Stage == FirstFrame;
-        if (_mainTimestamp == 0 || _settingsAppliedTimestamp == 0 || (_expectFirstFrame && !hasFrame))
+        if (_mainTimestamp == 0 || _settingsAppliedTimestamp == 0 || _hotkeysInitializedTimestamp == 0
+            || (_expectFirstFrame && !hasFrame))
         {
             return null;
         }
@@ -104,9 +115,12 @@ internal static class StartupTrace
             previous = timestamp;
         }
 
+        long hotkeysWork = Math.Max(_hotkeysInitializedTimestamp, _settingsAppliedTimestamp);
         line.Append(" total=").Append(Format(Stopwatch.GetElapsedTime(_mainTimestamp, previous).TotalMilliseconds)).Append("ms")
             .Append(" settingsAppliedAt=")
-            .Append(Format(Stopwatch.GetElapsedTime(_mainTimestamp, _settingsAppliedTimestamp).TotalMilliseconds)).Append("ms");
+            .Append(Format(Stopwatch.GetElapsedTime(_mainTimestamp, _settingsAppliedTimestamp).TotalMilliseconds)).Append("ms")
+            .Append(" hotkeysAt=")
+            .Append(Format(Stopwatch.GetElapsedTime(_mainTimestamp, hotkeysWork).TotalMilliseconds)).Append("ms");
         return line.ToString();
     }
 

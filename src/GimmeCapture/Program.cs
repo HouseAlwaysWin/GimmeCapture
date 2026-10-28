@@ -1,5 +1,6 @@
 using Avalonia;
 using System;
+using GimmeCapture.Composition;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Desktop;
 using ReactiveUI.Avalonia.Reactive;
@@ -71,6 +72,9 @@ class Program
                 SingleInstanceGuard.SignalRunningInstance();
                 return;
             }
+
+            // On the thread pool while Avalonia starts, so the UI thread only has to apply the settings.
+            SettingsPreload.Start();
 
             // Ensure Working Directory is correct (Fix for Auto-Start)
             var exeDir = RuntimePathProvider.GetExecutableDirectory();

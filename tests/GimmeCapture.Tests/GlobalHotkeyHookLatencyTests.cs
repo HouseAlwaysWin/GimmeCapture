@@ -47,7 +47,7 @@ public class GlobalHotkeyHookLatencyTests
                 }
             };
             s.Register(HotkeyId, "F24");
-            s.Initialize(null!);
+            s.Initialize();
             return s;
         });
 

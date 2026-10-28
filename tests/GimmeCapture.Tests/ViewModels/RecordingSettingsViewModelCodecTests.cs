@@ -9,8 +9,8 @@ namespace GimmeCapture.Tests.ViewModels;
 /// The codec list used to run the hardware AV1 probe — loading FFmpeg first — the moment settings touched it, on the
 /// UI thread at startup (1.75 s measured). Now it only reads the probe's answer, and the probe runs on the pool and
 /// reports back. These pin down what the list does before and after the answer, above all that a saved AV1 choice
-/// survives the wait. Each test hands the view model its own answer: the real one is process-wide, and any test that
-/// builds the main view model starts the real probe, which overwrote it mid-test.
+/// survives the wait. Each test hands the view model its own answer: the real one is process-wide, and a test that
+/// starts the main view model's probe (StartHardwareProbe) runs the real one, which overwrote it mid-test.
 /// </summary>
 public sealed class RecordingSettingsViewModelCodecTests
 {

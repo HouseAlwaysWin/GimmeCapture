@@ -55,7 +55,9 @@ public partial class App : Application
             // After that dispose, which the stall watchdog still covers: past it the UI thread stops pumping for good,
             // and the watchdog would report the rest of the exit as a stall.
             desktop.Exit += (_, _) => UiThreadStallMonitor.Stop();
-            var hotkeyHost = _bootstrapper.CreateTrayHostWindow();
+            // The main view model applies the saved settings as it is built, hotkeys included: Main has read them
+            // (SettingsPreload).
+            _bootstrapper.CreateMainViewModel();
             StartupTrace.Mark("viewModel");
             TraceSettingsAppliedAsync(_bootstrapper.InitialSettingsLoadTask).Forget("Startup.Trace");
 
@@ -66,13 +68,20 @@ public partial class App : Application
                 StartupTrace.Mark("mainWindow");
                 mainWindow.Opened += OnMainWindowFirstOpened;
                 desktop.MainWindow = mainWindow;
-                hotkeyHost.Show();
             }
             else
             {
                 StartupTrace.LaunchedToTray();
-                desktop.MainWindow = hotkeyHost;
+                // With no main window, the tray host stands in as the lifetime's, which shows it: the visible top level
+                // the clipboard and dialogs need (see AppBootstrapper.CreateTrayHostWindow).
+                desktop.MainWindow = _bootstrapper.CreateTrayHostWindow();
+                StartHardwareProbeWhenIdle();
             }
+
+            // The global hotkeys work from here. This used to wait for that hidden window to open, which a window launch
+            // has no other use for at start-up, and for the settings, applied only once the main window was up.
+            _bootstrapper.InitializeHotkeys();
+            StartupTrace.MarkHotkeysInitialized();
 
             // Tray icon + native menu lifecycle lives in TrayController.
             _trayController = new TrayController(this, _bootstrapper, desktop);
@@ -114,7 +123,7 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static void OnMainWindowFirstOpened(object? sender, EventArgs e)
+    private void OnMainWindowFirstOpened(object? sender, EventArgs e)
     {
         if (sender is not Avalonia.Controls.Window window)
         {
@@ -124,7 +133,21 @@ public partial class App : Application
         window.Opened -= OnMainWindowFirstOpened;
         StartupTrace.Mark("show");
         // The first callback comes as the first frame starts; the second once that frame has been drawn.
-        window.RequestAnimationFrame(_ => window.RequestAnimationFrame(_ => StartupTrace.MarkFirstFrame()));
+        window.RequestAnimationFrame(_ => window.RequestAnimationFrame(_ =>
+        {
+            StartupTrace.MarkFirstFrame();
+            StartHardwareProbeWhenIdle();
+        }));
+    }
+
+    // The AV1 hardware probe loads FFmpeg and opens a GPU encoder, which on a cold start overlapped the main window's
+    // creation by 1.3–1.5 s: it waits for the first frame, or in a launch to the tray for start-up's own work.
+    private void StartHardwareProbeWhenIdle()
+    {
+        AppBootstrapper? bootstrapper = _bootstrapper;
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => bootstrapper?.StartHardwareProbe(),
+            Avalonia.Threading.DispatcherPriority.Background);
     }
 
     private static async System.Threading.Tasks.Task TraceSettingsAppliedAsync(System.Threading.Tasks.Task settingsLoad)

@@ -25,14 +25,32 @@ public sealed class AppBootstrapper : IAsyncDisposable
     private MainWindow? _mainWindow;
     private Window? _trayHostWindow;
 
+    // How long start-up waits for the settings read Main began (SettingsPreload). It has nearly always finished by now;
+    // one still going after this (a first launch moving an old AI folder, say) is applied once it is done.
+    private static readonly TimeSpan SettingsReadWait = TimeSpan.FromSeconds(1);
+
     public AppBootstrapper()
     {
-        var settingsService = new AppSettingsService();
+        var preloadedSettings = SettingsPreload.Take();
+        var settingsService = preloadedSettings ?? new AppSettingsService();
         // Build the windows in the saved language from the start. Switching it once the settings have loaded lays
-        // the whole main window out a second time, and loads the CJK font in the middle of start-up.
-        if (settingsService.PeekSavedLanguage() is { } savedLanguage)
+        // the whole main window out a second time, and loads the CJK font in the middle of start-up. With the read
+        // done, the main view model also applies the rest of the settings as it is built, before any window.
+        if (settingsService.TryGetReadLanguage(SettingsReadWait, out Language readLanguage))
         {
-            LocalizationService.Instance.CurrentLanguage = savedLanguage;
+            LocalizationService.Instance.CurrentLanguage = readLanguage;
+        }
+        else
+        {
+            if (preloadedSettings != null)
+            {
+                AppLog.Information("Startup.SettingsRead", "Not finished in time; the settings are applied once it is.");
+            }
+
+            if (settingsService.PeekSavedLanguage() is { } savedLanguage)
+            {
+                LocalizationService.Instance.CurrentLanguage = savedLanguage;
+            }
         }
 
         _settingsService = settingsService;
@@ -98,6 +116,12 @@ public sealed class AppBootstrapper : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Builds the main view model. With Main's read of the settings done, it applies them as it is built, which registers
+    /// the global hotkeys' combos with the hotkey service for <see cref="InitializeHotkeys"/> to put into effect.
+    /// </summary>
+    public MainWindowViewModel CreateMainViewModel() => _mainWindowViewModel.Value;
+
     public MainWindow CreateMainWindow()
     {
         return _mainWindow ??= new MainWindow(
@@ -108,19 +132,29 @@ public sealed class AppBootstrapper : IAsyncDisposable
     }
 
     /// <summary>
+    /// Starts the global hotkey service; the combos the settings registered take effect here. Call it after the main window
+    /// is built, when there is one: its handler is what reports a combo another app already holds.
+    /// </summary>
+    public void InitializeHotkeys() => _mainWindowViewModel.Value.HotkeyService.Initialize();
+
+    /// <summary>Starts the hardware encoder probe (<see cref="MainWindowViewModel.StartHardwareProbe"/>).</summary>
+    public void StartHardwareProbe() => _mainWindowViewModel.Value.StartHardwareProbe();
+
+    /// <summary>
     /// Loads the capture overlay's code while the app is idle (<see cref="ISnipWindowFactory.ScheduleWarmUp"/>), ten
     /// seconds in so it stays clear of startup's own work.
     /// </summary>
     public void ScheduleCaptureOverlayWarmUp() => _snipWindowFactory.Value.ScheduleWarmUp(TimeSpan.FromSeconds(10));
 
+    /// <summary>
+    /// A window nobody sees (1×1, transparent, off-screen) that gives the app a visible top level while the main window is
+    /// not: the lifetime's main window in a launch to the tray, which the clipboard and other top-level lookups use, and
+    /// the owner of a dialog shown while the main window is hidden — Avalonia shows no dialog over a hidden owner. It no
+    /// longer starts the hotkey service, so a window launch builds it only once a dialog needs it.
+    /// </summary>
     public Window CreateTrayHostWindow()
     {
-        if (_trayHostWindow != null)
-        {
-            return _trayHostWindow;
-        }
-
-        var window = new Window
+        return _trayHostWindow ??= new Window
         {
             Width = 1,
             Height = 1,
@@ -133,17 +167,8 @@ public sealed class AppBootstrapper : IAsyncDisposable
             TransparencyLevelHint = [WindowTransparencyLevel.Transparent],
             WindowStartupLocation = WindowStartupLocation.Manual,
             Position = new PixelPoint(-32000, -32000),
-            Content = null,
-            DataContext = _mainWindowViewModel.Value
+            Content = null
         };
-
-        window.Opened += (_, _) =>
-        {
-            _mainWindowViewModel.Value.HotkeyService.Initialize(window);
-        };
-
-        _trayHostWindow = window;
-        return window;
     }
 
     public bool RunOnStartup
@@ -216,18 +241,12 @@ public sealed class AppBootstrapper : IAsyncDisposable
             return;
         }
 
-        var owner = ResolveDialogOwner();
-        if (owner == null)
-        {
-            return;
-        }
-
         _isElevatedNoticeShowing = true;
         try
         {
             var loc = LocalizationService.Instance;
             var result = await ConfirmationDialog.ShowConfirmation(
-                owner,
+                ResolveDialogOwner(),
                 loc["ElevatedWindowNoticeTitle"],
                 string.Format(loc["ElevatedWindowNoticeMessage"], blockedHotkey),
                 ConfirmationMode.YesNo,
@@ -248,14 +267,20 @@ public sealed class AppBootstrapper : IAsyncDisposable
         }
     }
 
-    private Window? ResolveDialogOwner()
+    private Window ResolveDialogOwner()
     {
         if (_mainWindow is { IsVisible: true })
         {
             return _mainWindow;
         }
 
-        return _trayHostWindow ?? _mainWindow;
+        var host = CreateTrayHostWindow();
+        if (!host.IsVisible)
+        {
+            host.Show();
+        }
+
+        return host;
     }
 
     private void RestartAsAdministrator()

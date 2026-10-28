@@ -6,7 +6,6 @@ using System.Threading;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Interop;
-using Avalonia.Controls;
 using Avalonia.Threading;
 
 namespace GimmeCapture.Services.Platforms.Windows;
@@ -233,7 +232,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         _postToUi = postToUi;
     }
 
-    public void Initialize(Window window)
+    public void Initialize()
     {
         if (!OperatingSystem.IsWindows()) return;
 

@@ -54,7 +54,7 @@ public partial class MainWindowViewModel
         public Action<HotkeyPress>? OnHotkeyPressed { get; set; }
         public Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
         public Action<string>? OnElevatedWindowFocused { get; set; }
-        public void Initialize(Avalonia.Controls.Window window) { }
+        public void Initialize() { }
         public void Register(int id, string hotkey) { }
         public void Unregister(int id) { }
         public void SuspendAll() { }

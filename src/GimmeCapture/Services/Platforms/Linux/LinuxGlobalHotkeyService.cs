@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
-using Avalonia.Controls;
 using Avalonia.Threading;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
@@ -58,7 +57,7 @@ public sealed class LinuxGlobalHotkeyService : IGlobalHotkeyService
 
     private readonly record struct Command(CommandType Type, int Id, uint Win32Mods, uint Vkey);
 
-    public void Initialize(Window window)
+    public void Initialize()
     {
         if (_thread != null)
         {

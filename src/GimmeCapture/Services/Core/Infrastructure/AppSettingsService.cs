@@ -215,18 +215,88 @@ public class AppSettingsService : IAppSettingsService
         settings.ConfigVersion = CurrentConfigVersion;
     }
 
-    public async Task LoadAsync()
+    // A saved config as read and migrated, before it is copied into Settings. Settings is null when the file could not be
+    // read or parsed.
+    private sealed record SavedConfig(ConfigSource Source, AppSettings? Settings);
+
+    private Task<SavedConfig?>? _read;
+    private Task? _load;
+
+    /// <summary>
+    /// Loads the saved settings. Only the first call loads; later calls return that same load. The file is read and
+    /// migrated into a separate object, on the thread pool when <see cref="StartReadingInBackground"/> came first, and
+    /// <see cref="Settings"/> itself changes only on the thread that awaits this.
+    /// </summary>
+    public Task LoadAsync() => _load ??= LoadAndApplyAsync();
+
+    private async Task LoadAndApplyAsync()
     {
-        ConfigSource? source = FindConfigSource();
-        if (source is not { } found)
+        if (await (_read ??= ReadSavedConfigAsync()) is { } saved)
+        {
+            ApplySavedConfig(saved);
+        }
+    }
+
+    /// <summary>
+    /// Reads and migrates the saved settings on the thread pool, for <see cref="LoadAsync"/> to apply. Program.Main
+    /// starts it before Avalonia does (<c>SettingsPreload</c>), so by the time the main view model loads the settings
+    /// the UI thread only has to apply them. Call it before anything loads this instance.
+    /// </summary>
+    internal void StartReadingInBackground() => _read ??= Task.Run(ReadSavedConfigAsync);
+
+    /// <summary>
+    /// The language the saved settings name, once the read <see cref="StartReadingInBackground"/> began has finished:
+    /// waits up to <paramref name="timeout"/> for it. The default on a first run, as a load would leave it. False when
+    /// no read was started or it is still going.
+    /// </summary>
+    internal bool TryGetReadLanguage(TimeSpan timeout, out Language language)
+    {
+        language = Settings.Language;
+        try
+        {
+            if (_read is not { } read || !read.Wait(timeout))
+            {
+                return false;
+            }
+
+            if (read.Result?.Settings is { } saved)
+            {
+                language = saved.Language;
+            }
+
+            return true;
+        }
+        catch (AggregateException)
+        {
+            // The load that awaits the same read reports it.
+            return false;
+        }
+    }
+
+    private async Task<SavedConfig?> ReadSavedConfigAsync()
+    {
+        if (FindConfigSource() is not { } source)
         {
             DebugLog("Loading phase. No saved config: DEFAULT");
-            return;
+            return null;
         }
 
-        DebugLog($"Loading phase. Choosing: {found.Path}");
-        UseConfigSource(found);
-        await LoadFromPathAsync(found.Path, found.SaveDirectoryOverride);
+        DebugLog($"Loading phase. Choosing: {source.Path}");
+        try
+        {
+            return ParseSavedConfig(source, await File.ReadAllTextAsync(source.Path).ConfigureAwait(false));
+        }
+        catch (Exception ex)
+        {
+            return Unreadable(source, ex);
+        }
+    }
+
+    // A read or parse failure reverts to defaults, so it is surfaced.
+    private static SavedConfig Unreadable(ConfigSource source, Exception ex)
+    {
+        AppLog.Warning("Settings.Load", ex);
+        return new SavedConfig(source, null);
     }
 
     /// <summary>
@@ -478,53 +548,50 @@ public class AppSettingsService : IAppSettingsService
             return;
         }
 
-        UseConfigSource(source);
-        LoadFromPathSync(source.Path, source.SaveDirectoryOverride);
-    }
-
-    private async Task LoadFromPathAsync(string path, string? saveDirectoryOverride = null)
-    {
+        SavedConfig saved;
         try
         {
-            var json = await File.ReadAllTextAsync(path);
-            ApplyLoadedJson(path, json, saveDirectoryOverride);
+            saved = ParseSavedConfig(source, File.ReadAllText(source.Path));
         }
         catch (Exception ex)
         {
-            // A parse/read failure here reverts to defaults — surface it (was silent DebugLog).
-            AppLog.Warning("Settings.Load", ex);
+            saved = Unreadable(source, ex);
         }
+
+        ApplySavedConfig(saved);
     }
 
-    private void LoadFromPathSync(string path, string? saveDirectoryOverride = null)
-    {
-        try
-        {
-            var json = File.ReadAllText(path);
-            ApplyLoadedJson(path, json, saveDirectoryOverride);
-        }
-        catch (Exception ex)
-        {
-            DebugLog($"ERROR loading from {path}: {ex.Message}");
-        }
-    }
-
-    private void ApplyLoadedJson(string path, string json, string? saveDirectoryOverride = null)
+    // Leaves Settings alone: the JSON, the migrations and the AI folder's (which can move files) all go into a new
+    // AppSettings, so this can run off the UI thread while the UI reads the live one.
+    private SavedConfig ParseSavedConfig(ConfigSource source, string json)
     {
         int sourceVersion = DetectConfigVersion(json);
         string normalizedJson = NormalizeLegacyTranslationEngineJson(json);
         var settings = JsonSerializer.Deserialize<AppSettings>(normalizedJson, GetJsonOptions());
         if (settings == null)
-            return;
+        {
+            return new SavedConfig(source, null);
+        }
 
         ApplyMigrations(json, settings, sourceVersion);
         NormalizeAIResourcesDirectory(settings);
-        UpdateSettings(settings);
-        if (!string.IsNullOrWhiteSpace(saveDirectoryOverride))
+        DebugLog($"Successfully loaded settings from {source.Path}. Version {sourceVersion} -> {settings.ConfigVersion}. Language value: {settings.Language}");
+        return new SavedConfig(source, settings);
+    }
+
+    private void ApplySavedConfig(SavedConfig saved)
+    {
+        UseConfigSource(saved.Source);
+        if (saved.Settings is not { } settings)
         {
-            BaseDataDirectory = saveDirectoryOverride;
+            return;
         }
-        DebugLog($"Successfully loaded settings from {path}. Version {sourceVersion} -> {Settings.ConfigVersion}. Language value: {Settings.Language}");
+
+        UpdateSettings(settings);
+        if (!string.IsNullOrWhiteSpace(saved.Source.SaveDirectoryOverride))
+        {
+            BaseDataDirectory = saved.Source.SaveDirectoryOverride;
+        }
     }
 
     private void NormalizeAIResourcesDirectory(AppSettings settings)

@@ -13,6 +13,9 @@
 
 ### 🛡️ Reliability
 
+- **The tray menu's *Run on startup* and *Auto check updates* show their saved state from the start.** The menu was
+  built before the settings had loaded, so both read unchecked, and choosing one switched it the other way from what the
+  menu showed.
 - **Dragging a playing video pin's seek bar stops the clip at once.** The drag paused the clip in name only: picture and
   sound played on under it for about 0.3 s, until the seek caught up. Playback now stops the moment the drag starts, as
   the pause button does, and the seek still waits for the drag to settle.
