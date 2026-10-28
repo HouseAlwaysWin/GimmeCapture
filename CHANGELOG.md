@@ -13,6 +13,9 @@
 
 ### 🛡️ Reliability
 
+- **Dragging a playing video pin's seek bar stops the clip at once.** The drag paused the clip in name only: picture and
+  sound played on under it for about 0.3 s, until the seek caught up. Playback now stops the moment the drag starts, as
+  the pause button does, and the seek still waits for the drag to settle.
 - **Editing a playing video pin's timeline can no longer stop the clip.** The playback, on a thread of its own, read the
   timeline's pieces straight from the list the timeline strip shows, at the start of every piece and loop. An edit
   landing at that moment could stop playback with an error, or play one pass with the edit half applied. It now plays a

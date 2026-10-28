@@ -241,10 +241,12 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                     RefreshActiveRedactionBoxes(); // scrubbing the slider bypasses the CurrentTime setter
                 }
                 
-                // Auto-pause immediately upon scrubbing
+                // Auto-pause immediately upon scrubbing, the way pausing does: the decode and its audio stop now, where
+                // they played on under the drag until the debounced seek below replaced them.
                 if (_isPlaybackActive)
                 {
                     _isPlaybackActive = false;
+                    CancelPlaybackInBackground();
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         this.RaisePropertyChanged(nameof(IsPlaying)));
                 }
