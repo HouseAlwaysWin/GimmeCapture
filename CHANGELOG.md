@@ -341,6 +341,11 @@
 
 ### 🧹 Maintenance
 
+- **A pinned recording without sound no longer logs a warning at every play and seek.** Starting its preview audio
+  failed in Media Foundation, which was logged as a warning, and so went into a bug report's error summary. It then
+  failed again in FFmpeg; one user's log had 16 of these in a day. The first failure now checks whether the clip has an
+  audio stream at all. A clip without one plays silent from then on and is noted only with `GIMMECAPTURE_DEBUG_LOG=1`. A
+  clip with sound plays it as before, and a real failure is still logged.
 - **A playing pin no longer adds log lines at every seek and loop.** Which decoder the player used, and a file that
   opens slowly, were logged each time the clip was opened, and a pin does that at every seek, segment and loop pass.
   Each is now logged once, and the decoder again when it changes. Repeats appear only with `GIMMECAPTURE_DEBUG_LOG=1`.

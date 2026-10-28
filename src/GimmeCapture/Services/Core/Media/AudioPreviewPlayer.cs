@@ -31,6 +31,10 @@ internal sealed class AudioPreviewPlayer : IDisposable
 
     private readonly LatestRequestWorker<Request> _requests;
 
+    // A clip with no audio stream (a silent recording) fails to start in Media Foundation and in FFmpeg alike, at every
+    // play and seek: once a failure has shown it has none, its starts do nothing.
+    private readonly FilesWithoutAudio _filesWithoutAudio = new(LibavAudioStreamProbe.HasAudioStream);
+
     // What is playing. The worker puts it in place and takes it down; the decode thread puts its own output in place;
     // Volume adjusts it. All three under _outputGate, so none of them misses a change the others make.
     private readonly object _outputGate = new();
@@ -81,7 +85,8 @@ internal sealed class AudioPreviewPlayer : IDisposable
     /// <summary>
     /// (Re)start audio at <paramref name="startSeconds"/> with the given effective speed. Any previous
     /// playback is stopped first. Failures fall back to the decoded path, then log and stay silent
-    /// (preview audio is best-effort). Returns at once; the audio follows shortly.
+    /// (preview audio is best-effort); a file with no audio stream just stays silent, unlogged.
+    /// Returns at once; the audio follows shortly.
     /// </summary>
     public void Start(string videoPath, double startSeconds, double effectiveSpeed)
     {
@@ -97,6 +102,9 @@ internal sealed class AudioPreviewPlayer : IDisposable
     /// <summary>Stops playback and releases the player/stream/decode token. Safe to call repeatedly. Returns at once.</summary>
     public void Stop() => _requests.Submit(default);
 
+    /// <summary>True once a start of <paramref name="videoPath"/> has found it has no audio stream.</summary>
+    internal bool FoundNoAudioStream(string videoPath) => _filesWithoutAudio.Contains(videoPath);
+
     // On the worker: whatever played stops, then the request starts, unless a newer one is already waiting.
     private void Handle(Request request, Func<bool> superseded)
     {
@@ -111,6 +119,11 @@ internal sealed class AudioPreviewPlayer : IDisposable
 
     private void StartCore(string videoPath, double start, double effectiveSpeed, Func<bool> superseded)
     {
+        if (_filesWithoutAudio.Contains(videoPath))
+        {
+            return; // no audio stream to play: neither reader nor device is opened
+        }
+
         try
         {
             if (ShouldUseDecodedPlayback(videoPath, effectiveSpeed))
@@ -125,6 +138,13 @@ internal sealed class AudioPreviewPlayer : IDisposable
         {
             if (_disposed)
             {
+                return;
+            }
+
+            // A file with no audio stream is not a failure: nothing to play, so no warning and no fallback.
+            if (_filesWithoutAudio.AddIfSilent(videoPath))
+            {
+                StopCore();
                 return;
             }
 
@@ -214,6 +234,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
             // This decode's own output, so a decode that a newer request cancelled never feeds the next one's device.
             BufferedWaveProvider? buffered = null;
             LinuxPulseAudioOutput? linuxOutput = null;
+            bool formatKnown = false;
             try
             {
                 LibavPinAudioPcmDecoder.DecodeStreaming(
@@ -221,6 +242,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
                     startSeconds,
                     onFormat: sourceFormat =>
                     {
+                        formatKnown = true;
                         if (_disposed || token.IsCancellationRequested)
                         {
                             return;
@@ -295,7 +317,14 @@ internal sealed class AudioPreviewPlayer : IDisposable
             }
             catch (Exception ex)
             {
-                // "No audio stream", device init failure, etc. Preview audio is best-effort: log and stay silent.
+                // Failing before its format is known, the file may have no audio stream at all: once the probe says so,
+                // its starts skip it (StartCore), where until then each one opened the file again only to fail.
+                if (!formatKnown && _filesWithoutAudio.AddIfSilent(videoPath))
+                {
+                    return;
+                }
+
+                // Device init failure, a decode error, etc. Preview audio is best-effort: log and stay silent.
                 AppLog.Debug("PinAudio.StreamingDecode", ex);
             }
         }, token);
