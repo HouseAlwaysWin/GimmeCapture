@@ -14,6 +14,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
 {
     internal readonly record struct MediaInfo(double Duration, int Width, int Height, int Fps, bool HasAudio, int AudioChannels);
 
+    /// <summary>A first frame scaled down for a list row: <see cref="Width"/> × <see cref="Height"/> BGRA pixels, rows packed.</summary>
+    internal sealed record BgraThumbnail(int Width, int Height, byte[] Bgra);
+
     /// <summary>
     /// One decoded frame for <see cref="PlayFramesAsync"/>: outputWidth × outputHeight BGRA pixels with the rows packed,
     /// exactly that many bytes long. It points into the decoder's own memory and is only valid during the call.
@@ -303,13 +306,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                 AVFormatContext* fmt = null;
                 try
                 {
-                    // Same open-stage timing as PlayAsync (queue-add path): a slow probe on a big/non-faststart
-                    // file is the moov read in open_input. Logged only when slow.
-                    var probeStage = Stopwatch.StartNew();
-                    ThrowIfErr(ffmpeg.avformat_open_input(&fmt, videoPath, null, null), "open_input");
-                    long openMs = probeStage.ElapsedMilliseconds; probeStage.Restart();
-                    ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
-                    long findMs = probeStage.ElapsedMilliseconds;
+                    (long openMs, long findMs) = OpenForProbe(&fmt, videoPath);
                     if (openMs + findMs > 250)
                     {
                         // The two-part overload: a single event name is cut at 120 characters, which lost the timings.
@@ -318,27 +315,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                             $"slow probe {System.IO.Path.GetFileName(videoPath)}: open_input={openMs}ms find_stream_info={findMs}ms");
                     }
 
-                    double duration = fmt->duration > 0 ? fmt->duration / (double)ffmpeg.AV_TIME_BASE : 0;
-
-                    int width = 0, height = 0, fps = 30;
-                    int v = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
-                    if (v >= 0)
-                    {
-                        AVStream* vst = fmt->streams[v];
-                        width = vst->codecpar->width;
-                        height = vst->codecpar->height;
-                        fps = ResolveFps(vst);
-                        if (duration <= 0 && vst->duration > 0)
-                        {
-                            duration = vst->duration * ffmpeg.av_q2d(vst->time_base);
-                        }
-                    }
-
-                    int a = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);
-                    bool hasAudio = a >= 0;
-                    int channels = hasAudio ? fmt->streams[a]->codecpar->ch_layout.nb_channels : 0;
-
-                    return new MediaInfo(duration, width, height, fps, hasAudio, channels);
+                    return ReadMediaInfo(fmt, out _);
                 }
                 finally
                 {
@@ -349,6 +326,225 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                 }
             }
         }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// What <see cref="ProbeAsync"/> returns, plus the first frame scaled to fit <paramref name="maxEdge"/>
+    /// (<see cref="ThumbnailSize"/>), from one open of the file: a compress queue row needs both, and opening the file
+    /// again, with a GPU decoder, for a 96 px picture cost more than decoding one frame in software. The thumbnail is null
+    /// when the file has no video stream or its first frame cannot be decoded (logged); the probe's answer still stands.
+    /// </summary>
+    public async Task<(MediaInfo Info, BgraThumbnail? Thumbnail)> ProbeWithThumbnailAsync(
+        string videoPath, int maxEdge, CancellationToken ct = default)
+    {
+        return await Task.Run(() =>
+        {
+            FFmpegRuntime.EnsureInitialized();
+            unsafe
+            {
+                AVFormatContext* fmt = null;
+                try
+                {
+                    (long openMs, long findMs) = OpenForProbe(&fmt, videoPath);
+                    MediaInfo info = ReadMediaInfo(fmt, out int videoStream);
+
+                    var thumbnailStage = Stopwatch.StartNew();
+                    BgraThumbnail? thumbnail = null;
+                    if (videoStream >= 0 && info.Width > 0 && info.Height > 0)
+                    {
+                        (int width, int height) = ThumbnailSize(info.Width, info.Height, maxEdge);
+                        try
+                        {
+                            thumbnail = DecodeFirstFrame(fmt, videoStream, width, height, ct);
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            AppLog.Warning("LibavVideoFramePlayer.ProbeWithThumbnailAsync", ex);
+                        }
+                    }
+
+                    long thumbnailMs = thumbnailStage.ElapsedMilliseconds;
+                    if (openMs + findMs + thumbnailMs > 250)
+                    {
+                        AppLog.Information(
+                            "LibavVideoFramePlayer.ProbeWithThumbnailAsync",
+                            $"slow probe {System.IO.Path.GetFileName(videoPath)}: open_input={openMs}ms " +
+                            $"find_stream_info={findMs}ms thumbnail={thumbnailMs}ms");
+                    }
+
+                    return (info, thumbnail);
+                }
+                finally
+                {
+                    if (fmt != null)
+                    {
+                        ffmpeg.avformat_close_input(&fmt);
+                    }
+                }
+            }
+        }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <paramref name="width"/> × <paramref name="height"/> fitted inside <paramref name="maxEdge"/> with its shape kept,
+    /// never enlarged, each side even and at least 2 for the scaler. That is the frame as stored: like the probe's size,
+    /// it applies no rotation tag or sample aspect ratio.
+    /// </summary>
+    internal static (int Width, int Height) ThumbnailSize(int width, int height, int maxEdge)
+    {
+        // In whole pixels: the scale as a double made 5000 × (96 / 5000) 95.99…, and the long side 2 px short.
+        int longer = Math.Max(width, height);
+        int thumbnailWidth = longer <= maxEdge ? width : (int)((long)width * maxEdge / longer);
+        int thumbnailHeight = longer <= maxEdge ? height : (int)((long)height * maxEdge / longer);
+        thumbnailWidth = Math.Max(2, thumbnailWidth);
+        thumbnailHeight = Math.Max(2, thumbnailHeight);
+        return (thumbnailWidth - (thumbnailWidth & 1), thumbnailHeight - (thumbnailHeight & 1));
+    }
+
+    // Opens videoPath with libav's default scan and reads its stream info, timing both: a slow probe of a big or
+    // non-faststart file is the moov read in open_input. The caller closes *fmt, also when this throws.
+    private static unsafe (long OpenMs, long FindMs) OpenForProbe(AVFormatContext** fmt, string videoPath)
+    {
+        var stage = Stopwatch.StartNew();
+        ThrowIfErr(ffmpeg.avformat_open_input(fmt, videoPath, null, null), "open_input");
+        long openMs = stage.ElapsedMilliseconds;
+        stage.Restart();
+        ThrowIfErr(ffmpeg.avformat_find_stream_info(*fmt, null), "find_stream_info");
+        return (openMs, stage.ElapsedMilliseconds);
+    }
+
+    // The probe's answer for a file whose stream info has been read. videoStream is negative when there is no video.
+    private static unsafe MediaInfo ReadMediaInfo(AVFormatContext* fmt, out int videoStream)
+    {
+        double duration = fmt->duration > 0 ? fmt->duration / (double)ffmpeg.AV_TIME_BASE : 0;
+
+        int width = 0, height = 0, fps = 30;
+        videoStream = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
+        if (videoStream >= 0)
+        {
+            AVStream* vst = fmt->streams[videoStream];
+            width = vst->codecpar->width;
+            height = vst->codecpar->height;
+            fps = ResolveFps(vst);
+            if (duration <= 0 && vst->duration > 0)
+            {
+                duration = vst->duration * ffmpeg.av_q2d(vst->time_base);
+            }
+        }
+
+        int a = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);
+        bool hasAudio = a >= 0;
+        int channels = hasAudio ? fmt->streams[a]->codecpar->ch_layout.nb_channels : 0;
+
+        return new MediaInfo(duration, width, height, fps, hasAudio, channels);
+    }
+
+    // Decodes the first frame the decoder gives out from where find_stream_info left the file (its start: the packets it
+    // read are handed out again), scaled to width × height BGRA as PlayFramesAsync scales. Software on one thread: frame
+    // threads would hold that frame back until each had a packet of its own. Null when the stream ends without a frame.
+    private static unsafe BgraThumbnail? DecodeFirstFrame(
+        AVFormatContext* fmt, int videoStream, int width, int height, CancellationToken ct)
+    {
+        AVCodecContext* decCtx = null;
+        SwsContext* sws = null;
+        AVPacket* pkt = null;
+        AVFrame* frame = null;
+        AVFrame* outFrame = null;
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            AVCodecParameters* par = fmt->streams[videoStream]->codecpar;
+            AVCodec* dec = ffmpeg.avcodec_find_decoder(par->codec_id);
+            if (dec == null)
+                throw new InvalidOperationException($"Decoder not found for {par->codec_id}");
+
+            decCtx = ffmpeg.avcodec_alloc_context3(dec);
+            if (decCtx == null)
+                throw new OutOfMemoryException("alloc decoder context");
+            ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, par), "par_to_ctx");
+            decCtx->thread_count = 1;
+            ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "open_decoder");
+
+            pkt = ffmpeg.av_packet_alloc();
+            frame = ffmpeg.av_frame_alloc();
+            if (pkt == null || frame == null)
+                throw new OutOfMemoryException("alloc packet/frame");
+
+            bool draining = false;
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!draining)
+                {
+                    int rr = ffmpeg.av_read_frame(fmt, pkt);
+                    if (rr == ffmpeg.AVERROR_EOF)
+                    {
+                        // A short clip can hold its only frames back until the decoder is told the stream ended.
+                        ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, (AVPacket*)null), "send_eof");
+                        draining = true;
+                    }
+                    else if (rr == ffmpeg.AVERROR(11))
+                    {
+                        Thread.Sleep(1);
+                        continue;
+                    }
+                    else
+                    {
+                        ThrowIfErr(rr, "read_frame");
+                        if (pkt->stream_index != videoStream)
+                        {
+                            ffmpeg.av_packet_unref(pkt);
+                            continue;
+                        }
+
+                        int sr = ffmpeg.avcodec_send_packet(decCtx, pkt);
+                        ffmpeg.av_packet_unref(pkt);
+                        ThrowIfErr(sr, "send_packet");
+                    }
+                }
+
+                int gr = ffmpeg.avcodec_receive_frame(decCtx, frame);
+                if (gr == ffmpeg.AVERROR(11) && !draining)
+                {
+                    continue; // the decoder wants more packets first
+                }
+
+                if (gr == ffmpeg.AVERROR_EOF || gr == ffmpeg.AVERROR(11))
+                {
+                    return null;
+                }
+
+                ThrowIfErr(gr, "receive_frame");
+
+                sws = ffmpeg.sws_getContext(
+                    frame->width, frame->height, (AVPixelFormat)frame->format,
+                    width, height, AVPixelFormat.AV_PIX_FMT_BGRA,
+                    (int)SwsFlags.SWS_BILINEAR, null, null, null);
+                if (sws == null)
+                    throw new InvalidOperationException("sws_getContext failed.");
+
+                outFrame = ffmpeg.av_frame_alloc();
+                if (outFrame == null)
+                    throw new OutOfMemoryException("alloc frame");
+                outFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
+                outFrame->width = width;
+                outFrame->height = height;
+                ThrowIfErr(ffmpeg.av_frame_get_buffer(outFrame, 1), "out_frame_buffer");
+                ffmpeg.sws_scale(sws, frame->data, frame->linesize, 0, frame->height, outFrame->data, outFrame->linesize);
+
+                var bgra = new byte[width * height * 4];
+                CopyBgraFrame(outFrame, width, height, bgra);
+                return new BgraThumbnail(width, height, bgra);
+            }
+        }
+        finally
+        {
+            if (pkt != null) ffmpeg.av_packet_free(&pkt);
+            if (frame != null) ffmpeg.av_frame_free(&frame);
+            if (outFrame != null) ffmpeg.av_frame_free(&outFrame);
+            if (sws != null) ffmpeg.sws_freeContext(sws);
+            if (decCtx != null) ffmpeg.avcodec_free_context(&decCtx);
+        }
     }
 
     // Rounded, clamped frame rate — mirrors LibavClipExporter.ResolveFps so ProbedFps matches encode-time fps.

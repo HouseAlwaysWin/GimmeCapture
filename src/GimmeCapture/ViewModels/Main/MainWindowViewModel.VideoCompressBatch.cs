@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
@@ -13,7 +12,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
-using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
 using ReactiveUI.Reactive;
 using SkiaSharp;
@@ -566,15 +565,18 @@ public partial class MainWindowViewModel
         }
     }
 
-    // A probe opens its file twice — metadata, then the first frame for the row thumbnail, through a GPU decoder — and
-    // adding a folder started one for every video at once. Two at a time keeps the disk and the GPU free for the rest.
+    // The longest side of a queue row's thumbnail, in pixels.
+    private const int QueueThumbnailMaxEdge = 96;
+
+    // A probe opens its file, reads its streams and decodes its first frame for the row thumbnail, and adding a folder
+    // started one for every video at once. Two at a time keeps the disk and the CPU free for the rest.
     private readonly SemaphoreSlim _probeSlots = new(2, 2);
 
     // Cancelled when the queue is cleared or replaced: probes still waiting for a slot then never run.
     private CancellationTokenSource _probeCts = new();
 
-    // Probes a queued file's resolution / fps / duration, then refreshes its "≈ size" estimate and decodes its
-    // thumbnail. Continuations run on the UI thread, which owns the item.
+    // Probes a queued file's resolution / fps / duration and decodes its thumbnail in one open, then refreshes its
+    // "≈ size" estimate. Continuations run on the UI thread, which owns the item.
     private async Task ProbeQueueItemAsync(CompressQueueItem item, CancellationToken queueToken)
     {
         try
@@ -588,14 +590,16 @@ public partial class MainWindowViewModel
 
         try
         {
+            LibavVideoFramePlayer.BgraThumbnail? thumbnail = null;
             try
             {
                 using var probe = new LibavVideoFramePlayer();
-                var info = await probe.ProbeAsync(item.Path, queueToken); // one open+scan for duration/size/fps (was 3)
-                item.ProbedDuration = info.Duration;
-                item.ProbedWidth = info.Width;
-                item.ProbedHeight = info.Height;
-                item.ProbedFps = info.Fps;
+                var probed = await probe.ProbeWithThumbnailAsync(item.Path, QueueThumbnailMaxEdge, queueToken);
+                item.ProbedDuration = probed.Info.Duration;
+                item.ProbedWidth = probed.Info.Width;
+                item.ProbedHeight = probed.Info.Height;
+                item.ProbedFps = probed.Info.Fps;
+                thumbnail = probed.Thumbnail;
             }
             catch (OperationCanceledException)
             {
@@ -615,25 +619,11 @@ public partial class MainWindowViewModel
 
             item.EstimatedText = BuildItemEstimate(item);
 
-            // First-frame thumbnail for the picker row (small; reuses the preview decode at a row-sized scale).
-            if (item.Thumbnail == null && item.ProbedWidth > 0 && item.ProbedHeight > 0)
+            // The bitmap is made only for an item still in the queue: the queue disposes its items' thumbnails, and
+            // one made for an item already gone would never be released.
+            if (thumbnail != null && item.Thumbnail == null)
             {
-                double scale = Math.Min(1.0, 96.0 / Math.Max(item.ProbedWidth, item.ProbedHeight));
-                int tw = Math.Max(2, (int)(item.ProbedWidth * scale)); tw -= tw & 1;
-                int th = Math.Max(2, (int)(item.ProbedHeight * scale)); th -= th & 1;
-                Bitmap? thumb = await DecodeFirstFrameAsync(item.Path, tw, th, queueToken);
-                if (thumb == null)
-                {
-                    return;
-                }
-
-                if (queueToken.IsCancellationRequested)
-                {
-                    thumb.Dispose(); // the item was disposed with its queue and would never release it
-                    return;
-                }
-
-                item.Thumbnail = thumb;
+                item.Thumbnail = CreateThumbnailBitmap(thumbnail);
             }
         }
         finally
@@ -642,45 +632,14 @@ public partial class MainWindowViewModel
         }
     }
 
-    // Decodes a video's first frame into an Avalonia Bitmap at the given (even) dimensions, cancelling right after
-    // the first frame so it doesn't decode the whole clip. Returns null if there is no frame, the file is unreadable,
-    // or <paramref name="cancellationToken"/> is cancelled.
-    private static async Task<Bitmap?> DecodeFirstFrameAsync(
-        string path, int width, int height, CancellationToken cancellationToken)
+    // A queue row's picture from its decoded first frame. UI thread.
+    private static Bitmap? CreateThumbnailBitmap(LibavVideoFramePlayer.BgraThumbnail thumbnail)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        byte[]? frame = null;
         try
         {
-            using var player = new LibavVideoFramePlayer();
-            await player.PlayAsync(path, width, height, 0, 1.0, false, (data, _) =>
-            {
-                if (frame == null)
-                {
-                    frame = (byte[])data.Clone();
-                    cts.Cancel();
-                }
-            }, cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // expected — we cancel right after the first frame
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Compress.ThumbDecode", ex);
-        }
-
-        if (frame == null || cancellationToken.IsCancellationRequested)
-        {
-            return null;
-        }
-
-        try
-        {
-            using var sk = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
-            Marshal.Copy(frame, 0, sk.GetPixels(), Math.Min(frame.Length, width * height * 4));
-            return FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(sk, out Bitmap? bmp, out _) ? bmp : null;
+            return VideoFrameBitmap.Draw(
+                null, thumbnail.Bgra, thumbnail.Width, thumbnail.Height,
+                new Avalonia.PixelRect(0, 0, thumbnail.Width, thumbnail.Height), rotation: 0);
         }
         catch (Exception ex)
         {

@@ -122,9 +122,11 @@
   listed the working folder and swept old resume files on the UI thread; one log showed the app stop responding for 0.45
   s there. Those reads now run in the background, and the tab appears once the saved queue is in, so it never shows an
   empty queue to click on meanwhile.
-- **Adding a folder of videos to the Compress queue no longer opens them all at once.** Reading each file's length and
-  size and decoding its thumbnail opens it twice and brings up a GPU decoder, and every file in a folder started that at
-  the same moment. Two now run at a time, and clearing or switching the queue stops the ones still waiting.
+- **Adding videos to the Compress queue opens each file once, and no longer all at once.** Reading a file's length and
+  size and decoding its thumbnail opened it twice, the second time bringing up a GPU decoder for a 96-pixel picture, and
+  every file in a folder started that at the same moment. Each file is now opened once and its first frame decoded in
+  software: here about 65 ms a file instead of 180 ms for a 1080p H.264 clip, and 30 ms instead of 150 ms at 720p. Two
+  still run at a time, and clearing or switching the queue stops the ones still waiting.
 - **Playing a video in the Compress editor or its quality comparison no longer piles up memory.** Every frame shown
   became a new bitmap, about 1.2 MB at the preview's 720-pixel width, and the one it replaced was never released. A 30
   fps clip left roughly 35 MB a second for the garbage collector, twice that in the comparison. Frames are now drawn
