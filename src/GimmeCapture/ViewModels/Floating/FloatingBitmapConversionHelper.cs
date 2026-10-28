@@ -4,7 +4,6 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using SkiaSharp;
 using System.Buffers;
-using System.Runtime.InteropServices;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -153,7 +152,12 @@ internal static class FloatingBitmapConversionHelper
         return TryCreateDetachedBitmapFromSkBitmap(dst, out Bitmap? result, out _) ? result : null;
     }
 
-    public static bool TryCopyToSkBitmap(Bitmap? bitmap, out SKBitmap? skBitmap, out string? error)
+    /// <summary>
+    /// Copies <paramref name="bitmap"/>'s pixels into a new BGRA SKBitmap of <paramref name="alphaType"/>, which becomes
+    /// the caller's. The bitmaps here are premultiplied, so the default copies them as they are.
+    /// </summary>
+    public static bool TryCopyToSkBitmap(
+        Bitmap? bitmap, out SKBitmap? skBitmap, out string? error, SKAlphaType alphaType = SKAlphaType.Premul)
     {
         skBitmap = null;
         error = null;
@@ -171,36 +175,24 @@ internal static class FloatingBitmapConversionHelper
             return false;
         }
 
-        var result = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
-        byte[] rented = ArrayPool<byte>.Shared.Rent(width * height * 4);
+        var result = new SKBitmap(width, height, SKColorType.Bgra8888, alphaType);
+        int rowBytes = width * 4;
+        byte[] rented = ArrayPool<byte>.Shared.Rent(rowBytes * height);
 
         try
         {
-            var handle = GCHandle.Alloc(rented, GCHandleType.Pinned);
-            try
-            {
-                bitmap.CopyPixels(
-                    new PixelRect(0, 0, width, height),
-                    handle.AddrOfPinnedObject(),
-                    width * height * 4,
-                    width * 4);
-            }
-            finally
-            {
-                handle.Free();
-            }
-
             unsafe
             {
-                byte* srcBase = (byte*)Marshal.UnsafeAddrOfPinnedArrayElement(rented, 0);
-                byte* dstBase = (byte*)result.GetPixels();
-                for (int row = 0; row < height; row++)
+                // Pinned until the pixels are out again, not just while Avalonia writes them: the GC may move a small
+                // array in between.
+                fixed (byte* buffer = rented)
                 {
-                    Buffer.MemoryCopy(
-                        srcBase + (row * width * 4),
-                        dstBase + (row * result.RowBytes),
-                        result.RowBytes,
-                        width * 4);
+                    bitmap.CopyPixels(new PixelRect(0, 0, width, height), (IntPtr)buffer, rowBytes * height, rowBytes);
+                    if (!TryCopyFromPremulBgra((IntPtr)buffer, rowBytes, result, out error))
+                    {
+                        result.Dispose();
+                        return false;
+                    }
                 }
             }
 
@@ -217,6 +209,44 @@ internal static class FloatingBitmapConversionHelper
         {
             ArrayPool<byte>.Shared.Return(rented);
         }
+    }
+
+    /// <summary>
+    /// Writes the premultiplied BGRA pixels at <paramref name="source"/> into <paramref name="destination"/> in the form
+    /// it is declared as: copied as they are into premultiplied BGRA, converted into anything else.
+    /// </summary>
+    internal static unsafe bool TryCopyFromPremulBgra(
+        IntPtr source, int sourceRowBytes, SKBitmap destination, out string? error)
+    {
+        error = null;
+        // Each of these is a call into Skia: read them once.
+        SKImageInfo info = destination.Info;
+        int destinationRowBytes = destination.RowBytes;
+        IntPtr destinationPixels = destination.GetPixels();
+        if (info.ColorType == SKColorType.Bgra8888 && info.AlphaType == SKAlphaType.Premul)
+        {
+            int bytesPerRow = Math.Min(sourceRowBytes, destinationRowBytes);
+            for (int row = 0; row < info.Height; row++)
+            {
+                Buffer.MemoryCopy(
+                    (byte*)source + (row * sourceRowBytes),
+                    (byte*)destinationPixels + (row * destinationRowBytes),
+                    destinationRowBytes,
+                    bytesPerRow);
+            }
+
+            return true;
+        }
+
+        using var pixmap = new SKPixmap(
+            new SKImageInfo(info.Width, info.Height, SKColorType.Bgra8888, SKAlphaType.Premul), source, sourceRowBytes);
+        if (!pixmap.ReadPixels(info, destinationPixels, destinationRowBytes))
+        {
+            error = $"Cannot convert premultiplied BGRA pixels to {info.ColorType} {info.AlphaType}.";
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

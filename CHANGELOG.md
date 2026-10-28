@@ -217,6 +217,9 @@
   the pin's transparency checkerboard instead of the checkerboard: its pixels kept their colour at full
   transparency, and drawing the pin added that colour to what lay behind instead of hiding it. Smart selection's
   preview also drew the red marks of points that exclude an area in blue, and its tint brighter than intended.
+- **Removing the background again no longer darkens a pin's soft edges.** A second removal on the same pin, inside a
+  selection say, made the soft edges the first one left about a fifth darker, and darker again with each removal
+  after that.
 
 ### ♿ Accessibility
 

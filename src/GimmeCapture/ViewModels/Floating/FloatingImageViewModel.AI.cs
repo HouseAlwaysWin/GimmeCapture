@@ -568,11 +568,13 @@ public partial class FloatingImageViewModel
             PushUndoState();
 
             // 1. Copy the Avalonia Bitmap into an SKBitmap, off the UI thread. No PNG in between: the removal
-            // service works on pixels, and encoding one for a 4K pin took over 2 s on its own.
+            // service works on pixels, and encoding one for a 4K pin took over 2 s on its own. Unpremultiplied: the
+            // service keeps the colour of each pixel it keeps and hands it back as unpremultiplied, so premultiplied
+            // colour was premultiplied again on the way back, darkening the soft edges an earlier removal left.
             var source = Image;
             if (source == null) return;
             var (copied, sourcePixels, copyError) = await Task.Run(() =>
-                (FloatingBitmapConversionHelper.TryCopyToSkBitmap(source, out var bitmap, out var error), bitmap, error));
+                (FloatingBitmapConversionHelper.TryCopyToSkBitmap(source, out var bitmap, out var error, SkiaSharp.SKAlphaType.Unpremul), bitmap, error));
             if (!copied || sourcePixels == null)
                 throw new Exception(copyError ?? "Failed to read the image pixels.");
             using var sourceBitmap = sourcePixels;

@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using GimmeCapture.Services.Core.AI;
 using GimmeCapture.ViewModels.Floating;
 using SkiaSharp;
 using Xunit;
@@ -41,19 +42,73 @@ public class FloatingBitmapConversionHelperTests
         Assert.Equal(new[] { 0xFF_C8_64_32u }, converted);
     }
 
-    private static unsafe uint[] CopyAsPremulBgra(SKColorType colorType, SKAlphaType alphaType, params uint[] pixels)
+    [Fact]
+    public void ThePinsPixels_ComeOutUnpremultiplied_WhenAskedFor()
+    {
+        using var copy = FromPremulBgra(SKAlphaType.Unpremul, 0xFF_C8_64_32u, 0x00_00_00_00u, 0x80_64_32_19u);
+
+        // 100, 50 and 25 at alpha 128 are 199, 100 and 50.
+        Assert.Equal(new[] { 0xFF_C8_64_32u, 0x00_00_00_00u, 0x80_C7_64_32u }, Words(copy));
+    }
+
+    [Fact]
+    public void ThePinsPixels_AreCopiedAsTheyAre_IntoAPremultipliedBitmap()
+    {
+        uint[] pixels = { 0xFF_C8_64_32u, 0x00_00_00_00u, 0x80_64_32_19u };
+        using var copy = FromPremulBgra(SKAlphaType.Premul, pixels);
+
+        Assert.Equal(pixels, Words(copy));
+    }
+
+    // A removal on a pin an earlier one left with soft edges: the pin hands its pixels over unpremultiplied, the
+    // removal keeps or clears each, and the result comes back premultiplied. Handed over premultiplied, a translucent
+    // pixel it kept came back premultiplied twice, 0x80643219 as 0x8032190D: darker with every removal.
+    [Fact]
+    public void ARemoval_HandsBackTheTranslucentPixelsItKeeps_AsThePinHadThem()
+    {
+        // Opaque, translucent and cleared pixels the mask keeps, and an opaque one it clears.
+        using var handedOver = FromPremulBgra(SKAlphaType.Unpremul, 0xFF_C8_64_32u, 0x80_64_32_19u, 0x00_00_00_00u, 0xFF_10_20_30u);
+        using var mask = new SKBitmap(4, 1, SKColorType.Gray8, SKAlphaType.Opaque);
+        new byte[] { 255, 255, 255, 0 }.CopyTo(mask.GetPixelSpan());
+
+        using var removed = BackgroundRemovalService.ApplyMask(handedOver, mask, 0f, 1f);
+
+        Assert.Equal(new[] { 0xFF_C8_64_32u, 0x80_64_32_19u, 0u, 0u }, CopyAsPremulBgra(removed));
+    }
+
+    private static uint[] CopyAsPremulBgra(SKColorType colorType, SKAlphaType alphaType, params uint[] pixels)
     {
         using var source = new SKBitmap(pixels.Length, 1, colorType, alphaType);
         pixels.AsSpan().CopyTo(MemoryMarshal.Cast<byte, uint>(source.GetPixelSpan()));
+        return CopyAsPremulBgra(source);
+    }
 
-        var converted = new uint[pixels.Length];
+    private static unsafe uint[] CopyAsPremulBgra(SKBitmap source)
+    {
+        var converted = new uint[source.Width * source.Height];
         fixed (uint* destination = converted)
         {
             bool copied = FloatingBitmapConversionHelper.TryCopyAsPremulBgra(
-                source, (IntPtr)destination, converted.Length * sizeof(uint), 1, out string? error);
+                source, (IntPtr)destination, source.Width * sizeof(uint), source.Height, out string? error);
             Assert.True(copied, error);
         }
 
         return converted;
     }
+
+    // A one-row bitmap of alphaType holding the premultiplied pixels, as TryCopyToSkBitmap copies a pin's.
+    private static unsafe SKBitmap FromPremulBgra(SKAlphaType alphaType, params uint[] pixels)
+    {
+        var bitmap = new SKBitmap(pixels.Length, 1, SKColorType.Bgra8888, alphaType);
+        fixed (uint* source = pixels)
+        {
+            bool copied = FloatingBitmapConversionHelper.TryCopyFromPremulBgra(
+                (IntPtr)source, pixels.Length * sizeof(uint), bitmap, out string? error);
+            Assert.True(copied, error);
+        }
+
+        return bitmap;
+    }
+
+    private static uint[] Words(SKBitmap bitmap) => MemoryMarshal.Cast<byte, uint>(bitmap.GetPixelSpan()).ToArray();
 }
