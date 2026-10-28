@@ -23,6 +23,10 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
     private static readonly Lazy<byte[]> s_drawnUnpremulChannels = new(() => BuildDrawnChannels(SKAlphaType.Unpremul));
 
     private InferenceSession? _session;
+    // Keeps the DirectML device open across idle unloads, for the app's idle window after the last removal or until
+    // this service is disposed. The unload frees the session 10 s after a removal, and the session was the last thing
+    // holding the device: reopening it for the next removal cost ~0.2 s of every cold one.
+    private readonly GpuDeviceHold _gpuDevice = new(ProcessMemoryTrimService.IdleTrimDelay);
     private readonly AIResourceService _aiResourceService;
     private readonly AIPathService _pathService;
     private bool _isInitialized = false;
@@ -62,8 +66,9 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         {
             try
             {
-                _session = CreateSession(modelPath, out _);
+                _session = CreateSession(modelPath, out string provider);
                 _isInitialized = true;
+                _gpuDevice.SessionBuilt(provider);
             }
             catch (TypeInitializationException ex)
             {
@@ -184,6 +189,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
             // Start the idle-unload countdown from completion, so a slow removal can't trip it mid-run and a
             // fresh removal within the window keeps the model warm.
             _idleUnload.NotifyUse();
+            _gpuDevice.NotifyUse();
         }
     }
 
@@ -903,6 +909,12 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
             _session?.Dispose();
             _session = null;
             _isInitialized = false;
+            // An idle unload keeps the GPU device for the next removal, until the hold's own idle window ends;
+            // disposing the service lets it go now.
+            if (IsDisposed)
+            {
+                _gpuDevice.Release();
+            }
         }
         finally
         {

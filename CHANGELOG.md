@@ -161,6 +161,10 @@
   0.35 s at 1920×1200; inside a selection, 0.15 s instead of 0.57 s and 0.10 s instead of 0.25 s. The first removal
   after a pause, which also loads the model, saves the same work. On a pin with a one-colour background, which skips
   the model, the removal itself takes 4 ms instead of 50 ms at 3840×2400.
+- **The first background removal after a pause starts about 0.2 s sooner.** The model is unloaded 10 s after a
+  removal, and with it went the last thing keeping the graphics device open, so each removal after a pause opened the
+  device again. A pin now keeps it open until five minutes after its last removal, or until the pin is closed, which
+  holds about 45 MB. Loading the model after a pause takes about 0.5 s instead of 0.7 s on a laptop's Radeon graphics.
 - **Smart selection keeps up on a large pin.** Its pixel work asked Skia for the image's size at every pixel too. On
   a 3840×2400 pin, each click spent about 0.18 s preparing the mask and then 0.2 s colouring in the selection, which
   held the UI thread; confirming spent 0.36 s applying it. Each of these now takes 5–9 ms and gives the same pixels.
