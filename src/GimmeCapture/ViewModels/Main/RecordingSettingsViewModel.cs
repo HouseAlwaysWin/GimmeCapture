@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reactive;
+using System.Threading.Tasks;
 using ReactiveUI;
 using ReactiveUI.Reactive;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -13,6 +15,7 @@ namespace GimmeCapture.ViewModels.Main;
 public class RecordingSettingsViewModel : ViewModelBase
 {
     private readonly Func<bool?> _hardwareAv1Answer;
+    private readonly Func<IReadOnlyList<AudioInputDevice>> _enumerateMicInputDevices;
 
     public RecordingSettingsViewModel()
         : this(() => LibavRecordingEncoder.KnownHardwareAv1Usable)
@@ -23,9 +26,13 @@ public class RecordingSettingsViewModel : ViewModelBase
     /// The hardware AV1 probe's answer so far, null until it has run. The real one is process-wide, so tests pass their
     /// own rather than race every other test that starts the probe.
     /// </param>
-    internal RecordingSettingsViewModel(Func<bool?> hardwareAv1Answer)
+    /// <param name="enumerateMicInputDevices">Lists the microphones; the system's own when null. Tests pass their own.</param>
+    internal RecordingSettingsViewModel(
+        Func<bool?> hardwareAv1Answer,
+        Func<IReadOnlyList<AudioInputDevice>>? enumerateMicInputDevices = null)
     {
         _hardwareAv1Answer = hardwareAv1Answer;
+        _enumerateMicInputDevices = enumerateMicInputDevices ?? AudioInputDevices.Enumerate;
         RefreshWebcamDevicesCommand = ReactiveCommand.Create(RefreshWebcamDevices);
     }
 
@@ -117,7 +124,7 @@ public class RecordingSettingsViewModel : ViewModelBase
     ///
     /// Knowing that means test-opening an encoder, after loading FFmpeg if nothing has — 1.75 s, measured on the UI
     /// thread at startup when this list probed for itself. The list now only reads the probe's answer; the probe
-    /// runs on the thread pool (see <see cref="MainWindowViewModel.LoadSettingsAsync"/>) and
+    /// runs on the thread pool (see <see cref="MainWindowViewModel.StartHardwareProbe"/>) and
     /// <see cref="ApplyHardwareAv1ProbeResult"/> rebuilds the list once it answers.
     /// </summary>
     public VideoCodecOption[] VideoCodecOptions => _videoCodecOptions ??= BuildVideoCodecOptions();
@@ -361,7 +368,26 @@ public class RecordingSettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _micVolume, Math.Clamp(value, 0.0, 2.0));
     }
 
-    // Available microphone / capture devices (first entry = system default, empty id).
-    public System.Collections.Generic.IReadOnlyList<GimmeCapture.Services.Core.Media.AudioInputDevice> MicInputDevices { get; } =
-        GimmeCapture.Services.Core.Media.AudioInputDevices.Enumerate();
+    // Available microphone / capture devices (first entry = system default, empty id). Empty until
+    // LoadMicInputDevicesAsync has run.
+    private IReadOnlyList<AudioInputDevice> _micInputDevices = [];
+    public IReadOnlyList<AudioInputDevice> MicInputDevices
+    {
+        get => _micInputDevices;
+        private set => this.RaiseAndSetIfChanged(ref _micInputDevices, value);
+    }
+
+    private Task? _micInputDevicesLoad;
+
+    /// <summary>
+    /// Lists the microphones on the thread pool, once. That is COM device enumeration, 65–90 ms measured, and it ran on
+    /// the UI thread at every launch when this view model was built; only the Record tab shows the list, and it waits for
+    /// this before it is built, so its picker never binds to a list still being filled.
+    /// </summary>
+    internal Task LoadMicInputDevicesAsync() => _micInputDevicesLoad ??= LoadMicInputDevicesCoreAsync();
+
+    private async Task LoadMicInputDevicesCoreAsync()
+    {
+        MicInputDevices = await Task.Run(_enumerateMicInputDevices);
+    }
 }

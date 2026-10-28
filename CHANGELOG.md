@@ -114,6 +114,14 @@
 
 ### ⚡ Performance
 
+- **The app opens a third of a second sooner, and its hotkeys work half a second sooner.** From launch to the main
+  window's first frame took 1.35 s and now takes 1.01 s, and the app stops responding for 0.54 s at start-up instead of
+  0.88 s (a published build, 10 launches each). The global hotkeys work 0.65 s after launch instead of 1.12 s; one
+  pressed before then was lost, not just late. The saved settings are read in the background while the app starts and
+  applied before the main window is built, instead of arriving just before its first frame and laying parts of it out
+  again; the microphone list is read when the Record tab first opens; the hidden window the hotkeys waited for is built
+  only for a launch to the tray; and the AV1 encoder check waits for the first frame. Launched to the tray, the settings
+  are applied at 0.46 s instead of 0.77 s. `Startup.Timings` also logs `hotkeysAt`.
 - **Launching the app or opening a capture no longer rewrites the settings file.** Every launch saved the settings
   although nothing had changed: the AV1 encoder check reporting whether GIF recording works counted as a change. Every
   capture saved them too, before its overlay opened. A save now leaves the file alone when it already holds the same

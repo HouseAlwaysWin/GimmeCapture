@@ -54,6 +54,35 @@ public partial class MainWindow
         tabControl.SelectedIndex = 6;
     }
 
+    // The microphone list is read on the thread pool the first time the tab is shown, and the tab is built once it is in,
+    // so its device picker never binds to a list still being filled. The read takes a frame or a few.
+    private async Task ShowRecordTabAsync(ContentControl host)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            // The tab's codec list and GIF choice wait on the hardware probe, which the app otherwise starts after the
+            // first frame.
+            vm.StartHardwareProbe();
+
+            Task ready = vm.RecordingSettings.LoadMicInputDevicesAsync();
+            if (!ready.IsCompleted)
+            {
+                host.Content = new Panel(); // keeps a second visit from starting this again
+                try
+                {
+                    await ready;
+                }
+                catch (Exception ex)
+                {
+                    // Still show the tab, with an empty microphone list.
+                    AppLog.Warning("Record.LoadMicrophones", ex);
+                }
+            }
+        }
+
+        host.Content = new SettingsRecordTab();
+    }
+
     private void EnsureLazyTabContent(int selectedIndex)
     {
         switch (selectedIndex)
@@ -64,7 +93,10 @@ public partial class MainWindow
                 break;
             case 2:
                 _recordTabHost ??= this.FindControl<ContentControl>("RecordTabHost");
-                _recordTabHost!.Content ??= new SettingsRecordTab();
+                if (_recordTabHost!.Content == null)
+                {
+                    ShowRecordTabAsync(_recordTabHost).Forget("Record.ShowTab");
+                }
                 break;
             case 3:
                 _compressTabHost ??= this.FindControl<ContentControl>("CompressTabHost");
