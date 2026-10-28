@@ -103,6 +103,10 @@
 
 ### ⚡ Performance
 
+- **Seeking, changing speed or muting a playing video pin no longer stalls the app.** Each of these opened the clip's
+  audio and the audio device again on the UI thread, and closing the previous device waited there too. That now happens
+  in the background. A seek made while the audio is still opening waits its turn, and audio that a newer seek replaced
+  is never heard.
 - **A playing video pin does less work per frame, and never shows a frame that is half one and half the next.** Each
   frame was copied three times on its way to the screen, one copy up to twice the frame's size, and the screen read it
   while the next frame was being written into it. Each frame is now copied twice, at its own size, and the two copies

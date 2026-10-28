@@ -15,20 +15,41 @@ namespace GimmeCapture.Services.Core.Media;
 /// plays a source file's audio from a start position at an effective speed. 1× non-webm goes through
 /// NAudio's <see cref="MediaFoundationReader"/> (native rate); any other speed (or webm) decodes PCM via
 /// <see cref="LibavPinAudioPcmDecoder"/> and retimes by adjusting the sample rate. Output prefers
-/// WasapiOut and falls back to WaveOutEvent. The component owns the player/stream/decode-token trio and
-/// is safe to Stop/Start repeatedly from the host's playback loop.
+/// WasapiOut and falls back to WaveOutEvent.
+/// <para><see cref="Start"/> and <see cref="Stop"/> only record what the caller wants, so they are safe from any thread
+/// and never block it: opening a reader and an output device takes 30–150 ms, which the pin spent on the UI thread at
+/// every seek, speed change and mute. One worker does that work, a request at a time and the newest first, so a seek
+/// made while an earlier start is still opening waits for it instead of racing it, and the earlier one never plays.
+/// The worker's thread is in the MTA. Media Foundation is started there by the reader, which opens the file only to
+/// read its format and opens it again for reading on the output's own playback thread (another MTA thread), so its
+/// COM objects never cross apartments.</para>
 /// </summary>
 internal sealed class AudioPreviewPlayer : IDisposable
 {
+    // How long Dispose waits for the device and the file to be let go: a pin deletes its temporary recording next.
+    private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(2);
+
+    private readonly LatestRequestWorker<Request> _requests;
+
+    // What is playing. The worker puts it in place and takes it down; the decode thread puts its own output in place;
+    // Volume adjusts it. All three under _outputGate, so none of them misses a change the others make.
+    private readonly object _outputGate = new();
     private IWavePlayer? _player;
     private WaveStream? _stream;
     private VolumeSampleProvider? _volumeProvider;
+    private LinuxPulseAudioOutput? _linuxOutput; // Linux audio output (NAudio IWavePlayer is Windows-only)
     private CancellationTokenSource? _decodeCts;
-    private BufferedWaveProvider? _buffered;
     private Task? _decodeTask;
     private volatile bool _disposed;
     private float _volume = 1f;
-    private LinuxPulseAudioOutput? _linuxOutput; // Linux audio output (NAudio IWavePlayer is Windows-only)
+
+    // A start of the file at a position and speed, or a stop when VideoPath is null.
+    private readonly record struct Request(string? VideoPath, double StartSeconds, double EffectiveSpeed);
+
+    public AudioPreviewPlayer()
+    {
+        _requests = new LatestRequestWorker<Request>(Handle, "AudioPreview.Request");
+    }
 
     /// <summary>
     /// Preview playback volume, 0–1. Scales the audio samples <em>in the stream</em> (via
@@ -41,17 +62,18 @@ internal sealed class AudioPreviewPlayer : IDisposable
         get => _volume;
         set
         {
-            _volume = Math.Clamp(value, 0f, 1f);
-            var vp = _volumeProvider;
-            if (vp != null)
+            lock (_outputGate)
             {
-                vp.Volume = _volume;
-            }
+                _volume = Math.Clamp(value, 0f, 1f);
+                if (_volumeProvider != null)
+                {
+                    _volumeProvider.Volume = _volume;
+                }
 
-            var lo = _linuxOutput;
-            if (lo != null)
-            {
-                lo.Volume = _volume;
+                if (_linuxOutput != null)
+                {
+                    _linuxOutput.Volume = _volume;
+                }
             }
         }
     }
@@ -59,17 +81,36 @@ internal sealed class AudioPreviewPlayer : IDisposable
     /// <summary>
     /// (Re)start audio at <paramref name="startSeconds"/> with the given effective speed. Any previous
     /// playback is stopped first. Failures fall back to the decoded path, then log and stay silent
-    /// (preview audio is best-effort).
+    /// (preview audio is best-effort). Returns at once; the audio follows shortly.
     /// </summary>
     public void Start(string videoPath, double startSeconds, double effectiveSpeed)
     {
-        Stop();
         if (_disposed || string.IsNullOrEmpty(videoPath))
+        {
+            Stop();
+            return;
+        }
+
+        _requests.Submit(new Request(videoPath, Math.Max(0, startSeconds), effectiveSpeed));
+    }
+
+    /// <summary>Stops playback and releases the player/stream/decode token. Safe to call repeatedly. Returns at once.</summary>
+    public void Stop() => _requests.Submit(default);
+
+    // On the worker: whatever played stops, then the request starts, unless a newer one is already waiting.
+    private void Handle(Request request, Func<bool> superseded)
+    {
+        StopCore();
+        if (request.VideoPath is not { } videoPath || _disposed || superseded())
         {
             return;
         }
 
-        double start = Math.Max(0, startSeconds);
+        StartCore(videoPath, request.StartSeconds, request.EffectiveSpeed, superseded);
+    }
+
+    private void StartCore(string videoPath, double start, double effectiveSpeed, Func<bool> superseded)
+    {
         try
         {
             if (ShouldUseDecodedPlayback(videoPath, effectiveSpeed))
@@ -78,17 +119,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
                 return;
             }
 
-            var reader = new MediaFoundationReader(videoPath);
-            if (_disposed)
-            {
-                reader.Dispose();
-                return;
-            }
-
-            reader.CurrentTime = TimeSpan.FromSeconds(start);
-            _stream = reader;
-            _player = CreateOutput(_stream);
-            _player.Play();
+            StartMediaFoundationPlayback(videoPath, start, superseded);
         }
         catch (Exception ex)
         {
@@ -98,7 +129,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
             }
 
             AppLog.Warning("PinAudio.PrimaryOutput", ex);
-            Stop();
+            StopCore();
 
             try
             {
@@ -107,8 +138,43 @@ internal sealed class AudioPreviewPlayer : IDisposable
             catch (Exception fallbackEx)
             {
                 AppLog.Warning("PinAudio.FfmpegFallback", fallbackEx);
-                Stop();
+                StopCore();
             }
+        }
+    }
+
+    private void StartMediaFoundationPlayback(string videoPath, double start, Func<bool> superseded)
+    {
+        MediaFoundationReader? reader = null;
+        IWavePlayer? player = null;
+        try
+        {
+            reader = new MediaFoundationReader(videoPath);
+            reader.CurrentTime = TimeSpan.FromSeconds(start);
+            player = CreateOutput(reader, out VolumeSampleProvider volumeProvider);
+
+            lock (_outputGate)
+            {
+                // A newer request came in while the file opened: it runs next, so this one is never heard.
+                if (_disposed || superseded())
+                {
+                    return;
+                }
+
+                volumeProvider.Volume = _volume;
+                _stream = reader;
+                _player = player;
+                _volumeProvider = volumeProvider;
+                reader = null;
+                IWavePlayer playing = player;
+                player = null;
+                playing.Play(); // if this throws, StopCore still finds and disposes it
+            }
+        }
+        finally
+        {
+            player?.Dispose();
+            reader?.Dispose();
         }
     }
 
@@ -133,14 +199,11 @@ internal sealed class AudioPreviewPlayer : IDisposable
             return;
         }
 
-        _decodeCts = new CancellationTokenSource();
-        if (_disposed)
-        {
-            CancelDecode()?.Dispose();
-            return;
-        }
-
-        var token = _decodeCts.Token;
+        var cts = new CancellationTokenSource();
+        CancellationTokenSource? previous = Interlocked.Exchange(ref _decodeCts, cts);
+        previous?.Cancel();
+        previous?.Dispose();
+        var token = cts.Token;
 
         // Stream the audio: start the device on an initially-empty BufferedWaveProvider, then feed it from a
         // background decode. First audio lands in ~100-200 ms; memory stays bounded (decoder throttled ~4 s
@@ -148,6 +211,9 @@ internal sealed class AudioPreviewPlayer : IDisposable
         // held hundreds of MB in a MemoryStream.
         _decodeTask = Task.Run(() =>
         {
+            // This decode's own output, so a decode that a newer request cancelled never feeds the next one's device.
+            BufferedWaveProvider? buffered = null;
+            LinuxPulseAudioOutput? linuxOutput = null;
             try
             {
                 LibavPinAudioPcmDecoder.DecodeStreaming(
@@ -168,56 +234,55 @@ internal sealed class AudioPreviewPlayer : IDisposable
                         {
                             // NAudio's device output is Windows-only; play the decoded PCM through PulseAudio.
                             // pa_simple_write blocks, so it provides the backpressure the BufferedWaveProvider
-                            // gave on Windows — waitIfFull below stays a no-op (there's no _buffered on Linux).
+                            // gave on Windows — waitIfFull below stays a no-op (there's no buffer on Linux).
                             var output = new LinuxPulseAudioOutput { Volume = _volume };
-                            if (!output.Start(retimed.SampleRate, retimed.Channels) || _disposed || token.IsCancellationRequested)
+                            if (output.Start(retimed.SampleRate, retimed.Channels) && TryAdoptLinuxOutput(output, token))
+                            {
+                                linuxOutput = output;
+                            }
+                            else
                             {
                                 output.Dispose();
-                                return;
                             }
 
-                            _linuxOutput = output;
                             return;
                         }
 
-                        var buffered = new BufferedWaveProvider(retimed)
+                        var bufferedProvider = new BufferedWaveProvider(retimed)
                         {
                             BufferDuration = TimeSpan.FromSeconds(4),
                             DiscardOnBufferOverflow = false,
                             ReadFully = true, // underrun => silence, never signals end-of-stream (device won't stop)
                         };
 
-                        IWavePlayer player = CreateOutput(buffered);
-                        if (_disposed || token.IsCancellationRequested)
+                        IWavePlayer player = CreateOutput(bufferedProvider, out VolumeSampleProvider volumeProvider);
+                        if (TryAdoptOutput(player, volumeProvider, token))
+                        {
+                            buffered = bufferedProvider;
+                        }
+                        else
                         {
                             player.Dispose();
-                            return;
                         }
-
-                        _buffered = buffered;
-                        _player = player;
-                        player.Play();
                     },
                     onPcm: (buffer, length) =>
                     {
                         // Linux: pa_simple_write blocks → paces the decoder itself. Windows: feed the buffer.
-                        var lo = _linuxOutput;
-                        if (lo != null)
+                        if (linuxOutput != null)
                         {
-                            lo.Write(buffer, length);
+                            linuxOutput.Write(buffer, length);
                         }
                         else
                         {
-                            _buffered?.AddSamples(buffer, 0, length);
+                            buffered?.AddSamples(buffer, 0, length);
                         }
                     },
                     waitIfFull: () =>
                     {
                         // Backpressure: keep the decoder ~3-4 s ahead so memory stays bounded (~768 KB).
-                        BufferedWaveProvider? bp;
-                        while ((bp = _buffered) != null
+                        while (buffered != null
                                && !token.IsCancellationRequested
-                               && bp.BufferedDuration > TimeSpan.FromSeconds(3))
+                               && buffered.BufferedDuration > TimeSpan.FromSeconds(3))
                         {
                             Thread.Sleep(15);
                         }
@@ -234,6 +299,40 @@ internal sealed class AudioPreviewPlayer : IDisposable
                 AppLog.Debug("PinAudio.StreamingDecode", ex);
             }
         }, token);
+    }
+
+    // The decode thread's device goes in place only while its decode is still wanted: once a stop or a newer request
+    // has cancelled it, the caller disposes the device, so nothing it opened outlives that stop.
+    private bool TryAdoptOutput(IWavePlayer player, VolumeSampleProvider volumeProvider, CancellationToken token)
+    {
+        lock (_outputGate)
+        {
+            if (_disposed || token.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            volumeProvider.Volume = _volume;
+            _player = player;
+            _volumeProvider = volumeProvider;
+            player.Play(); // if this throws, StopCore still finds and disposes it
+            return true;
+        }
+    }
+
+    private bool TryAdoptLinuxOutput(LinuxPulseAudioOutput output, CancellationToken token)
+    {
+        lock (_outputGate)
+        {
+            if (_disposed || token.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            output.Volume = _volume;
+            _linuxOutput = output;
+            return true;
+        }
     }
 
     /// <summary>Retimes audio by scaling the sample rate (pitch shifts with speed, like the Pin preview).</summary>
@@ -265,10 +364,10 @@ internal sealed class AudioPreviewPlayer : IDisposable
     internal static (VolumeSampleProvider Volume, IWaveProvider Output) BuildVolumePipeline(WaveStream stream, float volume)
         => BuildVolumePipeline((IWaveProvider)stream, volume);
 
-    private IWavePlayer CreateOutput(IWaveProvider source)
+    // Opens the output device for source. The volume stage it returns is put in place with the device, under _outputGate.
+    private IWavePlayer CreateOutput(IWaveProvider source, out VolumeSampleProvider volumeProvider)
     {
-        (VolumeSampleProvider volumeProvider, IWaveProvider output) = BuildVolumePipeline(source, _volume);
-        _volumeProvider = volumeProvider;
+        (volumeProvider, IWaveProvider output) = BuildVolumePipeline(source, _volume);
 
         var wasapi = new WasapiOut();
         try
@@ -285,8 +384,6 @@ internal sealed class AudioPreviewPlayer : IDisposable
         waveOut.Init(output);
         return waveOut;
     }
-
-    private IWavePlayer CreateOutput(WaveStream stream) => CreateOutput((IWaveProvider)stream);
 
     /// <summary>
     /// Cancels any in-flight PCM decode and hands the token source to the caller (dispose off-thread) —
@@ -309,23 +406,44 @@ internal sealed class AudioPreviewPlayer : IDisposable
         return oldCts;
     }
 
-    /// <summary>Stops playback and releases the player/stream/decode token. Safe to call repeatedly.</summary>
-    public void Stop()
+    // On the worker: stops and releases whatever plays. A decode still running sees its token cancelled and stops
+    // feeding; it can no longer put a device in place.
+    private void StopCore()
     {
+        CancellationTokenSource? decodeCts = Interlocked.Exchange(ref _decodeCts, null);
+        if (decodeCts != null)
+        {
+            try
+            {
+                decodeCts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            decodeCts.Dispose();
+        }
+
+        IWavePlayer? player;
+        WaveStream? stream;
+        LinuxPulseAudioOutput? linuxOutput;
+        lock (_outputGate)
+        {
+            player = _player;
+            stream = _stream;
+            linuxOutput = _linuxOutput;
+            _player = null;
+            _stream = null;
+            _linuxOutput = null;
+            _volumeProvider = null;
+        }
+
         try
         {
-            _decodeCts?.Cancel();
-            _decodeCts?.Dispose();
-            _decodeCts = null;
-            _player?.Stop();
-            _player?.Dispose();
-            _player = null;
-            _volumeProvider = null;
-            _stream?.Dispose();
-            _stream = null;
-            _linuxOutput?.Dispose(); // frees the pa_simple handle (Dispose waits out any in-flight blocking write)
-            _linuxOutput = null;
-            _buffered = null; // decode thread's onPcm/waitIfFull observe null + the cancelled token and exit
+            player?.Stop();
+            player?.Dispose();
+            stream?.Dispose();
+            linuxOutput?.Dispose(); // frees the pa_simple handle (Dispose waits out any in-flight blocking write)
         }
         catch (Exception ex)
         {
@@ -333,9 +451,33 @@ internal sealed class AudioPreviewPlayer : IDisposable
         }
     }
 
+    /// <summary>Stops playback and waits, two seconds at most, until the device and the file are let go.</summary>
     public void Dispose()
     {
         _disposed = true;
         Stop();
+
+        var waited = Stopwatch.StartNew();
+        bool released = _requests.WaitUntilIdle(DisposeTimeout);
+
+        // The stop cancelled the last decode; it closes the file as soon as it notices.
+        Task? decode = _decodeTask;
+        TimeSpan left = DisposeTimeout - waited.Elapsed;
+        if (released && decode != null && left > TimeSpan.Zero)
+        {
+            try
+            {
+                released = decode.Wait(left);
+            }
+            catch (AggregateException)
+            {
+                // cancelled before it started: nothing was opened
+            }
+        }
+
+        if (!released)
+        {
+            AppLog.Debug("AudioPreview.Dispose", $"still releasing the audio device or file after {DisposeTimeout.TotalSeconds:0} s");
+        }
     }
 }
