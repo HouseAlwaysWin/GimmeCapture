@@ -567,119 +567,11 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 
             if (masksResult == null || iouResult == null) throw new Exception("Decoder Error: Missing masks/IOU.");
 
-            var masksTensor = masksResult.AsTensor<float>();
-            var iouTensor = iouResult.AsTensor<float>();
-
-            int bestIdx = 0;
-            float maxScore = -1000f;
-            float bestIou = 0, bestDensity = 0;
-            string bestPointStats = "";
-            int numMasks = iouTensor.Dimensions[1];
-            int mh = masksTensor.Dimensions[2], mw = masksTensor.Dimensions[3];
-            float gxFactor = (float)mw / 1024f, gyFactor = (float)mh / 1024f;
-            int activeMw = mw, activeMh = mh;
-
-            for(int i=0; i<numMasks; i++)
-            {
-                // REV22: 先計算此 mask 的值域來決定閾值
-                float minVal = float.MaxValue, maxVal = float.MinValue;
-                for(int sy=0; sy<mh; sy+=10) {
-                    for(int sx=0; sx<mw; sx+=10) {
-                        float v = masksTensor[0, i, sy, sx];
-                        if (v < minVal) minVal = v;
-                        if (v > maxVal) maxVal = v;
-                    }
-                }
-                float threshold = (maxVal > 10) ? 127.5f : (minVal < -1 ? 0f : 0.5f);
-                
-                float iou = iouTensor[0, i];
-                int pointErrors = 0;
-                string pointStats = $"R:{minVal:F0}~{maxVal:F0}T:{threshold:F1} ";
-                for(int pIdx=0; pIdx < pointList.Count; pIdx++) {
-                    var p = pointList[pIdx];
-                    int gx = (int)Math.Clamp(p.X * scaleX * gxFactor, 0, mw - 1);
-                    int gy = (int)Math.Clamp(p.Y * scaleY * gyFactor, 0, mh - 1);
-
-                    float val = masksTensor[0, i, gy, gx];
-                    float valSwap = masksTensor[0, i, Math.Clamp(gx, 0, mh-1), Math.Clamp(gy, 0, mw-1)];
-                    
-                    bool hasMask = val > threshold;
-                    if (p.IsPositive && !hasMask) pointErrors++;
-                    if (!p.IsPositive && hasMask) pointErrors++;
-                    
-                    string xyTag = (val <= threshold && valSwap > threshold) ? "[SWP?]" : "";
-                    pointStats += $"P{pIdx}({gx},{gy})={val:F0}{xyTag}|";
-                    
-                    // Nuclear Debug: Only first point, first mask
-                    if (i == 0 && pIdx == 0) {
-                        bestPointStats = pointStats;
-                    }
-                }
-
-                int count = 0;
-                for(int y=0; y<activeMh; y++)
-                    for(int x=0; x<activeMw; x++)
-                        if (masksTensor[0, i, Math.Min(y, mh-1), Math.Min(x, mw-1)] > threshold) count++;
-                
-                float density = (float)count / Math.Max(1, activeMw * activeMh);
-                float currentScore = iou;
-                if (pointErrors > 0) currentScore -= (pointErrors * 50.0f); 
-                if (density > 0.45f) currentScore -= 10.0f;
-                else if (density < 0.25f && density > 0.01f) currentScore += 2.0f; 
-
-                // NOTE: Corner check moved outside loop
-
-                AppLog.Debug("SAM2Service", $"[AI BRAIN] Mask {i}: IOU={iou:F2} D={density:F2} Err={pointErrors} Score={currentScore:F2} {pointStats}");
-
-                if (currentScore > maxScore) {
-                    maxScore = currentScore; bestIdx = i; bestIou = iou; bestDensity = density; bestPointStats = pointStats;
-                }
-            }
-
-            // 根據最佳 mask 重新計算閾值
-            float finalMinVal = float.MaxValue, finalMaxVal = float.MinValue;
-            for(int sy=0; sy<mh; sy+=5) {
-                for(int sx=0; sx<mw; sx+=5) {
-                    float v = masksTensor[0, bestIdx, sy, sx];
-                    if (v < finalMinVal) finalMinVal = v;
-                    if (v > finalMaxVal) finalMaxVal = v;
-                }
-            }
-            float finalThreshold = (finalMaxVal > 10) ? 127.5f : (finalMinVal < -1 ? 0f : 0.5f);
-
-            bool finalTouchesLT = masksTensor[0, bestIdx, 1, 1] > finalThreshold;
-            bool finalTouchesRT = masksTensor[0, bestIdx, 1, mw - 2] > finalThreshold;
-            bool finalTouchesLB = masksTensor[0, bestIdx, mh - 2, 1] > finalThreshold;
-            bool finalTouchesRB = masksTensor[0, bestIdx, mh - 2, mw - 2] > finalThreshold;
-            bool isAllSelect = finalTouchesLT && finalTouchesRT && finalTouchesLB && finalTouchesRB;
-            
-            // 如果四角都選中且密度很高，嘗試反轉 mask
-            bool invertMask = isAllSelect && bestDensity > 0.7f;
-            string invTag = invertMask ? "[INV!]" : "";
-
-            AppLog.Debug("SAM2Service", $"[AI FINAL] Mask {bestIdx}: Min={finalMinVal:F1} Max={finalMaxVal:F1} Thresh={finalThreshold} Inv={invertMask}");
-
-            _lastIouInfo = $"REV:{_buildRev} {invTag}{bestPointStats} | D={bestDensity:F1}";
-
-            // Extract result & RESIZE BACK TO ORIGINAL (Not 1024)
-            using var maskFull = new SKBitmap(mw, mh, SKColorType.Gray8, SKAlphaType.Opaque);
-            // Gray8 is one byte per pixel, so write the rows straight through: SetPixel would run a colour
-            // conversion for every pixel of a mask that is routinely 1024x1024.
-            unsafe
-            {
-                byte* maskBase = (byte*)maskFull.GetPixels().ToPointer();
-                int maskRowBytes = maskFull.RowBytes;
-                for (int y = 0; y < mh; y++)
-                {
-                    byte* maskRow = maskBase + (y * maskRowBytes);
-                    for (int x = 0; x < mw; x++)
-                    {
-                        bool isSelected = masksTensor[0, bestIdx, y, x] > finalThreshold;
-                        if (invertMask) isSelected = !isSelected;
-                        maskRow[x] = isSelected ? (byte)255 : (byte)0;
-                    }
-                }
-            }
+            // Extract result & RESIZE BACK TO ORIGINAL (Not 1024). Read before the results are disposed: the masks
+            // are read straight from the output's buffer.
+            using var maskFull = ReadBestMask(masksResult.AsTensor<float>(), iouResult.AsTensor<float>(), pointList, scaleX, scaleY, out var choice);
+            string invTag = choice.Inverted ? "[INV!]" : "";
+            _lastIouInfo = $"REV:{_buildRev} {invTag}{choice.PointStats} | D={choice.Density:F1}";
 
             // CRITICAL: Resize the mask back to the ORIGINAL dimensions so it aligns in the UI
             using var resizedMask = maskFull.Resize(new SKImageInfo(_originalWidth, _originalHeight), new SKSamplingOptions(SKFilterMode.Linear));
@@ -690,6 +582,191 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
             // a byte at a time.
             return NormalizeToGray8(resizedMask);
         });
+    }
+
+    /// <summary>What <see cref="ReadBestMask"/> picked, for the diagnostics line.</summary>
+    internal readonly record struct MaskChoice(int Index, bool Inverted, float Density, string PointStats);
+
+    /// <summary>
+    /// Picks the decoder mask that best fits <paramref name="points"/> and returns it as a Gray8 bitmap at the mask's
+    /// own size, white where selected. The bitmap is the caller's to dispose.
+    /// </summary>
+    /// <remarks>
+    /// Reads the masks through the tensor's memory (<see cref="MaskPlanes"/>), never its indexer. Internal so
+    /// <c>Sam2MaskReadoutTests</c> can hold it to the indexer's answer.
+    /// </remarks>
+    internal static SKBitmap ReadBestMask(
+        Tensor<float> masksTensor,
+        Tensor<float> iouTensor,
+        IReadOnlyList<(double X, double Y, bool IsPositive)> points,
+        float scaleX,
+        float scaleY,
+        out MaskChoice choice)
+    {
+        var masks = new MaskPlanes(masksTensor);
+        int bestIdx = 0;
+        float maxScore = -1000f;
+        float bestDensity = 0;
+        string bestPointStats = "";
+        int numMasks = iouTensor.Dimensions[1];
+        int mh = masks.Height, mw = masks.Width;
+        float gxFactor = (float)mw / 1024f, gyFactor = (float)mh / 1024f;
+
+        for(int i=0; i<numMasks; i++)
+        {
+            // REV22: 先計算此 mask 的值域來決定閾值
+            float minVal = float.MaxValue, maxVal = float.MinValue;
+            for(int sy=0; sy<mh; sy+=10) {
+                for(int sx=0; sx<mw; sx+=10) {
+                    float v = masks[i, sy, sx];
+                    if (v < minVal) minVal = v;
+                    if (v > maxVal) maxVal = v;
+                }
+            }
+            float threshold = (maxVal > 10) ? 127.5f : (minVal < -1 ? 0f : 0.5f);
+
+            float iou = iouTensor[0, i];
+            int pointErrors = 0;
+            string pointStats = $"R:{minVal:F0}~{maxVal:F0}T:{threshold:F1} ";
+            for(int pIdx=0; pIdx < points.Count; pIdx++) {
+                var p = points[pIdx];
+                int gx = (int)Math.Clamp(p.X * scaleX * gxFactor, 0, mw - 1);
+                int gy = (int)Math.Clamp(p.Y * scaleY * gyFactor, 0, mh - 1);
+
+                float val = masks[i, gy, gx];
+                float valSwap = masks[i, Math.Clamp(gx, 0, mh-1), Math.Clamp(gy, 0, mw-1)];
+
+                bool hasMask = val > threshold;
+                if (p.IsPositive && !hasMask) pointErrors++;
+                if (!p.IsPositive && hasMask) pointErrors++;
+
+                string xyTag = (val <= threshold && valSwap > threshold) ? "[SWP?]" : "";
+                pointStats += $"P{pIdx}({gx},{gy})={val:F0}{xyTag}|";
+
+                // Nuclear Debug: Only first point, first mask
+                if (i == 0 && pIdx == 0) {
+                    bestPointStats = pointStats;
+                }
+            }
+
+            float density = (float)masks.CountAbove(i, threshold) / Math.Max(1, mw * mh);
+            float currentScore = iou;
+            if (pointErrors > 0) currentScore -= (pointErrors * 50.0f);
+            if (density > 0.45f) currentScore -= 10.0f;
+            else if (density < 0.25f && density > 0.01f) currentScore += 2.0f;
+
+            AppLog.Debug("SAM2Service", $"[AI BRAIN] Mask {i}: IOU={iou:F2} D={density:F2} Err={pointErrors} Score={currentScore:F2} {pointStats}");
+
+            if (currentScore > maxScore) {
+                maxScore = currentScore; bestIdx = i; bestDensity = density; bestPointStats = pointStats;
+            }
+        }
+
+        // 根據最佳 mask 重新計算閾值
+        float finalMinVal = float.MaxValue, finalMaxVal = float.MinValue;
+        for(int sy=0; sy<mh; sy+=5) {
+            for(int sx=0; sx<mw; sx+=5) {
+                float v = masks[bestIdx, sy, sx];
+                if (v < finalMinVal) finalMinVal = v;
+                if (v > finalMaxVal) finalMaxVal = v;
+            }
+        }
+        float finalThreshold = (finalMaxVal > 10) ? 127.5f : (finalMinVal < -1 ? 0f : 0.5f);
+
+        bool finalTouchesLT = masks[bestIdx, 1, 1] > finalThreshold;
+        bool finalTouchesRT = masks[bestIdx, 1, mw - 2] > finalThreshold;
+        bool finalTouchesLB = masks[bestIdx, mh - 2, 1] > finalThreshold;
+        bool finalTouchesRB = masks[bestIdx, mh - 2, mw - 2] > finalThreshold;
+        bool isAllSelect = finalTouchesLT && finalTouchesRT && finalTouchesLB && finalTouchesRB;
+
+        // 如果四角都選中且密度很高，嘗試反轉 mask
+        bool invertMask = isAllSelect && bestDensity > 0.7f;
+
+        AppLog.Debug("SAM2Service", $"[AI FINAL] Mask {bestIdx}: Min={finalMinVal:F1} Max={finalMaxVal:F1} Thresh={finalThreshold} Inv={invertMask}");
+
+        var maskFull = new SKBitmap(mw, mh, SKColorType.Gray8, SKAlphaType.Opaque);
+        // Gray8 is one byte per pixel, so write the rows straight through: SetPixel would run a colour
+        // conversion for every pixel of a mask that is routinely 1024x1024.
+        ReadOnlySpan<float> values = masks.Values;
+        int columnStride = masks.ColumnStride;
+        unsafe
+        {
+            byte* maskBase = (byte*)maskFull.GetPixels().ToPointer();
+            int maskRowBytes = maskFull.RowBytes;
+            for (int y = 0; y < mh; y++)
+            {
+                byte* maskRow = maskBase + (y * maskRowBytes);
+                int at = masks.RowStart(bestIdx, y);
+                for (int x = 0; x < mw; x++, at += columnStride)
+                {
+                    bool isSelected = values[at] > finalThreshold;
+                    if (invertMask) isSelected = !isSelected;
+                    maskRow[x] = isSelected ? (byte)255 : (byte)0;
+                }
+            }
+        }
+
+        choice = new MaskChoice(bestIdx, invertMask, bestDensity, bestPointStats);
+        return maskFull;
+    }
+
+    /// <summary>
+    /// The masks of a decoder output's first batch item, read through the tensor's memory at offsets worked out from
+    /// its strides.
+    /// </summary>
+    /// <remarks>
+    /// The tensor's own indexer takes its indices as a <c>params int[]</c>, so every read allocated an array, then went
+    /// through virtual calls and ONNX Runtime's memory manager for the native buffer to find one float — and a click
+    /// reads a 1024x1024 output about four million times.
+    /// </remarks>
+    private readonly ref struct MaskPlanes
+    {
+        private readonly int _maskStride;
+        private readonly int _rowStride;
+
+        public MaskPlanes(Tensor<float> tensor)
+        {
+            // ONNX Runtime returns its outputs as dense tensors over the native buffer; anything else is copied into one.
+            var dense = tensor as DenseTensor<float> ?? tensor.ToDenseTensor();
+            ReadOnlySpan<int> strides = dense.Strides;
+            ReadOnlySpan<int> dimensions = dense.Dimensions;
+            Values = dense.Buffer.Span;
+            _maskStride = strides[1];
+            _rowStride = strides[2];
+            ColumnStride = strides[3];
+            Height = dimensions[2];
+            Width = dimensions[3];
+        }
+
+        public ReadOnlySpan<float> Values { get; }
+        public int Height { get; }
+        public int Width { get; }
+
+        /// <summary>How far apart a row's neighbouring values lie in <see cref="Values"/>: 1 for a row-major tensor.</summary>
+        public int ColumnStride { get; }
+
+        public float this[int mask, int y, int x] => Values[RowStart(mask, y) + (x * ColumnStride)];
+
+        /// <summary>Where row <paramref name="y"/> of mask <paramref name="mask"/> starts in <see cref="Values"/>.</summary>
+        public int RowStart(int mask, int y) => (mask * _maskStride) + (y * _rowStride);
+
+        /// <summary>How many of the values of mask <paramref name="mask"/> lie above <paramref name="threshold"/>.</summary>
+        public int CountAbove(int mask, float threshold)
+        {
+            ReadOnlySpan<float> values = Values;
+            int height = Height, width = Width, columnStride = ColumnStride;
+            int count = 0;
+            for (int y = 0; y < height; y++)
+            {
+                int at = RowStart(mask, y);
+                for (int x = 0; x < width; x++, at += columnStride)
+                {
+                    if (values[at] > threshold) count++;
+                }
+            }
+
+            return count;
+        }
     }
 
     /// <summary>

@@ -81,6 +81,10 @@
 
 ### ⚡ Performance
 
+- **Smart selection reads its result about 45 ms faster a click.** It read the model's three 1024×1024 masks about four
+  million times through ONNX Runtime's tensor indexer, which allocated a small array on every read: 45–56 ms and 163 MB
+  of memory to clean up after each click. It now reads them in place: about 3 ms, nothing to clean up, and the same
+  selection.
 - **The Windows download is a folder, so the first launch after an update no longer unpacks the app.** The single
   file unpacked all 478 MB of itself into `%TEMP%\.net\GimmeCapture` the first time each version ran: 2.7 s here
   before anything started, so the first frame came 6.1 s after launch instead of 2.3 s. Every earlier version's
