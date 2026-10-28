@@ -50,10 +50,12 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
 4. ✅ CI and tests: one Linux workflow (#187), Linux and Windows release builds side by side (#188), release and
    hung-test guards (#189), coverage without `.axaml` at a 30% gate and the audio and Linux tests in CI (#190), NuGet
    updates by hand after Dependabot proved unable to handle the multi-target projects (#191, #193, #194)
+5. ✅ Library upgrades: LLamaSharp 0.27 → 0.30, measured on a real model, and ReactiveUI 23 → 26 through
+   ReactiveUI.Avalonia.Reactive
 
 ### Next
-- Library upgrades held back for PRs of their own: ReactiveUI 26 (with ReactiveUI.Avalonia), NAudio 3,
-  LLamaSharp 0.30, ONNX Runtime past the DirectML 1.24 line, FFmpeg 9 (FFmpeg.AutoGen 9 and a new mirrored build)
+- Library upgrades held back for PRs of their own: NAudio 3, ONNX Runtime past the DirectML 1.24 line, FFmpeg 9
+  (FFmpeg.AutoGen 9 and a new mirrored build)
 
 ## Remaining `Application.Current` Usage
 In sanctioned locations (platform impls / composition root / view code-behind):
