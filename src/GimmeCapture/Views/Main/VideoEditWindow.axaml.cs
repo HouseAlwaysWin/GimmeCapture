@@ -42,7 +42,8 @@ public partial class VideoEditWindow : Window
         _annotationInput = new AnnotationInputController(
             getState: () => (DataContext as VideoEditViewModel)?.EditorState,
             getContentControl: () => SurfacePanel,
-            getContentSnapshot: () => (DataContext as VideoEditViewModel)?.Frame,
+            // A copy: the annotation keeps it, while the preview bitmap is redrawn by every frame and replaced on resize.
+            getContentSnapshot: () => (DataContext as VideoEditViewModel)?.CopyFrame(),
             isInteractionBlocked: () => (DataContext as VideoEditViewModel)?.IsPreparing ?? true,
             confirmTextEntry: () =>
             {
@@ -212,6 +213,8 @@ public partial class VideoEditWindow : Window
         if (DataContext is VideoEditViewModel vm)
         {
             vm.RequestClose = Close;
+            // Frames are drawn into the bitmap the preview already shows, which repaints nothing by itself.
+            vm.RequestRedraw = PreviewImage.InvalidateVisual;
             _layoutHandler = () => Dispatcher.UIThread.Post(UpdateSegmentLayout);
             vm.SegmentLayoutChanged += _layoutHandler;
             _positionSub = vm.WhenAnyValue(x => x.PositionSeconds)
@@ -231,6 +234,7 @@ public partial class VideoEditWindow : Window
             {
                 vm.SegmentLayoutChanged -= _layoutHandler;
             }
+            vm.RequestRedraw = null;
             vm.Dispose(); // stop playback
         }
     }

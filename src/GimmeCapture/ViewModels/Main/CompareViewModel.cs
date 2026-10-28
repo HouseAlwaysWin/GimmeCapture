@@ -1,18 +1,17 @@
 using System;
 using System.IO;
 using System.Reactive;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
-using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
 using ReactiveUI.Reactive;
-using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -52,6 +51,15 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _stepCts;
     private CancellationTokenSource? _sampleCts; // supersedes an in-flight window encode when the target moves
     private volatile bool _disposed;
+
+    // Bumped on each play and pause (UI thread), so a stopped play loop's frames, playhead and "stopped" don't land
+    // after a seek or a new play.
+    private int _playGeneration;
+
+    // Playback hands each side's newest decoded frame to the UI thread here, which draws it into that side's one
+    // bitmap (see VideoFrameBitmap).
+    private readonly LatestFrameSlot _sourceFrames = new();
+    private readonly LatestFrameSlot _sampleFrames = new();
 
     internal CompareViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
@@ -96,11 +104,15 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
     internal static double ComputeWindowStart(double durationSeconds, double windowLen, double pos)
         => Math.Clamp(pos - windowLen * 0.25, 0, Math.Max(0, durationSeconds - windowLen));
 
-    private Bitmap? _sourceFrame;
-    public Bitmap? SourceFrame { get => _sourceFrame; private set => this.RaiseAndSetIfChanged(ref _sourceFrame, value); }
+    // Each side's frame bitmap: made by the first frame, then every later frame of the same size is drawn into it.
+    private WriteableBitmap? _sourceFrame;
+    public Bitmap? SourceFrame => _sourceFrame;
 
-    private Bitmap? _sampleFrame;
-    public Bitmap? SampleFrame { get => _sampleFrame; private set => this.RaiseAndSetIfChanged(ref _sampleFrame, value); }
+    private WriteableBitmap? _sampleFrame;
+    public Bitmap? SampleFrame => _sampleFrame;
+
+    /// <summary>Set by the view: repaints both frames after one was drawn into the bitmap it already shows.</summary>
+    public Action? RequestRedraw { get; set; }
 
     private double _positionSeconds;
     public double PositionSeconds
@@ -181,18 +193,19 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         _playCts?.Cancel();
         _playCts = new CancellationTokenSource();
         CancellationToken ct = _playCts.Token;
+        int gen = ++_playGeneration;
         IsPlaying = true;
 
         double start = PositionSeconds >= _duration - 0.05 ? 0 : PositionSeconds; // replay from start if at end
         PositionSeconds = start;
 
-        _ = Task.Run(() => PlayLoopAsync(start, ct), ct);
+        _ = Task.Run(() => PlayLoopAsync(start, gen, ct), ct);
         return Task.CompletedTask;
     }
 
     // Plays source + sample in sync, encoding CONTIGUOUS short windows so playback follows the playhead through
     // the whole clip (with a brief re-sample at each window boundary).
-    private async Task PlayLoopAsync(double startPos, CancellationToken ct)
+    private async Task PlayLoopAsync(double startPos, int gen, CancellationToken ct)
     {
         try
         {
@@ -234,8 +247,10 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                         await ps.PlayAsync(samplePath, _decodeW, _decodeH, playFrom - winStart, 1.0, false, (data, _) =>
                         {
                             if (wct.IsCancellationRequested) throw new OperationCanceledException();
-                            Bitmap? bmp = BytesToBitmap(data);
-                            Dispatcher.UIThread.Post(() => SampleFrame = bmp);
+                            if (_sampleFrames.Offer(data, _decodeW, _decodeH, gen, 0))
+                            {
+                                Dispatcher.UIThread.Post(DrawPlayedSample);
+                            }
                         }, wct);
                     }
                     catch (OperationCanceledException) { }
@@ -250,8 +265,11 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                     {
                         if (wct.IsCancellationRequested || ts >= winEnd) throw new OperationCanceledException();
                         srcReady.TrySetResult(); // first frame of the window releases the sample to start in step
-                        Bitmap? bmp = BytesToBitmap(data);
-                        Dispatcher.UIThread.Post(() => { SourceFrame = bmp; PositionSeconds = ts; });
+                        // Only the newest frame of each side waits for the UI thread; a later one replaces it.
+                        if (_sourceFrames.Offer(data, _decodeW, _decodeH, gen, ts))
+                        {
+                            Dispatcher.UIThread.Post(DrawPlayedSource);
+                        }
                     }, wct);
                 }
                 catch (OperationCanceledException) { /* window end or paused */ }
@@ -272,18 +290,111 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
                 pos = winEnd;                    // advance to the next contiguous window
                 double next = pos;
-                Dispatcher.UIThread.Post(() => PositionSeconds = next);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (gen == _playGeneration)
+                    {
+                        PositionSeconds = next;
+                    }
+                });
             }
         }
         catch (OperationCanceledException) { /* paused */ }
         catch (Exception ex) { AppLog.Error("Compress.ComparePlay", ex); }
-        finally { Dispatcher.UIThread.Post(() => IsPlaying = false); }
+        finally
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (gen == _playGeneration)
+                {
+                    IsPlaying = false; // a newer play owns the button; a pause has already reset it
+                }
+            });
+        }
     }
 
     private void Pause()
     {
         _playCts?.Cancel();
+        _playGeneration++;
         IsPlaying = false;
+    }
+
+    // UI thread: draws the newest frame each side's playback left, unless a pause / seek / new play superseded it.
+    private void DrawPlayedSource()
+    {
+        if (_sourceFrames.Take() is not { } frame)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!_disposed && frame.Ticket == _playGeneration)
+            {
+                DrawFrame(ref _sourceFrame, nameof(SourceFrame), frame.Pixels);
+                PositionSeconds = frame.Seconds;
+            }
+        }
+        finally
+        {
+            _sourceFrames.Return(frame.Pixels);
+        }
+    }
+
+    private void DrawPlayedSample()
+    {
+        if (_sampleFrames.Take() is not { } frame)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!_disposed && frame.Ticket == _playGeneration)
+            {
+                DrawFrame(ref _sampleFrame, nameof(SampleFrame), frame.Pixels);
+            }
+        }
+        finally
+        {
+            _sampleFrames.Return(frame.Pixels);
+        }
+    }
+
+    // UI thread. Draws a decoded frame into one side's bitmap, rotated like the editor shows it (both sides alike);
+    // the first frame makes the bitmap, which later frames reuse.
+    private void DrawFrame(ref WriteableBitmap? shown, string propertyName, ReadOnlySpan<byte> bgra)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            WriteableBitmap? drawn = VideoFrameBitmap.Draw(
+                shown, bgra, _decodeW, _decodeH, new PixelRect(0, 0, _decodeW, _decodeH), _rotation);
+            if (drawn == null)
+            {
+                return;
+            }
+
+            if (ReferenceEquals(drawn, shown))
+            {
+                RequestRedraw?.Invoke();
+                return;
+            }
+
+            WriteableBitmap? replaced = shown;
+            shown = drawn;
+            this.RaisePropertyChanged(propertyName);
+            replaced?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.CompareFrameBuild", ex);
+        }
     }
 
     // Slider scrubbing (driven by the panel code-behind): pause on grab, seek to the dropped position on release.
@@ -319,7 +430,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             {
                 return;
             }
-            if (src != null) { SourceFrame = BytesToBitmap(src); }
+            if (src != null) { DrawFrame(ref _sourceFrame, nameof(SourceFrame), src); }
 
             SampleWindow? win = await EnsureWindowForPosAsync(pos);
             if (ct.IsCancellationRequested || win == null)
@@ -333,7 +444,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             {
                 return;
             }
-            if (smp != null) { SampleFrame = BytesToBitmap(smp); }
+            if (smp != null) { DrawFrame(ref _sampleFrame, nameof(SampleFrame), smp); }
         }
         catch (OperationCanceledException) { /* superseded by a newer seek/step */ }
         catch (Exception ex) { AppLog.Error("Compress.CompareShowFrame", ex); }
@@ -463,34 +574,6 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             if (File.Exists(path)) { File.Delete(path); }
         }
         catch { /* best-effort; the whole temp dir is removed on Dispose */ }
-    }
-
-    private Bitmap? BytesToBitmap(byte[] bgra)
-    {
-        try
-        {
-            using var sk = new SKBitmap(new SKImageInfo(_decodeW, _decodeH, SKColorType.Bgra8888, SKAlphaType.Premul));
-            Marshal.Copy(bgra, 0, sk.GetPixels(), Math.Min(bgra.Length, _decodeW * _decodeH * 4));
-            if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(sk, out Bitmap? bmp, out _) || bmp == null)
-            {
-                return null;
-            }
-
-            if (_rotation == 0)
-            {
-                return bmp;
-            }
-
-            // Both source and sample are rotated equally here, so they match the editor's chosen orientation.
-            Bitmap? rotated = FloatingBitmapConversionHelper.TransformBitmap(bmp, _rotation, false, false);
-            bmp.Dispose();
-            return rotated;
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Compress.CompareFrameBuild", ex);
-            return null;
-        }
     }
 
     public void Dispose()

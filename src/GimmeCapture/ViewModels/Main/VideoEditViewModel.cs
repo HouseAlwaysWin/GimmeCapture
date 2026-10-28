@@ -4,9 +4,9 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reactive;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using GimmeCapture.Models;
@@ -14,6 +14,7 @@ using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
 using ReactiveUI.Reactive;
 using SkiaSharp;
@@ -40,7 +41,15 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
 
     private CancellationTokenSource? _playCts;
     private CancellationTokenSource? _stepCts;
-    private int _playGeneration; // bumped on each (re)start so a superseded play loop's finally can't clear IsPlaying
+    // Bumped on each (re)start and pause, so a stopped play loop can neither clear IsPlaying nor draw a frame it had
+    // already decoded over the one a seek shows.
+    private int _playGeneration;
+
+    // Playback hands its newest decoded frame to the UI thread here; the UI thread draws it into _frameBitmap, the one
+    // bitmap Frame shows once a frame is decoded, reused while the frame size holds (see VideoFrameBitmap).
+    private readonly LatestFrameSlot _playedFrames = new();
+    private WriteableBitmap? _frameBitmap;
+    private bool _disposed;
 
     internal VideoEditViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
@@ -136,7 +145,12 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     }
 
     private Bitmap? _frame;
+    /// <summary>The preview frame: the queue thumbnail until the first frame is decoded, then one bitmap that every
+    /// later frame is drawn into. Both are this view model's; a replaced one is disposed.</summary>
     public Bitmap? Frame { get => _frame; private set => this.RaiseAndSetIfChanged(ref _frame, value); }
+
+    /// <summary>Set by the window: repaints the preview after a frame was drawn into the bitmap it already shows.</summary>
+    public Action? RequestRedraw { get; set; }
 
     private double _positionSeconds;
     public double PositionSeconds
@@ -566,16 +580,12 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
                                     runCts.Cancel(); // reached this kept run's end → advance to the next kept run
                                     return;
                                 }
-                                Bitmap? bmp = BytesToBitmap(data);
-                                Dispatcher.UIThread.Post(() =>
+                                // Only the newest frame waits for the UI thread; one that comes before it was drawn
+                                // replaces it, so a busy UI thread skips frames instead of falling behind.
+                                if (_playedFrames.Offer(data, _decodeW, _decodeH, gen, ts))
                                 {
-                                    if (gen != _playGeneration)
-                                    {
-                                        return; // a superseded/cancelled loop must not overwrite the current frame/playhead
-                                    }
-                                    Frame = bmp;
-                                    PositionSeconds = Math.Min(ts, _duration);
-                                });
+                                    Dispatcher.UIThread.Post(DrawPlayedFrame);
+                                }
                             }, runCts.Token);
                         }
                         catch (OperationCanceledException) { /* run end or paused */ }
@@ -598,8 +608,33 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     private void Pause()
     {
         _playCts?.Cancel();
+        _playGeneration++; // frames the stopped loop already decoded are dropped (a seek's frame comes next)
         _audioPreview.Stop();
         IsPlaying = false;
+    }
+
+    // UI thread: draws the newest frame playback left, unless a newer play / pause / seek has superseded its loop.
+    private void DrawPlayedFrame()
+    {
+        if (_playedFrames.Take() is not { } frame)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_disposed || frame.Ticket != _playGeneration)
+            {
+                return;
+            }
+
+            DrawFrame(frame.Pixels);
+            PositionSeconds = Math.Min(frame.Seconds, _duration);
+        }
+        finally
+        {
+            _playedFrames.Return(frame.Pixels);
+        }
     }
 
     // After an edit that changes the segments/speed, reflect it immediately: restart playback from the current
@@ -661,72 +696,77 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        Frame = BytesToBitmap(frame);
+        DrawFrame(frame);
     }
 
-    private Bitmap? BytesToBitmap(byte[] bgra)
+    // UI thread. Outside crop mode the preview shows what the output will be: the crop, then the rotation. Crop mode
+    // shows the whole frame unrotated, since crop coordinates are source pixels.
+    private void DrawFrame(ReadOnlySpan<byte> bgra)
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        PixelRect region = !IsCropMode && DecodeCropRect() is { } crop
+            ? new PixelRect(crop.X, crop.Y, crop.W, crop.H)
+            : new PixelRect(0, 0, _decodeW, _decodeH);
+        int rotation = IsCropMode ? 0 : _rotation;
+
         try
         {
-            using var sk = new SKBitmap(new SKImageInfo(_decodeW, _decodeH, SKColorType.Bgra8888, SKAlphaType.Premul));
-            Marshal.Copy(bgra, 0, sk.GetPixels(), Math.Min(bgra.Length, _decodeW * _decodeH * 4));
-
-            // Outside crop mode, show the cropped region (what the output will be); in crop mode show the whole frame.
-            SKBitmap source = sk;
-            SKBitmap? cropped = null;
-            if (!IsCropMode && _crop != null)
+            WriteableBitmap? drawn = VideoFrameBitmap.Draw(_frameBitmap, bgra, _decodeW, _decodeH, region, rotation);
+            if (drawn == null)
             {
-                cropped = CropSkBitmap(sk, _crop);
-                if (cropped != null)
-                {
-                    source = cropped;
-                }
+                return;
             }
 
-            bool ok = FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(source, out Bitmap? bmp, out _);
-            cropped?.Dispose();
-            if (!ok || bmp == null)
+            if (ReferenceEquals(drawn, _frameBitmap))
             {
-                return null;
+                RequestRedraw?.Invoke();
+                return;
             }
 
-            // Crop mode shows the source orientation (crop coords map to source pixels); otherwise apply the rotation.
-            int rot = IsCropMode ? 0 : _rotation;
-            if (rot == 0)
-            {
-                return bmp;
-            }
-
-            Bitmap? rotated = FloatingBitmapConversionHelper.TransformBitmap(bmp, rot, false, false);
-            bmp.Dispose();
-            return rotated;
+            // First frame, or the size changed (crop mode, a crop, a rotation): show the new bitmap, then let the old one
+            // go — the previous size's bitmap, or the queue thumbnail shown until the first frame.
+            _frameBitmap = drawn;
+            Bitmap? replaced = Frame;
+            Frame = drawn;
+            replaced?.Dispose();
         }
         catch (Exception ex)
         {
             AppLog.Error("Compress.EditFrameBuild", ex);
-            return null;
         }
     }
 
-    // Deep-copy the crop region (source pixels scaled into decode space) out of the decoded frame for the preview.
-    private SKBitmap? CropSkBitmap(SKBitmap src, VideoEditCrop crop)
+    /// <summary>
+    /// A copy of the frame on screen, for a mosaic or blur annotation to sample. Not <see cref="Frame"/> itself: every
+    /// later frame is drawn into that bitmap, and it is disposed when the frame size changes.
+    /// </summary>
+    internal Bitmap? CopyFrame()
     {
-        double sx = _decodeW / (double)_sourceWidth;
-        double sy = _decodeH / (double)_sourceHeight;
-        int x = Math.Clamp((int)Math.Round(crop.X * sx), 0, _decodeW - 2);
-        int y = Math.Clamp((int)Math.Round(crop.Y * sy), 0, _decodeH - 2);
-        int w = Math.Clamp((int)Math.Round(crop.Width * sx), 2, _decodeW - x);
-        int h = Math.Clamp((int)Math.Round(crop.Height * sy), 2, _decodeH - y);
-        var dst = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
-        using (var canvas = new SKCanvas(dst))
+        if (!FloatingBitmapConversionHelper.TryCopyToSkBitmap(Frame, out SKBitmap? pixels, out _) || pixels == null)
         {
-            canvas.DrawBitmap(src, new SKRect(x, y, x + w, y + h), new SKRect(0, 0, w, h));
+            return null;
         }
-        return dst;
+
+        using (pixels)
+        {
+            return FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(pixels, out Bitmap? copy, out _)
+                ? copy
+                : null;
+        }
     }
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         _playCts?.Cancel();
         _stepCts?.Cancel();
         _playCts?.Dispose();
@@ -734,6 +774,13 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         _audioPreview.Dispose();
         Draw.Dispose();
         Compare?.Dispose(); // stops the inline compare's playback + deletes its temp sample, if still open
+
+        // The preview's frame bitmap, or the queue thumbnail if no frame was ever decoded.
+        Bitmap? shown = Frame;
+        Frame = null;
+        _frameBitmap = null;
+        shown?.Dispose();
+
         // Editor closed — reclaim the decoded preview/compare frames.
         ProcessMemoryTrimService.RequestIdleTrimAsync("editor-closed").Forget("MemoryTrim.EditorClosed");
     }

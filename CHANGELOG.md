@@ -98,6 +98,10 @@
 
 ### ⚡ Performance
 
+- **Playing a video in the Compress editor or its quality comparison no longer piles up memory.** Every frame shown
+  became a new bitmap, about 1.2 MB at the preview's 720-pixel width, and the one it replaced was never released. A 30
+  fps clip left roughly 35 MB a second for the garbage collector, twice that in the comparison. Frames are now drawn
+  into one bitmap per preview, and when the app falls behind it skips to the newest frame instead of queueing them all.
 - **Smart selection reads its result about 45 ms faster a click.** It read the model's three 1024×1024 masks about four
   million times through ONNX Runtime's tensor indexer, which allocated a small array on every read: 45–56 ms and 163 MB
   of memory to clean up after each click. It now reads them in place: about 3 ms, nothing to clean up, and the same
