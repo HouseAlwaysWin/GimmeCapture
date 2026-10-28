@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -67,21 +68,28 @@ internal static class CompressItemStateService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    // How long a save waits for more: applying the editor's edits persists the map once per changed item property.
+    private static readonly TimeSpan CoalesceDelay = TimeSpan.FromMilliseconds(300);
+
+    private static readonly Lazy<CompressItemStateWriter> SharedWriter = new(CreateSharedWriter);
+
     private static string FilePath =>
         Path.Combine(AppStoragePaths.GetRootDirectory(), "compress-item-states.json");
 
     /// <summary>Loads the map, dropping entries whose source file no longer exists (keeps the file from growing).</summary>
-    public static Dictionary<string, CompressItemState> Load()
+    public static Dictionary<string, CompressItemState> Load() => Load(FilePath);
+
+    internal static Dictionary<string, CompressItemState> Load(string filePath)
     {
         try
         {
-            if (!File.Exists(FilePath))
+            if (!File.Exists(filePath))
             {
                 return new Dictionary<string, CompressItemState>(StringComparer.OrdinalIgnoreCase);
             }
 
             Dictionary<string, CompressItemState>? raw =
-                JsonSerializer.Deserialize<Dictionary<string, CompressItemState>>(File.ReadAllText(FilePath));
+                JsonSerializer.Deserialize<Dictionary<string, CompressItemState>>(File.ReadAllText(filePath));
 
             var map = new Dictionary<string, CompressItemState>(StringComparer.OrdinalIgnoreCase);
             if (raw != null)
@@ -118,16 +126,106 @@ internal static class CompressItemStateService
         }
     }
 
-    public static void Save(IReadOnlyDictionary<string, CompressItemState> states)
+    /// <summary>
+    /// Has the map written to disk shortly, off the calling thread (see <see cref="CompressItemStateWriter"/>), and
+    /// returns at once.
+    /// </summary>
+    public static void Save(IReadOnlyDictionary<string, CompressItemState> states) => SharedWriter.Value.Save(states);
+
+    /// <summary>Writes a save still waiting for the background writer, on a worker thread.</summary>
+    public static Task FlushAsync() =>
+        SharedWriter.IsValueCreated ? Task.Run(SharedWriter.Value.Flush) : Task.CompletedTask;
+
+    internal static void Write(string filePath, IReadOnlyDictionary<string, CompressItemState> states)
     {
         try
         {
-            Directory.CreateDirectory(AppStoragePaths.GetRootDirectory());
-            AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(states, JsonOptions));
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+            AtomicFile.WriteAllText(filePath, JsonSerializer.Serialize(states, JsonOptions));
         }
         catch (Exception ex)
         {
             AppLog.Error("CompressItemState.Save", ex);
+        }
+    }
+
+    private static CompressItemStateWriter CreateSharedWriter()
+    {
+        string filePath = FilePath;
+        var writer = new CompressItemStateWriter(states => Write(filePath, states), CoalesceDelay);
+        // Nothing disposes the main view model, so the process exit is where a save still waiting gets written.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => writer.Flush();
+        return writer;
+    }
+}
+
+/// <summary>
+/// Writes the per-file Compress state map off the caller's thread. Every edit to a queue item persists the whole map,
+/// and it used to rewrite the indented JSON on the UI thread each time, several times over when the editor's edits
+/// were applied. <see cref="Save"/> now keeps only the newest map: the first save starts a short wait, saves during
+/// it replace the map waiting, and one write follows. Writes never overlap and never put an older map over a newer
+/// one. <see cref="Flush"/> writes whatever is still waiting, at once.
+/// </summary>
+internal sealed class CompressItemStateWriter
+{
+    private readonly Action<IReadOnlyDictionary<string, CompressItemState>> _write;
+    private readonly TimeSpan _coalesceDelay;
+    private readonly object _pendingLock = new();
+    private readonly object _writeLock = new(); // held through a write: one at a time, each taking the newest map
+    private Dictionary<string, CompressItemState>? _pending;
+    private bool _writeScheduled;
+
+    public CompressItemStateWriter(Action<IReadOnlyDictionary<string, CompressItemState>> write, TimeSpan coalesceDelay)
+    {
+        _write = write;
+        _coalesceDelay = coalesceDelay;
+    }
+
+    /// <summary>Keeps a copy of <paramref name="states"/> to write shortly; returns without waiting for any write.</summary>
+    public void Save(IReadOnlyDictionary<string, CompressItemState> states)
+    {
+        // Copied on the caller's thread, which goes on changing its map. The states in it are replaced on an edit,
+        // never changed, so a shallow copy holds still while it is written.
+        var snapshot = new Dictionary<string, CompressItemState>(states);
+        lock (_pendingLock)
+        {
+            _pending = snapshot;
+            if (_writeScheduled)
+            {
+                return;
+            }
+
+            _writeScheduled = true;
+        }
+
+        Task.Run(WriteAfterDelayAsync).Forget("CompressItemState.Save");
+    }
+
+    /// <summary>Writes the map still waiting, if any, on the calling thread, after a write already under way.</summary>
+    public void Flush() => WritePending();
+
+    private async Task WriteAfterDelayAsync()
+    {
+        await Task.Delay(_coalesceDelay).ConfigureAwait(false);
+        WritePending();
+    }
+
+    private void WritePending()
+    {
+        lock (_writeLock)
+        {
+            Dictionary<string, CompressItemState>? states;
+            lock (_pendingLock)
+            {
+                states = _pending;
+                _pending = null;
+                _writeScheduled = false; // a save from here on needs a write of its own
+            }
+
+            if (states != null)
+            {
+                _write(states);
+            }
         }
     }
 }

@@ -98,6 +98,9 @@
 
 ### ⚡ Performance
 
+- **Editing a file in the Compress queue no longer writes to disk on the UI thread.** Every change to a queue item
+  rewrote the whole saved-state file there, up to seven times in a row when the editor's edits were applied. Changes are
+  now saved in the background, a burst of them in one write, and anything still waiting is written when the app exits.
 - **The Compress tab's first open no longer waits on the disk.** It read the saved queue, settings and per-file edits,
   listed the working folder and swept old resume files on the UI thread; one log showed the app stop responding for 0.45
   s there. Those reads now run in the background, and the tab appears once the saved queue is in, so it never shows an

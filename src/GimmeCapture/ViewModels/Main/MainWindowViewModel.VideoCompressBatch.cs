@@ -969,6 +969,9 @@ public partial class MainWindowViewModel
         int done = CompressQueue.Count(i => i.Status == CompressQueueStatus.Done);
         CompressStatusText = $"{Localization["CompressQueueComplete"]}  ({done}/{CompressQueue.Count})";
 
+        // The files just finished are recorded as done now, rather than after a save's usual short wait.
+        CompressItemStateService.FlushAsync().Forget("CompressItemState.Flush");
+
         // Batch finished — release the encode/decode working buffers accumulated across the run.
         ProcessMemoryTrimService.RequestIdleTrimAsync("after-batch-compress").Forget("MemoryTrim.BatchCompress");
     }
