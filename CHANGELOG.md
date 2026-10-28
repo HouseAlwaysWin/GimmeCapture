@@ -13,6 +13,12 @@
 
 ### 🛡️ Reliability
 
+- **Pinning a recording no longer leaves its "Processing recording…" bar on screen.** Since the ReactiveUI 26 update,
+  the bar a recording shows while it is finished stayed up after a pinned recording, one more with every recording,
+  until the app quit. ReactiveUI 26 queues work the app hands it on the UI thread instead of running it at once, and
+  drops what is still queued when the window it was meant for has closed: the capture overlay closed right after the
+  recording was finished, before "finished" reached it. Work handed over on the UI thread runs at once again, as
+  before the update, and the overlay closes its progress windows when it closes.
 - **Failures that went nowhere now reach the log.** About 40 error paths reported only through `Debug.WriteLine`, which
   a release build leaves out. Among them were a recording's audio merge (which then keeps only the first
   segment's audio), FFmpeg failing to start, recording start and stop, device lists, a pin's crop and playback.

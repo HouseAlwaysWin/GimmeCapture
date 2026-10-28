@@ -1,6 +1,7 @@
 using Avalonia;
 using System;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Platforms.Desktop;
 using ReactiveUI.Avalonia.Reactive;
 
 namespace GimmeCapture;
@@ -105,6 +106,10 @@ class Program
             .WithInterFont()
             .LogToTrace()
             // A command that fails with nobody listening would otherwise hit ReactiveUI's default handler, which
-            // rethrows on the UI thread and ends the process (see UnhandledCommandExceptionReporter).
-            .UseReactiveUI(rx => rx.WithExceptionHandler(UnhandledCommandExceptionReporter.Shared));
+            // rethrows on the UI thread and ends the process (see UnhandledCommandExceptionReporter). The scheduler
+            // replaces the one UseReactiveUI has just set: work scheduled on the UI thread runs at once again, as it
+            // did before ReactiveUI 26 (see AvaloniaMainThreadScheduler).
+            .UseReactiveUI(rx => rx
+                .WithExceptionHandler(UnhandledCommandExceptionReporter.Shared)
+                .WithMainThreadScheduler(AvaloniaMainThreadScheduler.Instance));
 }

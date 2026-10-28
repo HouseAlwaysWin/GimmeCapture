@@ -359,6 +359,7 @@ public partial class SnipWindow : Window
 
         // Release ViewModel resources
         _viewModel?.Dispose();
+        CloseOwnedProgressWindows();
         
         // Clear window region before closing
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;

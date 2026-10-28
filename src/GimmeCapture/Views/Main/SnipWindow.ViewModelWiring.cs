@@ -374,6 +374,17 @@ public partial class SnipWindow : Window
         };
     }
 
+    // Both progress windows show the view model OnClosing has just disposed, which is what closes them, so one still
+    // open then would stay on screen for the rest of the session. A recording's did, every time its "finalize done"
+    // arrived after the overlay had closed.
+    private void CloseOwnedProgressWindows()
+    {
+        _progressWindow?.Close();
+        _progressWindow = null;
+        _processingWindow?.Close();
+        _processingWindow = null;
+    }
+
     // The native window region follows the selection, translation boxes and overlays.
     private void WireInteractionRegion(SnipWindowViewModel vm)
     {
