@@ -91,11 +91,29 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
     private string _currentStatusKey = "StatusReady";
     private OCRLanguage? _currentStatusOcrLanguage;
 
-    // Transient UI-state properties that are NOT persisted; changes to these never trigger a save.
+    // Transient UI-state properties that are NOT persisted; changes to these never trigger a save. That includes display
+    // state raised on its own: the hardware probe raising IsGifAvailable once the settings had loaded saved them at
+    // every launch.
     private static readonly HashSet<string> _nonPersistedPropertyNames = new(StringComparer.Ordinal)
     {
         nameof(StatusText), nameof(AIProgressText), nameof(IsModified), nameof(IsProcessing),
-        nameof(ProcessingText), nameof(ShowProcessingOverlay), nameof(ProgressValue), nameof(IsIndeterminate)
+        nameof(ProcessingText), nameof(ShowProcessingOverlay), nameof(ProgressValue), nameof(IsIndeterminate),
+        nameof(IsGifAvailable), nameof(AvailableRecordFormats), nameof(GifUnavailableReason),
+        nameof(AvailableCaptureDelays), nameof(AvailableOcrTextLayouts), nameof(AvailableRecordingAutoStopActions),
+        nameof(UpdateDownloadStageText), nameof(IsStartupBlockedByOs), nameof(IsStartupEntryMissing),
+        // The Translation tab's model picker, which sets LlamaModelId when a pick changes it.
+        nameof(IsLlamaVisible), nameof(AvailableLlamaModels), nameof(SelectedLlamaModelOption),
+        nameof(SelectedLlamaModelIndex), nameof(SelectedLlamaModelDisplayName), nameof(IsLlamaModelPickerOpen),
+        nameof(HasDownloadedLlamaModels), nameof(NoDownloadedLlamaModels),
+        nameof(AvailableOCRLanguages), nameof(AvailableTranslationLanguages)
+    };
+
+    // The same for RecordingSettings: its option lists, and the pickers' selections, which set the value they stand for.
+    private static readonly HashSet<string> _nonPersistedRecordingPropertyNames = new(StringComparer.Ordinal)
+    {
+        nameof(RecordingSettingsViewModel.VideoCodecOptions), nameof(RecordingSettingsViewModel.SelectedVideoCodecOption),
+        nameof(RecordingSettingsViewModel.SelectedVideoQualityOption),
+        nameof(RecordingSettingsViewModel.SelectedVideoEncoderHintOption), nameof(RecordingSettingsViewModel.MicInputDevices)
     };
     private readonly CaptureLaunchCoordinator _captureLaunchCoordinator = new();
 
@@ -519,7 +537,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
 
         RecordingSettings.PropertyChanged += (s, e) =>
         {
-            if (!_isDataLoading)
+            if (!_isDataLoading && (e.PropertyName is null || !_nonPersistedRecordingPropertyNames.Contains(e.PropertyName)))
             {
                 QueueSettingsSave();
             }

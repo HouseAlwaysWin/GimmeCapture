@@ -111,6 +111,10 @@
 
 ### ⚡ Performance
 
+- **Launching the app or opening a capture no longer rewrites the settings file.** Every launch saved the settings
+  although nothing had changed: the AV1 encoder check reporting whether GIF recording works counted as a change. Every
+  capture saved them too, before its overlay opened. A save now leaves the file alone when it already holds the same
+  settings.
 - **Smart selection on a large pin no longer holds up the app at every click.** Each click and each undo copied the
   whole pinned image on the UI thread, only for the model to find it unchanged, then coloured in the selection and
   handed it to the screen there too: about 30 ms of every click at 3840×2400, with a 37 MB copy. The image is now copied

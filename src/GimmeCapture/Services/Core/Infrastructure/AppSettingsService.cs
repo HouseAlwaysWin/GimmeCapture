@@ -638,21 +638,45 @@ public class AppSettingsService : IAppSettingsService
             var options = GetJsonOptions();
             var json = JsonSerializer.Serialize(Settings, options);
 
-            DebugLog($"Saving settings to {ConfigPath}. Language: {Settings.Language}");
-
             if (IsRuntimeDefaultStorage)
                 BaseDataDirectory = RuntimeVersionedAppDataPath;
+
+            string path = ConfigPath;
+            // A save asked for although nothing persisted changed leaves the file alone. Every launch used to rewrite
+            // it that way, and so did every capture, which saves before it opens.
+            if (await HoldsAsync(path, json))
+            {
+                AppLog.Debug("Settings.Save", "Unchanged; the config was not rewritten.");
+                return;
+            }
+
+            DebugLog($"Saving settings to {path}. Language: {Settings.Language}");
 
             if (!Directory.Exists(BaseDataDirectory))
             {
                 Directory.CreateDirectory(BaseDataDirectory);
             }
-            await AtomicFile.WriteAllTextAsync(ConfigPath, json);
-            DebugLog($"Saved to {ConfigPath} successfully.");
+            await AtomicFile.WriteAllTextAsync(path, json);
+            DebugLog($"Saved to {path} successfully.");
         }
         catch (Exception ex)
         {
             AppLog.Error("Settings.Save", ex);
+        }
+    }
+
+    // Whether the config at path already holds exactly json.
+    private static async Task<bool> HoldsAsync(string path, string json)
+    {
+        try
+        {
+            return File.Exists(path) && await File.ReadAllTextAsync(path) == json;
+        }
+        catch (Exception ex)
+        {
+            // Never a reason not to save: the save writes it instead.
+            AppLog.Debug("Settings.Save", ex);
+            return false;
         }
     }
 }
