@@ -298,6 +298,9 @@
 
 ### 🧹 Maintenance
 
+- **The log no longer gains two lines for every translation.** Each uncached translation, OCR run and SAM2 click wrote
+  two `MemoryTrim.Activity` lines. A line is now written only when that activity calls off a waiting memory trim; every
+  one is written with `GIMMECAPTURE_DEBUG_LOG=1`.
 - Avalonia 12.1.4, up from 12.0.4, brings its fixes for the tray icon, focus left on removed controls, popup
   placement and font fallback. Serilog moves to 4.4 and ZLinq to 1.5.6, and the test tooling to the xunit runner
   4.0, test SDK 18.11, coverlet 10.1 and Moq 4.21. ReactiveUI.Avalonia stays at 12.0.3, since every newer release

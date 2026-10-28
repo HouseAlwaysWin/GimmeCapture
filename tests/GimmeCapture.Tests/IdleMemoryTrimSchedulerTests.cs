@@ -71,6 +71,27 @@ public sealed class IdleMemoryTrimSchedulerTests
     }
 
     [Fact]
+    public async Task NotifyActivity_ReportsOnlyTheActivityThatCallsOffAWaitingTrim()
+    {
+        // Every uncached translation reports activity; only the one that calls off a trim is logged by default.
+        var delay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reasons = new List<string>();
+        var scheduler = new IdleMemoryTrimScheduler(
+            reasons.Add,
+            (_, _) => delay.Task);
+
+        Assert.False(scheduler.NotifyActivity("translation"));
+
+        var pending = scheduler.RequestTrimAsync("llama-idle", TimeSpan.FromSeconds(2));
+        Assert.True(scheduler.NotifyActivity("translation"));
+        Assert.False(scheduler.NotifyActivity("translation"));
+        delay.SetResult();
+
+        Assert.False(await pending);
+        Assert.Empty(reasons);
+    }
+
+    [Fact]
     public async Task MainWindowRestore_ShouldCancelPendingTrayTrim()
     {
         var delay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -250,15 +250,31 @@ internal sealed class IdleMemoryTrimScheduler
             effectiveDelay);
     }
 
-    internal void NotifyActivity(string reason)
+    /// <returns>Whether this called off a trim that was waiting for the app to go idle.</returns>
+    internal bool NotifyActivity(string reason)
     {
+        string? calledOff = null;
         lock (_trimGate)
         {
             _activityVersion++;
+            if (_pendingTrimCts != null)
+            {
+                calledOff = string.Join("+", _pendingReasons.OrderBy(static value => value, StringComparer.Ordinal));
+            }
+
             CancelPendingTrimLocked(clearReasons: true);
         }
 
-        AppLog.Information($"MemoryTrim.Activity.{reason}");
+        // Every uncached translation, OCR run and SAM2 click reports activity to both schedulers, and each wrote a line
+        // for it. Only calling off a waiting trim changes what happens next, so only that is logged by default.
+        if (calledOff == null)
+        {
+            AppLog.Debug("MemoryTrim.Activity", reason);
+            return false;
+        }
+
+        AppLog.Information("MemoryTrim.Activity", $"{reason} called off the idle trim for {calledOff}");
+        return true;
     }
 
     private async Task<bool> RunPendingTrimAsync(
