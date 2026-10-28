@@ -14,6 +14,15 @@
          grows (a null-deref that today is a warning would otherwise slip in silently). Scoped to nullable
          only — the many intentional obsolete-API / platform-compat warnings stay warnings. -->
     <WarningsAsErrors>nullable</WarningsAsErrors>
+
+    <!-- ReactiveUI.Binding, the generator behind ReactiveUI 26's bindings, reports each binding that fails at run
+         time. 001, 003, 006, 009, 012, 013, 015, 016 and 021: nothing was generated for the call, so it throws when
+         it runs. 002, 004 and 010: the observation misses changes. 002 and 004 deliver the first value and nothing
+         after; 010 never sees a change made inside a type on the path that raises no notification (AnnotationControl
+         had such a path until the ReactiveUI 26 migration). The package makes the first group errors, but 002, 004
+         and 010 are warnings, and 021 is reported as one when the member comes from another source generator.
+         Listed so every one fails the build, whatever a package update does to its default. -->
+    <WarningsAsErrors>$(WarningsAsErrors);RXUIBIND001;RXUIBIND002;RXUIBIND003;RXUIBIND004;RXUIBIND006;RXUIBIND009;RXUIBIND010;RXUIBIND012;RXUIBIND013;RXUIBIND015;RXUIBIND016;RXUIBIND021</WarningsAsErrors>
   </PropertyGroup>
 
   <!-- Allow compiling the net10.0-windows target on Linux/macOS (compile-check only;
