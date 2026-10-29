@@ -7,6 +7,9 @@ pins, compress, start-up and idle, checked against the app's logs). Batch 1 of i
 Line numbers are from `665c8b94`, before batch 1; batch 1 moved some of them, so search for the symbol named.
 Sizes: S = a few lines to a small class, M = a day-sized change with tests, L = a redesign.
 
+The last section is not an optimisation but a feature the user wants built later: the video editor as a standalone
+tool.
+
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
@@ -41,14 +44,14 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 ### OCR, AI and translation
 
 - **Cold OCR scan starts late and builds a recognizer it does not use** (M). The overlay's scan only detects
-  (`AIScanSessionService.cs:86-89`), but `OcrRuntimeService.cs:193` builds detection and recognition, and the load starts
+  (`AIScanSessionService.cs:86-89`), but `OcrRuntimeService.cs:193` builds detection and recognition and the load starts
   0.53-1.16 s after `SnipWindowFactory.Open` (a Background post in `SnipWindow.OnOpened`, `SnipWindow.axaml.cs:256`).
   Most of the user's captures are more than the 2-minute keep-alive apart, so most scans are cold (session build
   524-880 ms). Fix: take a lease and start a detection-only load at the top of `Open`; build recognizer and dictionary
   on the first `RecognizeText`; optionally keep the DirectML device with `GpuDeviceHold`. Hides about 0.5-0.9 s.
 - **Recognition runs up to four passes per box, one box per run** (S gating, M batching). `PaddleOCREngine.cs:111`:
-  `shouldEnhance = contrast < LowContrastThreshold || box.Height < 28` forces a second pass for most UI text whatever the
-  first pass's confidence; dark crops double it again. Callers loop one box at a time (`QuickOcrService.cs:66-74`,
+  `shouldEnhance = contrast < LowContrastThreshold || box.Height < 28` forces a second pass for most UI text whatever
+  the first pass's confidence; dark crops double it again. Callers loop one box at a time (`QuickOcrService.cs:66-74`,
   `TranslationService.cs:153-160`) though the recognizer's batch dimension is dynamic. Fix: extra passes only below
   about 0.9 confidence, inverted pass first on dark crops, batch boxes by width bucket.
 - **Every LLM request builds a new context and re-reads the whole prompt** (M). `LlamaSharpTranslationEngine` uses
@@ -75,13 +78,13 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   `TryReadFrameAfter(lastSeq)`, redraw only changed cells from the lease, re-send the encoder frame when nothing
   changed or to catch up, log readBack/converted as the single-window path does.
 - **WGC reads frames back at the window's update rate** (M). `WgcWindowCaptureSource.cs:169-177`: every FrameArrived
-  without a readback in flight does CopyResource + Map + memcpy; the log shows `readBack=254 converted=187`, 26-37% wasted.
+  with no readback in flight does CopyResource, Map, memcpy; the log shows `readBack=254 converted=187`, 26-37% wasted.
   Keep the newest frame and read it back only when due. `MinUpdateInterval` needs build 26100+ and a newer projection.
 - **Colour conversion for hardware encoders runs on the CPU** (S-M). NVENC and AMF take BGRA, but frames go through
   single-threaded `sws_scale` to NV12 (`LibavRecordingEncoder.cs:301-303`, `LibavGdigrabMkvSession.cs:536-551`,
   `LibavWgcMkvSession.cs:259`); overlays add a BGRA copy; the webcam frame is copied full size every output frame
   (`WebcamCaptureSource.cs:157`). Est. 3-5 ms per frame at 1080p, 12-25 at 4K.
-- **Stop and finalize run step by step** (S-M). `RecordingService.Finalize.cs:21,38-42,514`, `LiveSession.cs:555-567,593`:
+- **Stop and finalize run in series** (S-M). `RecordingService.Finalize.cs:21,38-42,514`, `LiveSession.cs:555-567,593`:
   a fixed `Task.Delay(100)`, then concat, WAV mix, AAC, mux and move in sequence; sources stop one after another; AAC is
   encoded only after stop (433 ms for 16 s of audio, est. half a minute per 30-minute recording); after a pause the
   video is rewritten twice. Drop the delay, stop everything then await together, encode AAC live or alongside the
@@ -125,8 +128,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 ### Pins
 
 - **Resizing rebuilds the window region 4-6 times per pointer move** (M). `FloatingImageWindow.axaml.cs:61-89,166-177,
-  218-265`, `Win32Helpers.cs` (~323-353): DisplayWidth and DisplayHeight each rebuild with stale bounds, then the window,
-  MainBorder and toolbar Bounds changes rebuild again; each walks the toolbar subtrees and ORs rects one `CombineRgn` at a
+  218-265`, `Win32Helpers.cs` (~323-353): DisplayWidth and DisplayHeight each rebuild on stale bounds, then the window,
+  MainBorder and toolbar Bounds changes rebuild again; each walks toolbar subtrees and ORs rects one `CombineRgn` at a
   time (O(n^2) for a cut-out pin's thousands of rects). Batch 1 made an unchanged region skip `SetWindowRgn`, not the
   rebuild. Fix: a dirty flag rebuilt once per frame at Render priority; build the image part once per bitmap with
   `ExtCreateRegion` and an XFORM to rescale.
@@ -158,14 +161,14 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **Lower**: video pins decode at full size and copy each frame twice (`LatestFrameHandoff.cs:40`, then
   `FloatingVideoViewModel.Media.cs:564`, 33 MB per frame at 4K) and keep decoding when covered;
   `ProcessingOverlay.axaml:87` keeps `IsIndeterminate="True"` (a 60 Hz animation after the first AI job? measure);
-  the translation layer adds results one at a time, rebuilding its region each time (`FloatingTranslationWindow.axaml.cs:
+  the translation layer adds results one at a time, rebuilding its region per item (`FloatingTranslationWindow.axaml.cs:
   109-117`).
 
 ### Snip overlay
 
 - **Frozen open grabs and builds the backdrop on the UI thread** (M). `SnipWindowFactory.cs:166-170` blocks in
   `.GetAwaiter().GetResult()` over GDI+ `CopyFromScreen`, a row copy into an SKBitmap and another into the
-  WriteableBitmap (`WindowsScreenCaptureService.cs:82-85,126-150`): `freezeGrab=46` + `show=120` ms against 14-26 ms for a
+  WriteableBitmap (`WindowsScreenCaptureService.cs:82-85,126-150`): `freezeGrab=46` + `show=120` ms vs 14-26 ms for a
   live open. BitBlt into a cached DIB section, copy once, build the display bitmap in the same Task.Run, reuse buffers.
 - **OCR scans run twice and cannot be stopped** (S). Esc-clear sets `CurrentState = Detecting`, which starts
   `RunOCRScanAsync`, then starts it again (`ModeRouting.cs:947,953`); the token only stops a detection not yet started
@@ -225,7 +228,56 @@ Disjoint file sets for parallel agents:
    source size, rotation in YUV, segmented path.
 4. Pins: resize region, opaque scan, persistent video decoder, shared background removal, save/copy paths, close and
    undo memory, pin WebM audio.
-5. Overlay: frozen open, OCR double scan and cache, candidate render control, hover timer, record meter, scrolling buffers.
+5. Overlay: frozen open, OCR double scan and cache, candidate render control, hover timer, record meter, scroll buffers.
 6. Idle and memory: UiStall pause, history thumbnails, raw input, ColorPicker/locales; measure OCR on CPU vs DirectML.
 
 The LLM context reuse is its own piece of work: measure load and generation times with the real model first.
+
+## Planned feature: the video editor as a standalone tool
+
+Asked for on 2026-10-29 and put off until later (M-L). The editor already has a window of its own; what keeps it
+inside the options window is how you reach it and what it can produce.
+
+**Today**
+
+- `Views/Main/VideoEditWindow.axaml(.cs)` (960x760, non-modal) with `VideoEditViewModel.cs` and
+  `VideoEditViewModel.Editing.cs`, the compare view (`CompareView.axaml`, `CompareViewModel`) inline.
+- The only way in is a Compress queue row's Edit button (`SettingsCompressTab.axaml:229`, then `OpenEditor` in
+  `MainWindowViewModel.VideoCompress.cs` around :852-899, then `OpenEditorAction` wired in
+  `SettingsCompressTab.axaml.cs:86-120`). Apply only writes the edit back to `CompressQueueItem`: kept runs with their
+  speed, crop, rotation, annotations, redaction tracks and the output name. The file comes out only when the user goes
+  back to the Compress tab and runs the batch. Record, trim, save therefore takes: open the main window, Compress tab,
+  add the file, wait for its probe, Edit, Apply, back, Start.
+- The window and the editor's freeze-frame pin are built in the tab's code-behind (`new VideoEditWindow`,
+  `new FloatingImageViewModel(... new ClipboardService() ...)`). Its confirm dialogs go through
+  `MainWindowViewModel.ConfirmYesNoAction`, which the main window owns; with no main window that falls back to `true`,
+  so opened from anywhere else, Reset all would discard every edit without asking.
+- A pinned video has an overlapping editor of its own (`FloatingVideoViewModel*.cs`): split and merge segments,
+  per-piece speed, crop, redaction keyframes, freeze-frame, save and export through `LibavClipExporter`. Two
+  implementations of the same edits, and the pin timeline has needed several fixes of its own (v0.70.0).
+
+**Plan**
+
+1. Propose the design to the user (in Traditional Chinese) and get an OK before refactoring: the entry points, what the
+   editor produces (export directly, apply to a queue item, add to the queue), how the pin's timeline and the editor
+   share the work.
+2. An edit session between `VideoEditViewModel` and its caller, with a result sink: "apply to this queue item" (today's
+   behaviour) or "export directly".
+3. Export from the editor: MP4, WebM or GIF, by quality or target size, through `CompressPipeline` /
+   `LibavClipExporter`, off the UI thread with progress and cancel; optionally "add to the compress queue".
+4. Entry points: a pinned video's toolbar ("open in editor"), History video entries, the end of a recording (its
+   finished toast or prompt), a tray-menu "Edit video…" with a file picker. Keep the Compress row's Edit.
+5. Open the window through a service owned by `AppBootstrapper` (in `Services/Platforms/Avalonia/`), not tab
+   code-behind. The editor window owns its confirm dialogs, so they work without the main window. The freeze-frame pin
+   gets injected services.
+6. Move the pin's heavy edits into the editor step by step; the pin keeps quick trim, loop and playback. Agree the
+   split with the user.
+7. Fix "Every editor or compare step reopens the file" (Compress and the editor, above) first or alongside: about
+   0.3 s cold per click matters more once the editor is a main tool.
+
+**Done when** a video opens in the editor from a pin, History, a finished recording and the tray and exports straight
+from there; the Compress queue flow still works; new strings are in all three locales; the edit session, its sinks and
+the export have tests; `scripts/verify.ps1` passes before each push.
+
+If the Compress tab should be easier to find too, a tray-menu "Video tools" entry opening the main window on that tab
+is enough: batch compress is set-and-run, so a tab suits it.
