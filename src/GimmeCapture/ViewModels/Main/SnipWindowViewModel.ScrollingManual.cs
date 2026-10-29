@@ -506,21 +506,26 @@ public partial class SnipWindowViewModel
             }
         }
 
-        // DIAGNOSTIC (temporary): per-frame alignment outcome + WHY it was rejected.
+        // Per-frame alignment outcome + WHY it was rejected, for chasing a bad stitch.
         // best=MAX => no offset scored (weight-starved / uniform frames); best>0.5 => frames don't
-        // overlap well; small ambGap (<0.035) => rejected as ambiguous.
-        string best = diagBestScore == double.MaxValue ? "MAX" : diagBestScore.ToString("F3");
-        string ambGap = diagAmbiguityGap == double.MaxValue ? "none" : diagAmbiguityGap.ToString("F3");
-        string motion = _manualMotionValid ? _manualMotionAccum.ToString() : "off";
-        AppLog.Information(
-            $"ManualScroll.Align horiz={_manualHorizontal} strip={_manualStrip.Width}x{_manualStrip.Height} " +
+        // overlap well; small ambGap (<0.035) => rejected as ambiguous. A debug line, so with debug logging off nothing
+        // in it is evaluated: as an information line it took the log file's lock and a flush about 25 times a second.
+        AppLog.Debug(
+            "ManualScroll.Align",
+            $"horiz={_manualHorizontal} strip={_manualStrip.Width}x{_manualStrip.Height} " +
             $"frame={stitchFrame.Width}x{stitchFrame.Height} found={align.Found} off={align.Offset} grew={grew} " +
-            $"best={best} ambGap={ambGap} motion={motion} veto={motionVetoed} samples={diagSampleCount}");
+            $"best={DiagnosticScore(diagBestScore, "MAX")} ambGap={DiagnosticScore(diagAmbiguityGap, "none")} " +
+            $"motion={(_manualMotionValid ? _manualMotionAccum.ToString() : "off")} veto={motionVetoed} " +
+            $"samples={diagSampleCount}");
 
         _manualPrevFrame!.Dispose();
         _manualPrevFrame = stitchFrame; // anchor always advances; ownership moves into prev
         return grew;
     }
+
+    // An alignment score for the trace above, or `none` when nothing scored.
+    private static string DiagnosticScore(double score, string none) =>
+        score == double.MaxValue ? none : score.ToString("F3");
 
     // Scroll axis already locked: rotate the screen-space frame into stitch space when horizontal,
     // then stitch. Consumes (disposes) the original screen frame for the horizontal case.

@@ -46,6 +46,8 @@
 
 ### ⚡ Performance
 
+- **Manual scrolling capture no longer writes a log line for every frame.** About 25 lines a second went to the log
+  file, each waiting for the file and flushing it; the line now needs debug logging on.
 - **Closing the capture overlay no longer makes every window on screen repaint.** Each close repainted the whole
   desktop as a safety net for a leftover recording frame, which only an overlay that recorded or was kept out of screen
   captures can leave; only those do it now. The overlay and pins also stop redrawing when their shape is set again
