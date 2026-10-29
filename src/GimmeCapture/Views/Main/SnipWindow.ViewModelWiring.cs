@@ -751,63 +751,7 @@ public partial class SnipWindow : Window
                     });
                 }
 
-                // Save Action
-                vm.SaveAction = async () =>
-                {
-                    try
-                    {
-                        var topLevel = TopLevel.GetTopLevel(win);
-                        if (topLevel?.StorageProvider is { } storageProvider)
-                        {
-                            // Default the dialog to the format chosen in the pin's toolbar (PNG/JPG/WebP).
-                            var (choices, defaultExt) = GimmeCapture.Views.Shared.VideoFilePickerTypes
-                                .SaveImageChoicesPreferring(vm.SelectedImageFormat);
-                            var file = await storageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
-                            {
-                                Title = "Save Pinned Image",
-                                DefaultExtension = defaultExt,
-                                ShowOverwritePrompt = true,
-                                SuggestedFileName = $"{CaptureFileNameService.SuggestedBaseName(_viewModel.Settings?.FileNameTemplate)}.{defaultExt}",
-                                FileTypeChoices = choices
-                            });
-
-                            if (file != null)
-                            {
-                                // Encode to the ACTUALLY chosen extension (the dialog can override the toolbar
-                                // default) via SkiaSharp, since Avalonia's Bitmap.Save only writes PNG.
-                                string ext = System.IO.Path.GetExtension(file.Name).TrimStart('.').ToLowerInvariant();
-                                var (skFormat, quality) = ext switch
-                                {
-                                    "jpg" or "jpeg" => (SkiaSharp.SKEncodedImageFormat.Jpeg, 92),
-                                    "webp" => (SkiaSharp.SKEncodedImageFormat.Webp, 90),
-                                    _ => (SkiaSharp.SKEncodedImageFormat.Png, 100)
-                                };
-                                // Encoded off the UI thread: a 4K PNG takes over 2 s at full compression.
-                                var image = vm.Image;
-                                var (encoded, bytes, encErr) = await System.Threading.Tasks.Task.Run(() =>
-                                    (GimmeCapture.ViewModels.Floating.FloatingBitmapConversionHelper.TryEncodeBitmap(
-                                        image, skFormat, quality, out var b, out var e), b, e));
-                                if (encoded)
-                                {
-                                    using (var stream = new System.IO.FileStream(file.Path.LocalPath, System.IO.FileMode.Create))
-                                    {
-                                        await stream.WriteAsync(bytes, 0, bytes.Length);
-                                    }
-                                    FileLocationService.RevealInFileExplorer(file.Path.LocalPath);
-                                }
-                                else
-                                {
-                                    AppLog.Debug("SnipWindow.ViewModelWiring", $"Failed to encode pinned image: {encErr}");
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        AppLog.Error("SnipWindow.SavePinnedImage", ex);
-                    }
-                };
-                
+                // Save is the window's own (FloatingImageWindow wires it), the same for every pin.
                 win.Show();
             }
             catch (Exception ex)

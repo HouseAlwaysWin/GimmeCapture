@@ -13,6 +13,8 @@
 
 ### 🛡️ Reliability
 
+- **Save works on every pinned image.** A pin opened from part of another pin, or from a frame frozen in the Compress
+  editor, had a Save button and shortcut that did nothing. Every image pin now saves the same way.
 - **Launched to the tray, the app now shows its toasts, the capture-delay countdown and the update offer.** All three
   were set up by the main window, which a launch to the tray, as at login, builds only once you open it. Until then a
   copy showed no confirmation, errors showed nothing, a delayed capture counted down with nothing on screen, and an
