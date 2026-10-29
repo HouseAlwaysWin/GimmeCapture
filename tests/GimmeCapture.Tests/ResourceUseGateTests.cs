@@ -164,8 +164,11 @@ public class ResourceUseGateTests
             return acquired;
         });
 
-        // Give the exclusive waiter time to register its intent before a new use arrives.
-        await OwnThread.Delay(Settle);
+        // The exclusive waiter claims the gate before a new use arrives. A fixed 150 ms pause stood in for that, and
+        // under the full suite's load it was not enough: the waiter's thread had not run yet, and the use went in.
+        Assert.True(
+            await OwnThread.Run(() => SpinWait.SpinUntil(() => gate.IsExclusiveClaimed, Timeout)),
+            "the swap never claimed the gate");
 
         var queuedUse = OwnThread.Run(() =>
         {

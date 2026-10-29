@@ -36,6 +36,18 @@ internal sealed class ResourceUseGate
         }
     }
 
+    /// <summary>Whether a swap has claimed the gate, so new uses wait. Diagnostics and tests only.</summary>
+    internal bool IsExclusiveClaimed
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _exclusiveHeld;
+            }
+        }
+    }
+
     /// <summary>
     /// Marks the resource in use until the returned scope is disposed. Blocks while it is being swapped out.
     /// Always dispose in a <c>finally</c> (or a <c>using</c>) — a leaked scope stalls every later swap until it
