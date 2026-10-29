@@ -156,6 +156,16 @@ internal static class LibavPinAudioPcmDecoder
             ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, par), "pin_audio_par_to_ctx");
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "pin_audio_open_decoder");
 
+            // A stream that does not say which speaker each channel feeds (a plain WAV, PCM in Matroska or AVI) decodes
+            // with an unspecified layout. swresample takes the default layout for that many channels instead and then
+            // refuses every frame as "Input changed". Naming the default layout on the decoder makes the two agree.
+            if (decCtx->ch_layout.order == AVChannelOrder.AV_CHANNEL_ORDER_UNSPEC && decCtx->ch_layout.nb_channels > 0)
+            {
+                int channels = decCtx->ch_layout.nb_channels;
+                ffmpeg.av_channel_layout_uninit(&decCtx->ch_layout);
+                ffmpeg.av_channel_layout_default(&decCtx->ch_layout, channels);
+            }
+
             int sampleRate = decCtx->sample_rate;
             if (sampleRate <= 0)
             {

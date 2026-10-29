@@ -148,4 +148,16 @@ public sealed class LibavAudioTranscoderTests : IDisposable
         var decoded = LibavPinAudioPcmDecoder.Decode(mp3, 0);
         Assert.True(decoded.PcmBytes.Length > 0, "MP3 output has no decodable audio");
     }
+
+    [Fact]
+    public void Decode_AStreamThatNamesNoChannelLayout()
+    {
+        // A plain WAV says how many channels it has, not which speaker each one feeds. swresample took the default
+        // stereo layout in its place and then refused every decoded frame as "Input changed", so it never decoded.
+        string wav = NewWav("no_layout.wav", seconds: 1.0);
+
+        var decoded = LibavPinAudioPcmDecoder.Decode(wav, 0);
+
+        Assert.Equal(48_000 * 4, decoded.PcmBytes.Length); // one second of 48 kHz 16-bit stereo, all of it
+    }
 }

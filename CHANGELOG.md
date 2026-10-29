@@ -13,6 +13,8 @@
 
 ### 🛡️ Reliability
 
+- **Videos with uncompressed PCM sound keep it when exported or pinned.** Audio that names no speaker layout, such as
+  a plain WAV, was refused frame by frame and came out silent. It now decodes.
 - **Exporting a long video no longer hangs while building its sound.** Past about 93 minutes of audio the buffer that
   holds it stopped growing and the export spun forever, ignoring Cancel. Each kept part of a trim now also decodes just
   its own sound, rather than everything from its start to the end of the file.
