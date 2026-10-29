@@ -256,7 +256,8 @@ internal static unsafe class LibavRecordingEncoder
         throw new InvalidOperationException($"No compatible video encoder available. Last error: {lastOpenError ?? "unknown"}");
     }
 
-    private static void ConfigureEncoderContext(
+    // Internal so a test can check what it sets without opening an encoder.
+    internal static void ConfigureEncoderContext(
         AVCodecContext* encCtx,
         AVCodec* enc,
         string encoderName,
@@ -276,6 +277,15 @@ internal static unsafe class LibavRecordingEncoder
         encCtx->gop_size = fps * 2;
         encCtx->max_b_frames = 0;
         encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
+
+        // Through the API libavcodec gives an encoder one thread unless asked for more. libx264 asks for auto itself (and
+        // keeps zerolatency's sliced threads), and libx265 under zerolatency keeps to one frame thread whatever it is told,
+        // spreading each frame over the cores by rows; but the last-ditch libopenh264 and mpeg4 ran on a single thread.
+        // Hardware and Media Foundation encoders are left as they are.
+        if (!IsHardwareOrMediaFoundationEncoder(encoderName))
+        {
+            encCtx->thread_count = 0;
+        }
 
         if (string.Equals(encoderName, "libx264", StringComparison.OrdinalIgnoreCase)
             || string.Equals(encoderName, "libx265", StringComparison.OrdinalIgnoreCase))

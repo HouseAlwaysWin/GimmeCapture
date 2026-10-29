@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
@@ -7,6 +8,23 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 internal static class LibavWebmTranscoder
 {
+    /// <summary>
+    /// VP9 tile columns, as a power of two, for a frame <paramref name="width"/> pixels wide: as many as keep every tile
+    /// at least four 64-pixel superblocks wide, the narrowest VP9 allows, up to libvpx's limit of 2^6. Each tile column
+    /// can be encoded on a thread of its own. Pure, so it can be unit-tested.
+    /// </summary>
+    internal static int Vp9TileColumnsLog2(int width)
+    {
+        int superblockColumns = (Math.Max(width, 0) + 63) / 64;
+        int log2 = 0;
+        while (log2 < 6 && (superblockColumns >> (log2 + 1)) >= 4)
+        {
+            log2++;
+        }
+
+        return log2;
+    }
+
     /// <summary>
     /// Encodes <paramref name="wavPath"/> to Opus-in-OGG and muxes it with an already-produced
     /// video-only WebM into <paramref name="outputPath"/> (WebM container). The temp .ogg is written
@@ -110,6 +128,13 @@ internal static class LibavWebmTranscoder
             ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
             ffmpeg.av_dict_set(&encOpts, "b", "0", 0);
             ffmpeg.av_dict_set(&encOpts, "cpu-used", cpuUsed, 0);
+            // Through the API libavcodec gives libvpx one thread unless asked for more, and VP9 splits a frame between
+            // threads only by tile columns, or by rows as well with row-mt. Auto threads, row-mt and as many tile
+            // columns as the width allows let it use every core instead of one.
+            encCtx->thread_count = 0;
+            ffmpeg.av_dict_set(&encOpts, "row-mt", "1", 0);
+            ffmpeg.av_dict_set(&encOpts, "tile-columns",
+                Vp9TileColumnsLog2(encCtx->width).ToString(CultureInfo.InvariantCulture), 0);
             ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, &encOpts), "webm_open_encoder");
 
             ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, "webm", outputPath), "webm_alloc_output");

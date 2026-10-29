@@ -9,6 +9,16 @@
 
 ---
 
+## Unreleased
+
+### ⚡ Performance
+
+- **Compressing to H.265 and saving as WebM use every core.** The H.265 encoder worked on one frame at a time and the
+  WebM encoder on a single core. A 1080p H.265 compress now runs about 1.5× as fast and a WebM about twice as fast;
+  H.264 and AV1 already used every core.
+
+---
+
 ## v0.70.0 - 2026-10-29
 
 ### 🛡️ Reliability

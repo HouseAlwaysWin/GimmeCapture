@@ -525,6 +525,13 @@ internal static class LibavClipExporter
                         };
                 ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
             }
+            // Through the API libavcodec gives an encoder one thread unless asked for more; only the ffmpeg command line
+            // asks for auto. libx264 sets auto for itself, but libx265 encoded one frame at a time and libaom on one
+            // thread. Hardware encoders are left as they are, and SVT-AV1 sizes its own thread pool whatever this says.
+            if ((enc->capabilities & (ffmpeg.AV_CODEC_CAP_HARDWARE | ffmpeg.AV_CODEC_CAP_HYBRID)) == 0)
+            {
+                encCtx->thread_count = 0;
+            }
             ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, &encOpts), "clip_open_encoder");
 
             outStream = ffmpeg.avformat_new_stream(outFmt, null);
