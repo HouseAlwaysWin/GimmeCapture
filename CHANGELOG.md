@@ -36,6 +36,10 @@
 
 ### ⚡ Performance
 
+- **Saving a recording to another drive no longer freezes the app.** After the save dialog, or when a recording
+  stopped by itself, the file was moved out of the temp folder on the UI thread. To another drive that is a full copy,
+  about 58 MB for each minute of 1080p at 30 fps, and the app and its hotkeys stopped responding until it was done. The
+  copy now runs in the background, and the overlay closes and the folder opens once the file is in place, as before.
 - **Compressing to H.265 and saving as WebM use every core.** The H.265 encoder worked on one frame at a time and the
   WebM encoder on a single core. A 1080p H.265 compress now runs about 1.5× as fast and a WebM about twice as fast;
   H.264 and AV1 already used every core.

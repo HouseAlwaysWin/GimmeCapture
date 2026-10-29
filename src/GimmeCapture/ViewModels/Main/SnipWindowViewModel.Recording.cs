@@ -494,8 +494,7 @@ public partial class SnipWindowViewModel
                 string ext = System.IO.Path.GetExtension(actualOutputPath).TrimStart('.');
                 string fileName = CaptureFileNameService.BuildFileName(ext, _settings.FileNameTemplate);
                 string targetPath = System.IO.Path.Combine(dir, fileName);
-                if (System.IO.File.Exists(targetPath)) System.IO.File.Delete(targetPath);
-                System.IO.File.Move(actualOutputPath, targetPath);
+                await MoveRecordingAsync(actualOutputPath, targetPath);
                 revealPath = targetPath;
             }
             catch (Exception ex)
@@ -513,8 +512,7 @@ public partial class SnipWindowViewModel
                 {
                     try
                     {
-                        if (System.IO.File.Exists(targetPath)) System.IO.File.Delete(targetPath);
-                        System.IO.File.Move(actualOutputPath, targetPath);
+                        await MoveRecordingAsync(actualOutputPath, targetPath);
                         revealPath = targetPath;
                     }
                     catch (Exception ex)
@@ -565,6 +563,31 @@ public partial class SnipWindowViewModel
         }
 
         CloseAction?.Invoke();
+    }
+
+    private Action<string, string> _moveRecordingFile = MoveReplacing;
+
+    /// <summary>
+    /// Test seam: stands in for the file move behind a save, so a test can hold the move and see that the thread the
+    /// save runs on is not held with it. Production never calls this.
+    /// </summary>
+    internal void UseRecordingFileMoveForTest(Action<string, string> move) => _moveRecordingFile = move;
+
+    /// <summary>
+    /// Moves a finished recording to <paramref name="targetPath"/>, replacing a file already there. On the thread pool:
+    /// to another drive a move is a full copy, about 58 MB for each minute of 1080p30, and on the UI thread it froze
+    /// the app, its hotkeys included, until the copy was done.
+    /// </summary>
+    private Task MoveRecordingAsync(string sourcePath, string targetPath)
+    {
+        Action<string, string> move = _moveRecordingFile;
+        return Task.Run(() => move(sourcePath, targetPath));
+    }
+
+    private static void MoveReplacing(string sourcePath, string targetPath)
+    {
+        if (System.IO.File.Exists(targetPath)) System.IO.File.Delete(targetPath);
+        System.IO.File.Move(sourcePath, targetPath);
     }
 
     /// <summary>
