@@ -84,6 +84,14 @@
   the Record tab whether AV1 and GIF recording are available ran at every start-up, a launch to the tray at login
   included. It now runs when the Record tab is first opened, or as an AV1 recording starts, and FFmpeg loads the first
   time a recording, a video pin or the Record tab needs it.
+- **A capture's text boxes come up about half a second sooner when OCR has been idle.** The capture overlay looked
+  for text only once it was on screen, and OCR, which unloads after two minutes unused, then loaded both its models,
+  though the overlay only finds text and never reads it, and ran its first detection slowly while the graphics card set
+  itself up. Opening a capture to its text boxes took about 1.2 s that way, and 1.4 s on the first capture after
+  launch. The overlay now loads text detection alone, starting as it opens, and runs it once on a blank picture of the
+  same size so the real one is quick, and the graphics card stays set up for five minutes after the last use. In the
+  same measurement the boxes come up after 0.5 s within those five minutes, 0.7 s after them and 0.85 s on the first
+  capture after launch. Changing the OCR language also reloads only that language's reader.
 - **The first recording after launch starts about as quickly as the rest.** Nothing is recorded until a start
   finishes, and the first one also loaded FFmpeg and opened the video encoder for the first time: 0.35-0.39 s on the
   machine measured, against 0.17-0.21 s for every later recording. Entering Record mode now gets both ready in the

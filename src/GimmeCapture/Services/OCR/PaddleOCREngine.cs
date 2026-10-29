@@ -53,6 +53,52 @@ public class PaddleOCREngine : IOCREngine
         _currentOCRLanguage = lang;
     }
 
+    /// <summary>Loads detection alone (<see cref="OcrRuntimeService.EnsureDetectionLoadedAsync"/>): all <see cref="DetectText"/> needs.</summary>
+    public async Task EnsureDetectionLoadedAsync(OCRLanguage lang, CancellationToken ct = default)
+    {
+        if (_leaseId == null)
+        {
+            _leaseId = _ocrRuntimeService.AcquireLease();
+        }
+
+        await _ocrRuntimeService.EnsureDetectionLoadedAsync(lang, ct);
+    }
+
+    /// <summary>
+    /// Runs detection once on a blank capture of this size. DirectML sets itself up on a session's first run, and again
+    /// for each new input size: a cold session's first detection took 260-300 ms, the next at the same size about
+    /// 10 ms, and one at another size 50-110 ms. Run while the overlay opens, it leaves the scan the fast run.
+    /// </summary>
+    public void WarmUpDetection(int captureWidth, int captureHeight)
+    {
+        using var use = _ocrRuntimeService.BeginSessionUse();
+        var detSession = use.Detection;
+        if (detSession == null || captureWidth <= 0 || captureHeight <= 0) return;
+
+        var (width, height) = DetectionInputSize(captureWidth, captureHeight);
+        var input = new DenseTensor<float>(new[] { 1, 3, height, width });
+        string inputName = detSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
+        using var outputs = detSession.Run(new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) });
+    }
+
+    /// <summary>
+    /// The size detection runs at for a capture of <paramref name="width"/> x <paramref name="height"/>: the longer side
+    /// brought down to 1280, then each side rounded up to a multiple of 32.
+    /// </summary>
+    internal static (int Width, int Height) DetectionInputSize(int width, int height)
+    {
+        const int limitSideLen = 1280;
+        float ratio = 1.0f;
+        if (Math.Max(height, width) > limitSideLen)
+        {
+            ratio = height > width ? (float)limitSideLen / height : (float)limitSideLen / width;
+        }
+
+        int targetWidth = (int)(width * ratio);
+        int targetHeight = (int)(height * ratio);
+        return ((targetWidth + 31) / 32 * 32, (targetHeight + 31) / 32 * 32);
+    }
+
     public List<SKRectI> DetectText(SKBitmap bitmap)
     {
         // Held across the whole method, not just the Run: the tensor prep below takes tens of milliseconds, and a
@@ -61,19 +107,7 @@ public class PaddleOCREngine : IOCREngine
         var detSession = use.Detection;
         if (detSession == null) return new List<SKRectI>();
 
-        int limitSideLen = 1280;
-        int w = bitmap.Width;
-        int h = bitmap.Height;
-        float ratio = 1.0f;
-        if (Math.Max(h, w) > limitSideLen)
-        {
-            ratio = h > w ? (float)limitSideLen / h : (float)limitSideLen / w;
-        }
-        int targetWidth = (int)(w * ratio);
-        int targetHeight = (int)(h * ratio);
-        targetWidth = (targetWidth + 31) / 32 * 32;
-        targetHeight = (targetHeight + 31) / 32 * 32;
-
+        var (targetWidth, targetHeight) = DetectionInputSize(bitmap.Width, bitmap.Height);
         using var resized = bitmap.Resize(new SKImageInfo(targetWidth, targetHeight), SKSamplingOptions.Default);
         var input = new DenseTensor<float>(new[] { 1, 3, targetHeight, targetWidth });
         float[] mean = { 0.485f, 0.456f, 0.406f };

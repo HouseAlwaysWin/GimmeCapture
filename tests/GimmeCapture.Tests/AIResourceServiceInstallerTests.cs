@@ -5,6 +5,7 @@ using GimmeCapture.Models;
 
 namespace GimmeCapture.Tests;
 
+[Collection(AIGlobalUnloadCollection.Name)]
 public sealed class AIResourceServiceInstallerTests : IDisposable
 {
     private readonly string _baseDir;

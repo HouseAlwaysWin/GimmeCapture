@@ -10,6 +10,7 @@ namespace GimmeCapture.Tests;
 // test's own (the GPU's, or WARP where there is none), so it needs no window and no capture. The reader replaced
 // SoftwareBitmap.CreateCopyFromSurfaceAsync, whose bitmaps added GC memory pressure that only their finalizers took back:
 // a window that kept changing set off a gen2 collection every three frames.
+[Collection(nameof(WgcSurfaceReaderTests))]
 public sealed unsafe class WgcSurfaceReaderTests
 {
     [Fact]
@@ -217,5 +218,12 @@ public sealed unsafe class WgcSurfaceReaderTests
             public uint SysMemSlicePitch;
         }
     }
+}
+
+// On their own, after the rest: the gen2 collection count is the whole process's, and a test running alongside that set
+// one off failed ASteadyStreamOfFrames_AllocatesNothing although the reader allocated nothing.
+[CollectionDefinition(nameof(WgcSurfaceReaderTests), DisableParallelization = true)]
+public sealed class WgcSurfaceReaderTestsCollection
+{
 }
 #endif

@@ -111,6 +111,67 @@ public sealed class AIScanSessionServiceTests : IDisposable
         captureService.Verify(
             service => service.CaptureScreenAsync(It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(), It.IsAny<bool>()),
             Times.Never);
+        // Boxes are all a scan needs: the recognizer is left for whatever reads the text.
+        Assert.Equal(["EnsureDetectionLoaded", "DetectText"], ocrEngine.Calls);
+    }
+
+    [Fact]
+    public async Task PrepareScanAsync_LoadsTheDetector_AndRunsItOnceAtTheCapturesSize()
+    {
+        var (sut, _, ocrEngine) = CreateWithModelsInstalled(installed: true);
+        using (sut)
+        {
+            await sut.PrepareScanAsync(OCRLanguage.Japanese, 3968, 1160);
+        }
+
+        Assert.Equal(["EnsureDetectionLoaded", "WarmUpDetection 3968x1160"], ocrEngine.Calls);
+    }
+
+    [Fact]
+    public async Task PrepareScanAsync_NeitherLoadsNorDownloads_WhenTheModelIsNotInstalled()
+    {
+        // A missing model is the scan's to report; opening an overlay must not start a download.
+        var (sut, aiResourceService, ocrEngine) = CreateWithModelsInstalled(installed: false);
+        using (sut)
+        {
+            await sut.PrepareScanAsync(OCRLanguage.Japanese, 3968, 1160);
+        }
+
+        Assert.Empty(ocrEngine.Calls);
+        aiResourceService.Verify(
+            service => service.EnsureOCRAsync(It.IsAny<OCRLanguage>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // A service whose OCR files for Japanese are present (or not) in a folder of the test's own, with a fake engine.
+    private (AIScanSessionService Sut, Mock<AIResourceService> AIResources, FakeOcrEngine Engine) CreateWithModelsInstalled(bool installed)
+    {
+        var settingsService = new AppSettingsService(_baseDir);
+        settingsService.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
+        var pathService = new AIPathService(settingsService);
+        if (installed)
+        {
+            var paths = pathService.GetOCRPaths(OCRLanguage.Japanese);
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.Det)!);
+            File.WriteAllText(paths.Det, "det");
+            File.WriteAllText(paths.Rec, "rec");
+            File.WriteAllText(paths.Dict, "dict");
+        }
+
+        var aiResourceService = new Mock<AIResourceService>(settingsService, pathService, new Mock<AIModelDownloader>().Object);
+        var ocrRuntimeService = new OcrRuntimeService(aiResourceService.Object);
+        var ocrEngine = new FakeOcrEngine(new List<SKRectI>());
+        var ocrEngineFactory = new Mock<IOcrEngineFactory>();
+        ocrEngineFactory
+            .Setup(factory => factory.Create(aiResourceService.Object, settingsService, ocrRuntimeService))
+            .Returns(ocrEngine);
+        var sut = new AIScanSessionService(
+            new Mock<IScreenCaptureService>().Object,
+            aiResourceService.Object,
+            new SAM2RuntimeService(pathService),
+            ocrRuntimeService,
+            settingsService,
+            ocrEngineFactory.Object);
+        return (sut, aiResourceService, ocrEngine);
     }
 
     public void Dispose()
@@ -145,13 +206,27 @@ public sealed class AIScanSessionServiceTests : IDisposable
             _boxes = boxes;
         }
 
+        // What was asked of it, in order.
+        public List<string> Calls { get; } = new();
+
         public Task EnsureLoadedAsync(OCRLanguage lang, CancellationToken ct = default)
         {
+            Calls.Add("EnsureLoaded");
             return Task.CompletedTask;
         }
 
+        public Task EnsureDetectionLoadedAsync(OCRLanguage lang, CancellationToken ct = default)
+        {
+            Calls.Add("EnsureDetectionLoaded");
+            return Task.CompletedTask;
+        }
+
+        public void WarmUpDetection(int captureWidth, int captureHeight) =>
+            Calls.Add($"WarmUpDetection {captureWidth}x{captureHeight}");
+
         public List<SKRectI> DetectText(SKBitmap bitmap)
         {
+            Calls.Add("DetectText");
             return _boxes;
         }
 

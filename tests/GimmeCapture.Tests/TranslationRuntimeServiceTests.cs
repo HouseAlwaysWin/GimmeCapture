@@ -6,6 +6,7 @@ namespace GimmeCapture.Tests;
 /// <summary>
 /// The translation engine and cache the app keeps for the whole run, shared by every capture overlay.
 /// </summary>
+[Collection(AIGlobalUnloadCollection.Name)]
 public sealed class TranslationRuntimeServiceTests : IDisposable
 {
     private readonly string _baseDir;

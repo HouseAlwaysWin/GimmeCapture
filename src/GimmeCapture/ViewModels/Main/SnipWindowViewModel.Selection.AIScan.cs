@@ -917,6 +917,33 @@ public partial class SnipWindowViewModel
         RunOCRScanAsync().Forget($"Snip.OcrAutoScanOnEntry.{reason}");
     }
 
+    /// <summary>
+    /// Starts the OCR detector loading as the overlay opens, when the open-time scan (<see cref="RequestOcrAutoScanOnEntry"/>)
+    /// is going to run: that scan starts only once the overlay has shown, and a detector unloaded while idle used to load
+    /// only then. <paramref name="captureWidth"/> x <paramref name="captureHeight"/> is the capture the scan will read,
+    /// in pixels.
+    /// </summary>
+    public void PrepareOcrAutoScan(int captureWidth, int captureHeight)
+    {
+        if (!WillScanOnEntry() || _aiScanSessionService is not { } scanService)
+        {
+            return;
+        }
+
+        // Wholly off the UI thread, which is still building the overlay: the model check reads the disk, and the first
+        // prepare of a run spent 7-8 ms on its caller before it yielded.
+        var language = _services?.SettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese;
+        Task.Run(() => scanService.PrepareScanAsync(language, captureWidth, captureHeight)).Forget("Snip.OcrPrepare");
+    }
+
+    // Whether the open-time scan is going to run: what RequestOcrAutoScanOnEntry and RunOCRScanAsync check, short of
+    // the state the overlay opens in.
+    internal bool WillScanOnEntry() =>
+        CurrentMode != SnipMode.Translation
+        && RecState == RecordingState.Idle
+        && _settings is { EnableAI: true, EnableAIScan: true, ShowAIScanBox: true }
+        && _aiScanSessionService != null;
+
     private void InitializeSelectionCommands()
     {
         ToggleAIScanBoxCommand = ReactiveCommand.Create(() => { ShowAIScanBox = !ShowAIScanBox; return Unit.Default; });

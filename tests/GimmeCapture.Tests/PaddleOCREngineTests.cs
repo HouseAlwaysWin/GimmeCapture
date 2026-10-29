@@ -13,6 +13,7 @@ using GimmeCapture.Services.Core.AI;
 
 namespace GimmeCapture.Tests;
 
+[Collection(AIGlobalUnloadCollection.Name)]
 public class PaddleOCREngineTests
 {
     private readonly Mock<AIResourceService> _mockAiResource;
@@ -87,5 +88,47 @@ public class PaddleOCREngineTests
         var expanded = PaddleOCREngine.ExpandRecognitionBox(box, 100, 20);
 
         Assert.Equal(new SKRectI(0, 0, 100, 20), expanded);
+    }
+
+    // The overlay warms detection up at the size its scan will run at, so both have to come out of this.
+    [Theory]
+    [InlineData(3968, 1160, 1280, 384)] // two screens side by side
+    [InlineData(1920, 1080, 1280, 736)]
+    [InlineData(1080, 1920, 736, 1280)] // portrait: the height is the longer side
+    [InlineData(800, 600, 800, 608)] // small enough already: only rounded up
+    public void DetectionInputSize_BringsTheLongerSideDownTo1280_ThenRoundsUpTo32(
+        int width, int height, int expectedWidth, int expectedHeight)
+    {
+        Assert.Equal((expectedWidth, expectedHeight), PaddleOCREngine.DetectionInputSize(width, height));
+    }
+
+    [Fact]
+    public async Task WarmUpDetection_RunsTheLoadedDetector_AndSkipsWhenNoneIsLoaded()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", "OcrWarmUp", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var settings = new AppSettingsService(folder);
+            settings.Settings.AIResourcesDirectory = Path.Combine(folder, "AI");
+            var pathService = new AIPathService(settings);
+            var paths = pathService.GetOCRPaths(OCRLanguage.TraditionalChinese);
+            TinyOnnxModel.WriteIdentity(paths.Det);
+            TinyOnnxModel.WriteIdentity(paths.Rec);
+            File.WriteAllLines(paths.Dict, ["a"]);
+            var aiResources = new AIResourceService(settings, pathService, new AIModelDownloader());
+            using var runtime = new OcrRuntimeService(aiResources);
+            using var engine = new PaddleOCREngine(aiResources, settings, runtime);
+
+            // A small capture: a real one's input runs to megabytes, which only the size above needs to show.
+            engine.WarmUpDetection(64, 48); // nothing loaded: nothing to run
+            await engine.EnsureDetectionLoadedAsync(OCRLanguage.TraditionalChinese);
+            engine.WarmUpDetection(64, 48);
+
+            Assert.True(runtime.IsDetectionLoaded);
+        }
+        finally
+        {
+            try { Directory.Delete(folder, recursive: true); } catch { /* best effort temp cleanup */ }
+        }
     }
 }

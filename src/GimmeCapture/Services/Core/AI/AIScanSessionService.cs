@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -50,6 +51,29 @@ public sealed class AIScanSessionService : IAIScanSessionService
         return RunOcrScanAsync(request, progress, ct);
     }
 
+    /// <summary>
+    /// Loads the detector and runs it once at the size of the capture a scan will read, for an overlay to start as it
+    /// opens. Its own scan began only once it had shown, 0.5-1.2 s in, and a detector unloaded while idle then took
+    /// 0.6-0.8 s more to load and set up before it answered. Does nothing when the detector is already loaded, and never
+    /// downloads: a missing model is the scan's to report.
+    /// </summary>
+    public async Task PrepareScanAsync(OCRLanguage language, int captureWidth, int captureHeight)
+    {
+        if (_ocrRuntimeService.IsDetectionLoaded || !_aiResourceService.IsOCRReady(language))
+        {
+            return;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        using var ocrEngine = _ocrEngineFactory.Create(_aiResourceService, _settingsService, _ocrRuntimeService);
+        await ocrEngine.EnsureDetectionLoadedAsync(language);
+        long loadMs = stopwatch.ElapsedMilliseconds;
+        await Task.Run(() => ocrEngine.WarmUpDetection(captureWidth, captureHeight));
+        AppLog.Information(
+            "OcrScan.Prepared",
+            $"load={loadMs}ms warmUp={stopwatch.ElapsedMilliseconds - loadMs}ms for a {captureWidth}x{captureHeight} capture");
+    }
+
     public void Dispose()
     {
         _sam2Service.Dispose();
@@ -84,13 +108,19 @@ public sealed class AIScanSessionService : IAIScanSessionService
         {
             ct.ThrowIfCancellationRequested();
             using var ocrEngine = _ocrEngineFactory.Create(_aiResourceService, _settingsService, _ocrRuntimeService);
-            await ocrEngine.EnsureLoadedAsync(request.SourceLanguage, ct);
+            var stopwatch = Stopwatch.StartNew();
+            // Boxes only: the recognizer loads when something reads the text.
+            await ocrEngine.EnsureDetectionLoadedAsync(request.SourceLanguage, ct);
+            long loadMs = stopwatch.ElapsedMilliseconds;
             progress?.Report(AIScanStage.DetectingObjects);
             var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap), ct);
             // Diagnostic (release-visible): distinguishes "capture failed" (0x0 bitmap) from "OCR found nothing"
             // (0 boxes on a real capture — e.g. a DirectML inference-correctness issue on some Win10 setups) from
             // "OCR works". Pair with OcrRuntime.SessionCreated (GPU vs CPU) to pinpoint a Win10-vs-Win11 discrepancy.
-            AppLog.Information($"OcrScan.Detected: {textBoxes.Count} text boxes from a {bitmap.Width}x{bitmap.Height} capture (lang={request.SourceLanguage}, frozen={frozen}).");
+            // load is the wait for the detector, which an overlay starts loading as it opens (PrepareScanAsync).
+            AppLog.Information(
+                "OcrScan.Detected",
+                $"{textBoxes.Count} text boxes from a {bitmap.Width}x{bitmap.Height} capture (lang={request.SourceLanguage}, frozen={frozen}), load={loadMs}ms detect={stopwatch.ElapsedMilliseconds - loadMs}ms.");
 
             double scaleX = bitmap.Width > 0 ? request.ViewportBounds.Width / bitmap.Width : 1;
             double scaleY = bitmap.Height > 0 ? request.ViewportBounds.Height / bitmap.Height : 1;

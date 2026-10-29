@@ -162,6 +162,11 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
             snipVm.InitializeTranslationToolbarPosition();
         }
 
+        // The open-time OCR scan reads the whole overlay, as the frozen still or a live grab of the same area: get its
+        // detector loading now, alongside the grab and the first show below.
+        double scanScaling = snip.Screens?.Primary?.Scaling ?? 1.0;
+        snipVm.PrepareOcrAutoScan((int)(snip.Width * scanScaling), (int)(snip.Height * scanScaling));
+
         double afterViewModelMs = openStopwatch.Elapsed.TotalMilliseconds;
 
         // Freeze-frame: for a plain screenshot (not recording/translation/scrolling), snapshot the WHOLE desktop

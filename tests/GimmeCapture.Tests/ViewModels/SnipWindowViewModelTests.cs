@@ -206,6 +206,62 @@ public class SnipWindowViewModelTests
         settings.VerifySet(s => s.TargetLanguage = TranslationLanguage.English);
     }
 
+    [Fact]
+    public async Task AnOverlayThatWillScanOnOpening_StartsLoadingItsDetector_ForTheCapturesSize()
+    {
+        var settings = OcrScanSettings();
+        var scan = new Mock<IAIScanSessionService>();
+        var prepared = new TaskCompletionSource();
+        scan.Setup(s => s.PrepareScanAsync(It.IsAny<OCRLanguage>(), It.IsAny<int>(), It.IsAny<int>()))
+            .Callback(() => prepared.SetResult())
+            .Returns(Task.CompletedTask);
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object, aiScanSessionService: scan.Object, settings: settings.Object);
+
+        vm.PrepareOcrAutoScan(3968, 1160);
+
+        await prepared.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        scan.Verify(s => s.PrepareScanAsync(OCRLanguage.TraditionalChinese, 3968, 1160), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("translation")]
+    [InlineData("AI off")]
+    [InlineData("OCR scan off")]
+    [InlineData("scan box hidden")]
+    public void NoDetectorIsLoadedEarly_WhenTheOverlayWillNotScanOnOpening(string reason)
+    {
+        var settings = OcrScanSettings();
+        switch (reason)
+        {
+            case "AI off": settings.SetupGet(s => s.EnableAI).Returns(false); break;
+            case "OCR scan off": settings.SetupGet(s => s.EnableAIScan).Returns(false); break;
+            case "scan box hidden": settings.SetupGet(s => s.ShowAIScanBox).Returns(false); break;
+        }
+
+        var scan = new Mock<IAIScanSessionService>();
+        using var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object, aiScanSessionService: scan.Object, settings: settings.Object);
+        if (reason == "translation")
+        {
+            vm.CurrentMode = SnipMode.Translation;
+        }
+
+        Assert.False(vm.WillScanOnEntry());
+        vm.PrepareOcrAutoScan(3968, 1160);
+        scan.Verify(s => s.PrepareScanAsync(It.IsAny<OCRLanguage>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+    }
+
+    // Settings under which an overlay scans for text as it opens.
+    private static Mock<ISnipOverlaySettings> OcrScanSettings()
+    {
+        var settings = OverlaySettings();
+        settings.SetupGet(s => s.EnableAI).Returns(true);
+        settings.SetupGet(s => s.EnableAIScan).Returns(true);
+        settings.SetupGet(s => s.ShowAIScanBox).Returns(true);
+        return settings;
+    }
+
     // A settings stand-in whose recording settings exist, as the main window's always do.
     private static Mock<ISnipOverlaySettings> OverlaySettings()
     {

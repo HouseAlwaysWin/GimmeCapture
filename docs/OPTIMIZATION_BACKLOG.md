@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 23 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 24 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -33,6 +33,17 @@ tool.
   audio came out 6-120 ms (53 on average) short of its video, so every part after a pause played that much early.
   After: the muxed tracks start together and differ in length only by AAC framing (+27 or +36 ms), and the audio
   written matches the gate's open span within 7 ms. Each pause or stop logs `Recording.AudioGate`.
+- Done since batch 1: **the cold OCR scan**. The user's log showed most overlay scans cold (captures more than the
+  2-minute keep-alive apart). Measured on the installed models (DirectML, fresh processes; DirectML.dll has to be copied
+  beside a Debug build's tests, or the sessions fall back to the CPU): detector alone 445 ms, with the recognizer
+  550-660; a cold detector's first run 260-300 ms, then ~10 ms at the same input size and 50-110 at another; a reload
+  after the idle unload 340-430 ms plus 260-300, or 170-200 plus 110-140 with the DirectML device still open. Now the
+  runtime loads detection and each language's recognizer separately (a language swap keeps the detector), the
+  overlay's scan loads detection only, `SnipWindowFactory.Open` starts `AIScanSessionService.PrepareScanAsync` (load,
+  then one run on a blank capture of the scan's size), and `GpuDeviceHold` keeps the device for the 5-minute idle
+  window. Open-to-boxes with the scan starting 450 ms after the open: first scan of a run 1.39-1.42 s before,
+  0.84-0.85 after; after an idle unload 1.18-1.20 before, 0.50 after within 5 minutes and 0.66-0.74 past them. Logs
+  `OcrScan.Prepared` and `load=`/`detect=` on `OcrScan.Detected`.
 
 ## Hand checks still owed for batch 1
 
@@ -51,6 +62,10 @@ These were covered by unit tests only; check them in the real app before a relea
 - **Audio gate**: each pause and stop logs a `Recording.AudioGate` line (`head`, `tail`, `pad`, `waited`), with `pad`
   about 45-105 ms and `waited` a few ms. A recording paused once or twice should stay in step after each pause, which
   no test covers: the probe records single segments.
+- **Cold OCR scan**: open a capture after OCR has sat unused for more than two minutes. The log should show
+  `OcrScan.Prepared` (load and warm-up) and then `OcrScan.Detected` with a small `load=` and a `detect=` near 10 ms, and
+  the text boxes should come up about as the overlay appears. Nothing measured the real overlay's timing, only a
+  stand-in for it.
 
 ## How to run a batch
 
@@ -64,12 +79,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### OCR, AI and translation
 
-- **Cold OCR scan starts late and builds a recognizer it does not use** (M). The overlay's scan only detects
-  (`AIScanSessionService.cs:86-89`), but `OcrRuntimeService.cs:193` builds detection and recognition and the load starts
-  0.53-1.16 s after `SnipWindowFactory.Open` (a Background post in `SnipWindow.OnOpened`, `SnipWindow.axaml.cs:256`).
-  Most of the user's captures are more than the 2-minute keep-alive apart, so most scans are cold (session build
-  524-880 ms). Fix: take a lease and start a detection-only load at the top of `Open`; build recognizer and dictionary
-  on the first `RecognizeText`; optionally keep the DirectML device with `GpuDeviceHold`. Hides about 0.5-0.9 s.
 - **Recognition runs up to four passes per box, one box per run** (S gating, M batching). `PaddleOCREngine.cs:111`:
   `shouldEnhance = contrast < LowContrastThreshold || box.Height < 28` forces a second pass for most UI text whatever
   the first pass's confidence; dark crops double it again. Callers loop one box at a time (`QuickOcrService.cs:66-74`,
@@ -79,9 +88,9 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   `StatelessExecutor`, which creates a context (KV cache for 2048 tokens) and prefills from zero per call. Fix: one
   long-lived context, the per-language-pair instruction prefix decoded once and forked per request
   (BatchedExecutor/Conversation), blocks batched into one prompt. Measure first; no load-time log exists yet.
-- **Changing OCR language rebuilds the shared detector; Auto re-probes in every overlay** (S-M).
-  `OcrRuntimeService.cs:192-193`, `OcrScriptDetector.cs:85-112`. Every language uses the same `ocr_det.onnx`: swap only
-  the recognizer and dictionary, keep the Auto verdict app-wide. Only matters with several OCR languages installed.
+- **Auto re-probes the language in every overlay** (S). `OcrScriptDetector.cs:85-112`: keep the Auto verdict app-wide.
+  Each probe swaps recognizers, which now costs ~135 ms each (the shared detector stays loaded). Only matters with
+  several OCR languages installed.
 - **11 MB input tensor allocated per scan** (S). `PaddleOCREngine.cs:78`. Reuse belongs in `OcrRuntimeService`.
 - **Full-screen resize on the UI thread per OCR search** (S). `SnipWindowViewModel.Selection.AIScan.cs:216` resizes to
   1600 px (Mitchell), then `DetectText` resizes again to 1280. Do one resize, off the UI thread.
@@ -243,8 +252,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 Disjoint file sets for parallel agents:
 
-1. OCR cold start, recognition passes, language swap, per-scan buffers (`OcrRuntimeService`, `AIScanSessionService`,
-   `PaddleOCREngine`, `OcrScriptDetector`, `QuickOcrService`; the lease at `SnipWindowFactory.Open` needs that file).
+1. OCR recognition passes, the Auto verdict, per-scan buffers (`OcrRuntimeService`, `PaddleOCREngine`,
+   `OcrScriptDetector`, `QuickOcrService`).
 2. Recording: composite WGC, WGC readback pacing, BGRA into hardware encoders, finalize, the Linux audio gate.
 3. Compress: persistent editor/compare decoder, GIF/WebM intermediate with progress and cancel, stream copy at or above
    source size, rotation in YUV, segmented path.
