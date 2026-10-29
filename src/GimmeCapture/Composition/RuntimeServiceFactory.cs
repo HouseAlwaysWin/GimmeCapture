@@ -62,7 +62,10 @@ public static class RuntimeServiceFactory
         var windowManager = new AvaloniaWindowManager();
         var shellServices = CreateSnipWindowShellServices();
         var screenCaptureService = CreateScreenCaptureService();
-        var translationSessionServiceFactory = new TranslationSessionServiceFactory();
+        // One translation model and cache for the run, which every overlay's session translates through. Built per
+        // overlay, they went with it: each overlay loaded the model again and started with an empty cache.
+        var translationRuntime = new TranslationRuntimeService();
+        var translationSessionServiceFactory = new TranslationSessionServiceFactory(translationRuntime);
         var windowDetectionService = CreateWindowDetectionService();
 
         return new SnipWindowFactory(
@@ -71,6 +74,7 @@ public static class RuntimeServiceFactory
             shellServices.WindowLayerService,
             screenCaptureService,
             translationSessionServiceFactory,
+            translationRuntime,
             windowDetectionService);
     }
 }

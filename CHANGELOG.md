@@ -48,6 +48,12 @@
 
 ### ⚡ Performance
 
+- **A second translation within two minutes no longer loads the translation model again.** Each Translate press freed
+  the 2.5 GB model when it finished, and each capture overlay started with a translation engine and cache of its own,
+  so every press loaded the model again and no overlay reused another's translations. The model and the translations
+  already made now last the whole run: the model is freed once it has gone unused for two minutes, when AI is turned
+  off, before a module is removed and at exit. It also starts loading as a press begins, alongside OCR, instead of
+  once OCR has read the text.
 - **Translating no longer takes a snapshot of every running process a dozen times per press.** A debug log line read
   the app's memory use, which on Windows means a snapshot of every process, several times on the UI thread, and was
   then thrown away unless debug logging was on. The memory use is now read only when debug logging is on.

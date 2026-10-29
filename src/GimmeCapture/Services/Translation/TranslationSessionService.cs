@@ -21,15 +21,25 @@ public sealed class TranslationSessionService : ITranslationSessionService
     private Task? _warmupTask;
     private bool _ocrWarmHoldActive;
 
+    /// <param name="translationEngine">
+    /// The app's engine (<see cref="TranslationRuntimeService"/>), shared with every other overlay: this session
+    /// translates through it but neither frees its model nor disposes it.
+    /// </param>
     public TranslationSessionService(
         AIResourceService aiResourceService,
         IAppSettingsService settingsService,
         OcrRuntimeService ocrRuntimeService,
-        IOcrScriptDetector scriptDetector)
+        IOcrScriptDetector scriptDetector,
+        ITranslationModelEngine translationEngine)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        _translationService = new TranslationService(aiResourceService, settingsService, ocrRuntimeService, scriptDetector);
+        _translationService = new TranslationService(
+            aiResourceService,
+            settingsService,
+            ocrRuntimeService,
+            scriptDetector,
+            translationEngine);
     }
 
     internal bool IsOcrLoaded => _translationService.IsOcrLoaded;
@@ -143,10 +153,15 @@ public sealed class TranslationSessionService : ITranslationSessionService
         _translationService.Dispose();
     }
 
-    internal void ReleaseHeavyResources(bool trimProcessWorkingSet)
+    /// <summary>
+    /// Lets go of OCR at the end of a translate press or on leaving translate mode. The translation model stays
+    /// loaded: it is shared by every overlay and freed by its own idle countdown, so the next press, here or in the
+    /// next overlay, uses it instead of loading it again.
+    /// </summary>
+    internal void ReleaseHeavyResources()
     {
+        // Ending the warm-up drops its hold on OCR, which lets go of the OCR engine.
         CancelWarmup();
-        _translationService.ReleaseHeavyResources(trimProcessWorkingSet);
         TranslationMemoryDiagnostics.Log(
             "translation-session-release",
             ocrLoaded: IsOcrLoaded,

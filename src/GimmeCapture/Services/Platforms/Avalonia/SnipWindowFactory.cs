@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using System;
 using System.Diagnostics;
+using System.Reactive.Linq;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
@@ -9,25 +10,33 @@ using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Translation;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
+using ReactiveUI;
 
 namespace GimmeCapture.Services.Platforms.Desktop;
 
-public sealed class SnipWindowFactory : ISnipWindowFactory
+public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
 {
     private readonly IWindowManager _windowManager;
     private readonly IScreenLayoutService _screenLayoutService;
     private readonly IWindowLayerService _windowLayerService;
     private readonly IScreenCaptureService _screenCaptureService;
     private readonly ITranslationSessionServiceFactory _translationSessionServiceFactory;
+    private readonly TranslationRuntimeService _translationRuntime;
     private readonly IWindowDetectionService _windowDetectionService;
+    private IDisposable? _aiSwitchSubscription;
     private bool _openedOnce;
 
+    /// <param name="translationRuntime">
+    /// The translation model and cache every overlay's session shares, which this factory owns for the run: it frees
+    /// the model when AI is turned off and disposes it with itself.
+    /// </param>
     public SnipWindowFactory(
         IWindowManager windowManager,
         IScreenLayoutService screenLayoutService,
         IWindowLayerService windowLayerService,
         IScreenCaptureService screenCaptureService,
         ITranslationSessionServiceFactory translationSessionServiceFactory,
+        TranslationRuntimeService translationRuntime,
         IWindowDetectionService windowDetectionService)
     {
         _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
@@ -35,6 +44,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
         _windowLayerService = windowLayerService ?? throw new ArgumentNullException(nameof(windowLayerService));
         _screenCaptureService = screenCaptureService ?? throw new ArgumentNullException(nameof(screenCaptureService));
         _translationSessionServiceFactory = translationSessionServiceFactory ?? throw new ArgumentNullException(nameof(translationSessionServiceFactory));
+        _translationRuntime = translationRuntime ?? throw new ArgumentNullException(nameof(translationRuntime));
         _windowDetectionService = windowDetectionService ?? throw new ArgumentNullException(nameof(windowDetectionService));
     }
 
@@ -45,6 +55,15 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
         {
             throw new ArgumentException("Expected MainWindowViewModel.", nameof(mainViewModel));
         }
+
+        // Turning AI off frees the translation model now rather than at its idle unload: the switch is how a user asks
+        // for that memory back. Watched from the first overlay on: the main view model first reaches this factory here,
+        // and no model can have been loaded before. Freed off the UI thread, like SAM2's models on the same switch.
+        _aiSwitchSubscription ??= vm.WhenAnyValue(x => x.EnableAI)
+            .Skip(1)
+            .Where(static enabled => !enabled)
+            .Subscribe(_ => System.Threading.Tasks.Task.Run(_translationRuntime.ReleaseModel)
+                .Forget("Settings.EnableAI.ReleaseTranslationModel"));
 
         _openedOnce = true;
         var existing = _windowManager.FindWindowOfType<SnipWindow>();
@@ -203,6 +222,14 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
     public object? GetActiveViewModel()
     {
         return _windowManager.FindWindowOfType<SnipWindow>()?.DataContext;
+    }
+
+    /// <summary>At exit: frees the translation model, which outlives every overlay.</summary>
+    public void Dispose()
+    {
+        _aiSwitchSubscription?.Dispose();
+        _aiSwitchSubscription = null;
+        _translationRuntime.Dispose();
     }
 
     /// <summary>

@@ -211,7 +211,7 @@ public partial class SnipWindowViewModel
                 }
             });
 
-            ReleaseTranslationHeavyResources(trimProcessWorkingSet: true, phase: "translate-all-finish");
+            ReleaseTranslationHeavyResources(phase: "translate-all-finish");
 
             IsTranslating = false;
             ShowTopLoadingBar = false;
@@ -842,11 +842,14 @@ public partial class SnipWindowViewModel
         return resized;
     }
 
-    private void ReleaseTranslationHeavyResources(bool trimProcessWorkingSet, string phase)
+    // Lets go of OCR; the translation model stays loaded for the next press, here or in the next overlay. Nothing large
+    // is freed here any more, so no working-set trim is asked for here: the model's and OCR's idle unloads each request
+    // one once they free their memory.
+    private void ReleaseTranslationHeavyResources(string phase)
     {
         if (_translationSession is TranslationSessionService concreteSession)
         {
-            concreteSession.ReleaseHeavyResources(trimProcessWorkingSet);
+            concreteSession.ReleaseHeavyResources();
             TranslationMemoryDiagnostics.Log(
                 phase,
                 ocrLoaded: concreteSession.IsOcrLoaded,

@@ -336,6 +336,12 @@ public sealed class AppBootstrapper : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // The snip window factory owns the translation model, which outlives every overlay.
+        if (_snipWindowFactory.IsValueCreated && _snipWindowFactory.Value is IDisposable snipWindowFactory)
+        {
+            snipWindowFactory.Dispose();
+        }
+
         if (!_mainWindowDependencies.IsValueCreated)
         {
             return;

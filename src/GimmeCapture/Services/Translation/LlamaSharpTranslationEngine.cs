@@ -16,10 +16,20 @@ using LLama.Sampling;
 
 namespace GimmeCapture.Services.Translation;
 
-public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposable
+public sealed class LlamaSharpTranslationEngine : ITranslationModelEngine
 {
     private const string TranslationPromptCacheVersion = "prompt-v8";
     private const string TranslationEndMarker = "<<END_TRANSLATION>>";
+
+    /// <summary>
+    /// How long the model stays loaded after its last use. The app keeps one engine for the whole run, and the end of
+    /// a translate press no longer frees the model, so this countdown is what gives the memory back. Two minutes, as
+    /// for OCR's sessions, covers a working rhythm of presses without loading the 2.5 GB model again for each. It also
+    /// has to stay shorter than <see cref="ProcessMemoryTrimService.IdleTrimDelay"/>: every use of the model counts as
+    /// activity for that trim, so the model is always gone before an idle trim runs, rather than having its weights
+    /// pushed out of memory for the next press to fault back in.
+    /// </summary>
+    internal static readonly TimeSpan UnloadIdleDelay = TimeSpan.FromMinutes(2);
 
     public TranslationEngine EngineType => TranslationEngine.LlamaSharp;
 
@@ -37,11 +47,11 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly SemaphoreSlim _inferLock = new(1, 1);
     private volatile bool _disposed;
-    // Unload the (multi-GB) GGUF weights after they've gone unused for a while, so leaving the app idle in
-    // translation mode doesn't hold RAM/VRAM. A subsequent translation transparently reloads.
+    // Unload the (multi-GB) GGUF weights after they've gone unused for UnloadIdleDelay, so leaving the app idle
+    // doesn't hold RAM/VRAM. A subsequent translation transparently reloads.
     private readonly IdleReleaseScheduler _idleUnload;
 
-    internal bool IsModelLoaded => _executor != null && _weights != null;
+    public bool IsModelLoaded => _executor != null && _weights != null;
 
     public LlamaSharpTranslationEngine(
         AIResourceService aiResourceService,
@@ -51,7 +61,31 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-        _idleUnload = new IdleReleaseScheduler(TimeSpan.FromMinutes(5), ReleaseIdleModel);
+        _idleUnload = new IdleReleaseScheduler(UnloadIdleDelay, ReleaseIdleModel);
+    }
+
+    public Task PreloadAsync(CancellationToken ct = default)
+    {
+        if (_disposed)
+        {
+            return Task.CompletedTask;
+        }
+
+        // A model no translation ends up needing is then freed like an idle one.
+        NoteModelUse();
+        return EnsureLoadedAsync(ct);
+    }
+
+    /// <summary>
+    /// Restarts the idle countdown, and counts as activity for the process's idle trim. Called as a use starts and
+    /// again as a load or a generation lets go of the model: the unloader leaves a model in use alone, so a use longer
+    /// than the idle delay would otherwise leave it loaded with no countdown left. With every use reported at both
+    /// ends, the model is also always unloaded before an idle trim could push its weights out of memory.
+    /// </summary>
+    private void NoteModelUse()
+    {
+        ProcessMemoryTrimService.NotifyActivity("translation");
+        _idleUnload.NotifyUse();
     }
 
     public async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct = default)
@@ -70,8 +104,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             return cached;
         }
 
-        ProcessMemoryTrimService.NotifyActivity("translation");
-        _idleUnload.NotifyUse();
+        NoteModelUse();
         await EnsureLoadedAsync(ct);
         if (_executor == null)
         {
@@ -171,6 +204,10 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             {
                 ReleaseIdleModel();
             }
+            else
+            {
+                NoteModelUse();
+            }
         }
 
         return CleanupTranslationResult(sb.ToString());
@@ -192,7 +229,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         // Replacing the model frees the current weights, so no inference may be running on them: take the inference
         // lock first. This used to hold only _loadLock, and switching models while a translation was generating freed
         // the native weights under it — a use-after-free in llama.cpp. Lock order is always _inferLock → _loadLock,
-        // the same as ReleaseModel / ReleaseIdleModel / Dispose, so these can never deadlock each other.
+        // the same as TryFreeModel, which every release goes through, so these can never deadlock each other.
         await _inferLock.WaitAsync(ct);
         try
         {
@@ -209,6 +246,11 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         finally
         {
             _inferLock.Release();
+
+            if (!_disposed)
+            {
+                NoteModelUse();
+            }
         }
 
         // Disposed while this was loading: Dispose could not free a model that did not exist yet, and nothing will
@@ -297,64 +339,46 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         }
     }
 
-    internal void ReleaseModel()
+    public void ReleaseModel()
     {
-        // Never free the native weights out from under a running inference (mode-exit can race a background
-        // translation). Try non-blocking so we don't block/deadlock the UI thread; if a translation is in
-        // flight, re-arm the idle timer so the model unloads shortly after it finishes instead.
-        if (!_inferLock.Wait(0))
-        {
-            _idleUnload.NotifyUse();
-            return;
-        }
-
-        try
-        {
-            // Non-blocking here too: this is called on the UI thread when leaving translate mode, and a blocking
-            // Wait sat out an entire multi-GB model load. (Loads also hold _inferLock now, so the check above
-            // normally catches that case first.)
-            if (!_loadLock.Wait(0))
-            {
-                _idleUnload.NotifyUse();
-                return;
-            }
-
-            _idleUnload.Cancel();
-            try
-            {
-                DisposeModel();
-            }
-            finally
-            {
-                _loadLock.Release();
-            }
-        }
-        finally
-        {
-            _inferLock.Release();
-        }
+        // Never free the native weights out from under a running inference or load. Non-blocking, so turning AI off
+        // on the UI thread never sits out a generation or a multi-GB load: the translation or load in flight restarts
+        // the idle countdown as it ends, and the countdown frees the model.
+        TryFreeModel(TimeSpan.Zero, "llama-released");
     }
 
-    // Idle-unload callback: free the weights only if no translation is in flight (skip + retry on the next
-    // idle otherwise), then request a working-set trim. Guarded by both locks so it can't race load/inference.
-    private void ReleaseIdleModel()
+    public bool UnloadModel(TimeSpan timeout) => TryFreeModel(timeout, "llama-unloaded");
+
+    // Idle-unload callback: free the weights only if no translation is in flight. One that is restarts the countdown
+    // when it ends, so skipping here never leaves the model loaded for good.
+    private void ReleaseIdleModel() => TryFreeModel(TimeSpan.Zero, "llama-idle");
+
+    /// <summary>
+    /// Frees the weights once nothing translates with them or loads them, waiting up to <paramref name="wait"/> for
+    /// that, then asks for a working-set trim. Takes both locks in the usual order, so it cannot race a load or an
+    /// inference. False when one still held the model after the wait.
+    /// </summary>
+    private bool TryFreeModel(TimeSpan wait, string trimReason)
     {
-        if (!_inferLock.Wait(0))
+        if (!_inferLock.Wait(wait))
         {
-            return;
+            return false;
         }
 
         bool released = false;
         try
         {
-            _loadLock.Wait();
+            // Loads take _inferLock first, so with it held this lock is free; the wait is only a guard.
+            if (!_loadLock.Wait(wait))
+            {
+                return false;
+            }
+
             try
             {
-                if (IsModelLoaded)
-                {
-                    DisposeModel();
-                    released = true;
-                }
+                _idleUnload.Cancel();
+                released = IsModelLoaded;
+                DisposeModel();
             }
             finally
             {
@@ -368,8 +392,10 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
 
         if (released)
         {
-            ProcessMemoryTrimService.RequestIdleTrimAsync("llama-idle").Forget("MemoryTrim.LlamaIdle");
+            ProcessMemoryTrimService.RequestIdleTrimAsync(trimReason).Forget("MemoryTrim.LlamaReleased");
         }
+
+        return true;
     }
 
     public void Dispose()
@@ -377,7 +403,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         _disposed = true;
         _idleUnload.Cancel();
 
-        // Free the model now if nothing is generating. If a translation is still in flight (closing the overlay
+        // Free the model now if nothing is generating. If a translation is still in flight (the app exiting
         // mid-translation), it frees the model itself the moment it finishes — see TranslateWithPromptAsync — instead
         // of the multi-GB weights waiting for finalization.
         ReleaseIdleModel();

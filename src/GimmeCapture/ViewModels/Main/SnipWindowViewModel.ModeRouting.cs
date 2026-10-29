@@ -152,7 +152,7 @@ public partial class SnipWindowViewModel
             
             StopAutoDetectLoop();
             CancelTranslationWarmup();
-            ReleaseTranslationHeavyResources(trimProcessWorkingSet: true, phase: "translation-mode-exit");
+            ReleaseTranslationHeavyResources(phase: "translation-mode-exit");
         }
 
         // Common updates

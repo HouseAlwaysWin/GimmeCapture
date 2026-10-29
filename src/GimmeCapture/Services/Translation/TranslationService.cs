@@ -20,40 +20,42 @@ public partial class TranslationService : IDisposable
 {
     private readonly IAppSettingsService _settingsService;
     private readonly OcrRuntimeService _ocrRuntimeService;
-    private readonly IEnumerable<ITranslationEngine> _translationEngines;
+    private readonly ITranslationModelEngine _translationEngine;
     private readonly TranslationEngineRunner _translationEngineRunner;
     private readonly AIResourceService _aiResourceService;
     private readonly IOcrScriptDetector _scriptDetector;
+    private readonly IOcrEngineFactory _ocrEngineFactory;
     private readonly TranslationPipeline _translationPipeline = new();
     private IOCREngine? _ocrEngine;
     private bool _keepOcrWarm;
 
     private AppSettings _settings => _settingsService.Settings;
 
+    /// <param name="translationEngine">
+    /// The app's engine, shared by every overlay (<see cref="TranslationRuntimeService"/>): this service translates
+    /// through it, but its model and its lifetime are not this overlay's to end.
+    /// </param>
+    /// <param name="ocrEngineFactory">Builds the OCR engine; PaddleOCR unless a test hands in another.</param>
     public TranslationService(
         AIResourceService aiResourceService,
         IAppSettingsService settingsService,
         OcrRuntimeService ocrRuntimeService,
-        IOcrScriptDetector scriptDetector)
+        IOcrScriptDetector scriptDetector,
+        ITranslationModelEngine translationEngine,
+        IOcrEngineFactory? ocrEngineFactory = null)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _ocrRuntimeService = ocrRuntimeService ?? throw new ArgumentNullException(nameof(ocrRuntimeService));
         _scriptDetector = scriptDetector ?? throw new ArgumentNullException(nameof(scriptDetector));
-
-        // Manual DI for now as the app doesn't use a container in constructor injection here
-        var translationCache = new InMemoryTranslationCache();
-
-        _translationEngines = new List<ITranslationEngine>
-        {
-            new LlamaSharpTranslationEngine(_aiResourceService, settingsService, translationCache)
-        };
-        _translationEngineRunner = new TranslationEngineRunner(_translationEngines);
+        _translationEngine = translationEngine ?? throw new ArgumentNullException(nameof(translationEngine));
+        _ocrEngineFactory = ocrEngineFactory ?? new PaddleOcrEngineFactory();
+        _translationEngineRunner = new TranslationEngineRunner([_translationEngine]);
     }
 
     internal bool IsOcrLoaded => _ocrRuntimeService.IsLoaded;
     internal OCRLanguage? LoadedOcrLanguage => _ocrRuntimeService.LoadedLanguage;
-    internal bool IsLlamaLoaded => GetLlamaEngine()?.IsModelLoaded == true;
+    internal bool IsLlamaLoaded => _translationEngine.IsModelLoaded;
 
     public async Task WarmUpAsync(CancellationToken ct = default)
     {
@@ -66,6 +68,11 @@ public partial class TranslationService : IDisposable
             ocrLoaded: IsOcrLoaded,
             ocrLanguage: LoadedOcrLanguage?.ToString(),
             llamaLoaded: IsLlamaLoaded);
+
+        // The translation model starts loading alongside OCR, instead of only once OCR has read the text. Not awaited:
+        // a press with nothing new to translate should not wait for a model it will not use, and a translation that
+        // does need it waits for this load inside the engine rather than starting another.
+        PreloadTranslationModelAsync(ct).Forget("Translation.WarmupModel");
 
         try
         {
@@ -89,6 +96,28 @@ public partial class TranslationService : IDisposable
             ocrLoaded: IsOcrLoaded,
             ocrLanguage: LoadedOcrLanguage?.ToString(),
             llamaLoaded: IsLlamaLoaded);
+    }
+
+    private async Task PreloadTranslationModelAsync(CancellationToken ct)
+    {
+        if (_settings.SelectedTranslationEngine != TranslationEngine.LlamaSharp || !_aiResourceService.IsLlamaModelReady())
+        {
+            return;
+        }
+
+        try
+        {
+            await _translationEngine.PreloadAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // The press ended, or translate mode closed, before the model was needed.
+        }
+        catch (Exception ex)
+        {
+            // The translation that needs the model loads it again and reports the failure where the user sees it.
+            AppLog.Warning("Translation.WarmupModel", ex);
+        }
     }
 
     public Task<ResourceReadyResult> CheckEngineReadyAsync()
@@ -445,19 +474,6 @@ public partial class TranslationService : IDisposable
         }
     }
 
-    internal void ReleaseHeavyResources(bool trimProcessWorkingSet = false)
-    {
-        SetOcrWarmHold(false);
-        ReleaseOcrResources();
-        GetLlamaEngine()?.ReleaseModel();
-
-        if (trimProcessWorkingSet)
-        {
-            ProcessMemoryTrimService.RequestIdleTrimAsync("translation-resources-released")
-                .Forget("MemoryTrim.TranslationResourcesReleased");
-        }
-    }
-
     private async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, CancellationToken ct)
     {
         return await _translationEngineRunner.TranslateSelectedAsync(
@@ -562,23 +578,15 @@ public partial class TranslationService : IDisposable
 
     public void Dispose()
     {
-        ReleaseHeavyResources(trimProcessWorkingSet: false);
-
-        foreach (var engine in _translationEngines.AsValueEnumerable().OfType<IDisposable>())
-        {
-            engine.Dispose();
-        }
+        // OCR only. The translation engine outlives this overlay: the next one translates through it, and its own idle
+        // countdown frees the model.
+        SetOcrWarmHold(false);
     }
 
     private IOCREngine GetOrCreateOcrEngine()
     {
-        _ocrEngine ??= new PaddleOCREngine(_aiResourceService, _settingsService, _ocrRuntimeService);
+        _ocrEngine ??= _ocrEngineFactory.Create(_aiResourceService, _settingsService, _ocrRuntimeService);
         return _ocrEngine;
-    }
-
-    private LlamaSharpTranslationEngine? GetLlamaEngine()
-    {
-        return _translationEngines.AsValueEnumerable().OfType<LlamaSharpTranslationEngine>().FirstOrDefault();
     }
 
     private static bool ContainsJapaneseKana(string text)

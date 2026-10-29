@@ -13,6 +13,7 @@ public sealed class TranslationSessionServiceTests : IDisposable
 {
     private readonly string _baseDir;
     private readonly AppSettingsService _settingsService;
+    private readonly FakeTranslationModelEngine _engine = new() { IsModelLoaded = true };
     private readonly TranslationSessionService _sut;
 
     public TranslationSessionServiceTests()
@@ -32,7 +33,8 @@ public sealed class TranslationSessionServiceTests : IDisposable
             aiResourceService,
             _settingsService,
             ocrRuntimeService,
-            new OcrScriptDetector(aiResourceService));
+            new OcrScriptDetector(aiResourceService),
+            _engine);
     }
 
     [Fact]
@@ -69,6 +71,45 @@ public sealed class TranslationSessionServiceTests : IDisposable
 
         Assert.True(fakeEngine.IsDisposed);
         Assert.Null(ocrEngineField?.GetValue(translationService));
+    }
+
+    [Fact]
+    public void ReleaseHeavyResources_LetsGoOfOcrButKeepsTheTranslationModel()
+    {
+        // The end of every translate press calls this. It used to free the model too, so the next press, a few seconds
+        // later, loaded the 2.5 GB model all over again.
+        var fakeOcr = GiveTheSessionAnOcrEngine();
+
+        _sut.ReleaseHeavyResources();
+
+        Assert.True(fakeOcr.IsDisposed);
+        Assert.Equal(0, _engine.ReleaseCount);
+        Assert.Equal(0, _engine.DisposeCount);
+        Assert.True(_sut.IsLlamaLoaded);
+    }
+
+    [Fact]
+    public void Dispose_LeavesTheSharedEngineToTheNextOverlay()
+    {
+        var fakeOcr = GiveTheSessionAnOcrEngine();
+
+        _sut.Dispose();
+
+        Assert.True(fakeOcr.IsDisposed);
+        Assert.Equal(0, _engine.ReleaseCount);
+        Assert.Equal(0, _engine.DisposeCount);
+    }
+
+    private FakeOcrEngine GiveTheSessionAnOcrEngine()
+    {
+        var translationServiceField = typeof(TranslationSessionService)
+            .GetField("_translationService", BindingFlags.Instance | BindingFlags.NonPublic);
+        var translationService = Assert.IsType<TranslationService>(translationServiceField?.GetValue(_sut));
+        var ocrEngineField = typeof(TranslationService)
+            .GetField("_ocrEngine", BindingFlags.Instance | BindingFlags.NonPublic);
+        var fakeOcr = new FakeOcrEngine();
+        ocrEngineField?.SetValue(translationService, fakeOcr);
+        return fakeOcr;
     }
 
     public void Dispose()

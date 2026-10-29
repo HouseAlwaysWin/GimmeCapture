@@ -79,6 +79,9 @@ internal sealed class AIResourceInstaller
             string path = _callbacks.GetLlamaModelPathById(modelId);
             if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
             {
+                // The translation model now stays loaded between presses, and Windows will not delete a mapped GGUF
+                // file: unload first, as the other removals do.
+                _callbacks.RequestGlobalUnload();
                 File.Delete(path);
             }
 
