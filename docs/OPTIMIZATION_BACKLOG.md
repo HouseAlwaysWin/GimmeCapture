@@ -1,0 +1,231 @@
+# Optimisation Backlog
+
+What is left of the 2026-10-29 whole-app analysis (six read-only audits: snip overlay, recording, OCR/AI/translation,
+pins, compress, start-up and idle, checked against the app's logs). Batch 1 of it landed as 21 commits,
+`665c8b94..85411bed` (see `## Unreleased` in CHANGELOG.md). Everything below is still open.
+
+Line numbers are from `665c8b94`, before batch 1; batch 1 moved some of them, so search for the symbol named.
+Sizes: S = a few lines to a small class, M = a day-sized change with tests, L = a redesign.
+
+## Status
+
+- Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
+- Not released yet: `## Unreleased` holds 21 entries. Cut a release with `release.ps1` after adding the
+  `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
+- The user's installed copy is still 0.68.1.
+
+## Hand checks still owed for batch 1
+
+These were covered by unit tests only; check them in the real app before a release.
+
+- **Tray launch** (autostart): a copy shows its toast with the thumbnail, an error shows a toast, a delayed capture
+  shows its countdown, and an update the start-up check found is offered when the main window is first opened.
+- **Overlay close**: after a recording whose overlay was excluded from capture, no yellow frame ghost stays on screen;
+  a plain snip's close no longer repaints every window.
+- **Save** on a pin opened from part of another pin, and on a Compress editor freeze-frame pin.
+- **First recording of a run** now loads FFmpeg itself (the launch probe is gone); check that its start is acceptable,
+  or pre-warm FFmpeg when the Record overlay opens (see Recording below).
+- **System-audio keep-alive**: while recording, the app shows as a silent session in the Volume Mixer, and each segment
+  starts about 65 ms later. Nothing should be audible.
+
+## How to run a batch
+
+Six `isolation: "worktree"` agents on disjoint file sets, each told: no commits, no CHANGELOG/csproj/lock files, copy
+`src/GimmeCapture/ffmpeg-lib/*.dll` into its worktree, targeted tests with TRX output, report commit messages, hunks
+and a CHANGELOG bullet per change. Apply every diff to main's working tree, add follow-ups, run `verify.ps1`, then
+split into commits with a plan file and replay script, dry-run on a temporary index first. The method and its traps
+are in the assistant's memory note "integrating-parallel-agent-worktrees".
+
+## Backlog
+
+### OCR, AI and translation
+
+- **Cold OCR scan starts late and builds a recognizer it does not use** (M). The overlay's scan only detects
+  (`AIScanSessionService.cs:86-89`), but `OcrRuntimeService.cs:193` builds detection and recognition, and the load starts
+  0.53-1.16 s after `SnipWindowFactory.Open` (a Background post in `SnipWindow.OnOpened`, `SnipWindow.axaml.cs:256`).
+  Most of the user's captures are more than the 2-minute keep-alive apart, so most scans are cold (session build
+  524-880 ms). Fix: take a lease and start a detection-only load at the top of `Open`; build recognizer and dictionary
+  on the first `RecognizeText`; optionally keep the DirectML device with `GpuDeviceHold`. Hides about 0.5-0.9 s.
+- **Recognition runs up to four passes per box, one box per run** (S gating, M batching). `PaddleOCREngine.cs:111`:
+  `shouldEnhance = contrast < LowContrastThreshold || box.Height < 28` forces a second pass for most UI text whatever the
+  first pass's confidence; dark crops double it again. Callers loop one box at a time (`QuickOcrService.cs:66-74`,
+  `TranslationService.cs:153-160`) though the recognizer's batch dimension is dynamic. Fix: extra passes only below
+  about 0.9 confidence, inverted pass first on dark crops, batch boxes by width bucket.
+- **Every LLM request builds a new context and re-reads the whole prompt** (M). `LlamaSharpTranslationEngine` uses
+  `StatelessExecutor`, which creates a context (KV cache for 2048 tokens) and prefills from zero per call. Fix: one
+  long-lived context, the per-language-pair instruction prefix decoded once and forked per request
+  (BatchedExecutor/Conversation), blocks batched into one prompt. Measure first; no load-time log exists yet.
+- **Changing OCR language rebuilds the shared detector; Auto re-probes in every overlay** (S-M).
+  `OcrRuntimeService.cs:192-193`, `OcrScriptDetector.cs:85-112`. Every language uses the same `ocr_det.onnx`: swap only
+  the recognizer and dictionary, keep the Auto verdict app-wide. Only matters with several OCR languages installed.
+- **11 MB input tensor allocated per scan** (S). `PaddleOCREngine.cs:78`. Reuse belongs in `OcrRuntimeService`.
+- **Full-screen resize on the UI thread per OCR search** (S). `SnipWindowViewModel.Selection.AIScan.cs:216` resizes to
+  1600 px (Mitchell), then `DetectText` resizes again to 1280. Do one resize, off the UI thread.
+- **About 215 MB of native memory stays after the first DirectML use** (measure first, then M-L). Private bytes go
+  131 MB at start, ~350-400 MB after one OCR snip, even after `OcrRuntime.Unloaded` and a trim (managed heap ~10 MB):
+  D3D12, driver and DirectML state the process cannot free. Measure OCR on the CPU execution provider (speed and
+  memory); the alternative is AI work in a child process that exits when idle.
+
+### Recording
+
+- **Multi-window (composite) WGC redoes all the work every frame** (M). `LibavWgcCompositeMkvSession.cs:223-249`,
+  `WgcFrameExchange.cs:130-161`: clears the canvas, `TryCopyLatest` copies every source under the lock, Skia redraws,
+  full `sws_scale`, for every output frame (est. 15-25 ms at 2560x1440). `RecordingFramePacer` stamps one counter pts
+  per pass, so a loop slower than 1/fps makes the video shorter than its audio. Fix: lease sources with
+  `TryReadFrameAfter(lastSeq)`, redraw only changed cells from the lease, re-send the encoder frame when nothing
+  changed or to catch up, log readBack/converted as the single-window path does.
+- **WGC reads frames back at the window's update rate** (M). `WgcWindowCaptureSource.cs:169-177`: every FrameArrived
+  without a readback in flight does CopyResource + Map + memcpy; the log shows `readBack=254 converted=187`, 26-37% wasted.
+  Keep the newest frame and read it back only when due. `MinUpdateInterval` needs build 26100+ and a newer projection.
+- **Colour conversion for hardware encoders runs on the CPU** (S-M). NVENC and AMF take BGRA, but frames go through
+  single-threaded `sws_scale` to NV12 (`LibavRecordingEncoder.cs:301-303`, `LibavGdigrabMkvSession.cs:536-551`,
+  `LibavWgcMkvSession.cs:259`); overlays add a BGRA copy; the webcam frame is copied full size every output frame
+  (`WebcamCaptureSource.cs:157`). Est. 3-5 ms per frame at 1080p, 12-25 at 4K.
+- **Stop and finalize run step by step** (S-M). `RecordingService.Finalize.cs:21,38-42,514`, `LiveSession.cs:555-567,593`:
+  a fixed `Task.Delay(100)`, then concat, WAV mix, AAC, mux and move in sequence; sources stop one after another; AAC is
+  encoded only after stop (433 ms for 16 s of audio, est. half a minute per 30-minute recording); after a pause the
+  video is rewritten twice. Drop the delay, stop everything then await together, encode AAC live or alongside the
+  concat, concat and mux in one pass into the destination folder.
+- **First recording of a run starts slowly** (S). Loopback start to video start 0.28-1.42 s on the first recording,
+  41-73 ms after; region recordings still call `GraphicsCaptureSession.IsSupported()`
+  (`RecordingService.cs:343-373`, `LiveSession.cs:94`). Probe WGC only when windows are picked, open audio and video
+  in parallel, pre-warm both (and `FFmpegRuntime.EnsureInitialized`) when the Record overlay opens, add stage timings.
+- **gdigrab vs Desktop Duplication** (M; zero-copy L). `LibavGdigrabMkvSession.cs:140`: BitBlt with CAPTUREBLT, two CPU
+  copies and a CPU conversion, est. 20-50 ms per frame at 4K, so 4K30 likely drops frames unseen (gdigrab never counts
+  drops). FFmpeg's `ddagrab` + `hwdownload,format=bgra` into the existing converter gives monitor choice, crop, a GPU
+  cursor and HDR. Keep gdigrab for regions spanning monitors; re-check the overlay stays excluded.
+- **A failed WebM audio mux re-encodes the whole video** (S). `RecordingService.Finalize.cs:635`: move the video-only
+  file instead.
+
+### Compress and the editor
+
+- **Every editor or compare step reopens the file** (M). `LibavVideoFramePlayer.cs:567-582` (`DecodeFrameAtAsync`:
+  open, find_stream_info, new D3D11VA device, seek, decode), called from `VideoEditViewModel.cs:227,254,650,686` and
+  `CompareViewModel.cs:428,442`. A cold open logged 279-293 ms; compare pays it twice; rotate, crop toggles and
+  split/merge re-decode an unchanged frame. Fix: one long-lived decoder per view, and cache the last BGRA frame.
+- **GIF/WebM output: an extra encode, no progress, cancel ignored** (S-M). `CompressPipeline.cs:314-369`: an H.264
+  CRF 18 intermediate at the user's preset even with no edits; the transcode then gets no progress or token, so the bar
+  sits at 100% through the slowest stage and a cancel finishes as Done. `LibavGifTranscoder.TranscodeToGif` now takes
+  progress and a token (batch 1); wire them through `GifWebmVideoExporter.cs`, `CompressPipeline.cs`,
+  `RecordingService.Finalize.cs` (FinalizationProgress) and `FloatingVideoViewModel.Actions.cs`, and transcode the
+  source directly when nothing is edited.
+- **A target size at or above the source's size still encodes** (S). `CompressBatchRunner.cs:116-124`: stream-copy
+  with `LibavMuxer.RemuxAllStreams` when unedited, otherwise cap at the source bitrate. Audio-only M4A from an AAC
+  source can stream-copy too.
+- **Segmented CRF path writes the video four times** (M). `CompressPipeline.cs:462-523`, `LibavClipExporter.cs:224-227`:
+  each 30 s chunk reopens and probes the input and copies its output; finalize concatenates, builds the audio after the
+  bar shows 100%, then remuxes. Write chunks in place, concatenate straight into the final mux, build audio alongside.
+- **Rotation round-trips every frame through BGRA** (S-M). `LibavClipExporter.cs` (~338, 913-956): sws to BGRA, Skia
+  rotate, sws back. Use transpose/hflip,vflip in the YUV graph or display-matrix rotation; render static annotations
+  once. Two-pass pass 1 also writes a `pass1.mp4` nobody reads.
+- **Small ones**: every CRF-slider tick saves `compress-session.json` on the UI thread
+  (`MainWindowViewModel.VideoCompress.cs:552-559`); `GimmeCapture_*` folders in %TEMP% are never swept after a crash;
+  preview frames are decoded on the GPU, downloaded at full size and scaled on the CPU.
+
+### Pins
+
+- **Resizing rebuilds the window region 4-6 times per pointer move** (M). `FloatingImageWindow.axaml.cs:61-89,166-177,
+  218-265`, `Win32Helpers.cs` (~323-353): DisplayWidth and DisplayHeight each rebuild with stale bounds, then the window,
+  MainBorder and toolbar Bounds changes rebuild again; each walks the toolbar subtrees and ORs rects one `CombineRgn` at a
+  time (O(n^2) for a cut-out pin's thousands of rects). Batch 1 made an unchanged region skip `SetWindowRgn`, not the
+  rebuild. Fix: a dirty flag rebuilt once per frame at Render priority; build the image part once per bitmap with
+  `ExtCreateRegion` and an XFORM to rescale.
+- **Opaque-pixel scan on the UI thread at every Image change** (S). `FloatingImageWindow.axaml.cs:315-322,481-510`
+  copies into a 32 MiB rented array and scans every pixel, per crop, rotate, AI result, undo and redo (est. 20-30 ms at
+  4K). Scan on the pool, cache per bitmap, skip for captures known to be opaque.
+- **A video pin reopens file, GPU device, decoder and audio at every loop and seek** (M-L).
+  `FloatingVideoViewModel.Media.cs:279-313,371-373` (`loopPlayback = false`, a new `PlayFramesAsync` per pass),
+  `LibavVideoFramePlayer.cs:670-718`; `UpdateAudioStateFromPlayback` reopens Media Foundation and WASAPI too. Keep one
+  decoder per pin, do loops and seeks as requests to it, seek the audio on loop; 1-2 decode threads under D3D11VA.
+- **Each pin builds its own U2Net session** (S-M). `FloatingImageViewModel.AI.cs:684-687`: `new
+  BackgroundRemovalService` per pin; sessions take 661-962 ms. One shared service owned by `AppBootstrapper`.
+- **Saving an annotated pin swaps `Image` for the whole dialog** (S). `FloatingImageViewModel.Actions.cs:33-58`:
+  flattens even on cancel, drops SAM2's prepared image and the selection points, rescans, leaves ~33 MB at 4K to the
+  finalizer. Make it `SaveAction(Bitmap)`, flatten after a path is picked, dispose after encoding.
+- **Copy encodes the PNG twice** (S-M). `FloatingImageViewModel.Actions.cs:145-196`, `ClipboardService.cs:172-177`:
+  the temp file gets one encode, the clipboard path another plus a GDI+ decode (+0.33 s CPU per Ctrl+C at 4K); the
+  flattened and cropped bitmaps (and rotate's flatten, :95) are never disposed; each copy makes a `GimmeCapture_Copy_*`
+  folder swept only at start-up after 12 h.
+- **Each mosaic or blur annotation holds a full-size SKBitmap** (S-M). `AnnotationControl.axaml.cs:39-40,104-106`,
+  `AnnotationRenderService.cs:48-52`: ~33 MB per redaction at 4K for the pin's lifetime, built on the UI thread. Share
+  one copy per snapshot and drop it when the drag ends; a resize also re-renders previews that do not depend on it.
+- **Closing a pin frees little** (S). Image view models are disposed only by CloseCommand, so Alt+F4 skips it and a
+  held SAM2 lease keeps SAM2 loaded (`FloatingImageWindow.axaml.cs:191-216`, `SAM2RuntimeService.cs:89-90`); Dispose
+  never frees `Image`; undo history is capped at 30 steps, not bytes (up to ~1 GB at 4K,
+  `AnnotationEditorState.cs:150`); pins never call `ProcessMemoryTrimService.NotifyActivity`.
+- **WebM export from a video pin decodes the whole audio track and writes the WAV on the UI thread**, and leaves its
+  trimmed intermediate folder behind (`FloatingVideoViewModel.Actions.cs`; found during batch 1).
+- **Lower**: video pins decode at full size and copy each frame twice (`LatestFrameHandoff.cs:40`, then
+  `FloatingVideoViewModel.Media.cs:564`, 33 MB per frame at 4K) and keep decoding when covered;
+  `ProcessingOverlay.axaml:87` keeps `IsIndeterminate="True"` (a 60 Hz animation after the first AI job? measure);
+  the translation layer adds results one at a time, rebuilding its region each time (`FloatingTranslationWindow.axaml.cs:
+  109-117`).
+
+### Snip overlay
+
+- **Frozen open grabs and builds the backdrop on the UI thread** (M). `SnipWindowFactory.cs:166-170` blocks in
+  `.GetAwaiter().GetResult()` over GDI+ `CopyFromScreen`, a row copy into an SKBitmap and another into the
+  WriteableBitmap (`WindowsScreenCaptureService.cs:82-85,126-150`): `freezeGrab=46` + `show=120` ms against 14-26 ms for a
+  live open. BitBlt into a cached DIB section, copy once, build the display bitmap in the same Task.Run, reuse buffers.
+- **OCR scans run twice and cannot be stopped** (S). Esc-clear sets `CurrentState = Detecting`, which starts
+  `RunOCRScanAsync`, then starts it again (`ModeRouting.cs:947,953`); the token only stops a detection not yet started
+  (`AIScanSessionService.cs:89`); a frozen still is re-detected at every return to Detecting and copied (8 MB) on the
+  UI thread (`Selection.AIScan.cs:809`). Cache results per still, check the token before running, trigger once.
+- **OCR candidate rectangles are built one item at a time** (M). `Selection.AIScan.cs:633-647` adds 68-109 rects as
+  separate CollectionChanged events, each binding `$parent[Window].DataContext.OcrHighlightColor` through a converter
+  that allocates a brush, plus a pointer-over style that never matches (`SnipWindow.axaml:140-153`). One control that
+  draws all rects in Render with a shared pen; grab only the active monitor (`AIScanSessionService.cs:77-81`).
+- **Hover animation renders at 60 Hz while the overlay sits idle** (S). `Selection.AIScan.cs:26` (16 ms timer, no
+  settled exit at :564-570), `HoverRectangleAnimationController.cs:63`; the dirty rect is often the whole screen. Stop
+  once the move ends or tick at 30 Hz or less.
+- **Frozen commits keep the overlay up while the pin window is built** (M). `Capture.cs:464`; copy with history on
+  re-encodes the PNG the clipboard path already encoded (`:342`, `WindowsScreenCaptureService.cs:440-441`). Hide the
+  frozen overlay right after the crop, reuse the PNG bytes. (Explains the 307 ms "blocked" stall before close.)
+- **Record-mode audio meter** (S). `SnipWindowViewModel.cs:507`: a 120 ms timer in Record mode even when idle, MMDevice
+  COM objects created on the UI thread at the first tick (`AudioLevelMonitorService.cs:54-59`), the mic metered when not
+  recorded, at least six notifications per tick (`:749-772`). A long-lived meter off the UI thread posting changes only.
+- **Manual scrolling allocates per frame** (S). Row signatures built three times a frame into a new
+  `byte[height * samples * 4]` (`ScrollStitcher.cs:110-111,351,775`, LOH from ~665 rows); the producer keeps grabbing
+  when nothing scrolls (`ScrollingManual.cs:304-309`). Carry signatures in rented buffers, skip unchanged frames.
+- **Freezing mid-session after entering drawing mode live keeps the live snapshot** (S). Needs
+  `SnipWindowViewModel.Capture.cs` (left from batch 1).
+- **Small ones**: `ToolbarMaxWidth` raised on every pointer move (`Selection.AIScan.cs:852`, `State.cs:812`); the key
+  filter rebuilds a 28-field record on every view-model PropertyChanged (`SnipWindow.Win32.cs:148,227`).
+
+### Idle, start-up and memory
+
+- **The UiStall monitor never sleeps** (S). `UiThreadStallMonitor.cs:28,33,62,69`: a 100 ms DispatcherTimer and a 250 ms
+  watchdog, about 14 wakeups a second in the tray, the app's only scheduled idle work; probably logs a false stall
+  across Modern Standby. Pause both while no window is visible and resume on a hotkey or window show, or post one
+  probe a second.
+- **History thumbnails decoded for every entry and never released** (S-M). `MainWindowViewModel.History.cs:149-156,
+  184-187`, `HistoryItemViewModel.cs:126`: about 70 MB at the 300-entry cap for the rest of the session. Decode when a
+  row is realized, at card width, dispose when the tab detaches or the window hides.
+- **CJK fonts copied whole into native memory** (M). `LocalizationService.cs:63-68,109-114`: 16.8 MB for zh-TW,
+  12.9 MB for ja-JP, on the UI thread. Subset the UI-chrome fonts, or load during the idle warm-up. Cinzel lacks
+  ▶ ◀ → ⚠ ✓, so English falls back through the JP chain for those.
+- **The raw-input sink duplicates the keyboard hook** (S). `WindowsGlobalHotkeyService.cs:488,537-577`: about four
+  hotkey-thread wakeups per keystroke typed elsewhere. Register the sink only when the hook fails or stops counting.
+- **The `avalonia=` start-up stage (~375 ms) is the largest left** (measure first). It includes the whole ColorPicker
+  theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files parsed through `x:Static`. Split the
+  mark with `AfterPlatformServicesSetup` and around `AvaloniaXamlLoader.Load` before changing anything.
+- **Tray sessions still miss** the failed-hotkey-registration dialog and the overlay's request to open the Modules tab;
+  an update found there waits for the main window, because `UpdateDialog.ShowDialog` cannot open centred on screen.
+- **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab and a
+  recording start probing together (`LibavRecordingEncoder`).
+
+## Suggested batch 2 split
+
+Disjoint file sets for parallel agents:
+
+1. OCR cold start, recognition passes, language swap, per-scan buffers (`OcrRuntimeService`, `AIScanSessionService`,
+   `PaddleOCREngine`, `OcrScriptDetector`, `QuickOcrService`; the lease at `SnipWindowFactory.Open` needs that file).
+2. Recording: composite WGC, WGC readback pacing, BGRA into hardware encoders, finalize, first-recording pre-warm.
+3. Compress: persistent editor/compare decoder, GIF/WebM intermediate with progress and cancel, stream copy at or above
+   source size, rotation in YUV, segmented path.
+4. Pins: resize region, opaque scan, persistent video decoder, shared background removal, save/copy paths, close and
+   undo memory, pin WebM audio.
+5. Overlay: frozen open, OCR double scan and cache, candidate render control, hover timer, record meter, scrolling buffers.
+6. Idle and memory: UiStall pause, history thumbnails, raw input, ColorPicker/locales; measure OCR on CPU vs DirectML.
+
+The LLM context reuse is its own piece of work: measure load and generation times with the real model first.
