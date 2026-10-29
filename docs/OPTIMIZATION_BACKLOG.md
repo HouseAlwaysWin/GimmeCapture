@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 24 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 25 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -44,6 +44,11 @@ tool.
   window. Open-to-boxes with the scan starting 450 ms after the open: first scan of a run 1.39-1.42 s before,
   0.84-0.85 after; after an idle unload 1.18-1.20 before, 0.50 after within 5 minutes and 0.66-0.74 past them. Logs
   `OcrScan.Prepared` and `load=`/`detect=` on `OcrScan.Detected`.
+- Done since batch 1: **OCR scans ran twice**. The user's log had two `OcrScan.Detected` lines 61-69 ms apart after
+  most Esc presses: entering Detecting starts the scan (`SnipSelectionStateController`), and `DismissOrClose` started a
+  second one, left from 7c54042c, when the first could be skipped. One Esc started 2 scans before and 1 after (a
+  view-model test with a counting scan service, run against both). A frozen still also keeps the boxes found on it
+  (`_ocrResultsStill`), so a return to Detecting on it shows them again with no scan and no 8 MB copy on the UI thread.
 
 ## Hand checks still owed for batch 1
 
@@ -66,6 +71,8 @@ These were covered by unit tests only; check them in the real app before a relea
   `OcrScan.Prepared` (load and warm-up) and then `OcrScan.Detected` with a small `load=` and a `detect=` near 10 ms, and
   the text boxes should come up about as the overlay appears. Nothing measured the real overlay's timing, only a
   stand-in for it.
+- **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
+  hold one `OcrScan.Detected` per capture, not one more for each Esc.
 
 ## How to run a batch
 
@@ -201,10 +208,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   `.GetAwaiter().GetResult()` over GDI+ `CopyFromScreen`, a row copy into an SKBitmap and another into the
   WriteableBitmap (`WindowsScreenCaptureService.cs:82-85,126-150`): `freezeGrab=46` + `show=120` ms vs 14-26 ms for a
   live open. BitBlt into a cached DIB section, copy once, build the display bitmap in the same Task.Run, reuse buffers.
-- **OCR scans run twice and cannot be stopped** (S). Esc-clear sets `CurrentState = Detecting`, which starts
-  `RunOCRScanAsync`, then starts it again (`ModeRouting.cs:947,953`); the token only stops a detection not yet started
-  (`AIScanSessionService.cs:89`); a frozen still is re-detected at every return to Detecting and copied (8 MB) on the
-  UI thread (`Selection.AIScan.cs:809`). Cache results per still, check the token before running, trigger once.
+- **A cancelled OCR scan still runs a detection it has queued** (S, low value now). The token stops a detection only
+  before the pool picks it up (`AIScanSessionService` `Task.Run(..., ct)`); one cancelled while waiting for the
+  inference lock behind another still runs. Since the Esc double start went and a frozen still is no longer re-scanned,
+  overlapping scans need a live overlay and quick repeated presses. Check the token after taking the lock.
 - **OCR candidate rectangles are built one item at a time** (M). `Selection.AIScan.cs:633-647` adds 68-109 rects as
   separate CollectionChanged events, each binding `$parent[Window].DataContext.OcrHighlightColor` through a converter
   that allocates a brush, plus a pointer-over style that never matches (`SnipWindow.axaml:140-153`). One control that

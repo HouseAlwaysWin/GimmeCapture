@@ -92,6 +92,10 @@
   same size so the real one is quick, and the graphics card stays set up for five minutes after the last use. In the
   same measurement the boxes come up after 0.5 s within those five minutes, 0.7 s after them and 0.85 s on the first
   capture after launch. Changing the OCR language also reloads only that language's reader.
+- **Clearing a selection with Esc no longer looks for text in the capture twice.** Esc takes the capture overlay back
+  to choosing a region, which starts a text scan, and a leftover second start ran the same detection again right
+  behind the first. On a frozen screen, where the picture cannot change, the text boxes already found now come back at
+  once with no scan at all; each return used to copy the whole picture on the UI thread and find the same boxes again.
 - **The first recording after launch starts about as quickly as the rest.** Nothing is recorded until a start
   finishes, and the first one also loaded FFmpeg and opened the video encoder for the first time: 0.35-0.39 s on the
   machine measured, against 0.17-0.21 s for every later recording. Entering Record mode now gets both ready in the

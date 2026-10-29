@@ -30,6 +30,9 @@ public partial class SnipWindowViewModel
     private IReadOnlyList<Rect> _ocrRawRects = [];
     private IReadOnlyList<OcrCandidate> _ocrLineCandidates = [];
     private IReadOnlyList<OcrCandidate> _ocrParagraphCandidates = [];
+    // The frozen still the stored OCR results were detected on; null when they came from the live screen or there are
+    // none. Compared by reference only, never read: a still never changes, so its results stay right for it.
+    private SkiaSharp.SKBitmap? _ocrResultsStill;
     private IReadOnlyList<Rect> _translationOcrRawRects = [];
     private IReadOnlyList<OcrCandidate> _translationOcrLineCandidates = [];
     private IReadOnlyList<OcrCandidate> _translationOcrParagraphCandidates = [];
@@ -115,6 +118,7 @@ public partial class SnipWindowViewModel
         _ocrRawRects = [];
         _ocrLineCandidates = [];
         _ocrParagraphCandidates = [];
+        _ocrResultsStill = null;
         DismissWindowSnapHoverPreview(preserveTargetRect: false);
         _scanCts?.Cancel();
     }
@@ -726,6 +730,19 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        // A frozen still never changes, so the boxes stored for it are still right: show them again rather than detect
+        // them all over. Every return to Detecting on a frozen overlay (Esc after a selection, a right-click) copied the
+        // 8 MB still on the UI thread and ran detection again for the same boxes.
+        using (var current = Surface.LeaseFrozenStill())
+        {
+            if (current != null && ReferenceEquals(current.Still, _ocrResultsStill))
+            {
+                AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Showing the boxes already found on this frozen still");
+                RefreshProjectedOcrRects();
+                return;
+            }
+        }
+
         var scanCts = new System.Threading.CancellationTokenSource();
         var previousScanCts = System.Threading.Interlocked.Exchange(ref _scanCts, scanCts);
         previousScanCts?.Cancel();
@@ -759,7 +776,7 @@ public partial class SnipWindowViewModel
                 return;
             }
 
-            ApplyOcrScanResult(result, token);
+            ApplyOcrScanResult(result, token, frozenLease?.Still);
         }
         catch (OperationCanceledException)
         {
@@ -815,31 +832,42 @@ public partial class SnipWindowViewModel
         return copy;
     }
 
-    private void ApplyOcrScanResult(AIScanSessionResult result, System.Threading.CancellationToken token)
+    // still: the frozen still the scan read, which the stored results then belong to; null for the live screen.
+    private void ApplyOcrScanResult(AIScanSessionResult result, System.Threading.CancellationToken token, SkiaSharp.SKBitmap? still)
     {
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (token.IsCancellationRequested) return;
-            // Store results in the SAME states the candidate overlay is willing to SHOW them
-            // (see IsAiScanCandidateLayerVisible): Detecting, or the resting manual-draw state after an
-            // Esc-clear (Selecting with no active drag). Previously this accepted ONLY Detecting, so a scan
-            // whose slow async OCR finished after the state had moved to resting-Selecting — exactly the
-            // Esc-cancel rescan — had its result silently discarded here. That is why OCR "did nothing"
-            // after select-then-Esc even though the scan itself ran (the store gate and the render gate
-            // were asymmetric).
-            bool stateAllowsOcr = CurrentState == SnipState.Detecting
-                || (CurrentState == SnipState.Selecting && !HasSelectionArea);
-            if (!stateAllowsOcr || _settings?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
-
-            _ocrRawRects = result.RawDetectedRects.AsValueEnumerable().ToList();
-            _ocrParagraphCandidates = result.Candidates.AsValueEnumerable()
-                .Where(candidate => candidate.Kind == OcrCandidateKind.Paragraph)
-                .ToList();
-            _ocrLineCandidates = result.Candidates.AsValueEnumerable()
-                .Where(candidate => candidate.Kind == OcrCandidateKind.Line)
-                .ToList();
-            RefreshProjectedOcrRects();
+            StoreOcrScanResult(result, still);
         });
+    }
+
+    /// <summary>
+    /// Stores a scan's boxes and shows them, when the state still has a use for them. UI thread.
+    /// <paramref name="still"/> is the frozen still they were found on, null for the live screen.
+    /// </summary>
+    internal void StoreOcrScanResult(AIScanSessionResult result, SkiaSharp.SKBitmap? still)
+    {
+        // Store results in the SAME states the candidate overlay is willing to SHOW them
+        // (see IsAiScanCandidateLayerVisible): Detecting, or the resting manual-draw state after an
+        // Esc-clear (Selecting with no active drag). Previously this accepted ONLY Detecting, so a scan
+        // whose slow async OCR finished after the state had moved to resting-Selecting — exactly the
+        // Esc-cancel rescan — had its result silently discarded here. That is why OCR "did nothing"
+        // after select-then-Esc even though the scan itself ran (the store gate and the render gate
+        // were asymmetric).
+        bool stateAllowsOcr = CurrentState == SnipState.Detecting
+            || (CurrentState == SnipState.Selecting && !HasSelectionArea);
+        if (!stateAllowsOcr || _settings?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
+
+        _ocrRawRects = result.RawDetectedRects.AsValueEnumerable().ToList();
+        _ocrParagraphCandidates = result.Candidates.AsValueEnumerable()
+            .Where(candidate => candidate.Kind == OcrCandidateKind.Paragraph)
+            .ToList();
+        _ocrLineCandidates = result.Candidates.AsValueEnumerable()
+            .Where(candidate => candidate.Kind == OcrCandidateKind.Line)
+            .ToList();
+        _ocrResultsStill = still;
+        RefreshProjectedOcrRects();
     }
 
     private Rect _activeScreenBounds = new Rect(0,0,1920,1080); // Default

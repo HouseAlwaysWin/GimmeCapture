@@ -8,6 +8,7 @@ using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interaction;
 using GimmeCapture.ViewModels;
 using GimmeCapture.ViewModels.Main;
+using SkiaSharp;
 
 namespace GimmeCapture.Tests.ViewModels;
 
@@ -250,6 +251,102 @@ public class SnipWindowViewModelTests
         Assert.False(vm.WillScanOnEntry());
         vm.PrepareOcrAutoScan(3968, 1160);
         scan.Verify(s => s.PrepareScanAsync(It.IsAny<OCRLanguage>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public void EscAfterASelection_ScansForTextOnce()
+    {
+        // Returning to the ready state starts a scan, and Esc used to start a second one of the same picture right
+        // behind it: the log showed two detections of each still, 61-69 ms apart.
+        var (vm, scan) = OverlayScanningForText();
+        using (vm)
+        {
+            SelectABox(vm);
+            int before = ScanCount(scan);
+
+            vm.DismissOrClose();
+
+            Assert.Equal(SnipState.Detecting, vm.CurrentState);
+            Assert.Equal(before + 1, ScanCount(scan));
+        }
+    }
+
+    [Fact]
+    public void EscOnAFrozenStill_ShowsTheBoxesAlreadyFoundOnIt_WithoutScanningAgain()
+    {
+        var (vm, scan) = OverlayScanningForText();
+        using (vm)
+        {
+            vm.Surface.UseHeadlessBackdropForTest();
+            vm.Surface.FreezeFromPreOverlayGrab(new SKBitmap(64, 48), grabScaling: 1.0);
+            vm.StoreOcrScanResult(OneParagraph(), FrozenStill(vm));
+            SelectABox(vm);
+            int before = ScanCount(scan);
+
+            vm.DismissOrClose();
+
+            Assert.Equal(before, ScanCount(scan));
+            var shown = Assert.Single(vm.AIScanRects);
+            Assert.Equal((1d, 2d, 30d, 10d), (shown.X, shown.Y, shown.Width, shown.Height));
+        }
+    }
+
+    [Fact]
+    public void ANewStill_OrTheLiveScreen_IsScannedAfresh()
+    {
+        var (vm, scan) = OverlayScanningForText();
+        using (vm)
+        {
+            vm.Surface.UseHeadlessBackdropForTest();
+            vm.Surface.FreezeFromPreOverlayGrab(new SKBitmap(64, 48), grabScaling: 1.0);
+            vm.StoreOcrScanResult(OneParagraph(), FrozenStill(vm));
+
+            vm.Surface.FreezeFromPreOverlayGrab(new SKBitmap(64, 48), grabScaling: 1.0);
+            SelectABox(vm);
+            int before = ScanCount(scan);
+            vm.DismissOrClose();
+            Assert.Equal(before + 1, ScanCount(scan));
+
+            vm.Surface.ReturnToLive();
+            SelectABox(vm);
+            before = ScanCount(scan);
+            vm.DismissOrClose();
+            Assert.Equal(before + 1, ScanCount(scan));
+        }
+    }
+
+    // An overlay that scans for text whenever it returns to the ready state, as the app's do, on a scan service that
+    // finds nothing and only counts the scans it is asked for.
+    private static (SnipWindowViewModel Vm, Mock<IAIScanSessionService> Scan) OverlayScanningForText()
+    {
+        var scan = new Mock<IAIScanSessionService>();
+        scan.Setup(s => s.RunScanAsync(It.IsAny<AIScanSessionRequest>(), It.IsAny<IProgress<AIScanStage>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AIScanSessionResult([], []));
+        var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object, aiScanSessionService: scan.Object, settings: OcrScanSettings().Object);
+        vm.EnableAIScan = true;
+        vm.AllScreenBounds.Add(new ScreenBoundsViewModel());
+        return (vm, scan);
+    }
+
+    // Draws a box, which Esc then clears.
+    private static void SelectABox(SnipWindowViewModel vm)
+    {
+        vm.CurrentState = SnipState.Selecting;
+        vm.SelectionRect = new Rect(10, 10, 120, 80);
+        vm.CurrentState = SnipState.Selected;
+    }
+
+    private static int ScanCount(Mock<IAIScanSessionService> scan) =>
+        scan.Invocations.Count(i => i.Method.Name == nameof(IAIScanSessionService.RunScanAsync));
+
+    private static AIScanSessionResult OneParagraph() =>
+        new([new Rect(1, 2, 30, 10)], [new OcrCandidate(new Rect(1, 2, 30, 10), OcrCandidateKind.Paragraph, groupId: 0)]);
+
+    private static SKBitmap FrozenStill(SnipWindowViewModel vm)
+    {
+        using var lease = vm.Surface.LeaseFrozenStill();
+        return lease!.Still;
     }
 
     // Settings under which an overlay scans for text as it opens.

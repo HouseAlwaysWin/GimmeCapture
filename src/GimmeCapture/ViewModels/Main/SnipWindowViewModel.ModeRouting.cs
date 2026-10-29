@@ -950,15 +950,10 @@ public partial class SnipWindowViewModel
             SelectionRect = new Rect(0, 0, 0, 0);
             // Return to the auto-detect (Detecting) ready state — NOT Selecting. Detecting is the full "ready to
             // select" state: hover-to-auto-select a window/OCR region, the AI-scan overlay, AND manual drag; it
-            // also hides the selection visual, so no stray wings render at the origin.
+            // also hides the selection visual, so no stray wings render at the origin. Entering it starts the OCR
+            // scan (SnipSelectionStateController). A second start here, left from when that path could be skipped,
+            // ran a second detection of the same picture right behind the first.
             CurrentState = SnipState.Detecting;
-            // Detecting's own transition re-triggers the OCR scan, but that path (TriggerAutoScanCommand.Execute)
-            // is silently skipped while the prior scan's CPU-bound OCR is still "executing". Call RunOCRScanAsync
-            // directly (it self-cancels the prior scan and always starts) so the re-scan is guaranteed.
-            if (ShouldTriggerAutoScan())
-            {
-                RunOCRScanAsync().Forget("Snip.EscRescan");
-            }
             return;
         }
         Close();
