@@ -110,6 +110,64 @@ public class PaddleOcrTensorFillTests
         }
     }
 
+    // Every layout FillDetProbabilityMap's switch handles, in the order it tests them.
+    public static TheoryData<int[]> DetectionMaskLayouts => new()
+    {
+        new[] { 1, 1, 5, 7 },  // NCHW, one channel
+        new[] { 1, 5, 7, 1 },  // NHWC, one channel
+        new[] { 1, 2, 5, 7 },  // NCHW, channel 0 of two
+        new[] { 1, 5, 7 },     // a leading 1, then H and W
+        new[] { 5, 7, 2 },     // HWC, channel 0 of two: values two apart
+        new[] { 5, 7, 1 },     // HWC, one channel
+        new[] { 5, 7 },        // H and W alone
+    };
+
+    [Theory]
+    [MemberData(nameof(DetectionMaskLayouts))]
+    public void FillDetProbabilityMap_ReadsTheBufferAsTheIndexerDid(int[] dimensions)
+    {
+        var mask = new DenseTensor<float>(dimensions);
+        FillWithDistinctScores(mask.Buffer.Span);
+
+        Assert.True(PaddleOCREngine.TryBuildDetProbabilityMap(mask, out float[] probMap, out int h, out int w));
+        try
+        {
+            var expected = new float[h * w];
+            PaddleOCREngine.FillDetProbabilityMapWithIndexer(mask, expected, h, w);
+
+            Assert.Equal(expected, probMap.AsSpan(0, h * w).ToArray());
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<float>.Shared.Return(probMap);
+        }
+    }
+
+    [Fact]
+    public void FillDetProbabilityMap_ReadsAColumnMajorTensorThroughTheIndexer()
+    {
+        // Column-major puts the same values at other offsets: read as row-major, its buffer would scramble the map.
+        var mask = new DenseTensor<float>(new[] { 1, 1, 5, 7 }, reverseStride: true);
+        FillWithDistinctScores(mask.Buffer.Span);
+        var expected = new float[5 * 7];
+        var actual = new float[5 * 7];
+
+        PaddleOCREngine.FillDetProbabilityMapWithIndexer(mask, expected, 5, 7);
+        PaddleOCREngine.FillDetProbabilityMap(mask, actual, 5, 7);
+
+        Assert.Equal(expected, actual);
+    }
+
+    // Probabilities below 0.5 and logits whose sigmoid is above 0.95, all different, so a misplaced read or a skipped
+    // sigmoid shows.
+    private static void FillWithDistinctScores(Span<float> buffer)
+    {
+        for (int i = 0; i < buffer.Length; i++)
+        {
+            buffer[i] = i % 2 == 0 ? i / (2f * buffer.Length) : 3f + i;
+        }
+    }
+
     [Fact]
     public void FillRecognitionTensor_MatchesIndexerNormalization()
     {

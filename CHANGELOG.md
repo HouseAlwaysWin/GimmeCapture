@@ -48,6 +48,9 @@
 
 ### ⚡ Performance
 
+- **Text detection no longer throws away tens of megabytes per scan.** Reading the detection model's result made a
+  small array for every pixel, about 38 MB of garbage for a 1280×736 scan. It is now read straight from the model's
+  output.
 - **Manual scrolling capture no longer writes a log line for every frame.** About 25 lines a second went to the log
   file, each waiting for the file and flushing it; the line now needs debug logging on.
 - **Closing the capture overlay no longer makes every window on screen repaint.** Each close repainted the whole

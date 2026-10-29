@@ -459,7 +459,7 @@ public class PaddleOCREngine : IOCREngine
     /// a <see cref="Span{T}"/>, gets no bounds-check elision in the flood fill's inner loop, and at detection
     /// sizes lands on the large-object heap on every scan.
     /// </remarks>
-    private bool TryBuildDetProbabilityMap(Tensor<float> mask, out float[] probMap, out int h, out int w)
+    internal static bool TryBuildDetProbabilityMap(Tensor<float> mask, out float[] probMap, out int h, out int w)
     {
         probMap = Array.Empty<float>(); h = 0; w = 0;
         if (mask.Dimensions.Length < 2) return false;
@@ -542,7 +542,41 @@ public class PaddleOCREngine : IOCREngine
         }
     }
 
-    private static void FillDetProbabilityMap(Tensor<float> mask, Span<float> probMap, int h, int w)
+    // The runtime hands back a row-major DenseTensor, so the map is read straight from its buffer. Each mask[...] read
+    // below goes through Tensor's params int[] indexer, which allocates its index array: about 942,000 of them, some
+    // 38 MB of garbage, for one 1280x736 detection. The indexer stays for any other kind of tensor.
+    internal static void FillDetProbabilityMap(Tensor<float> mask, Span<float> probMap, int h, int w)
+    {
+        if (mask is DenseTensor<float> { IsReversedStride: false } dense)
+        {
+            FillDetProbabilityMapFromBuffer(dense.Buffer.Span, mask.Dimensions, probMap, h, w);
+            return;
+        }
+
+        FillDetProbabilityMapWithIndexer(mask, probMap, h, w);
+    }
+
+    // The same elements FillDetProbabilityMapWithIndexer reads, by offset. In every layout it handles, the axes ahead
+    // of H are read at index 0, so the plane starts at the front of the buffer; the axis after W, where there is one,
+    // has size 1, or is the channel axis of [H, W, C], whose channel 0 puts the values C apart.
+    internal static void FillDetProbabilityMapFromBuffer(
+        ReadOnlySpan<float> buffer, ReadOnlySpan<int> dimensions, Span<float> probMap, int h, int w)
+    {
+        int length = h * w;
+        int step = dimensions.Length == 3 && dimensions[0] != 1 ? dimensions[2] : 1;
+        if (step == 1)
+        {
+            ReadOnlySpan<float> plane = buffer[..length];
+            for (int i = 0; i < length; i++)
+                probMap[i] = ToProbability(plane[i]);
+            return;
+        }
+
+        for (int i = 0; i < length; i++)
+            probMap[i] = ToProbability(buffer[i * step]);
+    }
+
+    internal static void FillDetProbabilityMapWithIndexer(Tensor<float> mask, Span<float> probMap, int h, int w)
     {
         switch (mask.Dimensions.Length)
         {
