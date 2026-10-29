@@ -13,9 +13,17 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 21 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 22 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
-- The user's installed copy is still 0.68.1.
+- The user's installed copy is 0.70.0 since 2026-10-29.
+- Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
+  showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
+  open of 135-260 ms instead of 80-100 ms on a run's first start, and `GraphicsCaptureSession.IsSupported()` 16 ms on
+  every start (45 ms on the first) although regions never use WGC. Regions no longer ask, a yes is cached, and entering
+  Record mode runs `RecordingService.WarmUpAsync` once a run: the first start went from 346-392 ms to 200-215 ms, later
+  ones from 172-210 ms to 162-173 ms. Opening audio and video in parallel was left out on purpose: it would save the
+  ~55 ms the audio takes, but only by risking the first frame arriving before the audio captures, which puts the head
+  out of step.
 
 ## Hand checks still owed for batch 1
 
@@ -26,8 +34,9 @@ These were covered by unit tests only; check them in the real app before a relea
 - **Overlay close**: after a recording whose overlay was excluded from capture, no yellow frame ghost stays on screen;
   a plain snip's close no longer repaints every window.
 - **Save** on a pin opened from part of another pin, and on a Compress editor freeze-frame pin.
-- **First recording of a run** now loads FFmpeg itself (the launch probe is gone); check that its start is acceptable,
-  or pre-warm FFmpeg when the Record overlay opens (see Recording below).
+- **First recording of a run**: entering Record mode now warms FFmpeg, the encoder, the audio endpoint and the WGC
+  check up in the background (see Status). After a launch, the log should show one `Recording.WarmUp` line and the
+  first `Recording.StartTimings` line (`n=1`) close to the later ones.
 - **System-audio keep-alive**: while recording, the app shows as a silent session in the Volume Mixer, and each segment
   starts about 65 ms later. Nothing should be audible.
 
@@ -89,10 +98,14 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   encoded only after stop (433 ms for 16 s of audio, est. half a minute per 30-minute recording); after a pause the
   video is rewritten twice. Drop the delay, stop everything then await together, encode AAC live or alongside the
   concat, concat and mux in one pass into the destination folder.
-- **First recording of a run starts slowly** (S). Loopback start to video start 0.28-1.42 s on the first recording,
-  41-73 ms after; region recordings still call `GraphicsCaptureSession.IsSupported()`
-  (`RecordingService.cs:343-373`, `LiveSession.cs:94`). Probe WGC only when windows are picked, open audio and video
-  in parallel, pre-warm both (and `FFmpegRuntime.EnsureInitialized`) when the Record overlay opens, add stage timings.
+- **The audio gate is only as fine as NAudio's 60-70 ms loopback bursts** (S-M). `WasapiLoopbackCapture` polls, so
+  each `DataAvailable` carries 60-70 ms (48 of them in a 3 s recording). The first burst written after the first frame
+  holds 41-64 ms captured before it, so system audio plays up to ~65 ms behind the picture: inside the ~125 ms that
+  late audio usually goes unnoticed, which is why recordings look in step. The last burst before stop is dropped, and
+  a cold stop let the video run 99 ms past the gate once; both only shorten the end. Fix: trim the first burst to what
+  came after the first frame (it ends about when it arrives and its length is its byte count), or capture loopback
+  event-driven (a `WasapiCapture` subclass with `useEventSync`, about 10 ms packets). `RecordingAvSyncTests` measures
+  only the length difference, which mixes both ends, so measure the head on its own first.
 - **gdigrab vs Desktop Duplication** (M; zero-copy L). `LibavGdigrabMkvSession.cs:140`: BitBlt with CAPTUREBLT, two CPU
   copies and a CPU conversion, est. 20-50 ms per frame at 4K, so 4K30 likely drops frames unseen (gdigrab never counts
   drops). FFmpeg's `ddagrab` + `hwdownload,format=bgra` into the existing converter gives monitor choice, crop, a GPU
@@ -214,8 +227,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   mark with `AfterPlatformServicesSetup` and around `AvaloniaXamlLoader.Load` before changing anything.
 - **Tray sessions still miss** the failed-hotkey-registration dialog and the overlay's request to open the Modules tab;
   an update found there waits for the main window, because `UpdateDialog.ShowDialog` cannot open centred on screen.
-- **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab and a
-  recording start probing together (`LibavRecordingEncoder`).
+- **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab, the
+  Record-mode warm-up and a recording start probing together (`LibavRecordingEncoder`).
 
 ## Suggested batch 2 split
 
@@ -223,7 +236,7 @@ Disjoint file sets for parallel agents:
 
 1. OCR cold start, recognition passes, language swap, per-scan buffers (`OcrRuntimeService`, `AIScanSessionService`,
    `PaddleOCREngine`, `OcrScriptDetector`, `QuickOcrService`; the lease at `SnipWindowFactory.Open` needs that file).
-2. Recording: composite WGC, WGC readback pacing, BGRA into hardware encoders, finalize, first-recording pre-warm.
+2. Recording: composite WGC, WGC readback pacing, BGRA into hardware encoders, finalize, audio-gate precision.
 3. Compress: persistent editor/compare decoder, GIF/WebM intermediate with progress and cancel, stream copy at or above
    source size, rotation in YUV, segmented path.
 4. Pins: resize region, opaque scan, persistent video decoder, shared background removal, save/copy paths, close and

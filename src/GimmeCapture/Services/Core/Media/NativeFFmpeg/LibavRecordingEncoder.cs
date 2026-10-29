@@ -256,6 +256,20 @@ internal static unsafe class LibavRecordingEncoder
         throw new InvalidOperationException($"No compatible video encoder available. Last error: {lastOpenError ?? "unknown"}");
     }
 
+    /// <summary>
+    /// Opens and frees the encoder a recording of <paramref name="codec"/> would get, so what that encoder loads the
+    /// first time it opens (NVENC's driver libraries, say) is loaded before a recording waits on it. Returns its name.
+    /// </summary>
+    public static string WarmUpEncoder(VideoCodec codec, bool preferHardware)
+    {
+        AVDictionary* options = null;
+        AVCodecContext* context = OpenRecordingEncoderContext(
+            codec, preferHardware, 640, 480, 30, 0, 0, &options, out string name, out _);
+        ffmpeg.av_dict_free(&options);
+        ffmpeg.avcodec_free_context(&context);
+        return name;
+    }
+
     // Internal so a test can check what it sets without opening an encoder.
     internal static void ConfigureEncoderContext(
         AVCodecContext* encCtx,

@@ -77,6 +77,12 @@
   the Record tab whether AV1 and GIF recording are available ran at every start-up, a launch to the tray at login
   included. It now runs when the Record tab is first opened, or as an AV1 recording starts, and FFmpeg loads the first
   time a recording, a video pin or the Record tab needs it.
+- **The first recording after launch starts about as quickly as the rest.** Nothing is recorded until a start
+  finishes, and the first one also loaded FFmpeg and opened the video encoder for the first time: 0.35-0.39 s on the
+  machine measured, against 0.17-0.21 s for every later recording. Entering Record mode now gets both ready in the
+  background while you pick what to record, which brings the first start to about 0.2 s. Every region recording also
+  starts about 17 ms sooner: each start asked Windows whether window capture works, which only a recording of picked
+  windows needs, and a window recording now asks once a run instead of twice a recording.
 - **A capture hotkey opens its overlay without waiting for the settings to be saved.** Every capture saves the
   settings, and its overlay waited while they were turned into text, a step that redid its preparation from scratch
   each time, and while the saved file was read back to see whether anything had changed. The overlay now opens first,

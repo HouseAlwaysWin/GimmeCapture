@@ -128,6 +128,13 @@ public partial class SnipWindowViewModel
         RefreshSelectedSnapshotLock();
         SyncAudioMeterTimerWithMode();
 
+        if (value == SnipMode.Recording)
+        {
+            // What a run's first recording would load during its start (FFmpeg, the encoder) loads while the user picks
+            // what to record. Once a run; a no-op after that.
+            _recordingService?.WarmUpAsync().Forget("Recording.WarmUp");
+        }
+
         // Logic from old IsRecordingMode / IsTranslationMode setters
         if (value == SnipMode.Translation)
         {

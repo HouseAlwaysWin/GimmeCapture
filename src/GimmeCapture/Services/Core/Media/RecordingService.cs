@@ -79,6 +79,10 @@ public partial class RecordingService : ReactiveObject
     private NAudio.CoreAudioApi.MMDevice? _micDevice;
     private int _startInProgress;
     private string _lastSelectedVideoEncoderName = string.Empty;
+    private TimeSpan? _lastEncoderOpenTime;
+
+    // Starts and resumes this run, numbered in the start timings: n=1 is the cold one.
+    private static int _starts;
 
     // Live mute toggles for the active recording. When set, the corresponding audio capture writes silence
     // (zeros) instead of real samples, so the recorded WAV stays the same length and A/V stays in sync.
@@ -109,6 +113,10 @@ public partial class RecordingService : ReactiveObject
     public bool RequestedSystemAudioUnavailable { get; private set; }
     public bool RequestedMicrophoneUnavailable { get; private set; }
     public string LastSelectedVideoEncoderName => _lastSelectedVideoEncoderName;
+
+    /// <summary>The <c>Recording.StartTimings</c> line of the last start or resume (see <see cref="RecordingStartTimings"/>).</summary>
+    internal string? LastStartTimings { get; private set; }
+
     public void ClearLastRecording() { _outputFile = string.Empty; }
     
     public long GetCurrentRecordingSizeBytes()
@@ -284,8 +292,12 @@ public partial class RecordingService : ReactiveObject
         }
     }
 
+    private static RecordingStartTimings NewStartTimings(string kind) =>
+        new($"n={Interlocked.Increment(ref _starts).ToString(System.Globalization.CultureInfo.InvariantCulture)} kind={kind}");
+
     private async Task<bool> StartSessionAsync()
     {
+        var timings = NewStartTimings("start");
         if (!FFmpegRuntime.IsInitialized)
         {
             FFmpegRuntime.TryInitialize(out var initError);
@@ -295,6 +307,8 @@ public partial class RecordingService : ReactiveObject
                 return false;
             }
         }
+
+        timings.Mark("ffmpeg");
 
         // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
         var baseDataDir = _settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
@@ -310,8 +324,9 @@ public partial class RecordingService : ReactiveObject
             AppLog.Warning("Recording.ClearTempDir", ex);
         }
         Directory.CreateDirectory(_tempDir);
+        timings.Mark("tempDir");
 
-        bool started = await StartSegmentAsync().ConfigureAwait(false);
+        bool started = await StartSegmentAsync(timings).ConfigureAwait(false);
         if (!started)
         {
             // Nothing was recorded, so nothing in the session folder is worth keeping. Every failed start used to
@@ -324,7 +339,7 @@ public partial class RecordingService : ReactiveObject
 
     /// <summary>Opens the audio captures and the video session for one segment. Blocks on native initialization
     /// for tens to hundreds of ms, so run it off the UI thread (see <see cref="StartAsync"/>).</summary>
-    private async Task<bool> StartSegmentAsync()
+    private async Task<bool> StartSegmentAsync(RecordingStartTimings timings)
     {
         // Record segments in MKV format for pause/resume workflow.
         string segmentFile = Path.Combine(_tempDir, $"segment_{_segments.Count}.mkv");
@@ -353,6 +368,8 @@ public partial class RecordingService : ReactiveObject
                 RequestedSystemAudioUnavailable = true;
                 _recordSystemAudio = false;
             }
+
+            timings.Mark("systemAudio");
         }
 
         if (_recordMicrophone)
@@ -368,9 +385,12 @@ public partial class RecordingService : ReactiveObject
                 RequestedMicrophoneUnavailable = true;
                 _recordMicrophone = false;
             }
+
+            timings.Mark("mic");
         }
 
-        var started = await StartFfmpegSegmentAsync(segmentFile);
+        _lastEncoderOpenTime = null;
+        var started = await StartFfmpegSegmentAsync(segmentFile, timings);
         if (started)
         {
             // The session's start-up gate has seen the first frame by now (or timed out and started anyway).
@@ -382,6 +402,21 @@ public partial class RecordingService : ReactiveObject
             StopMicCapture();
         }
 
+        timings.Mark("video");
+        timings.Note("windows", _windowHandles.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (!string.IsNullOrEmpty(_lastSelectedVideoEncoderName))
+        {
+            timings.Note("encoder", _lastSelectedVideoEncoderName);
+        }
+
+        if (_lastEncoderOpenTime is { } encoderOpenTime)
+        {
+            timings.Note("encoderOpen", encoderOpenTime);
+        }
+
+        timings.Note("started", started ? "yes" : "no");
+        LastStartTimings = timings.Finish();
+        AppLog.Information("Recording.StartTimings", LastStartTimings);
         return started;
     }
 
@@ -398,7 +433,7 @@ public partial class RecordingService : ReactiveObject
         if (State != RecordingState.Paused) return;
 
         // A resume reopens the audio endpoints and the capture source, just like a start.
-        await Task.Run(StartSegmentAsync);
+        await Task.Run(() => StartSegmentAsync(NewStartTimings("resume")));
     }
 
     public async Task StopAsync()

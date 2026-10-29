@@ -20,11 +20,21 @@ internal static class WgcInterop
     // IID of Windows.Graphics.Capture.IGraphicsCaptureItem — passed to the interop factory's CreateForWindow.
     private static readonly Guid GraphicsCaptureItemIid = new("79C3F95B-31F7-4EC2-A464-632EF5D30760");
 
+    // A window recording asks this twice, deciding on WGC and again as its capture starts, and every call took 16 ms
+    // (45 ms the first). The answer does not change while the app runs, so a yes is kept; a no, which an exception
+    // also gives, is asked again next time.
+    private static volatile bool _supported;
+
     public static bool IsSupported()
     {
+        if (_supported)
+        {
+            return true;
+        }
+
         try
         {
-            return GraphicsCaptureSession.IsSupported();
+            return _supported = GraphicsCaptureSession.IsSupported();
         }
         catch
         {

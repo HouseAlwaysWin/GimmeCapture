@@ -195,6 +195,7 @@ public sealed class RecordingAvSyncTests
                         continue;
                     }
 
+                    _output.WriteLine($"recording {i}: {service.LastStartTimings}");
                     await Task.Delay(RecordMilliseconds);
                     await service.StopAsync(); // returns once the final mux is written
 

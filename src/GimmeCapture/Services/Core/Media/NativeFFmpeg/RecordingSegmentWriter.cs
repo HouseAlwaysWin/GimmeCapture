@@ -30,6 +30,9 @@ internal sealed unsafe class RecordingSegmentWriter : IDisposable
     /// <summary>Why the encoder is not the one asked for, when it is not.</summary>
     public string? EncoderWarning { get; private set; }
 
+    /// <summary>How long the encoder ladder took to open an encoder, failed candidates included.</summary>
+    public TimeSpan EncoderOpenTime { get; private set; }
+
     /// <summary>The opened encoder. Frames must be in its pixel format and size; its time base is 1/fps.</summary>
     public AVCodecContext* Encoder => _encoder;
 
@@ -65,9 +68,11 @@ internal sealed unsafe class RecordingSegmentWriter : IDisposable
         _packet = ffmpeg.av_packet_alloc();
 
         AVDictionary* options = null;
+        long opening = System.Diagnostics.Stopwatch.GetTimestamp();
         _encoder = LibavRecordingEncoder.OpenRecordingEncoderContext(
             codec, preferHardware, width, height, fps, crf, bitrate, &options,
             out string encoderName, out string? warning);
+        EncoderOpenTime = System.Diagnostics.Stopwatch.GetElapsedTime(opening);
         _encoderOptions = options;
         if (_encoder == null)
         {

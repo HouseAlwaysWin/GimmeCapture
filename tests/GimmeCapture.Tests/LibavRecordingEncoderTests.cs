@@ -36,6 +36,15 @@ public class LibavRecordingEncoderTests
     }
 
     [Fact]
+    public void WarmUpEncoder_OpensTheEncoderARecordingWouldGet()
+    {
+        FFmpegRuntime.EnsureInitialized();
+
+        Assert.Equal("libx264", LibavRecordingEncoder.WarmUpEncoder(VideoCodec.H264, preferHardware: false));
+        Assert.Equal("libx265", LibavRecordingEncoder.WarmUpEncoder(VideoCodec.H265, preferHardware: false));
+    }
+
+    [Fact]
     public unsafe void Libx264_KeepsZerolatencysSlicedThreads()
     {
         // libx264 turns zerolatency's sliced threads into frame threads, which hold frames back, whenever thread_type

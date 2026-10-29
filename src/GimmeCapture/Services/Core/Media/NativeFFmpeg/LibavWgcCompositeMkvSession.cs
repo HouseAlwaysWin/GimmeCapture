@@ -158,6 +158,7 @@ internal sealed class LibavWgcCompositeMkvSession : LibavRecordingSession
             AVCodecContext* encCtx = writer.Encoder;
 
             SelectedEncoderName = writer.EncoderName;
+            EncoderOpenTime = writer.EncoderOpenTime;
             string? warningMessage = writer.EncoderWarning;
             if (!string.IsNullOrWhiteSpace(warningMessage))
             {

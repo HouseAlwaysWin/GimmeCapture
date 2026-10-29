@@ -193,6 +193,7 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
                 outputPath, codec, PreferHardwareEncoder, width, height, fps, VideoCrf, VideoBitrate);
 
             SelectedEncoderName = writer.EncoderName;
+            EncoderOpenTime = writer.EncoderOpenTime;
             LastWarningMessage = writer.EncoderWarning;
             if (!string.IsNullOrWhiteSpace(writer.EncoderWarning))
             {

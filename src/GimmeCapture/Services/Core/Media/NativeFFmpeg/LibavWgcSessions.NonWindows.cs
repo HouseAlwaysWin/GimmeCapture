@@ -24,6 +24,7 @@ internal sealed class LibavWgcMkvSession : IDisposable
     public string? LastErrorMessage { get; private set; } = "WGC capture is not available on this platform.";
     public string? LastWarningMessage { get; private set; }
     public string? SelectedEncoderName { get; private set; }
+    public TimeSpan? EncoderOpenTime { get; private set; }
 
     public Task<bool> StartAsync(string outputPath, IntPtr hwnd, int fps, bool drawMouse, VideoCodec codec)
         => Task.FromResult(false);
@@ -42,6 +43,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
     public string? LastErrorMessage { get; private set; } = "WGC capture is not available on this platform.";
     public string? LastWarningMessage { get; private set; }
     public string? SelectedEncoderName { get; private set; }
+    public TimeSpan? EncoderOpenTime { get; private set; }
 
     public Task<bool> StartAsync(string outputPath, IReadOnlyList<IntPtr> hwnds, int fps, bool drawMouse, VideoCodec codec)
         => Task.FromResult(false);

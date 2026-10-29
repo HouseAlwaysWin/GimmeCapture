@@ -80,7 +80,7 @@ public partial class RecordingService
         AppLog.Information("Wgc.Disabled (session): WGC produced no frames; skipping WGC and using gdigrab region capture for the rest of this run.");
     }
 
-    private async Task<bool> StartFfmpegSegmentAsync(string segmentFile)
+    private async Task<bool> StartFfmpegSegmentAsync(string segmentFile, RecordingStartTimings timings)
     {
         if (!FFmpegRuntime.IsInitialized)
         {
@@ -89,9 +89,16 @@ public partial class RecordingService
             return false;
         }
 
-        // Whether to *attempt* WGC at all. Once WGC has been seen to deliver no frames this run, WgcAvailable is
-        // false and we skip straight to the gdigrab fallbacks (no per-recording first-frame timeout, no warning).
-        bool tryWgc = WgcAvailable;
+        // Whether to *attempt* WGC at all. Only a picked window records through WGC, so a region does not ask: the
+        // question took 45 ms on a run's first recording and 16 ms on every one after. Once WGC has been seen to deliver
+        // no frames this run, WgcAvailable is false and we skip straight to the gdigrab fallbacks (no per-recording
+        // first-frame timeout, no warning).
+        bool tryWgc = false;
+        if (_windowHandles.Count > 0)
+        {
+            tryWgc = WgcAvailable;
+            timings.Mark("wgcProbe");
+        }
 
         // Multiple windows: composite → one tiled video; separate → one file per window.
         if (_windowHandles.Count >= 2)
@@ -185,6 +192,7 @@ public partial class RecordingService
 
             LastStartWarning = _nativeWgcCompositeRecorder.LastWarningMessage ?? string.Empty;
             _lastSelectedVideoEncoderName = _nativeWgcCompositeRecorder.SelectedEncoderName ?? string.Empty;
+            _lastEncoderOpenTime = _nativeWgcCompositeRecorder.EncoderOpenTime;
             State = RecordingState.Recording;
             return true;
         }
@@ -236,6 +244,7 @@ public partial class RecordingService
 
             LastStartWarning = _nativeWgcRecorder.LastWarningMessage ?? string.Empty;
             _lastSelectedVideoEncoderName = _nativeWgcRecorder.SelectedEncoderName ?? string.Empty;
+            _lastEncoderOpenTime = _nativeWgcRecorder.EncoderOpenTime;
             State = RecordingState.Recording;
             return true;
         }
@@ -503,6 +512,7 @@ public partial class RecordingService
                 ? _nativeRecorder.LastWarningMessage ?? string.Empty
                 : LastStartWarning;
             _lastSelectedVideoEncoderName = _nativeRecorder.SelectedEncoderName ?? string.Empty;
+            _lastEncoderOpenTime = _nativeRecorder.EncoderOpenTime;
             if (!ok)
             {
                 LastStartError = _nativeRecorder.LastErrorMessage ?? "Native gdigrab session reported failure.";
