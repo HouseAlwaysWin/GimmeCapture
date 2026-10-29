@@ -18,7 +18,8 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// GIF/WebM targets are handled elsewhere.
 ///
 /// Video: seek to each range start, drop decoded frames before the start, re-encode frames within
-/// [start,end) with a continuous output PTS (CFR at the source frame rate). Audio: decode each range to
+/// [start,end) at a constant rate (the source's exact rate), each frame placed by its own timestamp
+/// (<see cref="OutputFrameClock"/>). Audio: decode each range to
 /// PCM (truncated to the range length), pitch-preservingly retime any non-1× segment via
 /// <see cref="LibavAtempoFilter"/>, concatenate, encode to AAC, then mux with the video.
 /// </summary>
@@ -34,19 +35,101 @@ internal static class LibavClipExporter
     private const double TimeEpsilon = 1e-4;
 
     /// <summary>
-    /// Advances the fractional output-frame cursor by one source frame at the given speed and returns how
-    /// many output frames to emit for it. Faster-than-1× drops frames (can return 0); slower duplicates
-    /// (can return ≥2); 1× always returns 1. Pure so the retiming math can be unit-tested.
+    /// Decides which output frames each decoded source frame fills, from the frames' own timestamps. The output runs at
+    /// a constant rate, and output frame k shows whichever source frame is on screen at k / rate on the output timeline:
+    /// a frame shows from its own time until the next one's. Faster-than-1× ranges and an fps cap so drop frames, slow
+    /// motion and gaps in the source repeat them, and the output keeps real time however the source's rate varies.
+    /// A frame's run is only known once the next frame arrives, so the frame on screen is held and handed out then.
+    /// Pure, so the retiming can be unit-tested.
     /// </summary>
-    internal static int AdvanceFrameCursor(ref double accum, double speed)
+    internal sealed class OutputFrameClock
     {
-        double effective = speed > 0.01 ? speed : 1.0;
-        double before = accum;
-        accum += 1.0 / effective;
-        // Nudge before flooring so accumulated FP drift (e.g. 90 × 1/1.5 = 59.999…) doesn't spuriously
-        // drop a frame at boundaries; the epsilon telescopes across calls and can't over-count exact values.
-        const double eps = 1e-9;
-        return (int)Math.Floor(accum + eps) - (int)Math.Floor(before + eps);
+        private readonly double _framesPerSecond;
+        private bool _holding;
+
+        public OutputFrameClock(double framesPerSecond)
+        {
+            _framesPerSecond = framesPerSecond;
+        }
+
+        /// <summary>Output frames handed out so far, which is also the next one's pts.</summary>
+        public long Emitted { get; private set; }
+
+        /// <summary>
+        /// A source frame arrives at <paramref name="outputSeconds"/>. Returns how many output frames, numbered from
+        /// <paramref name="firstPts"/>, the frame held until now fills before this one takes over; this one is held
+        /// next. A frame arriving with nothing held fills from wherever the output stands, gap before it included.
+        /// </summary>
+        public int Arrive(double outputSeconds, out long firstPts)
+        {
+            int count = _holding ? FillUntil(outputSeconds, out firstPts) : NothingHeld(out firstPts);
+            _holding = true;
+            return count;
+        }
+
+        /// <summary>
+        /// The held frame's run ends at <paramref name="outputSeconds"/>: its range's end, or its own end where the source
+        /// runs out first. Returns how many output frames, numbered from <paramref name="firstPts"/>, it still fills.
+        /// </summary>
+        public int Release(double outputSeconds, out long firstPts)
+        {
+            int count = _holding ? FillUntil(outputSeconds, out firstPts) : NothingHeld(out firstPts);
+            _holding = false;
+            return count;
+        }
+
+        private int FillUntil(double outputSeconds, out long firstPts)
+        {
+            firstPts = Emitted;
+            // Rounded to the nearest output frame, so timestamps a hair off the grid (Matroska keeps milliseconds)
+            // neither drop nor repeat a frame. An exact half, as at 2× speed, rounds up, keeping every other frame.
+            long due = (long)Math.Floor((outputSeconds * _framesPerSecond) + 0.5 + 1e-6);
+            int count = (int)Math.Clamp(due - Emitted, 0, int.MaxValue);
+            Emitted += count;
+            return count;
+        }
+
+        private int NothingHeld(out long firstPts)
+        {
+            firstPts = Emitted;
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// The source's frame rate as an exact fraction, 30000/1001 for 29.97 fps rather than a rounded 30: the stream's
+    /// average rate, else its base rate. When neither is a plausible 1–120 fps, <paramref name="roundedFallback"/>, the
+    /// whole number <see cref="ProbeFps"/> reports. Pure, so the choice can be unit-tested.
+    /// </summary>
+    internal static AVRational ChooseFrameRate(AVRational average, AVRational baseRate, int roundedFallback)
+    {
+        if (IsPlausibleFrameRate(average))
+        {
+            return average;
+        }
+
+        return IsPlausibleFrameRate(baseRate) ? baseRate : new AVRational { num = roundedFallback, den = 1 };
+    }
+
+    /// <summary>
+    /// The rate an export runs at: the source's own, or <paramref name="maxFps"/> when a cap below the source's rate
+    /// (rounded, as the compress tab shows it) is asked for. 0 means no cap. Pure, so it can be unit-tested.
+    /// </summary>
+    internal static AVRational OutputFrameRate(AVRational sourceRate, int maxFps)
+    {
+        int roundedSource = (int)Math.Round((double)sourceRate.num / sourceRate.den);
+        return maxFps > 0 && maxFps < roundedSource ? new AVRational { num = maxFps, den = 1 } : sourceRate;
+    }
+
+    private static bool IsPlausibleFrameRate(AVRational rate)
+    {
+        if (rate.num <= 0 || rate.den <= 0)
+        {
+            return false;
+        }
+
+        double fps = (double)rate.num / rate.den;
+        return fps >= 1 && fps <= 120;
     }
 
     /// <summary>
@@ -325,10 +408,6 @@ internal static class LibavClipExporter
         AVFrame* filterFrame = null;
         AVDictionary* encOpts = null;
         AVStream* outStream = null;
-        long frameIndex = 0;
-        // Fractional output-frame cursor for per-segment speed: each source frame advances it by
-        // 1/speed output frames, and we emit floor(after)-floor(before) frames (drop when >1×, dup when <1×).
-        double frameAccum = 0;
         bool annotate = frameComposite != null || frameCompositeAfterTransform != null;
 
         // Output rotation (0/90/180/270 clockwise), baked into the pixels via a SkiaSharp BGRA round-trip.
@@ -370,13 +449,14 @@ internal static class LibavClipExporter
             decCtx->thread_type = ffmpeg.FF_THREAD_FRAME | ffmpeg.FF_THREAD_SLICE;
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "clip_open_decoder");
 
-            int srcFps = ResolveFps(inStream);
-            // FPS cap: when a cap below the source rate is requested, the encoder runs at the cap and we
-            // decimate source frames into it (output stays CFR). 0 or ≥ source fps keeps the source rate.
-            int fps = (opt.MaxFps > 0 && opt.MaxFps < srcFps) ? opt.MaxFps : srcFps;
-            // Per-source-frame cursor scaling that realises the decimation: emit ≈ fps/srcFps output frames
-            // per source frame. 1.0 when not capping, so the speed-only path is byte-for-byte unchanged.
-            double fpsCursorScale = (double)srcFps / fps;
+            // The output runs at the source's exact rate (30000/1001 for 29.97 fps, not a rounded 30), or at the cap
+            // when one below the source's rate is asked for. Which source frame fills each output frame follows the
+            // frames' own timestamps, so the output keeps real time: counting frames against a rounded rate ran a
+            // 29.97 fps source 0.1% fast and a variable-rate one off by however much its rate wandered.
+            AVRational sourceRate = ResolveFrameRate(inStream);
+            AVRational rate = OutputFrameRate(sourceRate, opt.MaxFps);
+            double sourceFrameSeconds = (double)sourceRate.den / sourceRate.num;
+            var clock = new OutputFrameClock((double)rate.num / rate.den);
 
             // AV1 (SVT-AV1) / H.265 when requested and available; otherwise fall back to H.264 (the AV1 and
             // libx265 encoders may be absent from a given build). Existing callers default to H.264 so their
@@ -448,9 +528,9 @@ internal static class LibavClipExporter
             // AV1 encodes 10-bit (yuv420p10le): smaller and banding-free even from 8-bit sources. The sws
             // target and the encFrame buffer both follow encCtx->pix_fmt, so this is the only knob to flip.
             encCtx->pix_fmt = isAv1 ? AVPixelFormat.AV_PIX_FMT_YUV420P10LE : AVPixelFormat.AV_PIX_FMT_YUV420P;
-            encCtx->time_base = new AVRational { num = 1, den = fps };
-            encCtx->framerate = new AVRational { num = fps, den = 1 };
-            encCtx->gop_size = fps * 2;
+            encCtx->time_base = new AVRational { num = rate.den, den = rate.num };
+            encCtx->framerate = rate;
+            encCtx->gop_size = (int)Math.Round(2.0 * rate.num / rate.den);
             // B-frames materially shrink offline output at the same quality. This whole path is offline export
             // (never realtime capture), so enable them for x264/x265; SVT-AV1 manages hierarchical frames
             // internally and takes no explicit count.
@@ -626,6 +706,15 @@ internal static class LibavClipExporter
             }
 
             double tb = ffmpeg.av_q2d(inStream->time_base);
+            // Where the range being encoded starts on the output timeline: the kept ranges' lengths so far, each
+            // divided by its speed. Added up exactly, so rounding to whole frames never accumulates across ranges.
+            double rangeOutputStart = 0;
+            double inputEndSeconds = RecordedEndSeconds(inFmt);
+            // A file whose streams start late (MPEG-TS often starts near 1.4 s) has nothing before that. A range reaching
+            // back past it is measured from the file's start, as its audio is, which begins at its first sample.
+            double inputStartSeconds = inFmt->start_time != ffmpeg.AV_NOPTS_VALUE
+                ? inFmt->start_time / (double)ffmpeg.AV_TIME_BASE
+                : 0;
 
             foreach (SourceRange range in ranges)
             {
@@ -637,6 +726,7 @@ internal static class LibavClipExporter
                     ffmpeg.avcodec_flush_buffers(decCtx);
                 }
 
+                var timing = new RangeTiming(rangeOutputStart, Math.Max(range.StartSeconds, inputStartSeconds));
                 bool runDone = false;
                 bool eof = false;
                 while (!runDone && !eof)
@@ -669,25 +759,43 @@ internal static class LibavClipExporter
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame,
                         filterSrc, filterSink, filterFrame, frameComposite,
                         rotation, rotateDst, frameCompositeAfterTransform,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
-                        fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, clock, timing,
+                        sourceFrameSeconds, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
 
                 // Range reached the file end: flush the decoder so its buffered tail frames aren't lost.
                 if (eof && !runDone)
                 {
                     ffmpeg.avcodec_send_packet(decCtx, null);
-                    DrainDecodedFrames(
+                    runDone = DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame,
                         filterSrc, filterSink, filterFrame, frameComposite,
                         rotation, rotateDst, frameCompositeAfterTransform,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
-                        fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, clock, timing,
+                        sourceFrameSeconds, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
+
+                // The range's last frame shows until the range ends. Where the file ran out first, it shows until the
+                // file's end: its own end, or the container's recorded length when that is later (a variable-rate
+                // file's last frame carries no duration of its own). A length the demuxer only guessed from the
+                // bitrate is not trusted, so a range that asks for more than the file holds does not freeze its end.
+                double rangeOutputEnd = rangeOutputStart
+                    + (Math.Max(0, range.EndSeconds - timing.SourceOrigin) / range.EffectiveSpeed);
+                double lastFrameUntil = rangeOutputEnd;
+                if (!runDone && !double.IsNaN(timing.HeldFrameSourceEnd))
+                {
+                    double sourceEnd = double.IsNaN(inputEndSeconds)
+                        ? timing.HeldFrameSourceEnd
+                        : Math.Max(timing.HeldFrameSourceEnd, inputEndSeconds);
+                    lastFrameUntil = Math.Min(
+                        rangeOutputEnd, rangeOutputStart + ((sourceEnd - timing.SourceOrigin) / range.EffectiveSpeed));
+                }
+                EmitHeldFrame(encCtx, encFrame, clock.Release(lastFrameUntil, out long tailPts), tailPts, outFmt, outStream, outPkt);
 
                 // Reset the decoder before the next range's seek (and after the final flush above).
                 ffmpeg.avcodec_flush_buffers(decCtx);
                 elapsedBeforeRange += range.Duration;
+                rangeOutputStart = rangeOutputEnd;
             }
 
             // Flush the encoder to drain any buffered output packets.
@@ -825,6 +933,28 @@ internal static class LibavClipExporter
         }
     }
 
+    // One kept range's place on the output timeline while it is encoded.
+    private sealed class RangeTiming
+    {
+        public RangeTiming(double outputStart, double sourceOrigin)
+        {
+            OutputStart = outputStart;
+            SourceOrigin = sourceOrigin;
+        }
+
+        // Where the range starts on the output timeline, in seconds.
+        public double OutputStart { get; }
+
+        // The source time that lands at OutputStart: the range's start, or the file's when the range reaches back past it.
+        public double SourceOrigin { get; }
+
+        // The last decoded frame's source time, which a frame without a timestamp follows on from.
+        public double LastSourceSeconds { get; set; } = double.NaN;
+
+        // When the frame on screen ends by its own duration, in source time, should the file end under it.
+        public double HeldFrameSourceEnd { get; set; } = double.NaN;
+    }
+
     // Pulls decoded frames, drops those before the range start, encodes those in [start,end).
     // Returns true once a frame at/after the range end is seen (the run is complete).
     private static unsafe bool DrainDecodedFrames(
@@ -848,9 +978,9 @@ internal static class LibavClipExporter
         AVRational inTimeBase,
         SourceRange range,
         VideoEditCrop? crop,
-        ref long frameIndex,
-        ref double frameAccum,
-        double fpsCursorScale,
+        OutputFrameClock clock,
+        RangeTiming timing,
+        double sourceFrameSeconds,
         IProgress<double>? progress,
         double totalSrcDuration,
         double elapsedBeforeRange,
@@ -868,7 +998,11 @@ internal static class LibavClipExporter
             long ts = decFrame->best_effort_timestamp != ffmpeg.AV_NOPTS_VALUE
                 ? decFrame->best_effort_timestamp
                 : decFrame->pts;
-            double t = ts != ffmpeg.AV_NOPTS_VALUE ? ts * ffmpeg.av_q2d(inTimeBase) : 0;
+            // A frame without a timestamp follows the one before it by one frame at the source's rate.
+            double t = ts != ffmpeg.AV_NOPTS_VALUE
+                ? ts * ffmpeg.av_q2d(inTimeBase)
+                : double.IsNaN(timing.LastSourceSeconds) ? range.StartSeconds : timing.LastSourceSeconds + sourceFrameSeconds;
+            timing.LastSourceSeconds = t;
 
             if (t < range.StartSeconds - TimeEpsilon)
             {
@@ -880,6 +1014,14 @@ internal static class LibavClipExporter
                 ffmpeg.av_frame_unref(decFrame);
                 return true; // reached the end of this run
             }
+
+            // Place the frame on the output timeline, at its time into the range divided by the range's speed. The
+            // frame on screen until now runs until this one starts: it is handed out for the output frames due before
+            // then while encFrame still holds its picture, and only after that is this frame converted into encFrame,
+            // where it waits for its own run to end.
+            double outputSeconds = timing.OutputStart + ((t - timing.SourceOrigin) / range.EffectiveSpeed);
+            timing.HeldFrameSourceEnd = t + (decFrame->duration > 0 ? decFrame->duration * ffmpeg.av_q2d(inTimeBase) : sourceFrameSeconds);
+            EmitHeldFrame(encCtx, encFrame, clock.Arrive(outputSeconds, out long firstPts), firstPts, outFmt, outStream, outPkt);
 
             // Crop the decoded frame in place (pointer offset, no copy) to the requested region before
             // scaling. UNALIGNED tolerates odd x/y offsets (chroma is adjusted per plane).
@@ -997,23 +1139,26 @@ internal static class LibavClipExporter
                 }
             }
 
-            // Per-segment speed AND fps cap fold into one cursor advance: each source frame spans
-            // 1/(speed × fpsScale) output frames. fpsScale = srcFps/outFps decimates to the capped rate
-            // (≥1 drops frames); both are 1.0 in the default path, so behaviour there is unchanged.
-            int emitCount = AdvanceFrameCursor(ref frameAccum, range.EffectiveSpeed * fpsCursorScale);
-
-            for (int e = 0; e < emitCount; e++)
-            {
-                encFrame->pts = frameIndex++;
-                ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "clip_send_frame");
-                WriteEncoded(encCtx, outFmt, outStream, outPkt);
-            }
-
             ffmpeg.av_frame_unref(decFrame); // safe no-op when the filter already consumed it
             if (srcFrame == filterFrame)
             {
                 ffmpeg.av_frame_unref(filterFrame);
             }
+        }
+    }
+
+    // Encodes the picture waiting in encFrame as output frames firstPts .. firstPts + count - 1: none when a faster
+    // range or an fps cap drops it, several when slow motion or a gap in the source repeats it.
+    private static unsafe void EmitHeldFrame(
+        AVCodecContext* encCtx, AVFrame* encFrame, int count, long firstPts,
+        AVFormatContext* outFmt, AVStream* outStream, AVPacket* outPkt)
+    {
+        for (int e = 0; e < count; e++)
+        {
+            encFrame->pts = firstPts + e;
+            encFrame->duration = 1;
+            ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "clip_send_frame");
+            WriteEncoded(encCtx, outFmt, outStream, outPkt);
         }
     }
 
@@ -1061,6 +1206,31 @@ internal static class LibavClipExporter
         {
             if (fmt != null) ffmpeg.avformat_close_input(&fmt);
         }
+    }
+
+    // The source's exact frame rate (ChooseFrameRate), reduced to terms of at most 65535 so the odd average a
+    // variable-rate file can report still makes a tidy encoder time base. 30000/1001 and its kin come through unchanged.
+    private static unsafe AVRational ResolveFrameRate(AVStream* stream)
+    {
+        AVRational rate = ChooseFrameRate(stream->avg_frame_rate, stream->r_frame_rate, ResolveFps(stream));
+        int num = 0;
+        int den = 0;
+        ffmpeg.av_reduce(&num, &den, rate.num, rate.den, 65535);
+        return new AVRational { num = num, den = den };
+    }
+
+    // Where the input ends, in seconds on its streams' timeline: its start plus the length its container records.
+    // NaN when it records none, or when the demuxer only guessed the length from the bitrate.
+    private static unsafe double RecordedEndSeconds(AVFormatContext* fmt)
+    {
+        if (fmt->duration == ffmpeg.AV_NOPTS_VALUE || fmt->duration <= 0
+            || fmt->duration_estimation_method == AVDurationEstimationMethod.AVFMT_DURATION_FROM_BITRATE)
+        {
+            return double.NaN;
+        }
+
+        long start = fmt->start_time != ffmpeg.AV_NOPTS_VALUE ? fmt->start_time : 0;
+        return (start + fmt->duration) / (double)ffmpeg.AV_TIME_BASE;
     }
 
     private static unsafe int ResolveFps(AVStream* stream)

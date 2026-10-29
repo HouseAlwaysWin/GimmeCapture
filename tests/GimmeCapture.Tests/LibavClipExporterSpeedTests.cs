@@ -2,27 +2,41 @@ using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 namespace GimmeCapture.Tests;
 
+/// <summary>
+/// How a kept range's speed retimes its frames through <see cref="LibavClipExporter.OutputFrameClock"/>: each frame is
+/// placed on the output timeline at its own time divided by the speed, and the clock decides how many output frames it
+/// fills. Faster ranges drop frames and slow motion repeats them.
+/// </summary>
 public class LibavClipExporterSpeedTests
 {
-    private static int TotalEmitted(double speed, int sourceFrames)
+    // Plays sourceFrames frames of a 30 fps clip at the given speed through a 30 fps clock and counts the output frames.
+    private static long TotalEmitted(double speed, int sourceFrames)
     {
-        double accum = 0;
-        int total = 0;
+        var clock = new LibavClipExporter.OutputFrameClock(30);
+        long total = 0;
         for (int i = 0; i < sourceFrames; i++)
         {
-            total += LibavClipExporter.AdvanceFrameCursor(ref accum, speed);
+            total += clock.Arrive(i / 30.0 / speed, out _);
         }
+
+        total += clock.Release(sourceFrames / 30.0 / speed, out _);
+        Assert.Equal(total, clock.Emitted);
         return total;
     }
 
     [Fact]
     public void NormalSpeed_EmitsExactlyOnePerFrame()
     {
-        double accum = 0;
-        for (int i = 0; i < 100; i++)
+        var clock = new LibavClipExporter.OutputFrameClock(30);
+        Assert.Equal(0, clock.Arrive(0, out _)); // held until the next frame says how long it shows
+        for (int i = 1; i < 100; i++)
         {
-            Assert.Equal(1, LibavClipExporter.AdvanceFrameCursor(ref accum, 1.0));
+            Assert.Equal(1, clock.Arrive(i / 30.0, out long firstPts));
+            Assert.Equal(i - 1, firstPts);
         }
+
+        Assert.Equal(1, clock.Release(100 / 30.0, out long lastPts));
+        Assert.Equal(99, lastPts);
     }
 
     [Fact]
@@ -47,11 +61,28 @@ public class LibavClipExporterSpeedTests
     }
 
     [Fact]
+    public void DoubleSpeed_KeepsEveryOtherFrame_Evenly()
+    {
+        var clock = new LibavClipExporter.OutputFrameClock(30);
+        var kept = new System.Collections.Generic.List<int>();
+        clock.Arrive(0, out _);
+        for (int i = 1; i <= 20; i++)
+        {
+            // What an arrival hands out belongs to the frame before it.
+            if (clock.Arrive(i / 60.0, out _) > 0)
+            {
+                kept.Add(i - 1);
+            }
+        }
+
+        Assert.Equal(new[] { 0, 2, 4, 6, 8, 10, 12, 14, 16, 18 }, kept);
+    }
+
+    [Fact]
     public void ZeroOrNegativeSpeed_TreatedAsNormal()
     {
-        double accum = 0;
-        Assert.Equal(1, LibavClipExporter.AdvanceFrameCursor(ref accum, 0));
-        Assert.Equal(1, LibavClipExporter.AdvanceFrameCursor(ref accum, -3));
+        Assert.Equal(1.0, new LibavClipExporter.SourceRange(0, 1, 0).EffectiveSpeed);
+        Assert.Equal(1.0, new LibavClipExporter.SourceRange(0, 1, -3).EffectiveSpeed);
     }
 
     [Fact]

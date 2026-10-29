@@ -11,6 +11,12 @@
 
 ## Unreleased
 
+### 🛡️ Reliability
+
+- **Compressed and trimmed videos stay in step with their sound on 29.97 fps and variable-frame-rate sources.** The
+  export rounded the frame rate and counted frames, so a 29.97 fps video came out 0.1% fast (3.6 s an hour) and a
+  variable-rate recording drifted. Every frame is now placed by its own time at the source's exact rate.
+
 ### ⚡ Performance
 
 - **Compressing to H.265 and saving as WebM use every core.** The H.265 encoder worked on one frame at a time and the
