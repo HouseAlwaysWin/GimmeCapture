@@ -842,9 +842,10 @@ public partial class MainWindowViewModel
     /// <summary>
     /// Starts the hardware probe, once. Which codecs this machine can record is known only after loading FFmpeg and
     /// test-opening the AV1 hardware encoders: 1.75 s, measured on the UI thread at startup when the codec list did it
-    /// for itself. It runs on the pool; the codec list and GIF availability catch up when it answers. Not at start-up
-    /// either: on a cold start it overlapped the main window's creation by 1.3–1.5 s, so the app starts it once the
-    /// window has drawn its first frame, and the Record tab if it is opened first.
+    /// for itself. It runs on the pool; the codec list and GIF availability catch up when it answers. The Record tab,
+    /// the one place that shows them, starts it the first time it is shown. The app used to start it at every launch as
+    /// well, so every login loaded FFmpeg and opened GPU encoders for a list most sessions never show. An AV1 recording
+    /// runs the probe for itself as it starts.
     /// </summary>
     internal void StartHardwareProbe()
     {

@@ -137,9 +137,6 @@ public sealed class AppBootstrapper : IAsyncDisposable
     /// </summary>
     public void InitializeHotkeys() => _mainWindowViewModel.Value.HotkeyService.Initialize();
 
-    /// <summary>Starts the hardware encoder probe (<see cref="MainWindowViewModel.StartHardwareProbe"/>).</summary>
-    public void StartHardwareProbe() => _mainWindowViewModel.Value.StartHardwareProbe();
-
     /// <summary>
     /// Loads the capture overlay's code while the app is idle (<see cref="ISnipWindowFactory.ScheduleWarmUp"/>), ten
     /// seconds in so it stays clear of startup's own work.

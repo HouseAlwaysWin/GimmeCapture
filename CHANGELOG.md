@@ -41,6 +41,10 @@
 
 ### ⚡ Performance
 
+- **The app no longer loads FFmpeg and tests the graphics card's AV1 encoders at every launch.** The check that tells
+  the Record tab whether AV1 and GIF recording are available ran at every start-up, a launch to the tray at login
+  included. It now runs when the Record tab is first opened, or as an AV1 recording starts, and FFmpeg loads the first
+  time a recording, a video pin or the Record tab needs it.
 - **A capture hotkey opens its overlay without waiting for the settings to be saved.** Every capture saves the
   settings, and its overlay waited while they were turned into text, a step that redid its preparation from scratch
   each time, and while the saved file was read back to see whether anything had changed. The overlay now opens first,

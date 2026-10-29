@@ -60,8 +60,7 @@ public partial class MainWindow
     {
         if (DataContext is MainWindowViewModel vm)
         {
-            // The tab's codec list and GIF choice wait on the hardware probe, which the app otherwise starts after the
-            // first frame.
+            // The tab's codec list and GIF choice wait on the hardware probe, which nothing else starts.
             vm.StartHardwareProbe();
 
             Task ready = vm.RecordingSettings.LoadMicInputDevicesAsync();

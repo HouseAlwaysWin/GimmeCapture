@@ -75,7 +75,6 @@ public partial class App : Application
                 // With no main window, the tray host stands in as the lifetime's, which shows it: the visible top level
                 // the clipboard and dialogs need (see AppBootstrapper.CreateTrayHostWindow).
                 desktop.MainWindow = _bootstrapper.CreateTrayHostWindow();
-                StartHardwareProbeWhenIdle();
             }
 
             // The global hotkeys work from here. This used to wait for that hidden window to open, which a window launch
@@ -133,21 +132,7 @@ public partial class App : Application
         window.Opened -= OnMainWindowFirstOpened;
         StartupTrace.Mark("show");
         // The first callback comes as the first frame starts; the second once that frame has been drawn.
-        window.RequestAnimationFrame(_ => window.RequestAnimationFrame(_ =>
-        {
-            StartupTrace.MarkFirstFrame();
-            StartHardwareProbeWhenIdle();
-        }));
-    }
-
-    // The AV1 hardware probe loads FFmpeg and opens a GPU encoder, which on a cold start overlapped the main window's
-    // creation by 1.3–1.5 s: it waits for the first frame, or in a launch to the tray for start-up's own work.
-    private void StartHardwareProbeWhenIdle()
-    {
-        AppBootstrapper? bootstrapper = _bootstrapper;
-        Avalonia.Threading.Dispatcher.UIThread.Post(
-            () => bootstrapper?.StartHardwareProbe(),
-            Avalonia.Threading.DispatcherPriority.Background);
+        window.RequestAnimationFrame(_ => window.RequestAnimationFrame(_ => StartupTrace.MarkFirstFrame()));
     }
 
     private static async System.Threading.Tasks.Task TraceSettingsAppliedAsync(System.Threading.Tasks.Task settingsLoad)
