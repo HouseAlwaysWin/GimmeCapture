@@ -13,6 +13,9 @@
 
 ### 🛡️ Reliability
 
+- **A mosaic or blur preview can no longer show scrambled pixels or close the app.** It read the picture from a buffer
+  the idle memory clean-up could move mid-read. The picture now goes straight to where the preview reads it, which also
+  saves a full-size copy, 33 MB at 4K.
 - **Save works on every pinned image.** A pin opened from part of another pin, or from a frame frozen in the Compress
   editor, had a Save button and shortcut that did nothing. Every image pin now saves the same way.
 - **Launched to the tray, the app now shows its toasts, the capture-delay countdown and the update offer.** All three

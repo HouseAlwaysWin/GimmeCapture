@@ -494,28 +494,20 @@ public sealed class AnnotationRenderService
             return null;
 
         var skBitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
-        byte[] rented = ArrayPool<byte>.Shared.Rent(width * height * 4);
+        var sourceRect = new PixelRect(0, 0, width, height);
 
         try
         {
-            var handle = System.Runtime.InteropServices.GCHandle.Alloc(rented, System.Runtime.InteropServices.GCHandleType.Pinned);
-            try
+            if (bitmap.Format == PixelFormat.Bgra8888 && bitmap.AlphaFormat == AlphaFormat.Premul)
             {
-                bitmap.CopyPixels(new PixelRect(0, 0, width, height), handle.AddrOfPinnedObject(), width * height * 4, width * 4);
+                // Laid out as Skia's are, so Avalonia copies straight into Skia's pixels, which the GC never moves.
+                // The copy used to go through a pooled array that was read after it was unpinned, and the idle memory
+                // trim compacts the large-object heap that array lives on: wrong pixels, or an access violation.
+                bitmap.CopyPixels(sourceRect, skBitmap.GetPixels(), skBitmap.ByteCount, skBitmap.RowBytes);
             }
-            finally
+            else
             {
-                handle.Free();
-            }
-
-            unsafe
-            {
-                byte* srcBase = (byte*)System.Runtime.InteropServices.Marshal.UnsafeAddrOfPinnedArrayElement(rented, 0);
-                byte* dstBase = (byte*)skBitmap.GetPixels();
-                for (int row = 0; row < height; row++)
-                {
-                    Buffer.MemoryCopy(srcBase + (row * width * 4), dstBase + (row * skBitmap.RowBytes), skBitmap.RowBytes, width * 4);
-                }
+                CopyThroughPinnedBuffer(bitmap, sourceRect, skBitmap);
             }
 
             return skBitmap;
@@ -524,6 +516,33 @@ public sealed class AnnotationRenderService
         {
             skBitmap.Dispose();
             return null;
+        }
+    }
+
+    // Any other layout is copied byte for byte through a pooled buffer, as all of them were before, pinned until the
+    // last row is out of it.
+    private static unsafe void CopyThroughPinnedBuffer(Bitmap bitmap, PixelRect sourceRect, SKBitmap destination)
+    {
+        int rowBytes = sourceRect.Width * 4;
+        int byteCount = rowBytes * sourceRect.Height;
+        byte[] rented = ArrayPool<byte>.Shared.Rent(byteCount);
+        try
+        {
+            fixed (byte* buffer = rented)
+            {
+                bitmap.CopyPixels(sourceRect, (IntPtr)buffer, byteCount, rowBytes);
+
+                byte* destinationPixels = (byte*)destination.GetPixels();
+                int destinationRowBytes = destination.RowBytes;
+                for (int row = 0; row < sourceRect.Height; row++)
+                {
+                    Buffer.MemoryCopy(
+                        buffer + (row * rowBytes),
+                        destinationPixels + (row * destinationRowBytes),
+                        destinationRowBytes,
+                        rowBytes);
+                }
+            }
         }
         finally
         {

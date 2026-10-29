@@ -1,12 +1,80 @@
 using Avalonia;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Rendering;
 using SkiaSharp;
 
 namespace GimmeCapture.Tests;
 
+// In the renderer's collection for the tests that start from an Avalonia bitmap, as a live mosaic or blur preview does.
+[Collection(AvaloniaRendererCollection.Name)]
 public class AnnotationRenderServiceTests
 {
+    [Theory]
+    [InlineData(AlphaFormat.Premul)] // Skia's own layout: copied straight into the Skia bitmap
+    [InlineData(AlphaFormat.Opaque)] // any other: copied through a pinned buffer
+    public void RenderAnnotationPreview_FromAnAvaloniaBitmap_SeesEveryPixelOfIt(AlphaFormat alphaFormat)
+    {
+        // The preview copies the Avalonia bitmap into Skia first. That copy went through a pooled array it read after
+        // unpinning, which a compacting GC could move under it. A mosaic over the whole picture averages every cell,
+        // so a pixel copied wrong, or a row in the wrong place, changes the preview.
+        const int Width = 37;
+        const int Height = 23;
+        AvaloniaRenderer.EnsureRegistered();
+        using var avaloniaBitmap = new WriteableBitmap(
+            new PixelSize(Width, Height), new Vector(96, 96), PixelFormat.Bgra8888, alphaFormat);
+        AvaloniaRenderer.Fill(avaloniaBitmap, PatternPixel);
+        using var skiaBitmap = new SKBitmap(Width, Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                uint word = PatternPixel(x, y);
+                skiaBitmap.SetPixel(x, y, new SKColor((byte)(word >> 16), (byte)(word >> 8), (byte)word, 255));
+            }
+        }
+
+        var annotation = new Annotation
+        {
+            Type = AnnotationType.Mosaic,
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(Width, Height),
+            EffectSettings = new AnnotationEffectSettings { MosaicCellSize = 3 },
+            DrawingModeReferenceSize = new Size(Width, Height)
+        };
+
+        using var expected = AnnotationRenderService.Shared.RenderAnnotationPreviewToSkBitmap(
+            skiaBitmap, annotation, Width, Height);
+        using var preview = AnnotationRenderService.Shared.RenderAnnotationPreview(
+            avaloniaBitmap, annotation, Width, Height);
+
+        Assert.NotNull(expected);
+        Assert.NotNull(preview);
+        Assert.Equal(Words(expected!), AvaloniaRenderer.ReadPixels(preview!));
+    }
+
+    // An opaque picture, as the word each pixel is in BGRA memory, with no two neighbours alike.
+    private static uint PatternPixel(int x, int y) =>
+        0xFF000000u | ((uint)(x * 7 % 256) << 16) | ((uint)(y * 13 % 256) << 8) | (uint)((x * 5 + y * 3) % 256);
+
+    // The bitmap's pixels row after row, each as the word it is in BGRA memory (0xAARRGGBB).
+    private static uint[] Words(SKBitmap bitmap)
+    {
+        var words = new uint[bitmap.Width * bitmap.Height];
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                SKColor c = bitmap.GetPixel(x, y);
+                words[(y * bitmap.Width) + x] =
+                    ((uint)c.Alpha << 24) | ((uint)c.Red << 16) | ((uint)c.Green << 8) | c.Blue;
+            }
+        }
+
+        return words;
+    }
+
     [Fact]
     public void RenderAnnotationsToBitmap_MosaicOnlyChangesPixelsInsideRoi()
     {
