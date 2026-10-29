@@ -79,7 +79,7 @@ internal static class LibavWebmTranscoder
         AVDictionary* encOpts = null;
         int videoIn = -1;
         AVStream* outStream = null;
-        long frameIndex = 0;
+        long lastPts = -1; // the last pts handed to the encoder; none yet
 
         try
         {
@@ -184,6 +184,12 @@ internal static class LibavWebmTranscoder
                 throw new InvalidOperationException("Failed to create sws context for WebM.");
             }
 
+            // Frames keep their own timestamps, measured from the input's start as the ffmpeg command line does, so an
+            // input that does not begin at zero still starts the WebM at zero.
+            long startTs = inFmt->start_time != ffmpeg.AV_NOPTS_VALUE
+                ? ffmpeg.av_rescale_q(inFmt->start_time, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, inStream->time_base)
+                : 0;
+
             while (true)
             {
                 int rr = ffmpeg.av_read_frame(inFmt, inPkt);
@@ -206,11 +212,13 @@ internal static class LibavWebmTranscoder
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, inPkt), "webm_send_packet");
                 ffmpeg.av_packet_unref(inPkt);
 
-                ReceiveAndEncode(decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, ref frameIndex);
+                ReceiveAndEncode(
+                    decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, inStream->time_base, startTs, ref lastPts);
             }
 
             ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "webm_flush_decoder");
-            ReceiveAndEncode(decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, ref frameIndex);
+            ReceiveAndEncode(
+                decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, inStream->time_base, startTs, ref lastPts);
 
             ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "webm_flush_encoder");
             WriteEncoded(encCtx, outFmt, outStream, outPkt);
@@ -242,6 +250,27 @@ internal static class LibavWebmTranscoder
         }
     }
 
+    /// <summary>
+    /// The encoder pts for a decoded frame stamped <paramref name="timestamp"/> (in <paramref name="inTimeBase"/>): its
+    /// time since <paramref name="startTimestamp"/> in <paramref name="encoderTimeBase"/>, to the nearest tick. A frame
+    /// without a timestamp follows <paramref name="lastPts"/>. A result not above <paramref name="lastPts"/> means the
+    /// frame lands on a tick already used, as when the source is denser than the output rate, and it is dropped. Pure,
+    /// so it can be unit-tested.
+    /// </summary>
+    internal static long OutputPts(
+        long timestamp, AVRational inTimeBase, AVRational encoderTimeBase, long startTimestamp, long lastPts)
+    {
+        if (timestamp == ffmpeg.AV_NOPTS_VALUE)
+        {
+            return lastPts + 1;
+        }
+
+        double ticks = (double)(timestamp - startTimestamp) * inTimeBase.num * encoderTimeBase.den
+            / ((double)inTimeBase.den * encoderTimeBase.num);
+        long pts = (long)Math.Round(ticks, MidpointRounding.AwayFromZero);
+        return lastPts < 0 ? Math.Max(0, pts) : pts;
+    }
+
     private static unsafe void ReceiveAndEncode(
         AVCodecContext* decCtx,
         AVCodecContext* encCtx,
@@ -251,7 +280,9 @@ internal static class LibavWebmTranscoder
         AVFormatContext* outFmt,
         AVStream* outStream,
         AVPacket* outPkt,
-        ref long frameIndex)
+        AVRational inTimeBase,
+        long startTs,
+        ref long lastPts)
     {
         while (true)
         {
@@ -262,6 +293,18 @@ internal static class LibavWebmTranscoder
             }
             ThrowIfErr(gr, "webm_receive_frame");
 
+            // A recording's frames carry the time they were captured, with gaps where a frame was missed. Numbering the
+            // frames one after another closed those gaps up and left the WebM's video shorter than its audio; their
+            // own timestamps keep them.
+            long timestamp = decFrame->best_effort_timestamp != ffmpeg.AV_NOPTS_VALUE
+                ? decFrame->best_effort_timestamp
+                : decFrame->pts;
+            long pts = OutputPts(timestamp, inTimeBase, encCtx->time_base, startTs, lastPts);
+            if (pts <= lastPts)
+            {
+                continue;
+            }
+
             ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "webm_make_writable");
             ffmpeg.sws_scale(
                 sws,
@@ -271,7 +314,8 @@ internal static class LibavWebmTranscoder
                 decFrame->height,
                 encFrame->data,
                 encFrame->linesize);
-            encFrame->pts = frameIndex++;
+            encFrame->pts = pts;
+            lastPts = pts;
 
             ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "webm_send_frame");
             WriteEncoded(encCtx, outFmt, outStream, outPkt);

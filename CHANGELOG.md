@@ -13,6 +13,8 @@
 
 ### 🛡️ Reliability
 
+- **Recordings saved as WebM keep their full length.** The conversion closed up gaps where the capture missed frames,
+  so the picture ran short of the sound. Each frame now keeps the time it was captured.
 - **Compressed and trimmed videos stay in step with their sound on 29.97 fps and variable-frame-rate sources.** The
   export rounded the frame rate and counted frames, so a 29.97 fps video came out 0.1% fast (3.6 s an hour) and a
   variable-rate recording drifted. Every frame is now placed by its own time at the source's exact rate.
