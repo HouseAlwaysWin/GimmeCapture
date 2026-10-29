@@ -175,50 +175,7 @@ public partial class MainWindowViewModel
         if (release != null)
         {
             SetStatus("StatusReady");
-            
-            // Check if already downloaded
-            string? zipPath = UpdateService.IsUpdateDownloaded(release) ? UpdateService.DownloadedZipPath : null;
-
-            if (string.IsNullOrEmpty(zipPath))
-            {
-                var msg = string.Format(Localization["UpdateFound"], release.TagName);
-                bool? result = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
-                {
-                    var mainWindow = _windowManager.GetMainWindow();
-                    if (mainWindow == null || ShowUpdateDialogAction == null) return false;
-                    return await ShowUpdateDialogAction(msg, true);
-                });
-
-                if (result == true)
-                {
-                    zipPath = await UpdateService.DownloadUpdateAsync(release);
-                }
-            }
-
-            if (!string.IsNullOrEmpty(zipPath))
-            {
-                var readyMsg = Localization["UpdateReady"];
-                bool? readyResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
-                {
-                    var mainWindow = _windowManager.GetMainWindow();
-                    if (mainWindow == null || ShowUpdateDialogAction == null) return false;
-
-                    // Ensure window is visible and focused
-                    if (mainWindow.WindowState == Avalonia.Controls.WindowState.Minimized)
-                    {
-                        mainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
-                    }
-                    mainWindow.Activate();
-                    mainWindow.Show();
-
-                    return await ShowUpdateDialogAction(readyMsg, true);
-                });
-
-                if (readyResult == true)
-                {
-                    UpdateService.ApplyUpdate(zipPath, release.NormalizedVersion);
-                }
-            }
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OfferUpdateAsync(release));
         }
         else
         {
@@ -233,6 +190,70 @@ public partial class MainWindowViewModel
                 });
             }
         }
+    }
+
+    // An update found with no main window up to ask about it in. The update dialog is the main window's, centred on it,
+    // and a launch to the tray builds that window only once the user opens it: the start-up check used to find the
+    // update there and drop it, for the whole session.
+    private ReleaseInfo? _pendingUpdate;
+
+    /// <summary>
+    /// Offers <paramref name="release"/>: asks to download it, unless that is done already, then asks to install it. On
+    /// the UI thread. With no main window on screen it waits for one instead (<see cref="OfferPendingUpdate"/>).
+    /// </summary>
+    internal async Task OfferUpdateAsync(ReleaseInfo release)
+    {
+        if (ShowUpdateDialogAction == null || _windowManager.GetMainWindow() is { IsVisible: false })
+        {
+            _pendingUpdate = release;
+            return;
+        }
+
+        // Check if already downloaded
+        string? zipPath = UpdateService.IsUpdateDownloaded(release) ? UpdateService.DownloadedZipPath : null;
+
+        if (string.IsNullOrEmpty(zipPath))
+        {
+            var msg = string.Format(Localization["UpdateFound"], release.TagName);
+            if (await ShowUpdateDialogAction(msg, true))
+            {
+                zipPath = await UpdateService.DownloadUpdateAsync(release);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(zipPath))
+        {
+            var mainWindow = _windowManager.GetMainWindow();
+            if (mainWindow == null || ShowUpdateDialogAction == null) return;
+
+            // Ensure window is visible and focused
+            if (mainWindow.WindowState == Avalonia.Controls.WindowState.Minimized)
+            {
+                mainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
+            }
+            mainWindow.Activate();
+            mainWindow.Show();
+
+            if (await ShowUpdateDialogAction(Localization["UpdateReady"], true))
+            {
+                UpdateService.ApplyUpdate(zipPath, release.NormalizedVersion);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Offers the update <see cref="OfferUpdateAsync"/> held back for want of a main window on screen, once. The main
+    /// window calls this whenever it shows.
+    /// </summary>
+    public void OfferPendingUpdate()
+    {
+        if (_pendingUpdate is not { } release)
+        {
+            return;
+        }
+
+        _pendingUpdate = null;
+        OfferUpdateAsync(release).Forget("Update.PendingOffer");
     }
 
     public async Task SelectVideoPath()

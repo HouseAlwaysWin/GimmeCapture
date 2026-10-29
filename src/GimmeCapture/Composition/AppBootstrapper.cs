@@ -1,6 +1,7 @@
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 using GimmeCapture.Views.Dialogs;
@@ -127,7 +128,6 @@ public sealed class AppBootstrapper : IAsyncDisposable
         return _mainWindow ??= new MainWindow(
             _mainWindowViewModel.Value,
             _downloadWindowService.Value,
-            _toastService.Value,
             _snipWindowFactory.Value);
     }
 
@@ -230,6 +230,15 @@ public sealed class AppBootstrapper : IAsyncDisposable
         viewModel.GetActiveSnipViewModelAction = () => _snipWindowFactory.Value.GetActiveViewModel() as SnipWindowViewModel;
         viewModel.RequestElevatedWindowPromptAction = blockedHotkey =>
             ShowElevatedWindowNoticeAsync(blockedHotkey).Forget("ElevatedNotice.Show");
+
+        // Toasts and the capture-delay countdown are windows of their own, so they are wired here, with the view model.
+        // The main window wired them, and a launch to the tray builds it only once the user opens it: until then no copy
+        // was confirmed, no error was shown and a delayed capture counted down with nothing on screen.
+        viewModel.ShowToastAction = (message, severity) => _toastService.Value.Show(message, severity);
+        viewModel.ShowPreviewToastAction = (message, severity, preview) => _toastService.Value.Show(message, severity, preview);
+        var captureCountdown = new AvaloniaCaptureCountdownService(viewModel.CancelCaptureCountdown);
+        viewModel.ShowCaptureCountdownAction = captureCountdown.ShowAsync;
+        viewModel.CloseCaptureCountdownAction = captureCountdown.Close;
     }
 
     private bool _isElevatedNoticeShowing;

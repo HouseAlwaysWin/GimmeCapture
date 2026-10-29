@@ -13,6 +13,11 @@
 
 ### 🛡️ Reliability
 
+- **Launched to the tray, the app now shows its toasts, the capture-delay countdown and the update offer.** All three
+  were set up by the main window, which a launch to the tray, as at login, builds only once you open it. Until then a
+  copy showed no confirmation, errors showed nothing, a delayed capture counted down with nothing on screen, and an
+  update the start-up check found was dropped. Toasts and the countdown now work without the main window, and an update
+  found while it is closed is offered the next time you open it.
 - **Recordings keep their system audio in step after a quiet stretch.** While nothing played, Windows handed the
   recording no system audio at all, not even silence: that stretch went missing from the sound track, every sound
   after it played early against the picture, and a recording made while nothing played had no system audio at all.

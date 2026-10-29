@@ -20,12 +20,10 @@ using GimmeCapture.Views.Main.Tabs;
 
 namespace GimmeCapture.Views.Main;
 
-// ViewModel action wiring (dialogs / pickers / capture / countdown) for MainWindow.
+// ViewModel action wiring (dialogs / pickers / capture) for MainWindow.
 // Split out of MainWindow.axaml.cs by concern — no behavior change.
 public partial class MainWindow
 {
-    private CaptureCountdownWindow? _captureCountdownWindow;
-
     protected override void OnDataContextChanged(System.EventArgs e)
     {
         base.OnDataContextChanged(e);
@@ -106,12 +104,9 @@ public partial class MainWindow
                         ConfirmationMode.OkOnly).Forget("Hotkey.RegisterFailedDialog"));
             };
 
-            vm.ShowToastAction = (message, severity) => _toastService.Show(message, severity);
-            vm.ShowPreviewToastAction = (message, severity, preview) => _toastService.Show(message, severity, preview);
-
+            // Toasts and the capture-delay countdown are wired with the view model (AppBootstrapper), as a launch to the
+            // tray has no main window to wire them.
             vm.RequestCaptureAction = OpenSnipWindow;
-            vm.ShowCaptureCountdownAction = ShowCaptureCountdownAsync;
-            vm.CloseCaptureCountdownAction = CloseCaptureCountdown;
             vm.RequestOpenModulesAction = OpenModulesTab;
             vm.GetActiveSnipViewModelAction = ResolveActiveSnipViewModel;
             vm.ShowUpdateDialogAction = async (message, isUpdateAvailable) =>
@@ -137,35 +132,5 @@ public partial class MainWindow
         {
             _snipWindowFactory.Open(vm, mode);
         }
-    }
-
-    private Task ShowCaptureCountdownAsync(int seconds, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (DataContext is not MainWindowViewModel vm)
-        {
-            return Task.CompletedTask;
-        }
-
-        _captureCountdownWindow ??= new CaptureCountdownWindow(vm.CancelCaptureCountdown);
-        _captureCountdownWindow.UpdateCountdown(seconds);
-        if (!_captureCountdownWindow.IsVisible)
-        {
-            _captureCountdownWindow.Show();
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private void CloseCaptureCountdown()
-    {
-        if (_captureCountdownWindow == null)
-        {
-            return;
-        }
-
-        _captureCountdownWindow.Close();
-        _captureCountdownWindow = null;
     }
 }

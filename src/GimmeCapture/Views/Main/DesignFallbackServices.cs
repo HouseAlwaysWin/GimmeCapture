@@ -22,18 +22,6 @@ internal sealed class NoOpSnipWindowFactory : ISnipWindowFactory
     public void ScheduleWarmUp(System.TimeSpan delay) { }
 }
 
-internal sealed class NoOpToastService : IToastService
-{
-    public void Show(
-        string message,
-        GimmeCapture.ViewModels.Main.MainWindowViewModel.ToastSeverity severity,
-        Avalonia.Media.Imaging.Bitmap? preview = null)
-    {
-        // Ownership still transfers even when nothing is shown, so a design-time toast can't leak the thumbnail.
-        preview?.Dispose();
-    }
-}
-
 internal sealed class NoOpScreenLayoutService : IScreenLayoutService
 {
     public IReadOnlyList<Rect> BuildRelativeScreenBounds(IReadOnlyList<PixelRect> screenBounds, PixelPoint windowPosition, double renderScaling) => [];

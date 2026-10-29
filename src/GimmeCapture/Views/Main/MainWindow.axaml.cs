@@ -22,21 +22,18 @@ namespace GimmeCapture.Views.Main;
 public partial class MainWindow : Window
 {
     private readonly IDownloadWindowService _downloadWindowService;
-    private readonly IToastService _toastService;
     private readonly ISnipWindowFactory _snipWindowFactory;
 
-    public MainWindow() : this(new MainWindowViewModel(), new NoOpDownloadWindowService(), new NoOpToastService(), new NoOpSnipWindowFactory())
+    public MainWindow() : this(new MainWindowViewModel(), new NoOpDownloadWindowService(), new NoOpSnipWindowFactory())
     {
     }
 
     public MainWindow(
         MainWindowViewModel? viewModel,
         IDownloadWindowService? downloadWindowService,
-        IToastService? toastService,
         ISnipWindowFactory? snipWindowFactory)
     {
         _downloadWindowService = downloadWindowService ?? new NoOpDownloadWindowService();
-        _toastService = toastService ?? new NoOpToastService();
         _snipWindowFactory = snipWindowFactory ?? new NoOpSnipWindowFactory();
 
         InitializeComponent();
@@ -114,6 +111,15 @@ public partial class MainWindow : Window
             // stops the app launching at login — the code never runs. Opening the window by hand is the one
             // moment the app is alive with the entry gone, so it is where the repair has to happen.
             (DataContext as MainWindowViewModel)?.ReverifyStartupRegistration();
+
+            // An update the start-up check found while this window was not up, as in a launch to the tray, is offered
+            // now. Posted: its dialog needs this window on screen, which it is not quite yet while it is being shown.
+            if (DataContext is MainWindowViewModel vm)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(
+                    vm.OfferPendingUpdate,
+                    Avalonia.Threading.DispatcherPriority.Background);
+            }
         }
 
         if (e.Property == Window.WindowStateProperty || e.Property == Window.IsVisibleProperty || e.Property == Window.BoundsProperty)
