@@ -81,6 +81,31 @@ tool.
   `$parent` options first), and the category is saved on change, so queued files lost it at exit:
   `IgnoreNullWriteBackConverter` drops those writes. Switching tabs and hiding the window never did it.
 
+## Next session: what the app itself holds (left off 2026-10-30)
+
+The user asked to bring down what the app really holds: Task Manager's commit size (Details tab, Commit size column),
+not the Memory column the working-set trim used to empty. Done so far: OCR on the CPU and the Record tab's AV1 check
+on Direct3D 11 (Status). Pick up in this order:
+
+1. **Hand-check both** on a published build: the "OCR memory" and "Record tab AV1 check" items below. A Debug build
+   never ran OCR on DirectML (it has no DirectML.dll), so it cannot show the change. The user's Debug instance started
+   2026-10-29 23:19 predates both and locks `bin\Debug`: close it before rebuilding.
+2. **Break down what the idle app holds.** That Debug instance sat at 331 MB private bytes after OCR had unloaded,
+   against 131 MB for a release build at start in an older note. On a published build, read the commit size after
+   each step: launched to the tray, main window opened, each settings tab opened, a capture with text boxes, OCR
+   unloaded (two minutes on), ten minutes on. Then split the largest steps between the GC heap (`GC.GetGCMemoryInfo`
+   in a debug-log line) and native memory (VMMap's private data and heaps). Known candidates, all under Idle, start-up
+   and memory: history thumbnails (about 70 MB at 300 entries), the CJK fonts copied into native memory (30 MB), and
+   what ONNX Runtime keeps after OCR unloads (6-12 MB, measured).
+3. **DirectML after background removal and smart selection** (under OCR, AI and translation): U2Net and SAM2 on the
+   CPU against DirectML, measured like OCR's opt-in test (real models, a real size, a fresh process each, twice), and
+   `BackgroundRemovalService`'s five-minute device hold.
+4. **NVENC** only if the user wants a child process: nothing in-process helped (under Idle, start-up and memory).
+
+What made the numbers trustworthy: private bytes after two `GC.Collect`s, one fresh test process per variant, each run
+twice, at the real capture size with real work. A 640x480 probe that encoded nothing made Direct3D 11 look as if it
+saved 190 MB per recording; a 3968x1160 run with frames showed it saved nothing.
+
 ## Hand checks still owed for batch 1
 
 These were covered by unit tests only; check them in the real app before a release.
