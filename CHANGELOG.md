@@ -13,6 +13,9 @@
 
 ### 🛡️ Reliability
 
+- **Exporting a long video no longer hangs while building its sound.** Past about 93 minutes of audio the buffer that
+  holds it stopped growing and the export spun forever, ignoring Cancel. Each kept part of a trim now also decodes just
+  its own sound, rather than everything from its start to the end of the file.
 - **Recordings saved as WebM keep their full length.** The conversion closed up gaps where the capture missed frames,
   so the picture ran short of the sound. Each frame now keeps the time it was captured.
 - **Compressed and trimmed videos stay in step with their sound on 29.97 fps and variable-frame-rate sources.** The

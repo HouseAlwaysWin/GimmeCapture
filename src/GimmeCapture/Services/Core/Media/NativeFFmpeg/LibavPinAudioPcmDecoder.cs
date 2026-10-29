@@ -16,11 +16,72 @@ internal static class LibavPinAudioPcmDecoder
 {
     internal sealed record DecodeResult(byte[] PcmBytes, WaveFormat WaveFormat);
 
-    internal static DecodeResult Decode(string path, double startSeconds, CancellationToken cancellationToken = default)
+    // Output is always 16-bit stereo.
+    private const int OutputBytesPerSampleFrame = 4;
+
+    // How far past a range's end the demuxer may read before giving up on filling it, for audio with a hole in it.
+    private const double ReadPastRangeEndSeconds = 1.0;
+
+    private const int InitialPcmCapacity = 16 * 1024;
+
+    internal static DecodeResult Decode(string path, double startSeconds, CancellationToken cancellationToken = default) =>
+        DecodeRange(path, startSeconds, double.PositiveInfinity, cancellationToken);
+
+    /// <summary>
+    /// Decodes <paramref name="durationSeconds"/> of audio from <paramref name="startSeconds"/>, and stops reading the
+    /// file there instead of decoding on to its end. The clip exporter builds an export's audio one kept range at a
+    /// time with it; decoding to the end and keeping only the range cost a trim with many ranges a decode of the rest of
+    /// the file for each one.
+    /// </summary>
+    internal static DecodeResult DecodeRange(
+        string path, double startSeconds, double durationSeconds, CancellationToken cancellationToken = default)
     {
         using var accumulator = new PooledByteAccumulator();
-        WaveFormat wf = DecodeCore(path, startSeconds, onFormat: null, accumulator, waitIfFull: null, cancellationToken);
+        WaveFormat wf = DecodeCore(path, startSeconds, durationSeconds, onFormat: null, accumulator, waitIfFull: null, cancellationToken);
         return new DecodeResult(accumulator.ToArray(), wf);
+    }
+
+    /// <summary>
+    /// The PCM a range of <paramref name="durationSeconds"/> keeps at <paramref name="sampleRate"/>, rounded to whole
+    /// sample frames the way the clip exporter has always cut it. Unbounded for an open-ended decode.
+    /// </summary>
+    internal static long RangeByteLimit(double durationSeconds, int sampleRate)
+    {
+        if (double.IsPositiveInfinity(durationSeconds))
+        {
+            return long.MaxValue;
+        }
+
+        long bytes = (long)Math.Round(Math.Max(0, durationSeconds) * sampleRate * OutputBytesPerSampleFrame);
+        return bytes - (bytes % OutputBytesPerSampleFrame);
+    }
+
+    /// <summary>
+    /// The size to grow a PCM buffer of <paramref name="currentCapacity"/> bytes to so it holds <paramref name="required"/>:
+    /// doubling from 16 KiB, worked out in long arithmetic and capped at the largest array .NET allows. Doubled as an int,
+    /// the size wrapped to int.MinValue and then 0 once it passed 1 GiB (about 93 minutes of 48 kHz stereo), and the loop
+    /// growing it spun forever. Past the largest array it now says so instead.
+    /// </summary>
+    internal static int GrowPcmCapacity(int currentCapacity, long required)
+    {
+        if (required <= currentCapacity)
+        {
+            return currentCapacity;
+        }
+
+        if (required > Array.MaxLength)
+        {
+            throw new InvalidOperationException(
+                $"The decoded audio needs {required:N0} bytes, more than one buffer can hold ({Array.MaxLength:N0} bytes).");
+        }
+
+        long size = Math.Max(currentCapacity, InitialPcmCapacity);
+        while (size < required)
+        {
+            size *= 2;
+        }
+
+        return (int)Math.Min(size, Array.MaxLength);
     }
 
     /// <summary>
@@ -39,14 +100,15 @@ internal static class LibavPinAudioPcmDecoder
         CancellationToken cancellationToken)
     {
         using var sink = new StreamingPcmSink(onPcm);
-        DecodeCore(path, startSeconds, onFormat, sink, waitIfFull, cancellationToken);
+        DecodeCore(path, startSeconds, double.PositiveInfinity, onFormat, sink, waitIfFull, cancellationToken);
     }
 
     private static unsafe WaveFormat DecodeCore(
         string path,
         double startSeconds,
+        double durationSeconds,
         Action<WaveFormat>? onFormat,
-        IPcmChunkSink pcmBuffer,
+        IPcmChunkSink output,
         Action? waitIfFull,
         CancellationToken cancellationToken)
     {
@@ -70,6 +132,16 @@ internal static class LibavPinAudioPcmDecoder
             if (audioIx < 0)
             {
                 throw new InvalidOperationException("No audio stream.");
+            }
+
+            // Only the audio is wanted, so the demuxer skips the other streams' packets (a video's, mostly) rather than
+            // reading each one in for this loop to throw away.
+            for (int i = 0; i < (int)fmt->nb_streams; i++)
+            {
+                if (i != audioIx)
+                {
+                    fmt->streams[i]->discard = AVDiscard.AVDISCARD_ALL;
+                }
             }
 
             AVStream* ast = fmt->streams[audioIx];
@@ -135,7 +207,12 @@ internal static class LibavPinAudioPcmDecoder
 
             long startSample = startSeconds > 0 ? (long)Math.Round(startSeconds * sampleRate) : 0;
 
-            while (true)
+            // A range is done once its samples are in. Reading also stops a little past its end, so audio with a hole in
+            // it does not send the demuxer on to the end of the file looking for samples that are not there.
+            var pcmBuffer = new RangeLimitedSink(output, RangeByteLimit(durationSeconds, sampleRate));
+            double stopReadingAtSeconds = startSeconds + durationSeconds + ReadPastRangeEndSeconds;
+
+            while (!pcmBuffer.IsFull)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 waitIfFull?.Invoke(); // consumer backpressure — bounds memory in the streaming path (no-op for Decode)
@@ -157,6 +234,13 @@ internal static class LibavPinAudioPcmDecoder
                 {
                     ffmpeg.av_packet_unref(pkt);
                     continue;
+                }
+
+                long packetTs = pkt->pts != ffmpeg.AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
+                if (packetTs != ffmpeg.AV_NOPTS_VALUE && packetTs * ffmpeg.av_q2d(ast->time_base) > stopReadingAtSeconds)
+                {
+                    ffmpeg.av_packet_unref(pkt);
+                    break;
                 }
 
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "pin_audio_send_packet");
@@ -363,6 +447,33 @@ internal static class LibavPinAudioPcmDecoder
         unsafe void Append(byte* data, int byteLength);
     }
 
+    /// <summary>Passes converted chunks on until a range's bytes are in, and drops the rest.</summary>
+    private sealed class RangeLimitedSink : IPcmChunkSink
+    {
+        private readonly IPcmChunkSink _inner;
+        private long _remaining;
+
+        public RangeLimitedSink(IPcmChunkSink inner, long maxBytes)
+        {
+            _inner = inner;
+            _remaining = maxBytes;
+        }
+
+        public bool IsFull => _remaining <= 0;
+
+        public unsafe void Append(byte* data, int byteLength)
+        {
+            int take = (int)Math.Min(byteLength, _remaining);
+            if (take <= 0)
+            {
+                return;
+            }
+
+            _inner.Append(data, take);
+            _remaining -= take;
+        }
+    }
+
     /// <summary>Streaming sink: copies each converted chunk into a reusable managed buffer and hands it to the
     /// consumer synchronously. No full-file buffering.</summary>
     private sealed class StreamingPcmSink : IPcmChunkSink, IDisposable
@@ -411,7 +522,7 @@ internal static class LibavPinAudioPcmDecoder
 
         public unsafe void Append(byte* source, int byteLength)
         {
-            EnsureCapacity(_length + byteLength);
+            EnsureCapacity((long)_length + byteLength);
             fixed (byte* destination = &_buffer[_length])
             {
                 Buffer.MemoryCopy(source, destination, _buffer.Length - _length, byteLength);
@@ -432,20 +543,14 @@ internal static class LibavPinAudioPcmDecoder
             return result;
         }
 
-        private void EnsureCapacity(int required)
+        private void EnsureCapacity(long required)
         {
             if (_buffer.Length >= required)
             {
                 return;
             }
 
-            int newSize = _buffer.Length == 0 ? 16 * 1024 : _buffer.Length;
-            while (newSize < required)
-            {
-                newSize *= 2;
-            }
-
-            byte[] newBuffer = ArrayPool<byte>.Shared.Rent(newSize);
+            byte[] newBuffer = ArrayPool<byte>.Shared.Rent(GrowPcmCapacity(_buffer.Length, required));
             if (_length > 0)
             {
                 _buffer.AsSpan(0, _length).CopyTo(newBuffer);

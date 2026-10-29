@@ -1267,8 +1267,10 @@ internal static class LibavClipExporter
             foreach (SourceRange range in ranges)
             {
                 ct.ThrowIfCancellationRequested();
+                // Just this range: the decode stops at its end rather than running on to the end of the file, which
+                // a trim with many kept ranges used to pay for once per range.
                 LibavPinAudioPcmDecoder.DecodeResult decoded =
-                    LibavPinAudioPcmDecoder.Decode(inputPath, range.StartSeconds, ct);
+                    LibavPinAudioPcmDecoder.DecodeRange(inputPath, range.StartSeconds, range.Duration, ct);
                 if (decoded.PcmBytes.Length == 0)
                 {
                     continue;
