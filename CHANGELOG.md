@@ -13,6 +13,8 @@
 
 ### 🛡️ Reliability
 
+- **Mosaic and blur on a frozen screenshot preview the frozen picture.** They previewed the live screen while the
+  frozen picture is what gets saved, so the preview could show what had changed since the freeze.
 - **A mosaic or blur preview can no longer show scrambled pixels or close the app.** It read the picture from a buffer
   the idle memory clean-up could move mid-read. The picture now goes straight to where the preview reads it, which also
   saves a full-size copy, 33 MB at 4K.

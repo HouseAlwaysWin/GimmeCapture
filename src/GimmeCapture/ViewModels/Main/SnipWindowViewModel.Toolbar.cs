@@ -13,6 +13,8 @@ using System.Threading.Tasks;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
+using GimmeCapture.Services.Core.Rendering;
+using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.ViewModels.Shared;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -173,12 +175,10 @@ public partial class SnipWindowViewModel
         int captureVersion = ++_selectionSnapshotCaptureVersion;
         _ = Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            Avalonia.Media.Imaging.WriteableBitmap? snapshot = null;
+            Avalonia.Media.Imaging.Bitmap? snapshot = null;
             try
             {
-                snapshot = CaptureDrawingModeSnapshotAsync != null
-                    ? await CaptureDrawingModeSnapshotAsync()
-                    : await _captureService.CaptureRegionBitmapAsync(SelectionRect, ScreenOffset, VisualScaling);
+                snapshot = await CaptureDrawingSourceAsync();
 
                 if (snapshot == null)
                 {
@@ -214,6 +214,46 @@ public partial class SnipWindowViewModel
             }
         });
     }
+
+    /// <summary>
+    /// The selection's pixels, which mosaic and blur sample while they are drawn. A frozen overlay crops them from its
+    /// still, as its export does: the live grab it used showed whatever was on screen by then, so the preview and the
+    /// saved picture could disagree. Live, the overlay is kept out of a grab of the screen.
+    /// </summary>
+    private async Task<Avalonia.Media.Imaging.Bitmap?> CaptureDrawingSourceAsync()
+    {
+        using (FrozenFrameLease? lease = Surface.LeaseFrozenStill())
+        {
+            if (lease != null)
+            {
+                Rect selection = SelectionRect;
+                return await Task.Run(() => CropFrozenStill(lease, selection));
+            }
+        }
+
+        return CaptureDrawingModeSnapshotAsync != null
+            ? await CaptureDrawingModeSnapshotAsync()
+            : await _captureService.CaptureRegionBitmapAsync(SelectionRect, ScreenOffset, VisualScaling);
+    }
+
+    // The selection cut from the frozen still at the scaling it was grabbed at, as the export crops it; null for a
+    // selection under a pixel, like the live grab.
+    private static Avalonia.Media.Imaging.Bitmap? CropFrozenStill(FrozenFrameLease lease, Rect selection)
+    {
+        if ((int)(selection.Width * lease.GrabScaling) <= 0 || (int)(selection.Height * lease.GrabScaling) <= 0)
+        {
+            return null;
+        }
+
+        using SkiaSharp.SKBitmap crop = FreezeFrameCompositor.CropWithAnnotations(
+            lease.Still, selection, lease.GrabScaling, annotations: null);
+        return FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(crop, out var bitmap, out _)
+            ? bitmap
+            : null;
+    }
+
+    /// <summary>Test hook: the drawing source <see cref="IsDrawingMode"/> takes, without the dispatcher.</summary>
+    internal Task<Avalonia.Media.Imaging.Bitmap?> CaptureDrawingSourceForTestAsync() => CaptureDrawingSourceAsync();
 
     private void DisposeDrawingModeSnapshot()
     {
