@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 25 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 26 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -49,6 +49,12 @@ tool.
   second one, left from 7c54042c, when the first could be skipped. One Esc started 2 scans before and 1 after (a
   view-model test with a counting scan service, run against both). A frozen still also keeps the boxes found on it
   (`_ocrResultsStill`), so a return to Detecting on it shows them again with no scan and no 8 MB copy on the UI thread.
+- Done since batch 1, the user's call: **no more EmptyWorkingSet**. Found in the user's 0.70.0 log: the first capture
+  three hours after an idle trim (working set 218 MB to 7.6 MB, private bytes 651 MB both before and after) logged
+  `SnipOpen.Timings waitedForUiThread=731 window=1252 viewModel=249 freezeGrab=246 show=485` (usually 13-67, 1-74,
+  51-73, 14-107) and a 4.1 s `UiStall` at 4% CPU: page-ins from the page file. `ProcessMemoryTrimService` no longer
+  empties the working set on Windows; the full trim keeps its compacting GC, and Linux keeps `malloc_trim`
+  (`CanReturnFreedMemory`). Task Manager's Memory column now shows a few hundred MB idle instead of a few MB.
 
 ## Hand checks still owed for batch 1
 
@@ -73,6 +79,9 @@ These were covered by unit tests only; check them in the real app before a relea
   stand-in for it.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
+- **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a
+  capture hotkey. `SnipOpen.Timings` should be close to the usual ~0.1 s, with no multi-second `UiStall`, and no more
+  `MemoryTrim.WorkingSet*` lines. Only one such press has been measured, before the change.
 
 ## How to run a batch
 

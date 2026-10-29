@@ -14,29 +14,28 @@ public static class ProcessMemoryTrimService
     private static readonly IdleMemoryTrimScheduler FullTrimScheduler = new(TrimCore);
     private static readonly IdleMemoryTrimScheduler WorkingSetTrimScheduler = new(TrimWorkingSetCore);
 
-    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    [DllImport("psapi.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool EmptyWorkingSet(IntPtr hProcess);
-
-    // glibc: returns freed heap pages (allocator arenas) to the OS. This is the Linux counterpart of
-    // EmptyWorkingSet — without it, native memory freed by e.g. an unloaded llama.cpp model stays in
-    // the process RSS indefinitely. Not part of POSIX: absent on musl and macOS, hence the flag below.
+    // glibc: returns freed heap pages (allocator arenas) to the OS — without it, native memory freed by e.g. an
+    // unloaded llama.cpp model stays in the process RSS indefinitely. Not part of POSIX: absent on musl and macOS,
+    // hence the flag below.
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     [DllImport("libc", EntryPoint = "malloc_trim")]
     private static extern int MallocTrim(nuint pad);
 
     private static volatile bool _mallocTrimUnavailable;
 
-    /// <summary>Best-effort "give freed memory back to the OS" step shared by both trim flavors.</summary>
-    private static void ReturnFreedMemoryToOs(Process process)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            _ = EmptyWorkingSet(process.Handle);
-            return;
-        }
+    /// <summary>
+    /// Whether this platform holds on to freed memory that a trim can hand back: glibc's allocator keeps freed pages
+    /// until asked. Windows has nothing to do. Its heap returns large blocks as they are freed, and EmptyWorkingSet,
+    /// which ran here, freed nothing: private bytes stayed the same (651 MB before and after) while the whole process
+    /// was moved out of RAM. Hours later Windows had given that RAM away, and the next capture read it all back from
+    /// the page file first: its overlay took 2.3 s to open, and the UI thread sat 4.1 s waiting at 4% CPU. Windows
+    /// still takes an idle app's RAM back by itself when another program needs it.
+    /// </summary>
+    internal static bool CanReturnFreedMemory => OperatingSystem.IsLinux() && !_mallocTrimUnavailable;
 
+    /// <summary>Best-effort "give freed memory back to the OS" step shared by both trim flavors.</summary>
+    private static void ReturnFreedMemoryToOs()
+    {
         if (OperatingSystem.IsLinux() && !_mallocTrimUnavailable)
         {
             try
@@ -56,8 +55,9 @@ public static class ProcessMemoryTrimService
     ///
     /// This used to be seconds — 5 s after the capture overlay closed, 30 s for a full trim — which made a normal
     /// working rhythm (capture, look at it, capture again) pay for a trim between captures. A real session shows
-    /// what that costs: <c>EmptyWorkingSet</c> took the process from 593 MB of working set to 5.8 MB with private
-    /// bytes unchanged, so the next capture had to fault all of it back in, and the full trim's blocking,
+    /// what that cost: emptying the working set, which no trim does any more (<see cref="CanReturnFreedMemory"/>),
+    /// took the process from 593 MB to 5.8 MB with private bytes unchanged, so the next capture had to fault all of
+    /// it back in, and the full trim's blocking,
     /// compacting gen2 GC pauses every thread — the UI one included. A trim is now what the name always claimed:
     /// an IDLE-time reclaim, not a between-captures one.
     /// </summary>
@@ -81,11 +81,20 @@ public static class ProcessMemoryTrimService
             ct);
     }
 
+    /// <summary>
+    /// Hands freed native memory back to the OS once the app is idle, where the platform keeps it
+    /// (<see cref="CanReturnFreedMemory"/>). Elsewhere there is nothing to do, and nothing is scheduled.
+    /// </summary>
     public static Task<bool> RequestIdleWorkingSetTrimAsync(
         string reason,
         TimeSpan? delay = null,
         CancellationToken ct = default)
     {
+        if (!CanReturnFreedMemory)
+        {
+            return Task.FromResult(false);
+        }
+
         return WorkingSetTrimScheduler.RequestTrimAsync(
             reason,
             ClampToIdleWindow(delay),
@@ -109,10 +118,7 @@ public static class ProcessMemoryTrimService
             GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
             GC.WaitForPendingFinalizers();
             GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
-
-            using var process = Process.GetCurrentProcess();
-            ReturnFreedMemoryToOs(process);
-            process.Refresh();
+            ReturnFreedMemoryToOs();
 
             var after = CaptureSnapshot();
             AppLog.Information($"MemoryTrim.After.{reason}.{after}");
@@ -131,9 +137,7 @@ public static class ProcessMemoryTrimService
             var before = CaptureSnapshot();
             AppLog.Information($"MemoryTrim.WorkingSetBefore.{reason}.{before}");
 
-            using var process = Process.GetCurrentProcess();
-            ReturnFreedMemoryToOs(process);
-            process.Refresh();
+            ReturnFreedMemoryToOs();
 
             var after = CaptureSnapshot();
             AppLog.Information($"MemoryTrim.WorkingSetAfter.{reason}.{after}");

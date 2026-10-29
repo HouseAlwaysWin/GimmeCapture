@@ -288,8 +288,9 @@ public partial class SnipWindow : Window
         _viewModel?.TranslationResultLayer?.RefreshWindowState();
 
         // The snip/record/translate overlay held large capture/preview buffers (a full-screen grab is tens of
-        // MB), now released. The app usually returns to idle/tray after a capture, so reclaim the working set
-        // like the main-window→tray path does. The scheduler skips this if the user is immediately active again.
+        // MB), now released. On Linux the C allocator keeps freed pages until asked to hand them back, which this
+        // does once the app is idle, like the main-window→tray path; Windows returns them as they are freed, and
+        // nothing is scheduled there. The scheduler skips this if the user is immediately active again.
         _ = GimmeCapture.Services.Core.Infrastructure.ProcessMemoryTrimService
             .RequestIdleWorkingSetTrimAsync("snip-overlay-closed");
 

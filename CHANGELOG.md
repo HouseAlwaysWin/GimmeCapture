@@ -92,6 +92,13 @@
   same size so the real one is quick, and the graphics card stays set up for five minutes after the last use. In the
   same measurement the boxes come up after 0.5 s within those five minutes, 0.7 s after them and 0.85 s on the first
   capture after launch. Changing the OCR language also reloads only that language's reader.
+- **The first capture after the computer has sat idle no longer freezes the app for seconds.** Five minutes after its
+  last use the app emptied its working set, which moved all of its memory out of RAM without freeing any of it. Hours
+  later Windows had given that RAM to other programs, so the next capture hotkey first had to read the app back from
+  the page file: one press measured the capture overlay taking 2.3 s to open and the app not responding for 4.1 s. The
+  app no longer does this, and Windows still takes an idle app's memory back by itself when another program needs it.
+  Task Manager's Memory column now shows a few hundred MB while the app sits idle, where it showed a few MB; what the
+  app holds, its commit size, is the same as before.
 - **Clearing a selection with Esc no longer looks for text in the capture twice.** Esc takes the capture overlay back
   to choosing a region, which starts a text scan, and a leftover second start ran the same detection again right
   behind the first. On a frozen screen, where the picture cannot change, the text boxes already found now come back at
