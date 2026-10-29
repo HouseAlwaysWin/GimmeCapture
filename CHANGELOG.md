@@ -30,6 +30,9 @@
   after it played early against the picture, and a recording made while nothing played had no system audio at all.
   The app now plays silence of its own to the same device while it records, which keeps the sound coming without
   being heard.
+- **Queued files keep their output category after the app closes.** Closing the app, once the Compress tab had been
+  opened, cleared the output category chosen for each file in its queue and saved that, so the files came back with
+  the default folder at the next start.
 - **Recorded sound starts with the picture and stays with it after a pause.** A recording takes its sound in 50-70 ms
   pieces and kept or dropped each piece whole, so the sound could start up to 68 ms (38 on average) before the first
   frame and played that much behind the picture. Pieces are now cut where the picture starts, which puts the two
@@ -92,6 +95,10 @@
   same size so the real one is quick, and the graphics card stays set up for five minutes after the last use. In the
   same measurement the boxes come up after 0.5 s within those five minutes, 0.7 s after them and 0.85 s on the first
   capture after launch. Changing the OCR language also reloads only that language's reader.
+- **Opening the Compress tab with a long queue no longer freezes the app.** The queue built a row for every file at
+  once, each with two dropdowns and eight buttons, though its box shows four or five: a 79-file queue came to 9,300
+  controls and froze the app for 0.77 s the first time the tab opened. Only the rows in view are built now, and the
+  rest as they scroll in.
 - **The first capture after the computer has sat idle no longer freezes the app for seconds.** Five minutes after its
   last use the app emptied its working set, which moved all of its memory out of RAM without freeing any of it. Hours
   later Windows had given that RAM to other programs, so the next capture hotkey first had to read the app back from

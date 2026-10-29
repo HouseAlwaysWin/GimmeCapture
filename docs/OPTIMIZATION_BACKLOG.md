@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 26 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 28 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -55,6 +55,13 @@ tool.
   51-73, 14-107) and a 4.1 s `UiStall` at 4% CPU: page-ins from the page file. `ProcessMemoryTrimService` no longer
   empties the working set on Windows; the full trim keeps its compacting GC, and Linux keeps `malloc_trim`
   (`CanReturnFreedMemory`). Task Manager's Memory column now shows a few hundred MB idle instead of a few MB.
+- Done since batch 1: **the Compress tab's first open**. The user's log: a 0.77 s `UiStall` (94% CPU, GC +10/+9/+2)
+  opening the tab with a 79-file queue. The queue was a plain `ItemsControl`, so every row was built. Headless
+  (`SettingsCompressTabTests`, COMPRESS_TAB_PROBE=1, Debug): 79 rows, 9,306 visuals, 144-152 MB, a warm build of
+  1.26-1.98 s before; 3 rows, 566 visuals, 8-11 MB, 122-153 ms with a `VirtualizingStackPanel`. The same test found
+  that closing the window wrote null into every built row's preset and category (the ComboBoxes lose their
+  `$parent` options first), and the category is saved on change, so queued files lost it at exit:
+  `IgnoreNullWriteBackConverter` drops those writes. Switching tabs and hiding the window never did it.
 
 ## Hand checks still owed for batch 1
 
@@ -82,6 +89,8 @@ These were covered by unit tests only; check them in the real app before a relea
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a
   capture hotkey. `SnipOpen.Timings` should be close to the usual ~0.1 s, with no multi-second `UiStall`, and no more
   `MemoryTrim.WorkingSet*` lines. Only one such press has been measured, before the change.
+- **Compress tab**: open it with the long queue: no `UiStall`, and scrolling the queue shows each file's own preset and
+  category. Pick a category for a file, exit from the tray, start again: the category is still there.
 
 ## How to run a batch
 

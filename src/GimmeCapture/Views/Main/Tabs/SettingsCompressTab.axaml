@@ -123,6 +123,14 @@
                                 MinHeight="48" Padding="6">
                             <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,14,0">
                                 <ItemsControl ItemsSource="{Binding CompressQueue}">
+                                <!-- Only the rows in view are built. A plain stack built every row the first time the tab
+                                     opened: 79 files came to 9,300 controls and a 0.77 s freeze, for the four or five
+                                     rows this 240-pixel window shows. -->
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="models:CompressQueueItem">
                                         <!-- Hairline separator between rows -->
@@ -183,7 +191,7 @@
                                                 <!-- Per-item output-settings bundle (a bundle overrides the live
                                                      輸出設定 for this file; "current settings" keeps them). -->
                                                 <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).BatchPresetChoices}"
-                                                          SelectedItem="{Binding SelectedPreset}"
+                                                          SelectedItem="{Binding SelectedPreset, Converter={x:Static converters:IgnoreNullWriteBackConverter.Instance}}"
                                                           IsEnabled="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
                                                           FontSize="10" MinWidth="120" VerticalAlignment="Center">
                                                     <ComboBox.ItemTemplate>
@@ -203,7 +211,7 @@
                                                      of the active working area; the empty sentinel keeps the global /
                                                      next-to-source default. Entries show the category (leaf) name. -->
                                                 <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).CompressCategoryChoices}"
-                                                          SelectedItem="{Binding SelectedOutputDir}"
+                                                          SelectedItem="{Binding SelectedOutputDir, Converter={x:Static converters:IgnoreNullWriteBackConverter.Instance}}"
                                                           IsEnabled="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
                                                           FontSize="10" MinWidth="96" MaxWidth="150" VerticalAlignment="Center"
                                                           ToolTip.Tip="{Binding [CompressItemOutputDirTip], Source={x:Static services:LocalizationService.Instance}}">
