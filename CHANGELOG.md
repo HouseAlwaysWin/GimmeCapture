@@ -13,6 +13,11 @@
 
 ### 🛡️ Reliability
 
+- **Recordings keep their system audio in step after a quiet stretch.** While nothing played, Windows handed the
+  recording no system audio at all, not even silence: that stretch went missing from the sound track, every sound
+  after it played early against the picture, and a recording made while nothing played had no system audio at all.
+  The app now plays silence of its own to the same device while it records, which keeps the sound coming without
+  being heard.
 - **Exporting a long clip as a GIF no longer fills up the computer's memory.** The export kept every frame of the clip
   in memory until it reached the last one, over 1 GB a minute at Medium quality and about 12 GB a minute of 1080p at
   High, whether recording as GIF, saving a pin as GIF or compressing to GIF. It now reads the clip twice, once to pick

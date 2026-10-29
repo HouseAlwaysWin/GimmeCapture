@@ -12,6 +12,20 @@ public partial class RecordingService
     private LinuxPulseAudioRecorder? _linuxSystemAudio;
     private LinuxPulseAudioRecorder? _linuxMic;
 
+    // WASAPI loopback hands over nothing at all while no stream renders to its endpoint: no packets, not even silent
+    // ones, and nothing fills that stretch in from timestamps. A stretch where nothing played went missing from the
+    // system-audio track, so every sound after it played early against the picture. A stream of our own rendering
+    // zeros to the same endpoint, open for as long as the capture, keeps the packets coming (OBS does the same).
+    private ISystemAudioEndpoint? _systemAudioEndpoint;
+    private IDisposable? _systemAudioKeepAlive;
+    private Func<ISystemAudioEndpoint> _openSystemAudioEndpoint = WasapiSystemAudioEndpoint.OpenDefault;
+
+    /// <summary>
+    /// Test seam: tests have no audio device, so they hand in a stand-in endpoint and check what is opened on it and in
+    /// which order. Production never calls this.
+    /// </summary>
+    internal void UseSystemAudioEndpointForTest(Func<ISystemAudioEndpoint> open) => _openSystemAudioEndpoint = open;
+
     private bool TryStartLinuxPulse(string wavPath, string source, ref LinuxPulseAudioRecorder? slot, Func<bool> isMuted)
     {
         slot?.Dispose();
@@ -33,7 +47,7 @@ public partial class RecordingService
         slot = null;
     }
 
-    private bool TryStartAudioCapture(string audioSegmentPath)
+    internal bool TryStartAudioCapture(string audioSegmentPath)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -43,11 +57,16 @@ public partial class RecordingService
         try
         {
             StopAudioCapture();
-            _audioCapture = new WasapiLoopbackCapture();
+            _systemAudioEndpoint = _openSystemAudioEndpoint();
+            _audioCapture = _systemAudioEndpoint.CreateLoopbackCapture();
             var captureFormat = _audioCapture.WaveFormat;
             var writerFormat = new WaveFormat(captureFormat.SampleRate, 16, captureFormat.Channels);
             _audioWriter = new WaveFileWriter(audioSegmentPath, writerFormat);
-            LogToFile($"[Audio] Start loopback capture: {audioSegmentPath}, captureFormat={captureFormat}, writerFormat={writerFormat}");
+
+            // Before the capture starts, so it has a stream to carry from its first packet on. In the capture's format,
+            // which is the endpoint's own mix format, so there is nothing to convert.
+            _systemAudioKeepAlive = TryStartSilence(_systemAudioEndpoint, captureFormat);
+            LogToFile($"[Audio] Start loopback capture: {audioSegmentPath}, captureFormat={captureFormat}, writerFormat={writerFormat}, keepAlive={_systemAudioKeepAlive != null}");
             _audioCapture.DataAvailable += (_, e) =>
             {
                 TryWriteAudioBuffer(e.Buffer, e.BytesRecorded, captureFormat, writerFormat);
@@ -64,7 +83,22 @@ public partial class RecordingService
         }
     }
 
-    private void StopAudioCapture()
+    // Best effort: without it the recording goes on as before, and only a stretch where nothing plays can drop out of
+    // the system audio. A warning, since that is something the user would hear.
+    private static IDisposable? TryStartSilence(ISystemAudioEndpoint endpoint, WaveFormat format)
+    {
+        try
+        {
+            return endpoint.StartSilence(format);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Recording.SystemAudioKeepAlive", ex);
+            return null;
+        }
+    }
+
+    internal void StopAudioCapture()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -234,9 +268,14 @@ public partial class RecordingService
 
         TryExecute("Dispose loopback capture", () => _audioCapture?.Dispose());
         TryExecute("Dispose wave writer", () => _audioWriter?.Dispose());
+        // Closed after the capture it kept delivering. A failed start comes through here too, so none is left open.
+        TryExecute("Stop silent keep-alive stream", () => _systemAudioKeepAlive?.Dispose());
+        TryExecute("Release system audio endpoint", () => _systemAudioEndpoint?.Dispose());
 
         _audioCapture = null;
         _audioWriter = null;
+        _systemAudioKeepAlive = null;
+        _systemAudioEndpoint = null;
 
         if (firstException != null)
         {
@@ -311,5 +350,69 @@ public partial class RecordingService
             AppLog.Debug("RecordingService.Audio", $"Write loopback audio buffer failed: {ex.Message}");
             LogToFile($"[Audio] Write buffer failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// The render endpoint system audio is recorded from: a loopback capture of what it plays, and a stream of silence
+    /// of our own that keeps that capture delivering while nothing else plays.
+    /// </summary>
+    internal interface ISystemAudioEndpoint : IDisposable
+    {
+        IWaveIn CreateLoopbackCapture();
+
+        /// <summary>
+        /// Starts rendering zeros in <paramref name="format"/> to the endpoint. Disposing the result stops it.
+        /// </summary>
+        IDisposable StartSilence(WaveFormat format);
+    }
+
+    /// <summary>
+    /// The default render endpoint: the one a <see cref="WasapiLoopbackCapture"/> records when given none.
+    /// </summary>
+    internal sealed class WasapiSystemAudioEndpoint : ISystemAudioEndpoint
+    {
+        private readonly MMDevice _device;
+
+        private WasapiSystemAudioEndpoint(MMDevice device) => _device = device;
+
+        // Looked up once for both, so the silent stream plays on the device the capture records even if the default
+        // changes in between.
+        public static ISystemAudioEndpoint OpenDefault()
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            return new WasapiSystemAudioEndpoint(enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia));
+        }
+
+        public IWaveIn CreateLoopbackCapture() => new WasapiLoopbackCapture(_device);
+
+        public IDisposable StartSilence(WaveFormat format)
+        {
+            // Shared mode mixes it in with whatever else plays, and zeros add nothing to that mix: nothing is heard,
+            // and the capture records what it did before, only without the gaps. Event-driven: closing it takes about
+            // one device period (11 ms measured), where polling took 70 ms.
+            var output = new WasapiOut(_device, AudioClientShareMode.Shared, useEventSync: true, latency: 200);
+            try
+            {
+                output.PlaybackStopped += (_, e) =>
+                {
+                    // Only a failure carries an exception, such as the device going away mid-recording; a stop asked
+                    // for does not.
+                    if (e.Exception != null)
+                    {
+                        AppLog.Warning("Recording.SystemAudioKeepAlive", e.Exception);
+                    }
+                };
+                output.Init(new SilenceProvider(format));
+                output.Play();
+                return output;
+            }
+            catch
+            {
+                output.Dispose();
+                throw;
+            }
+        }
+
+        public void Dispose() => _device.Dispose();
     }
 }

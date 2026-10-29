@@ -69,7 +69,7 @@ public partial class RecordingService : ReactiveObject
     private bool _isFinalizing;
     private double _finalizationProgress;
     private string _tempDir = string.Empty;
-    private WasapiLoopbackCapture? _audioCapture;
+    private IWaveIn? _audioCapture;
     private WaveFileWriter? _audioWriter;
     private NAudio.CoreAudioApi.WasapiCapture? _micCapture;
     private WaveFileWriter? _micWriter;

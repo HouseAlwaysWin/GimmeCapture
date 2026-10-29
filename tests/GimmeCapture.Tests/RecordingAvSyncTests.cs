@@ -177,16 +177,10 @@ public sealed class RecordingAvSyncTests
 
         private async void RunAsync()
         {
-            // WASAPI loopback hands over no packets while nothing is rendering, so on a quiet machine the recording
-            // would have no audio track at all — a different failure from the one this measures. Rendering silence
-            // keeps the endpoint delivering, without a sound from the speakers.
-            using var silence = new NAudio.Wave.WaveOutEvent();
+            // No silence of the test's own: on a quiet machine WASAPI loopback hands over no packets while nothing renders,
+            // and the recording keeps its system audio delivering itself, which this measures along with the rest.
             try
             {
-                silence.Init(new NAudio.Wave.SilenceProvider(new NAudio.Wave.WaveFormat(48000, 16, 2)));
-                silence.Play();
-                await Task.Delay(300); // let the render stream spin up before the first capture starts
-
                 var settings = new AppSettingsService(_root);
                 var service = new RecordingService(new FFmpegDownloaderService(settings), settings);
                 for (int i = 0; i < Recordings; i++)
