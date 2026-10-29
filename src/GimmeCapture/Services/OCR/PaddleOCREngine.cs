@@ -65,23 +65,6 @@ public class PaddleOCREngine : IOCREngine
     }
 
     /// <summary>
-    /// Runs detection once on a blank capture of this size. DirectML sets itself up on a session's first run, and again
-    /// for each new input size: a cold session's first detection took 260-300 ms, the next at the same size about
-    /// 10 ms, and one at another size 50-110 ms. Run while the overlay opens, it leaves the scan the fast run.
-    /// </summary>
-    public void WarmUpDetection(int captureWidth, int captureHeight)
-    {
-        using var use = _ocrRuntimeService.BeginSessionUse();
-        var detSession = use.Detection;
-        if (detSession == null || captureWidth <= 0 || captureHeight <= 0) return;
-
-        var (width, height) = DetectionInputSize(captureWidth, captureHeight);
-        var input = new DenseTensor<float>(new[] { 1, 3, height, width });
-        string inputName = detSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
-        using var outputs = detSession.Run(new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) });
-    }
-
-    /// <summary>
     /// The size detection runs at for a capture of <paramref name="width"/> x <paramref name="height"/>: the longer side
     /// brought down to 1280, then each side rounded up to a multiple of 32.
     /// </summary>
@@ -116,7 +99,12 @@ public class PaddleOCREngine : IOCREngine
 
         string inputName = detSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
-        using var outputs = detSession.Run(inputs);
+        // ONNX Runtime keeps what a run allocated, to hand to the next. For detection that was 255 MB of the 285 MB
+        // the loaded detector held at a two-screen capture's size, kept until the idle unload. Handing it back after
+        // each run costs a detection 8-13 ms (59 ms against 46).
+        using var runOptions = new RunOptions();
+        runOptions.AddRunConfigEntry("memory.enable_memory_arena_shrinkage", "cpu:0");
+        using var outputs = detSession.Run(inputs, detSession.OutputNames, runOptions);
         var outputTensor = outputs.AsValueEnumerable().First().AsTensor<float>();
 
         return FindBoxesFromMask(outputTensor, targetWidth, targetHeight, bitmap.Width, bitmap.Height);

@@ -87,14 +87,20 @@
   the Record tab whether AV1 and GIF recording are available ran at every start-up, a launch to the tray at login
   included. It now runs when the Record tab is first opened, or as an AV1 recording starts, and FFmpeg loads the first
   time a recording, a video pin or the Record tab needs it.
-- **A capture's text boxes come up about half a second sooner when OCR has been idle.** The capture overlay looked
-  for text only once it was on screen, and OCR, which unloads after two minutes unused, then loaded both its models,
-  though the overlay only finds text and never reads it, and ran its first detection slowly while the graphics card set
-  itself up. Opening a capture to its text boxes took about 1.2 s that way, and 1.4 s on the first capture after
-  launch. The overlay now loads text detection alone, starting as it opens, and runs it once on a blank picture of the
-  same size so the real one is quick, and the graphics card stays set up for five minutes after the last use. In the
-  same measurement the boxes come up after 0.5 s within those five minutes, 0.7 s after them and 0.85 s on the first
-  capture after launch. Changing the OCR language also reloads only that language's reader.
+- **A capture's text boxes come up sooner when OCR has been idle.** The capture overlay looked for text only once it
+  was on screen, and OCR, which unloads after two minutes unused, then loaded both its models, though the overlay only
+  finds text and never reads it, and ran its first detection slowly while the graphics card set itself up: 0.6-0.8 s
+  before the first box. The overlay now loads text detection alone, starting as it opens, which with its first
+  detection takes about 0.3 s, and 0.5 s on the first capture after launch. Changing the OCR language also reloads only
+  that language's reader.
+- **OCR no longer leaves hundreds of MB behind.** OCR ran on the graphics card through DirectML, which does not give
+  back all it allocates: the first capture that looked for text left the app about 270 MB larger until it closed, and
+  each one held 500-550 MB for the next five minutes. OCR now runs on the CPU, and text detection hands its working
+  memory back after each run: 40-50 MB while OCR is loaded, and about 10 MB once it unloads two minutes after the last
+  use. It is no slower where it counts. Reading 30 lines of text takes 0.5 s instead of 1.9 s, as the graphics card set
+  itself up again whenever the width of the text changed, and the first detection after OCR has been idle about 0.1 s
+  instead of 0.3-0.4 s; only a detection right after another is slower, about 70 ms instead of 16. On Linux, where OCR
+  already ran on the CPU, it now holds 40-50 MB while loaded instead of about 340.
 - **Opening the Compress tab with a long queue no longer freezes the app.** The queue built a row for every file at
   once, each with two dropdowns and eight buttons, though its box shows four or five: a 79-file queue came to 9,300
   controls and froze the app for 0.77 s the first time the tab opened. Only the rows in view are built now, and the

@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 28 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 29 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -43,7 +43,19 @@ tool.
   then one run on a blank capture of the scan's size), and `GpuDeviceHold` keeps the device for the 5-minute idle
   window. Open-to-boxes with the scan starting 450 ms after the open: first scan of a run 1.39-1.42 s before,
   0.84-0.85 after; after an idle unload 1.18-1.20 before, 0.50 after within 5 minutes and 0.66-0.74 past them. Logs
-  `OcrScan.Prepared` and `load=`/`detect=` on `OcrScan.Detected`.
+  `OcrScan.Prepared` and `load=`/`detect=` on `OcrScan.Detected`. The blank-capture run and OCR's `GpuDeviceHold`
+  went again with the move to the CPU (next entry).
+- Done since batch 1: **OCR on the CPU** (the backlog's "215 MB stays after the first DirectML use"). Measured with the
+  installed models on a 3968x1160 capture with 30 lines (Release tests; DirectML.dll copied beside them for the
+  DirectML runs): on DirectML the loaded detector kept 500 MB, both models 550, the held device 530 after the idle
+  unload and about 270 once it closed; on the CPU with ONNX Runtime's default arena 338, 350 and 52. Raw sessions showed
+  why. Detection's arena grew to 285 MB at 1280x384, and to 29-30 MB with `memory.enable_memory_arena_shrinkage` on
+  each run (59 ms a run instead of 46; with the arena off, 200 ms runs). DirectML recognition set itself up again
+  whenever the width changed: 31 widths twice took 930 ms against the CPU's 310. Now OCR's sessions are CPU-only,
+  detection runs with the shrink option, and the warm-up run is gone, since on the CPU it only made the scan wait for
+  it (58 ms in the user's log). After: 40, 51 and 8-12 MB; 30 lines read in 0.5 s instead of 1.9; a first detection
+  after a load 95-108 ms instead of 316-394, a later one 64-72 instead of 16. `OcrRuntimeServiceTests` has the opt-in
+  measurement (OCR_MODELS_DIR).
 - Done since batch 1: **OCR scans ran twice**. The user's log had two `OcrScan.Detected` lines 61-69 ms apart after
   most Esc presses: entering Detecting starts the scan (`SnipSelectionStateController`), and `DismissOrClose` started a
   second one, left from 7c54042c, when the first could be skipped. One Esc started 2 scans before and 1 after (a
@@ -81,9 +93,13 @@ These were covered by unit tests only; check them in the real app before a relea
   about 45-105 ms and `waited` a few ms. A recording paused once or twice should stay in step after each pause, which
   no test covers: the probe records single segments.
 - **Cold OCR scan**: open a capture after OCR has sat unused for more than two minutes. The log should show
-  `OcrScan.Prepared` (load and warm-up) and then `OcrScan.Detected` with a small `load=` and a `detect=` near 10 ms, and
-  the text boxes should come up about as the overlay appears. Nothing measured the real overlay's timing, only a
-  stand-in for it.
+  `OcrRuntime.SessionCreated: detection: CPU`, `OcrScan.Prepared` and then `OcrScan.Detected` with a small `load=` and
+  a `detect=` around 70-110 ms, and the text boxes should come up about as the overlay appears. Nothing measured the
+  real overlay's timing, only a stand-in for it.
+- **OCR memory** (a published build, which has DirectML.dll; a Debug build never ran OCR on DirectML): in Task
+  Manager's Details tab with the Commit size column, a capture with text boxes, then Translate or copy text, should add
+  tens of MB, not hundreds, and the commit size should fall back within two minutes. Translating a screenful of text
+  should not be slower than in 0.70.0.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a
@@ -119,10 +135,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **11 MB input tensor allocated per scan** (S). `PaddleOCREngine.cs:78`. Reuse belongs in `OcrRuntimeService`.
 - **Full-screen resize on the UI thread per OCR search** (S). `SnipWindowViewModel.Selection.AIScan.cs:216` resizes to
   1600 px (Mitchell), then `DetectText` resizes again to 1280. Do one resize, off the UI thread.
-- **About 215 MB of native memory stays after the first DirectML use** (measure first, then M-L). Private bytes go
-  131 MB at start, ~350-400 MB after one OCR snip, even after `OcrRuntime.Unloaded` and a trim (managed heap ~10 MB):
-  D3D12, driver and DirectML state the process cannot free. Measure OCR on the CPU execution provider (speed and
-  memory); the alternative is AI work in a child process that exits when idle.
+- **DirectML still keeps ~270 MB after background removal or smart selection** (measure first, then M-L). OCR moved
+  to the CPU (see Status), but U2Net and SAM2 still run on DirectML, and `BackgroundRemovalService` holds the device for
+  five minutes after each use: its comment's 45 MB predates sessions having run on it, and the device OCR held kept
+  about 260 MB more than a closed one. Measure both on the CPU, and the hold; the alternative is AI work in a child
+  process that exits when idle.
 
 ### Recording
 
@@ -272,6 +289,12 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   an update found there waits for the main window, because `UpdateDialog.ShowDialog` cannot open centred on screen.
 - **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab, the
   Record-mode warm-up and a recording start probing together (`LibavRecordingEncoder`).
+- **NVENC keeps 190-250 MB once it has opened** (measure first, M). Opening and freeing `h264_nvenc` left private
+  bytes 190 MB higher, and 245 from the second open on (Debug tests, six opens); libx264 left nothing. FFmpeg's nvenc
+  makes a CUDA context of its own when handed no device, and the CUDA driver keeps its memory. Entering Record mode
+  opens it (`RecordingService.WarmUpAsync`), as does every NVENC recording. Try handing nvenc a D3D11VA device
+  (`hw_device_ctx`), which skips CUDA, with the current path as the fallback: an Optimus laptop's default adapter has
+  no NVENC.
 
 ## Suggested batch 2 split
 
@@ -285,7 +308,8 @@ Disjoint file sets for parallel agents:
 4. Pins: resize region, opaque scan, persistent video decoder, shared background removal, save/copy paths, close and
    undo memory, pin WebM audio.
 5. Overlay: frozen open, OCR double scan and cache, candidate render control, hover timer, record meter, scroll buffers.
-6. Idle and memory: UiStall pause, history thumbnails, raw input, ColorPicker/locales; measure OCR on CPU vs DirectML.
+6. Idle and memory: UiStall pause, history thumbnails, raw input, ColorPicker/locales; DirectML after background
+   removal and smart selection, NVENC's driver memory.
 
 The LLM context reuse is its own piece of work: measure load and generation times with the real model first.
 

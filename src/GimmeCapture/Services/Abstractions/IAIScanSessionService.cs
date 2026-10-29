@@ -42,9 +42,6 @@ public interface IAIScanSessionService : IDisposable
         IProgress<AIScanStage>? progress = null,
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Gets a scan of a <paramref name="captureWidth"/> x <paramref name="captureHeight"/> capture ready while the
-    /// overlay that will run it opens.
-    /// </summary>
-    Task PrepareScanAsync(OCRLanguage language, int captureWidth, int captureHeight);
+    /// <summary>Gets a scan ready while the overlay that will run it opens.</summary>
+    Task PrepareScanAsync(OCRLanguage language);
 }

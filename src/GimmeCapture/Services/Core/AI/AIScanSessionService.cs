@@ -52,12 +52,11 @@ public sealed class AIScanSessionService : IAIScanSessionService
     }
 
     /// <summary>
-    /// Loads the detector and runs it once at the size of the capture a scan will read, for an overlay to start as it
-    /// opens. Its own scan began only once it had shown, 0.5-1.2 s in, and a detector unloaded while idle then took
-    /// 0.6-0.8 s more to load and set up before it answered. Does nothing when the detector is already loaded, and never
-    /// downloads: a missing model is the scan's to report.
+    /// Loads the detector, for an overlay to start as it opens. Its own scan began only once it had shown, 0.5-1.2 s
+    /// in, and a detector unloaded while idle then took 0.2-0.8 s more to load before it answered. Does nothing when the
+    /// detector is already loaded, and never downloads: a missing model is the scan's to report.
     /// </summary>
-    public async Task PrepareScanAsync(OCRLanguage language, int captureWidth, int captureHeight)
+    public async Task PrepareScanAsync(OCRLanguage language)
     {
         if (_ocrRuntimeService.IsDetectionLoaded || !_aiResourceService.IsOCRReady(language))
         {
@@ -67,11 +66,7 @@ public sealed class AIScanSessionService : IAIScanSessionService
         var stopwatch = Stopwatch.StartNew();
         using var ocrEngine = _ocrEngineFactory.Create(_aiResourceService, _settingsService, _ocrRuntimeService);
         await ocrEngine.EnsureDetectionLoadedAsync(language);
-        long loadMs = stopwatch.ElapsedMilliseconds;
-        await Task.Run(() => ocrEngine.WarmUpDetection(captureWidth, captureHeight));
-        AppLog.Information(
-            "OcrScan.Prepared",
-            $"load={loadMs}ms warmUp={stopwatch.ElapsedMilliseconds - loadMs}ms for a {captureWidth}x{captureHeight} capture");
+        AppLog.Information("OcrScan.Prepared", $"load={stopwatch.ElapsedMilliseconds}ms");
     }
 
     public void Dispose()

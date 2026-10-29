@@ -48,17 +48,11 @@ public sealed class OcrRuntimeService : IDisposable
     // teardown), which is not enough: concurrent Run calls on one session are themselves fatal.
     private readonly SemaphoreSlim _inferenceLock = new(1, 1);
     private readonly IdleReleaseScheduler _idleUnload;
-    // Keeps the DirectML device open across idle unloads, for the app's idle window after the last use. The sessions
-    // are the last thing holding it, and reopening it took 170-230 ms of a cold load and 150 ms of its first detection
-    // (a cold reload measured 340-430 ms plus 260-300 ms, against 170-200 ms plus 110-140 ms with the device held).
-    private readonly GpuDeviceHold _gpuDevice = new(ProcessMemoryTrimService.IdleTrimDelay);
     // The detection model is the same file for every language; only the recognizer and its dictionary differ.
     private InferenceSession? _detSession;
     private InferenceSession? _recSession;
     private OCRLanguage? _loadedLanguage;
     private List<string> _dictionary = new();
-    // Whether the sessions fell back to the CPU, so a recognizer built later joins the detector there.
-    private bool _onCpu;
 
     public OcrRuntimeService(AIResourceService aiResourceService)
     {
@@ -155,7 +149,6 @@ public sealed class OcrRuntimeService : IDisposable
             // teardown-then-rebuild sequence that precedes the crashes. A capture within the idle window cancels
             // this and reuses the sessions; a genuinely idle app still gets the memory back.
             _idleUnload.NotifyUse();
-            _gpuDevice.NotifyUse();
         }
     }
 
@@ -165,8 +158,8 @@ public sealed class OcrRuntimeService : IDisposable
 
     /// <summary>
     /// Loads detection alone, which is all the overlay's scan uses: the recognizer and its dictionary wait for the first
-    /// <see cref="EnsureLoadedAsync(OCRLanguage, CancellationToken)"/>. Building them took 135 ms of every cold load on
-    /// DirectML that a scan never used. <paramref name="language"/> only picks the model install that is checked.
+    /// <see cref="EnsureLoadedAsync(OCRLanguage, CancellationToken)"/>. Building them took 135 ms of every cold load
+    /// that a scan never used. <paramref name="language"/> only picks the model install that is checked.
     /// </summary>
     public Task EnsureDetectionLoadedAsync(OCRLanguage language, CancellationToken ct = default) =>
         EnsureLoadedAsync(language, recognition: false, ct);
@@ -185,7 +178,7 @@ public sealed class OcrRuntimeService : IDisposable
 
         // From here on, never on the caller's thread. The overlay's text scan calls this from the UI thread, and
         // when the model files are installed every await below completes synchronously — so building the two
-        // ONNX sessions (~0.4 s on DirectML) and a language swap's wait for a running inference (up to
+        // ONNX sessions (0.2-0.8 s) and a language swap's wait for a running inference (up to
         // SwapTimeout) all ran there: the capture overlay froze whenever OCR had been idle-unloaded.
         await _loadLock.WaitAsync(ct).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         try
@@ -213,24 +206,13 @@ public sealed class OcrRuntimeService : IDisposable
 
             using (swap)
             {
-                // A language change replaces only the recognizer. The detector, the same for every language, stays, and
-                // with it the GPU device the new recognizer then takes over. The language auto-detect swaps once per
-                // installed language.
+                // A language change replaces only the recognizer. The detector, the same for every language, stays. The
+                // language auto-detect swaps once per installed language.
                 _detSession ??= CreateSession(paths.Det, "detection");
                 if (recognition && (_recSession == null || _loadedLanguage != language))
                 {
                     DisposeRecognizer();
-                    bool detectionOnGpu = !_onCpu;
                     _recSession = CreateSession(paths.Rec, $"recognition {language}");
-                    if (detectionOnGpu && _onCpu)
-                    {
-                        // The recognizer could not be built on the GPU: detection joins it on the CPU. Cleared first, so a
-                        // failed rebuild leaves no disposed session behind for an inference to run on.
-                        _detSession.Dispose();
-                        _detSession = null;
-                        _detSession = CreateSession(paths.Det, "detection");
-                    }
-
                     _loadedLanguage = language;
                     _dictionary = LoadDictionaryWithEncodingFallback(paths.Dict);
                     _dictionary.Insert(0, string.Empty);
@@ -246,26 +228,21 @@ public sealed class OcrRuntimeService : IDisposable
     }
 
     /// <summary>
-    /// Builds one session on the GPU (DirectML on Windows) and, when a GPU provider was appended but the session fails to
-    /// build, again on the CPU alone. DirectML can be appended without error yet fail at <see cref="InferenceSession"/>
-    /// construction on some Windows 10 configurations (older system DirectML.dll / DX12 driver) — without the CPU attempt
-    /// OCR throws there and silently produces nothing while working on Windows 11. Once a session is on the CPU, the
-    /// next is built there directly, so detection and recognition never split across backends. Caller MUST hold
-    /// exclusive access via <see cref="_useGate"/>.
+    /// Builds one session, on the CPU. OCR ran on DirectML where it could, and DirectML does not give back all it
+    /// allocates: the first scan left the app about 270 MB larger for good, and the sessions, or the device held for
+    /// them, kept 500-550 MB where the CPU's keep 40-51. Nor was it faster where it counted. A detection took 16 ms
+    /// against 65-70, but 320-390 ms the first time at a size, which the first scan after an idle unload always is,
+    /// against 95-110; and reading 30 lines took 1.9 s against 0.5, as DirectML set itself up again whenever the width
+    /// of the text changed.
     /// </summary>
-    private InferenceSession CreateSession(string modelPath, string part)
+    private static InferenceSession CreateSession(string modelPath, string part)
     {
         var stopwatch = Stopwatch.StartNew();
-        var session = OnnxProviderConfigurator.CreateWithCpuFallback(
-            () => new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL },
-            options => new InferenceSession(modelPath, options),
-            "OcrRuntime",
-            _onCpu ? static _ => null : OnnxProviderConfigurator.AppendGpuProvidersWithFallback,
-            out string provider);
-        // Logged to the file sink so a Win10-vs-Win11 discrepancy is diagnosable without a debugger.
-        AppLog.Information("OcrRuntime.SessionCreated", $"{part}: {provider} in {stopwatch.ElapsedMilliseconds} ms");
-        _onCpu = provider == OnnxProviderConfigurator.CpuProvider;
-        _gpuDevice.SessionBuilt(provider);
+        using var options = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL };
+        var session = new InferenceSession(modelPath, options);
+        AppLog.Information(
+            "OcrRuntime.SessionCreated",
+            $"{part}: {OnnxProviderConfigurator.CpuProvider} in {stopwatch.ElapsedMilliseconds} ms");
         return session;
     }
 
@@ -295,7 +272,6 @@ public sealed class OcrRuntimeService : IDisposable
         AIResourceService.RequestGlobalUnload -= HandleGlobalUnload;
         _idleUnload.Cancel();
         ForceUnload(ShutdownUnloadTimeout);
-        _gpuDevice.Release();
         _loadLock.Dispose();
         // _inferenceLock is deliberately not disposed: if the unload above timed out, a thread may still be waiting
         // on it, and disposing it under a waiter throws. SemaphoreSlim needs no disposal unless its wait handle was
@@ -329,8 +305,6 @@ public sealed class OcrRuntimeService : IDisposable
         _detSession?.Dispose();
         _detSession = null;
         DisposeRecognizer();
-        // The next load tries the GPU again, after a driver reset say.
-        _onCpu = false;
     }
 
     /// <summary>Caller MUST hold exclusive access via <see cref="_useGate"/>.</summary>
@@ -342,12 +316,8 @@ public sealed class OcrRuntimeService : IDisposable
         _dictionary = new List<string>();
     }
 
-    // AI turned off or a module removed: the user is asking for the memory back, the device's included.
-    private void HandleGlobalUnload()
-    {
-        ForceUnload();
-        _gpuDevice.Release();
-    }
+    // AI turned off or a module removed: the user is asking for the memory back.
+    private void HandleGlobalUnload() => ForceUnload();
 
     private static List<string> LoadDictionaryWithEncodingFallback(string path)
     {

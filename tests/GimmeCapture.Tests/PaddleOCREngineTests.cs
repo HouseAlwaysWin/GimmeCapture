@@ -103,9 +103,9 @@ public class PaddleOCREngineTests
     }
 
     [Fact]
-    public async Task WarmUpDetection_RunsTheLoadedDetector_AndSkipsWhenNoneIsLoaded()
+    public async Task DetectText_RunsTheLoadedDetector_AndFindsNothingWhenNoneIsLoaded()
     {
-        string folder = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", "OcrWarmUp", Guid.NewGuid().ToString("N"));
+        string folder = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", "OcrDetect", Guid.NewGuid().ToString("N"));
         try
         {
             var settings = new AppSettingsService(folder);
@@ -119,12 +119,13 @@ public class PaddleOCREngineTests
             using var runtime = new OcrRuntimeService(aiResources);
             using var engine = new PaddleOCREngine(aiResources, settings, runtime);
 
-            // A small capture: a real one's input runs to megabytes, which only the size above needs to show.
-            engine.WarmUpDetection(64, 48); // nothing loaded: nothing to run
+            using var capture = new SKBitmap(64, 48);
+            Assert.Empty(engine.DetectText(capture)); // nothing loaded: nothing to run
             await engine.EnsureDetectionLoadedAsync(OCRLanguage.TraditionalChinese);
-            engine.WarmUpDetection(64, 48);
 
-            Assert.True(runtime.IsDetectionLoaded);
+            // The run hands its memory back to the system as it ends, which ONNX Runtime refuses on a session it would
+            // have nothing to hand back from. A run that finds no text reports the whole capture.
+            Assert.Equal([new SKRectI(0, 0, 64, 48)], engine.DetectText(capture));
         }
         finally
         {

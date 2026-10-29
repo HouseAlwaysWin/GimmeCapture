@@ -948,10 +948,9 @@ public partial class SnipWindowViewModel
     /// <summary>
     /// Starts the OCR detector loading as the overlay opens, when the open-time scan (<see cref="RequestOcrAutoScanOnEntry"/>)
     /// is going to run: that scan starts only once the overlay has shown, and a detector unloaded while idle used to load
-    /// only then. <paramref name="captureWidth"/> x <paramref name="captureHeight"/> is the capture the scan will read,
-    /// in pixels.
+    /// only then.
     /// </summary>
-    public void PrepareOcrAutoScan(int captureWidth, int captureHeight)
+    public void PrepareOcrAutoScan()
     {
         if (!WillScanOnEntry() || _aiScanSessionService is not { } scanService)
         {
@@ -961,7 +960,7 @@ public partial class SnipWindowViewModel
         // Wholly off the UI thread, which is still building the overlay: the model check reads the disk, and the first
         // prepare of a run spent 7-8 ms on its caller before it yielded.
         var language = _services?.SettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese;
-        Task.Run(() => scanService.PrepareScanAsync(language, captureWidth, captureHeight)).Forget("Snip.OcrPrepare");
+        Task.Run(() => scanService.PrepareScanAsync(language)).Forget("Snip.OcrPrepare");
     }
 
     // Whether the open-time scan is going to run: what RequestOcrAutoScanOnEntry and RunOCRScanAsync check, short of

@@ -116,15 +116,16 @@ public sealed class AIScanSessionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task PrepareScanAsync_LoadsTheDetector_AndRunsItOnceAtTheCapturesSize()
+    public async Task PrepareScanAsync_LoadsTheDetector_AndRunsNothing()
     {
+        // A run of its own on a blank capture set DirectML up for the scan's size; on the CPU it only held the scan up.
         var (sut, _, ocrEngine) = CreateWithModelsInstalled(installed: true);
         using (sut)
         {
-            await sut.PrepareScanAsync(OCRLanguage.Japanese, 3968, 1160);
+            await sut.PrepareScanAsync(OCRLanguage.Japanese);
         }
 
-        Assert.Equal(["EnsureDetectionLoaded", "WarmUpDetection 3968x1160"], ocrEngine.Calls);
+        Assert.Equal(["EnsureDetectionLoaded"], ocrEngine.Calls);
     }
 
     [Fact]
@@ -134,7 +135,7 @@ public sealed class AIScanSessionServiceTests : IDisposable
         var (sut, aiResourceService, ocrEngine) = CreateWithModelsInstalled(installed: false);
         using (sut)
         {
-            await sut.PrepareScanAsync(OCRLanguage.Japanese, 3968, 1160);
+            await sut.PrepareScanAsync(OCRLanguage.Japanese);
         }
 
         Assert.Empty(ocrEngine.Calls);
@@ -220,9 +221,6 @@ public sealed class AIScanSessionServiceTests : IDisposable
             Calls.Add("EnsureDetectionLoaded");
             return Task.CompletedTask;
         }
-
-        public void WarmUpDetection(int captureWidth, int captureHeight) =>
-            Calls.Add($"WarmUpDetection {captureWidth}x{captureHeight}");
 
         public List<SKRectI> DetectText(SKBitmap bitmap)
         {

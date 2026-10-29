@@ -1,9 +1,14 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.AI;
+using GimmeCapture.Services.OCR;
 using Microsoft.ML.OnnxRuntime;
+using SkiaSharp;
+using Xunit.Abstractions;
 
 namespace GimmeCapture.Tests;
 
@@ -17,13 +22,17 @@ public sealed class OcrRuntimeServiceTests : IDisposable
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(150);
+    private const string ModelsVariable = "OCR_MODELS_DIR";
+    private const long Mb = 1024 * 1024;
 
+    private readonly ITestOutputHelper _output;
     private readonly string _baseDir;
     private readonly AIPathService _pathService;
     private readonly OcrRuntimeService _sut;
 
-    public OcrRuntimeServiceTests()
+    public OcrRuntimeServiceTests(ITestOutputHelper output)
     {
+        _output = output;
         _baseDir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_baseDir);
 
@@ -170,6 +179,84 @@ public sealed class OcrRuntimeServiceTests : IDisposable
         _sut.ReleaseLease(lease);
 
         Assert.False(_sut.HasActiveLeases);
+    }
+
+    /// <summary>
+    /// How much of the process the real OCR models keep: loaded for an overlay's scan, loaded to read the text as well,
+    /// and once unloaded. On DirectML that was 500, 550 and, with the device held for the next scan, 530 MB, and about
+    /// 270 MB stayed once the device closed. On the CPU, with ONNX Runtime keeping what each detection allocated, 338,
+    /// 350 and 52 MB; now about 40, 50 and 6-12. Opt-in, naming the AI folder of an install with the Traditional
+    /// Chinese OCR module (<c>OCR_MODELS_DIR</c>, usually %LOCALAPPDATA%\GimmeCapture\AI), and best run on its own: it
+    /// reads the private bytes of the whole test process.
+    /// </summary>
+    [OptInFact(ModelsVariable)]
+    public async Task TheRealModels_KeepLittleOfTheProcess_LoadedOrNot()
+    {
+        string folder = Environment.GetEnvironmentVariable(ModelsVariable)!;
+        var settings = new AppSettingsService(_baseDir);
+        settings.Settings.AIResourcesDirectory = folder;
+        var aiResources = new AIResourceService(settings, new AIPathService(settings), new AIModelDownloader());
+        Assert.True(
+            aiResources.IsOCRReady(OCRLanguage.TraditionalChinese), $"No Traditional Chinese OCR module in {folder}.");
+        using var screen = TwoScreensOfText();
+        long baseline = PrivateBytes();
+
+        using var runtime = new OcrRuntimeService(aiResources);
+        List<SKRectI> boxes;
+        using (var engine = new PaddleOCREngine(aiResources, settings, runtime))
+        {
+            await engine.EnsureDetectionLoadedAsync(OCRLanguage.TraditionalChinese);
+            engine.DetectText(screen);
+            boxes = engine.DetectText(screen);
+        }
+
+        long detection = PrivateBytes() - baseline;
+        using (var engine = new PaddleOCREngine(aiResources, settings, runtime))
+        {
+            await engine.EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
+            foreach (var box in boxes)
+            {
+                engine.RecognizeText(screen, box);
+            }
+        }
+
+        long both = PrivateBytes() - baseline;
+        runtime.Unload();
+        long unloaded = PrivateBytes() - baseline;
+        _output.WriteLine(
+            $"{boxes.Count} lines found. Over the baseline: {detection / Mb} MB with detection loaded, " +
+            $"{both / Mb} MB with recognition too, {unloaded / Mb} MB unloaded.");
+
+        Assert.NotEmpty(boxes);
+        Assert.InRange(detection, long.MinValue, 100 * Mb);
+        Assert.InRange(both, long.MinValue, 120 * Mb);
+        Assert.InRange(unloaded, long.MinValue, 40 * Mb);
+    }
+
+    // Two screens side by side, 3968x1160, with 30 lines of UI text of different lengths.
+    private static SKBitmap TwoScreensOfText()
+    {
+        var screen = new SKBitmap(3968, 1160);
+        using var canvas = new SKCanvas(screen);
+        using var paint = new SKPaint { Color = SKColors.Black };
+        using var font = new SKFont { Size = 20 };
+        canvas.Clear(SKColors.White);
+        for (int row = 0; row < 30; row++)
+        {
+            string text = new string('設', 3 + row % 17) + " 定已儲存 OK " + row;
+            canvas.DrawText(text, 40 + (row % 3) * 1300, 40 + row * 36, font, paint);
+        }
+
+        return screen;
+    }
+
+    private static long PrivateBytes()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        using var process = Process.GetCurrentProcess();
+        return process.PrivateMemorySize64;
     }
 
     public void Dispose()

@@ -208,21 +208,21 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
-    public async Task AnOverlayThatWillScanOnOpening_StartsLoadingItsDetector_ForTheCapturesSize()
+    public async Task AnOverlayThatWillScanOnOpening_StartsLoadingItsDetector()
     {
         var settings = OcrScanSettings();
         var scan = new Mock<IAIScanSessionService>();
         var prepared = new TaskCompletionSource();
-        scan.Setup(s => s.PrepareScanAsync(It.IsAny<OCRLanguage>(), It.IsAny<int>(), It.IsAny<int>()))
+        scan.Setup(s => s.PrepareScanAsync(It.IsAny<OCRLanguage>()))
             .Callback(() => prepared.SetResult())
             .Returns(Task.CompletedTask);
         using var vm = new SnipWindowViewModel(
             Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object, aiScanSessionService: scan.Object, settings: settings.Object);
 
-        vm.PrepareOcrAutoScan(3968, 1160);
+        vm.PrepareOcrAutoScan();
 
         await prepared.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        scan.Verify(s => s.PrepareScanAsync(OCRLanguage.TraditionalChinese, 3968, 1160), Times.Once);
+        scan.Verify(s => s.PrepareScanAsync(OCRLanguage.TraditionalChinese), Times.Once);
     }
 
     [Theory]
@@ -249,8 +249,8 @@ public class SnipWindowViewModelTests
         }
 
         Assert.False(vm.WillScanOnEntry());
-        vm.PrepareOcrAutoScan(3968, 1160);
-        scan.Verify(s => s.PrepareScanAsync(It.IsAny<OCRLanguage>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        vm.PrepareOcrAutoScan();
+        scan.Verify(s => s.PrepareScanAsync(It.IsAny<OCRLanguage>()), Times.Never);
     }
 
     [Fact]
