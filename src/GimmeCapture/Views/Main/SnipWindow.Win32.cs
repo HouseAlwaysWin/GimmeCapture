@@ -31,6 +31,22 @@ public partial class SnipWindow : Window
     private bool _translationClickThroughExStyleActive;
     private bool _overlayNoActivateExStyleActive;
 
+    // Set once this overlay recorded or was excluded from screen capture. Hiding or closing such a window can leave a
+    // DWM ghost of its last frame, the recording selection frame (docs/archive/WGC_HANDOFF.md, Fix F), so only such an
+    // overlay clears its region before it closes (OnClosing) and repaints the desktop after (OnClosed).
+    private bool _mayLeaveCaptureGhost;
+
+    // Every change to the overlay's capture affinity goes through here, so no exclusion escapes the flag above.
+    private void SetOverlayCaptureVisibility(IntPtr hwnd, bool visible)
+    {
+        if (!visible)
+        {
+            _mayLeaveCaptureGhost = true;
+        }
+
+        Win32Helpers.SetWindowCaptureVisibility(hwnd, visible);
+    }
+
     /// <summary>
     /// While the translation toolbar is HIDDEN, add <c>WS_EX_TRANSPARENT</c> to the overlay so a Chromium
     /// (GPU/DWM-composited) browser underneath stops graying out on tab/page switch. Chromium's native-window
@@ -279,8 +295,10 @@ public partial class SnipWindow : Window
 
         // Safety net: force the whole desktop to repaint so any lingering DWM ghost of this (capture-excluded,
         // regioned) overlay — the yellow recording selection frame — is cleared even if the hide-time cleanup
-        // didn't catch it. See docs/WGC_HANDOFF.md.
-        if (OperatingSystem.IsWindows())
+        // didn't catch it. See docs/archive/WGC_HANDOFF.md. Only after an overlay that can leave one: this used to
+        // repaint every window on screen after every capture, our own pins synchronously among them. The overlay
+        // spans every monitor, so its own rectangle would be the whole desktop all the same.
+        if (_mayLeaveCaptureGhost && OperatingSystem.IsWindows())
         {
             try
             {

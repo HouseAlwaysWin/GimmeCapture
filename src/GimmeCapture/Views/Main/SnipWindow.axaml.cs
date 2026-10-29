@@ -361,9 +361,11 @@ public partial class SnipWindow : Window
         _viewModel?.Dispose();
         CloseOwnedProgressWindows();
         
-        // Clear window region before closing
+        // Clear the window region before closing an overlay that can leave a DWM ghost of its frame (see
+        // _mayLeaveCaptureGhost). Any other overlay goes with its region: clearing it only made the full-screen window
+        // repaint all of itself just before it was destroyed.
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-        if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+        if (_mayLeaveCaptureGhost && hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
         {
             Win32Helpers.ClearWindowRegion(hwnd);
         }
@@ -708,6 +710,6 @@ public partial class SnipWindow : Window
         // (RunTranslationOcrGrabExcludedAsync); recording-without-annotations still excludes continuously.
         bool excludeFromCapture = vm.RecordingUsesWindowsExcludeFromCapture;
 
-        Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: !excludeFromCapture);
+        SetOverlayCaptureVisibility(hwnd, visible: !excludeFromCapture);
     }
 }

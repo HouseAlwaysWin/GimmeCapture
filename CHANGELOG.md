@@ -46,6 +46,10 @@
 
 ### ⚡ Performance
 
+- **Closing the capture overlay no longer makes every window on screen repaint.** Each close repainted the whole
+  desktop as a safety net for a leftover recording frame, which only an overlay that recorded or was kept out of screen
+  captures can leave; only those do it now. The overlay and pins also stop redrawing when their shape is set again
+  unchanged.
 - **Saving or cropping a video pin, and finishing a compress, no longer freeze the app while the file is copied.** The
   finished file, for an unedited pin the whole recording, was copied on the UI thread; it now copies in the background
   while the progress shows. A crop moves its clip instead, and a save or crop no longer leaves its export in the temp

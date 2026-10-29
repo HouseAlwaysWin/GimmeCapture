@@ -112,6 +112,11 @@ public partial class SnipWindow : Window
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ =>
                 {
+                    if (vm.RecState != RecordingState.Idle)
+                    {
+                        _mayLeaveCaptureGhost = true; // a recording overlay, excluded or not
+                    }
+
                     ApplyRecordingScreenCaptureAffinity(vm);
                     vm.RaisePropertyChanged(nameof(vm.HideSelectionDecoration));
                     vm.RaisePropertyChanged(nameof(vm.HideFrameBorder));
@@ -324,7 +329,7 @@ public partial class SnipWindow : Window
             var snipHwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
             if (snipHwnd != IntPtr.Zero && OperatingSystem.IsWindows())
             {
-                Win32Helpers.SetWindowCaptureVisibility(snipHwnd, visible: true);
+                SetOverlayCaptureVisibility(snipHwnd, visible: true);
                 Win32Helpers.ClearWindowRegion(snipHwnd);
             }
 
@@ -471,7 +476,7 @@ public partial class SnipWindow : Window
             {
                 if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
                 {
-                    Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
+                    SetOverlayCaptureVisibility(hwnd, visible: false);
                     restoreCaptureVisibility = true;
                     await Task.Delay(50);
                 }
@@ -482,7 +487,7 @@ public partial class SnipWindow : Window
             {
                 if (restoreCaptureVisibility && hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
                 {
-                    Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: true);
+                    SetOverlayCaptureVisibility(hwnd, visible: true);
                 }
             }
         };
@@ -501,7 +506,7 @@ public partial class SnipWindow : Window
             {
                 if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
                 {
-                    Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
+                    SetOverlayCaptureVisibility(hwnd, visible: false);
                     restoreCaptureVisibility = true;
                     await Task.Delay(50);
                 }
@@ -512,7 +517,7 @@ public partial class SnipWindow : Window
             {
                 if (restoreCaptureVisibility && hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
                 {
-                    Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: true);
+                    SetOverlayCaptureVisibility(hwnd, visible: true);
                 }
             }
         };

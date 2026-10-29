@@ -23,6 +23,16 @@ public static class Win32Helpers
     [DllImport("user32.dll")]
     private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
 
+    // Copies the window's region into hRgn; ERROR (0) when the window has none.
+    [DllImport("user32.dll")]
+    private static extern int GetWindowRgn(IntPtr hWnd, IntPtr hRgn);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EqualRgn(IntPtr hrgn1, IntPtr hrgn2);
+
+    private const int RegionError = 0;
+
     [DllImport("user32.dll")]
     private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 
@@ -128,10 +138,9 @@ public static class Win32Helpers
             }
 
             // 5. Apply region to window
-            int setResult = SetWindowRgn(hwnd, fullRegion, true);
-            fullRegion = IntPtr.Zero; 
-            
-            return setResult != 0;
+            bool applied = ApplyWindowRegion(hwnd, fullRegion);
+            fullRegion = IntPtr.Zero; // the window's now, or deleted
+            return applied;
         }
         finally
         {
@@ -197,9 +206,9 @@ public static class Win32Helpers
                 }
             }
 
-            int setResult = SetWindowRgn(hwnd, fullRegion, true);
-            fullRegion = IntPtr.Zero;
-            return setResult != 0;
+            bool applied = ApplyWindowRegion(hwnd, fullRegion);
+            fullRegion = IntPtr.Zero; // the window's now, or deleted
+            return applied;
         }
         finally
         {
@@ -288,9 +297,9 @@ public static class Win32Helpers
                 }
             }
 
-            int setResult = SetWindowRgn(hwnd, fullRegion, true);
-            fullRegion = IntPtr.Zero;
-            return setResult != 0;
+            bool applied = ApplyWindowRegion(hwnd, fullRegion);
+            fullRegion = IntPtr.Zero; // the window's now, or deleted
+            return applied;
         }
         finally
         {
@@ -350,9 +359,9 @@ public static class Win32Helpers
                 }
             }
 
-            int setResult = SetWindowRgn(hwnd, fullRegion, true);
-            fullRegion = IntPtr.Zero;
-            return setResult != 0;
+            bool applied = ApplyWindowRegion(hwnd, fullRegion);
+            fullRegion = IntPtr.Zero; // the window's now, or deleted
+            return applied;
         }
         finally
         {
@@ -366,15 +375,58 @@ public static class Win32Helpers
     /// Call this when closing the window or when no selection is active.
     /// </summary>
     /// <param name="hwnd">Window handle</param>
-    /// <summary>
-    /// Clears the window region, restoring the window to its default rectangular shape.
-    /// Call this when closing the window or when no selection is active.
-    /// </summary>
-    /// <param name="hwnd">Window handle</param>
     public static void ClearWindowRegion(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero) return;
+
+        // A window without a region has nothing to clear, and the redraw would repaint all of it.
+        IntPtr probe = CreateRectRgn(0, 0, 0, 0);
+        try
+        {
+            if (probe != IntPtr.Zero && GetWindowRgn(hwnd, probe) == RegionError)
+            {
+                return;
+            }
+        }
+        finally
+        {
+            if (probe != IntPtr.Zero) Gdi32.DeleteObject(probe);
+        }
+
         SetWindowRgn(hwnd, IntPtr.Zero, true);
+    }
+
+    /// <summary>
+    /// Gives the window <paramref name="region"/>, which is then the window's, or deletes it when the window already
+    /// has an equal one. The region handlers re-apply an unchanged region on most of their triggers, and every
+    /// SetWindowRgn redraws the whole window: for the full-screen snip overlay, a repaint of everything it covers.
+    /// </summary>
+    private static bool ApplyWindowRegion(IntPtr hwnd, IntPtr region)
+    {
+        IntPtr current = CreateRectRgn(0, 0, 0, 0);
+        try
+        {
+            if (current != IntPtr.Zero
+                && GetWindowRgn(hwnd, current) != RegionError
+                && EqualRgn(current, region))
+            {
+                Gdi32.DeleteObject(region);
+                return true;
+            }
+        }
+        finally
+        {
+            if (current != IntPtr.Zero) Gdi32.DeleteObject(current);
+        }
+
+        if (SetWindowRgn(hwnd, region, true) != 0)
+        {
+            return true;
+        }
+
+        // The window takes the region only when SetWindowRgn succeeds.
+        Gdi32.DeleteObject(region);
+        return false;
     }
 
     /// <summary>
@@ -413,9 +465,6 @@ public static class Win32Helpers
     }
 
     // ---- Diagnostics: enumerate this process's top-level windows (to find what draws a lingering frame) ----
-
-    [DllImport("user32.dll")]
-    private static extern int GetWindowRgn(IntPtr hWnd, IntPtr hRgn);
 
     /// <summary>
     /// Logs every top-level window owned by the current process (handle, visibility, class, title, rect, extended

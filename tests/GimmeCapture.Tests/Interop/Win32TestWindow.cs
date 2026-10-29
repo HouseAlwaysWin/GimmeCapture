@@ -8,7 +8,7 @@ namespace GimmeCapture.Tests;
 /// <summary>
 /// A hidden borderless Unicode window for tests that need a real one, owned by the thread that creates it. Its client
 /// area is its whole screen rectangle; its procedure answers every hit test with <see cref="OwnHitTestAnswer"/> and
-/// records the characters and the style changes it is sent.
+/// records the characters, the style changes and the frame changes (a new window region is one) it is sent.
 /// </summary>
 internal sealed class Win32TestWindow : IDisposable
 {
@@ -18,6 +18,7 @@ internal sealed class Win32TestWindow : IDisposable
     private const uint WM_NCHITTEST = 0x0084;
     private const uint WM_CHAR = 0x0102;
     private const uint WM_STYLECHANGED = 0x007D;
+    private const uint WM_WINDOWPOSCHANGED = 0x0047;
     private static int s_classCount;
 
     private readonly string _className = $"GimmeCaptureTestWindow{Interlocked.Increment(ref s_classCount)}";
@@ -53,6 +54,8 @@ internal sealed class Win32TestWindow : IDisposable
 
     public int StyleChanges { get; private set; }
 
+    public int FrameChanges { get; private set; }
+
     public void Dispose()
     {
         DestroyWindow(Handle);
@@ -70,6 +73,9 @@ internal sealed class Win32TestWindow : IDisposable
                 return IntPtr.Zero;
             case WM_STYLECHANGED:
                 StyleChanges++;
+                break;
+            case WM_WINDOWPOSCHANGED:
+                FrameChanges++;
                 break;
         }
 
