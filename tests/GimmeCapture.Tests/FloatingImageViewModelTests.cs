@@ -10,7 +10,6 @@ using System.Reactive;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using GimmeCapture.Services.Core.AI;
-using System.Reflection;
 
 namespace GimmeCapture.Tests;
 
@@ -55,7 +54,7 @@ public class FloatingImageViewModelTests
     }
 
     [Fact]
-    public void ImageChange_ShouldPreserveSam2Service_AndInvalidatePreparedImage()
+    public async Task ImageChange_ShouldPreserveSam2Service_AndInvalidatePreparedImage()
     {
         var mockService = new MockClipboardService();
         var mockSettings = new Mock<IAppSettingsService>();
@@ -66,10 +65,14 @@ public class FloatingImageViewModelTests
         var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiDownloader.Object);
         var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object);
         var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object, new ResourceQueueService());
-        var sam2Service = new SAM2Service(sam2Runtime, mockSettings.Object);
+        // A real SAM2Service, with a stand-in for the model.
+        var sam2Service = StandInEncoderSam2Service.Create();
+        using (var pinPixels = new SkiaSharp.SKBitmap(8, 8))
+        {
+            await sam2Service.EnsureImagePreparedAsync(pinPixels);
+        }
 
-        typeof(SAM2Service).GetField("_isImagePrepared", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(sam2Service, true);
-        typeof(SAM2Service).GetField("_preparedImageKey", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(sam2Service, "prepared");
+        Assert.True(sam2Service.IsImagePreparedForTesting);
         vm.SetSam2ServiceForTesting(sam2Service);
 
         vm.HandleImageChangedForSam2();

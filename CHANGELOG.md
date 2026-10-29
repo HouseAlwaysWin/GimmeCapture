@@ -13,6 +13,10 @@
 
 ### 🛡️ Reliability
 
+- **Smart selection no longer stops selecting anything after the pin changes while it is starting.** Smart selection
+  spends up to a second getting the pin ready. Undoing and redoing on the pin in that second, or switching the
+  smart-selection model, left it marked ready with an image size of zero, and every click then selected nothing until
+  the pin changed again. A pin that changes while it is being got ready is now got ready again at the next click.
 - **The tray menu's *Run on startup* and *Auto check updates* show their saved state from the start.** The menu was
   built before the settings had loaded, so both read unchecked, and choosing one switched it the other way from what the
   menu showed.

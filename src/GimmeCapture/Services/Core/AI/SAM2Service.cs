@@ -11,6 +11,17 @@ using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.AI;
 
+/// <summary>
+/// What the SAM2 encoder made of one image (the Hiera embeddings and high-resolution features), with that image's size:
+/// everything the decoder needs for a click on it.
+/// </summary>
+internal sealed record Sam2ImageEncoding(
+    int Width,
+    int Height,
+    DenseTensor<float> ImageEmbeddings,
+    DenseTensor<float> HighResFeat0,
+    DenseTensor<float> HighResFeat1);
+
 public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 {
     /// <summary>Fixed square input resolution the SAM2 encoder expects (image is stretched to this grid).</summary>
@@ -20,29 +31,37 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
     private InferenceSession? _encoderSession;
     private InferenceSession? _decoderSession;
     private bool _isInitialized = false;
-    private bool _isImagePrepared = false;
-    private string? _preparedImageKey;
     private SAM2Variant? _initializedVariant;
 
-    // SAM2 Hiera Tensors
-    private DenseTensor<float>? _imageEmbeddings;
-    private DenseTensor<float>? _highResFeat0;
-    private DenseTensor<float>? _highResFeat1;
+    /// <summary>An image the encoder has made ready for clicks, and the key of the image it was made from.</summary>
+    private sealed record PreparedImage(string Key, Sam2ImageEncoding Encoding);
+
+    // The image prepared last, kept whole so that a click reads one image's embeddings with that image's size, and
+    // nothing at all once an invalidation has cleared it. It used to be seven fields, and InvalidatePreparedImage zeroing
+    // the size under a prepare still running left that prepare marking its image prepared at size 0.
+    private PreparedImage? _preparedImage;
+    // Moves on at every invalidation, under _preparedImageLock. A prepare publishes what the encoder made only if it has
+    // not moved since the prepare began.
+    private int _preparedImageGeneration;
+    private readonly object _preparedImageLock = new();
+    // Set by Dispose: the pin has let go of this service, which then prepares nothing more.
+    private bool _disposed;
+
     private string? _encoderInputName;
     private bool _encoderInputIs5D;
     
-    private int _originalWidth;
-    private int _originalHeight;
     private string _lastIouInfo = "";
     private int _buildRev = 22; 
 
     public string LastIouInfo => _lastIouInfo;
     public string ModelInfo => GetModelInfo();
     public string ModelVariantName { get; private set; } = "Unknown";
-    public bool IsImagePrepared => _isImagePrepared;
+    public bool IsImagePrepared => Volatile.Read(ref _preparedImage) != null;
     internal bool IsInitializedForTesting => _isInitialized;
-    internal bool IsImagePreparedForTesting => _isImagePrepared;
-    internal string? PreparedImageKeyForTesting => _preparedImageKey;
+    internal bool IsImagePreparedForTesting => IsImagePrepared;
+    internal string? PreparedImageKeyForTesting => Volatile.Read(ref _preparedImage)?.Key;
+    internal (int Width, int Height) PreparedImageSizeForTesting =>
+        Volatile.Read(ref _preparedImage) is { } prepared ? (prepared.Encoding.Width, prepared.Encoding.Height) : (0, 0);
 
     private readonly IAppSettingsService _settingsService;
     private readonly SemaphoreSlim _initLock = new(1, 1);
@@ -101,11 +120,12 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 
     public async Task EnsureImagePreparedAsync(SKBitmap original)
     {
-        if (!_isInitialized) await InitializeAsync();
-        if (_encoderSession == null) return;
+        // A service the pin has let go of (Esc, another tool) prepares nothing: loading the model again for a click
+        // that was still on its way would leave it loaded with no lease left to unload it.
+        if (Volatile.Read(ref _disposed) || !await EnsureEncoderLoadedAsync()) return;
 
         string imageKey = BuildImagePreparationKey(original);
-        if (_isImagePrepared && string.Equals(_preparedImageKey, imageKey, StringComparison.Ordinal))
+        if (IsPrepared(imageKey))
         {
             return;
         }
@@ -113,18 +133,31 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
         await _prepareLock.WaitAsync();
         try
         {
-            if (!_isInitialized) await InitializeAsync();
-            if (_encoderSession == null) return;
+            if (Volatile.Read(ref _disposed) || !await EnsureEncoderLoadedAsync()) return;
 
-            imageKey = BuildImagePreparationKey(original);
-            if (_isImagePrepared && string.Equals(_preparedImageKey, imageKey, StringComparison.Ordinal))
+            if (IsPrepared(imageKey))
             {
                 return;
             }
 
-            await PrepareImageCoreAsync(original);
-            _preparedImageKey = imageKey;
-            _isImagePrepared = true;
+            // Taken after the load just above, which invalidates by itself when it switches the model. An invalidation
+            // from here on (the pin changing, the model switched, the pin letting go of the service) means that what the
+            // encoder is about to make of this image is no longer wanted.
+            int generation;
+            lock (_preparedImageLock)
+            {
+                if (_disposed) return;
+                generation = _preparedImageGeneration;
+            }
+
+            Sam2ImageEncoding encoding = await EncodeImageAsync(original);
+            lock (_preparedImageLock)
+            {
+                if (generation == _preparedImageGeneration)
+                {
+                    Volatile.Write(ref _preparedImage, new PreparedImage(imageKey, encoding));
+                }
+            }
         }
         finally
         {
@@ -132,23 +165,37 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
         }
     }
 
-    public void InvalidatePreparedImage()
+    private bool IsPrepared(string imageKey) =>
+        Volatile.Read(ref _preparedImage) is { } prepared && string.Equals(prepared.Key, imageKey, StringComparison.Ordinal);
+
+    /// <summary>Loads SAM2 unless it is loaded, and says whether its encoder is there.</summary>
+    /// <remarks>Virtual, with <see cref="EncodeImageAsync"/>, so that tests can stand in for the model.</remarks>
+    internal virtual async Task<bool> EnsureEncoderLoadedAsync()
     {
-        _imageEmbeddings = null;
-        _highResFeat0 = null;
-        _highResFeat1 = null;
-        _originalWidth = 0;
-        _originalHeight = 0;
-        _preparedImageKey = null;
-        _isImagePrepared = false;
+        if (!_isInitialized) await InitializeAsync();
+        return _encoderSession != null;
     }
 
-    private async Task PrepareImageCoreAsync(SKBitmap original)
+    public void InvalidatePreparedImage()
+    {
+        lock (_preparedImageLock)
+        {
+            _preparedImageGeneration++;
+            Volatile.Write(ref _preparedImage, null);
+        }
+    }
+
+    /// <summary>
+    /// Runs the encoder on <paramref name="original"/>, off the caller's thread. Leaves the service's own state alone:
+    /// whether what it makes is kept is <see cref="EnsureImagePreparedAsync"/>'s call.
+    /// </summary>
+    /// <remarks>Virtual so that tests can hold a prepare open (Sam2ServicePrepareTests).</remarks>
+    internal virtual Task<Sam2ImageEncoding> EncodeImageAsync(SKBitmap original)
     {
         if (_encoderSession == null)
             throw new InvalidOperationException("SAM2 encoder session is not initialized.");
 
-        await Task.Run(() =>
+        return Task.Run(() =>
         {
             // The session comes from a use scope, never from the cached field: the scope keeps it alive (and
             // serialised) for the whole run. Esc or a tool switch releases the last lease; with the cached reference
@@ -158,8 +205,8 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
             var encoderSession = sessionUse.Encoder
                 ?? throw new InvalidOperationException("SAM2 was unloaded before the image could be prepared.");
 
-            _originalWidth = original.Width;
-            _originalHeight = original.Height;
+            int width = original.Width;
+            int height = original.Height;
 
             ResolveEncoderInputMetadata(encoderSession);
             string inputName = _encoderInputName ?? "image";
@@ -195,14 +242,16 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
                     return found?.Value as T;
                 }
 
-                _imageEmbeddings = FindResult<Tensor<float>>(new[] { "image_embeddings", "image_embed", "embeddings" })?.ToDenseTensor()
+                var imageEmbeddings = FindResult<Tensor<float>>(new[] { "image_embeddings", "image_embed", "embeddings" })?.ToDenseTensor()
                     ?? throw new Exception($"Encoder Error: Missing embeddings. Got: {string.Join(", ", outputNames)}");
 
-                _highResFeat0 = FindResult<Tensor<float>>(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" })?.ToDenseTensor()
+                var highResFeat0 = FindResult<Tensor<float>>(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" })?.ToDenseTensor()
                     ?? throw new Exception($"Encoder Error: Missing feat_0. Got: {string.Join(", ", outputNames)}");
 
-                _highResFeat1 = FindResult<Tensor<float>>(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" })?.ToDenseTensor()
+                var highResFeat1 = FindResult<Tensor<float>>(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" })?.ToDenseTensor()
                     ?? throw new Exception($"Encoder Error: Missing feat_1. Got: {string.Join(", ", outputNames)}");
+
+                return new Sam2ImageEncoding(width, height, imageEmbeddings, highResFeat0, highResFeat1);
             }
             finally
             {
@@ -287,13 +336,18 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 
     public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32, int maxObjects = 20, int minSize = 20, CancellationToken cancellationToken = default)
     {
-        if (!_isInitialized || !_isImagePrepared || _decoderSession == null || _imageEmbeddings == null) return new List<Avalonia.Rect>();
+        // One prepared image for the whole pass, whatever an invalidation does meanwhile.
+        var prepared = Volatile.Read(ref _preparedImage);
+        if (!_isInitialized || prepared == null || _decoderSession == null) return new List<Avalonia.Rect>();
+        var encoding = prepared.Encoding;
+        int originalWidth = encoding.Width;
+        int originalHeight = encoding.Height;
 
         return await Task.Run(() =>
         {
             var results = new List<Avalonia.Rect>();
 
-            // Use scope: keeps the decoder alive for the whole detection pass (see PrepareImageCoreAsync).
+            // Use scope: keeps the decoder alive for the whole detection pass (see EncodeImageAsync).
             using var sessionUse = _runtimeService.BeginSessionUse();
             var decoderSession = sessionUse.Decoder;
             if (decoderSession == null)
@@ -386,9 +440,9 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
                         } else inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
                     }
 
-                    AddTensorInput(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, _imageEmbeddings);
-                    AddTensorInput(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, _highResFeat0!);
-                    AddTensorInput(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, _highResFeat1!);
+                    AddTensorInput(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, encoding.ImageEmbeddings);
+                    AddTensorInput(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, encoding.HighResFeat0);
+                    AddTensorInput(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, encoding.HighResFeat1);
                     AddInput(new[] { "point_coords", "coords" }, System.Linq.Enumerable.ToArray(decCoords), decCoords.Dimensions.AsValueEnumerable().ToArray());
                     AddInput(new[] { "point_labels", "labels" }, System.Linq.Enumerable.ToArray(decLabels), decLabels.Dimensions.AsValueEnumerable().ToArray());
                     AddInput(new[] { "mask_input", "mask" }, System.Linq.Enumerable.ToArray(maskInput), maskInput.Dimensions.AsValueEnumerable().ToArray());
@@ -432,14 +486,14 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
                             if (count > 5)
                             {
                                 var rect = new Avalonia.Rect(
-                                    minX / mw * _originalWidth,
-                                    minY / mh * _originalHeight,
-                                    (maxX - minX) / mw * _originalWidth,
-                                    (maxY - minY) / mh * _originalHeight);
+                                    minX / mw * originalWidth,
+                                    minY / mh * originalHeight,
+                                    (maxX - minX) / mw * originalWidth,
+                                    (maxY - minY) / mh * originalHeight);
 
-                                // Filter noise 
+                                // Filter noise
                                 if (rect.Width >= minSize && rect.Height >= minSize &&
-                                    rect.Width < _originalWidth * 0.95 && rect.Height < _originalHeight * 0.95)
+                                    rect.Width < originalWidth * 0.95 && rect.Height < originalHeight * 0.95)
                                 {
                                     lock (lockObj)
                                     {
@@ -482,23 +536,29 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
     /// </remarks>
     public async Task<SKBitmap?> GetMaskBitmapAsync(IReadOnlyList<(double X, double Y, bool IsPositive)> points)
     {
-        if (!_isInitialized || !_isImagePrepared || _decoderSession == null || _imageEmbeddings == null || _highResFeat0 == null || _highResFeat1 == null)
+        // One prepared image for the whole click: the pin changing meanwhile cannot hand the decoder one image's
+        // embeddings with another image's size, or with none.
+        var prepared = Volatile.Read(ref _preparedImage);
+        if (!_isInitialized || prepared == null || _decoderSession == null)
             return null;
+
+        var encoding = prepared.Encoding;
+        // Copied before the caller's thread is left: the caller may change its list as soon as this returns.
+        var pointList = points.AsValueEnumerable().ToList();
 
         return await Task.Run(() =>
         {
-            var pointList = points.AsValueEnumerable().ToList();
             int n = pointList.Count;
             if (n == 0) return (SKBitmap?)null;
 
-            // Use scope: keeps the decoder alive and serialised for this click's run (see PrepareImageCoreAsync).
+            // Use scope: keeps the decoder alive and serialised for this click's run (see EncodeImageAsync).
             using var sessionUse = _runtimeService.BeginSessionUse();
             var decoderSession = sessionUse.Decoder;
             if (decoderSession == null) return (SKBitmap?)null;
 
             // SAM2 CRITICAL: Points must scale to the 1024-grid (since image is stretched)
-            float scaleX = 1024f / (float)_originalWidth;
-            float scaleY = 1024f / (float)_originalHeight;
+            float scaleX = 1024f / (float)encoding.Width;
+            float scaleY = 1024f / (float)encoding.Height;
             
             var decCoords = new DenseTensor<float>(new[] { 1, n, 2 });
             var decLabels = new DenseTensor<float>(new[] { 1, n });
@@ -552,9 +612,9 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
                } else inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
             }
 
-            AddTensorInput(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, _imageEmbeddings);
-            AddTensorInput(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, _highResFeat0!);
-            AddTensorInput(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, _highResFeat1!);
+            AddTensorInput(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, encoding.ImageEmbeddings);
+            AddTensorInput(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, encoding.HighResFeat0);
+            AddTensorInput(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, encoding.HighResFeat1);
             AddInput(new[] { "point_coords", "coords" }, System.Linq.Enumerable.ToArray(decCoords), decCoords.Dimensions.AsValueEnumerable().ToArray());
             AddInput(new[] { "point_labels", "labels" }, System.Linq.Enumerable.ToArray(decLabels), decLabels.Dimensions.AsValueEnumerable().ToArray());
             AddInput(new[] { "mask_input", "mask" }, System.Linq.Enumerable.ToArray(maskInput), maskInput.Dimensions.AsValueEnumerable().ToArray());
@@ -575,7 +635,7 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
             _lastIouInfo = $"REV:{_buildRev} {invTag}{choice.PointStats} | D={choice.Density:F1}";
 
             // CRITICAL: Resize the mask back to the ORIGINAL dimensions so it aligns in the UI
-            using var resizedMask = maskFull.Resize(new SKImageInfo(_originalWidth, _originalHeight), new SKSamplingOptions(SKFilterMode.Linear));
+            using var resizedMask = maskFull.Resize(new SKImageInfo(encoding.Width, encoding.Height), new SKSamplingOptions(SKFilterMode.Linear));
             if (resizedMask == null)
                 return (SKBitmap?)null;
 
@@ -925,10 +985,15 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
     public void Dispose()
     {
         // 清除所有張量參考，允許 GC 回收大型記憶體區塊
-        _imageEmbeddings = null;
-        _highResFeat0 = null;
-        _highResFeat1 = null;
-        
+        // The pin has let go of the service: a prepare still running publishes nothing, since it began under the
+        // generation this invalidation moves on from, and one still to come prepares nothing.
+        lock (_preparedImageLock)
+        {
+            _disposed = true;
+        }
+
+        InvalidatePreparedImage();
+
         // 清除 session 參考（不 Dispose，session 由 AIResourceService 管理）
         _encoderSession = null;
         _decoderSession = null;

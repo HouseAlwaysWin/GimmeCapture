@@ -17,7 +17,18 @@ public interface ISam2Service : IDisposable
     bool IsImagePrepared { get; }
 
     Task InitializeAsync();
+
+    /// <summary>
+    /// Prepares <paramref name="original"/> for clicks unless it is prepared already. An invalidation or a dispose while
+    /// it runs leaves nothing prepared, and a disposed service prepares nothing.
+    /// </summary>
     Task EnsureImagePreparedAsync(SKBitmap original);
+
+    /// <summary>
+    /// The mask of <paramref name="points"/> on the prepared image, the caller's to dispose; null when none is prepared.
+    /// <paramref name="points"/> may be read after this returns, on another thread: hand over a list nothing changes.
+    /// </summary>
     Task<SKBitmap?> GetMaskBitmapAsync(IReadOnlyList<(double X, double Y, bool IsPositive)> points);
+
     void InvalidatePreparedImage();
 }
