@@ -391,14 +391,22 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             }));
     }
 
+    // Set once the pin has closed: smart-selection work still running for it then lands nowhere.
+    private bool _disposed;
+
     public override void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
+
         _lifecycleDisposables.Dispose();
 
         base.Dispose();
         ReleaseSam2Resources();
         _backgroundRemoval?.Dispose();
         _backgroundRemoval = null;
+        // Frees the selection's mask, and moves the session on, so a click's mask still on its way is dropped.
+        _interactiveSession.Cancel();
         _interactiveMask?.Dispose();
         _interactiveMask = null;
     }

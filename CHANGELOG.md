@@ -13,6 +13,18 @@
 
 ### 🛡️ Reliability
 
+- **Confirming a smart selection can no longer close the app.** The confirm applies the selection in the background.
+  Pressing Esc, picking another tool or undoing on the pin while it ran, or a click's selection arriving just then,
+  freed the selection under it: a native crash that closed the app with no error. The confirm now holds on to the
+  selection until it is done. Esc or another tool still leaves the tool at once, and the confirm still lands (Ctrl+Z
+  takes it back); undoing on the pin meanwhile, or closing it, drops the confirm instead. Esc right after confirming a
+  Shift-click selection no longer turns it into a removal of what was selected.
+- **A smart selection still on its way when you leave the tool no longer turns up on the pin.** A click's selection
+  takes a fraction of a second to arrive. One that arrived after Esc, another tool, a confirm or closing the pin was
+  drawn over the pin anyway and stayed there; after Esc and straight back in, it showed up in the new selection. One
+  that arrived after undoing that click replaced the undo's selection. A selection that arrives after you have moved on
+  is now dropped, and a click still waiting for the pin to be got ready when you leave the tool no longer runs the
+  model.
 - **Smart selection no longer stops selecting anything after the pin changes while it is starting.** Smart selection
   spends up to a second getting the pin ready. Undoing and redoing on the pin in that second, or switching the
   smart-selection model, left it marked ready with an image size of zero, and every click then selected nothing until

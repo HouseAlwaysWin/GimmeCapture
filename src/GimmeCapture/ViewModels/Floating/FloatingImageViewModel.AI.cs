@@ -33,6 +33,7 @@ public partial class FloatingImageViewModel
         KeepSelected
     }
 
+    // Used on the UI thread only.
     private sealed class InteractiveRemovalSession
     {
         private readonly List<(double X, double Y, bool IsPositive)> _points = new();
@@ -40,13 +41,29 @@ public partial class FloatingImageViewModel
         public InteractiveRemovalState State { get; private set; } = InteractiveRemovalState.Idle;
         public InteractiveRemovalMode Mode { get; private set; } = InteractiveRemovalMode.RemoveSelected;
         public SkiaSharp.SKBitmap? CleanMaskBitmap { get; private set; }
-        public IReadOnlyList<(double X, double Y, bool IsPositive)> Points => _points;
+
+        /// <summary>
+        /// Moves on at every change to the selection: a point added or undone, a reset (the pin changing), Esc or
+        /// another tool, a new session, the start of a confirm. A click's mask asked for at one version and back at
+        /// another belongs to a selection that is gone, and is dropped.
+        /// </summary>
+        public int Version { get; private set; }
+
         public int PointCount => _points.Count;
         public bool IsActive => State != InteractiveRemovalState.Idle;
         public bool CanClick => State == InteractiveRemovalState.Collecting || State == InteractiveRemovalState.ReadyToConfirm;
         public bool CanUndo => PointCount > 0 && CanClick;
         public bool CanConfirm => State == InteractiveRemovalState.ReadyToConfirm && CleanMaskBitmap != null;
         public bool IsKeepSelectedMode => Mode == InteractiveRemovalMode.KeepSelected;
+
+        /// <summary>Whether the selection is still the one it was at <paramref name="version"/>.</summary>
+        public bool IsCurrent(int version) => version == Version;
+
+        /// <summary>
+        /// The points as they are now, in an array of their own: SAM2 reads a click's points on the thread pool, while
+        /// the UI thread goes on adding and undoing these.
+        /// </summary>
+        public (double X, double Y, bool IsPositive)[] CopyPoints() => _points.ToArray();
 
         public void Start()
         {
@@ -60,6 +77,7 @@ public partial class FloatingImageViewModel
             Mode = InteractiveRemovalMode.RemoveSelected;
             DisposeCleanMask();
             State = InteractiveRemovalState.Idle;
+            Version++;
         }
 
         public void ResetPoints()
@@ -69,6 +87,7 @@ public partial class FloatingImageViewModel
             DisposeCleanMask();
             if (State != InteractiveRemovalState.Idle)
                 State = InteractiveRemovalState.Collecting;
+            Version++;
         }
 
         public bool UndoLastPoint()
@@ -79,6 +98,7 @@ public partial class FloatingImageViewModel
             _points.RemoveAt(_points.Count - 1);
             DisposeCleanMask();
             State = InteractiveRemovalState.Collecting;
+            Version++;
             return true;
         }
 
@@ -97,8 +117,10 @@ public partial class FloatingImageViewModel
             _points.Add((x, y, sam2Positive));
             DisposeCleanMask();
             State = InteractiveRemovalState.Collecting;
+            Version++;
         }
 
+        /// <summary>Hands the session the mask of its current points (see <see cref="IsCurrent"/>), which it then owns.</summary>
         public void SetCleanMaskBitmap(SkiaSharp.SKBitmap bitmap)
         {
             DisposeCleanMask();
@@ -107,27 +129,36 @@ public partial class FloatingImageViewModel
                 State = InteractiveRemovalState.ReadyToConfirm;
         }
 
-        public bool BeginApplying()
+        /// <summary>
+        /// Starts applying the selection and hands its mask over: the caller owns it from here on, and nothing in the
+        /// session frees it, so Esc, another tool, the pin changing or a click's late mask cannot free it while the
+        /// confirm reads it on the thread pool. Null when there is nothing to confirm.
+        /// </summary>
+        public SkiaSharp.SKBitmap? BeginApplying()
         {
             if (!CanConfirm)
-                return false;
+                return null;
 
+            var mask = CleanMaskBitmap;
+            CleanMaskBitmap = null;
             State = InteractiveRemovalState.Applying;
-            return true;
+            Version++;
+            return mask;
         }
 
-        public void EndApplying(bool succeeded)
+        /// <summary>
+        /// Gives a confirm that failed its mask back, so the selection can be confirmed again, if the session is still
+        /// that confirm's (<paramref name="version"/>, the version after <see cref="BeginApplying"/>). False when it is
+        /// not: the mask is still the caller's to free.
+        /// </summary>
+        public bool EndApplyingFailed(int version, SkiaSharp.SKBitmap mask)
         {
-            if (State != InteractiveRemovalState.Applying)
-                return;
+            if (State != InteractiveRemovalState.Applying || !IsCurrent(version))
+                return false;
 
-            if (succeeded)
-            {
-                Cancel();
-                return;
-            }
-
-            State = CanConfirm ? InteractiveRemovalState.ReadyToConfirm : InteractiveRemovalState.Collecting;
+            CleanMaskBitmap = mask;
+            State = InteractiveRemovalState.ReadyToConfirm;
+            return true;
         }
 
         private void DisposeCleanMask()
@@ -343,36 +374,47 @@ public partial class FloatingImageViewModel
 
     private async Task RefineMaskAsync()
     {
+        // The selection this mask is for. Esc, another tool, a confirm, the pin changing or closing, a later click or an
+        // undo all move the session on, and a mask that comes back after that belongs to no selection: it is dropped, not
+        // shown (it used to stay on the pin after the tool was left) and not handed to the session (where it freed the
+        // selection's own mask). SAM2 gets the points in an array of their own, since it reads them on the thread pool
+        // while the UI thread goes on changing the session's.
+        int version = _interactiveSession.Version;
+        (double X, double Y, bool IsPositive)[] points = _interactiveSession.CopyPoints();
+
         // Check Resources and download if needed (SAM2)
         if (!await EnsureAIResourcesAsync()) return;
 
         var sam2 = await GetSAM2ServiceAsync();
         if (sam2 == null) return;
         if (!await PrepareCurrentImageForSam2Async(sam2)) return;
-    
+        // Moved on while the pin was being prepared (the encoder can take a second): nothing to ask SAM2 for.
+        if (!_interactiveSession.IsCurrent(version)) return;
+
         DiagnosticText = "AI: Refining...";
         try
         {
             IsProcessing = true;
             ProcessingText = Localization["StatusProcessing"];
-            
-            var cleanMask = await sam2.GetMaskBitmapAsync(_interactiveSession.Points);
-            var iouInfo = sam2.LastIouInfo;
-            DiagnosticText = $"AI: ({_interactiveSession.PointCount} pts) {iouInfo}";
+
+            var cleanMask = await sam2.GetMaskBitmapAsync(points);
+            if (_interactiveSession.IsCurrent(version))
+            {
+                DiagnosticText = $"AI: ({points.Length} pts) {sam2.LastIouInfo}";
+            }
 
             if (cleanMask != null)
             {
                 SkiaSharp.SKColor overlayColor = _interactiveSession.IsKeepSelectedMode
                     ? new SkiaSharp.SKColor(0, 255, 100, 150)   // Green for "Keep mode" (Shift+Click)
                     : new SkiaSharp.SKColor(255, 80, 80, 150);  // Red for "Remove mode" (Normal)
-                (double X, double Y, bool IsPositive)[] points = [.. _interactiveSession.Points];
                 int imageWidth = Image?.PixelSize.Width ?? 1;
                 int imageHeight = Image?.PixelSize.Height ?? 1;
 
                 // The preview is drawn and handed to Avalonia off the UI thread, which spent about 18 ms of every
                 // click on it at 3840x2400. It works from copies of what the UI thread can change meanwhile, and the
                 // session gets the mask only after, since the session disposes it when the next point comes in.
-                Bitmap interactiveMaskBitmap;
+                Bitmap? interactiveMaskBitmap = null;
                 try
                 {
                     interactiveMaskBitmap = await Task.Run(() =>
@@ -380,17 +422,32 @@ public partial class FloatingImageViewModel
                 }
                 finally
                 {
-                    _interactiveSession.SetCleanMaskBitmap(cleanMask);
+                    if (_interactiveSession.IsCurrent(version))
+                    {
+                        _interactiveSession.SetCleanMaskBitmap(cleanMask);
+                    }
+                    else
+                    {
+                        interactiveMaskBitmap?.Dispose();
+                        interactiveMaskBitmap = null;
+                        cleanMask.Dispose();
+                    }
                 }
 
-                InteractiveMask = interactiveMaskBitmap;
-                RaiseInteractiveStateChanged();
+                if (interactiveMaskBitmap != null)
+                {
+                    InteractiveMask = interactiveMaskBitmap;
+                    RaiseInteractiveStateChanged();
+                }
             }
         }
         catch (Exception ex)
         {
             AppLog.Error("FloatingImage.RefineMask", ex);
-            DiagnosticText = $"Refine Error: {ex.Message}";
+            if (_interactiveSession.IsCurrent(version))
+            {
+                DiagnosticText = $"Refine Error: {ex.Message}";
+            }
         }
         finally
         {
@@ -672,21 +729,23 @@ public partial class FloatingImageViewModel
 
     private async Task ConfirmInteractiveAsync()
     {
-        if (Image == null || InteractiveMask == null || !_interactiveSession.BeginApplying()) return;
+        var sourceImage = Image;
+        if (sourceImage == null || InteractiveMask == null) return;
 
-        var applySucceeded = false;
+        // The selection's mask is this confirm's from here on, and the selection's mode is read here, on the UI thread:
+        // the pixel work reads both on the thread pool, and Esc, another tool, the pin changing or a click's late mask
+        // used to free the mask under it (a native access violation, the app gone) and reset the mode.
+        var cleanMaskBitmap = _interactiveSession.BeginApplying();
+        if (cleanMaskBitmap == null) return;
+        int version = _interactiveSession.Version;
+        bool keepSelected = _interactiveSession.IsKeepSelectedMode;
+
+        bool maskHandedBack = false;
         try
         {
             RaiseInteractiveStateChanged();
             IsProcessing = true;
             ProcessingText = Localization["ProcessingAI"] ?? "Applying Removal...";
-            
-            PushUndoState();
-
-            var sourceImage = Image;
-            var cleanMaskBitmap = _interactiveSession.CleanMaskBitmap;
-            if (sourceImage == null) throw new Exception("Source image is unavailable.");
-            if (cleanMaskBitmap == null) throw new Exception("No valid mask generated.");
 
             // 1. Process with SkiaSharp in a background thread to prevent UI freeze
             var confirmedBitmap = await Task.Run(() =>
@@ -696,7 +755,7 @@ public partial class FloatingImageViewModel
 
                 using (originalBmp)
                 {
-                    using var resultBmp = InteractiveMaskPixels.ApplyToImage(originalBmp, cleanMaskBitmap, _interactiveSession.IsKeepSelectedMode);
+                    using var resultBmp = InteractiveMaskPixels.ApplyToImage(originalBmp, cleanMaskBitmap, keepSelected);
 
                     if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(resultBmp, out var detachedBitmap, out var detachError) || detachedBitmap == null)
                         throw new Exception(detachError ?? "Failed to materialize interactive output.");
@@ -705,19 +764,39 @@ public partial class FloatingImageViewModel
                 }
             });
 
-            Image = confirmedBitmap;
-            applySucceeded = true;
+            // Esc or another tool while that ran left the tool, but the confirm came first, so it still lands, and
+            // Ctrl+Z takes it back. It is dropped instead if the pin has changed since (an undo, say, which landing
+            // would quietly take back) or has closed.
+            if (_disposed || !ReferenceEquals(Image, sourceImage))
+            {
+                confirmedBitmap.Dispose();
+                return;
+            }
 
-            IsPointRemovalMode = false;
+            // Whether the tool is still this selection's to leave: after Esc it may be a new selection's.
+            bool stillSelecting = _interactiveSession.IsCurrent(version);
+            // Only now, so that a confirm which fails or is dropped leaves no empty undo step.
+            PushUndoState();
+            Image = confirmedBitmap;
+            if (stillSelecting)
+            {
+                IsPointRemovalMode = false;
+            }
         }
         catch (Exception ex)
         {
             AppLog.Error("FloatingImage.ConfirmInteractive", ex);
+            // A selection that is still this confirm's gets its mask back, to be confirmed again.
+            maskHandedBack = _interactiveSession.EndApplyingFailed(version, cleanMaskBitmap);
             ShowErrorDialog($"Failed to apply background removal: {ex.Message}");
         }
         finally
         {
-            _interactiveSession.EndApplying(applySucceeded);
+            if (!maskHandedBack)
+            {
+                cleanMaskBitmap.Dispose();
+            }
+
             RaiseInteractiveStateChanged();
             IsProcessing = false;
         }

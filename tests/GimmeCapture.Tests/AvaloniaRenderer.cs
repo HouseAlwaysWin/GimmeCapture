@@ -27,21 +27,26 @@ internal static class AvaloniaRenderer
     /// A premultiplied BGRA bitmap, the pin's form, with <paramref name="pixel"/>(x, y) at every pixel as the word it
     /// is in memory (0xAARRGGBB).
     /// </summary>
-    public static unsafe WriteableBitmap Create(int width, int height, Func<int, int, uint> pixel)
+    public static WriteableBitmap Create(int width, int height, Func<int, int, uint> pixel)
     {
         EnsureRegistered();
         var bitmap = new WriteableBitmap(new PixelSize(width, height), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
+        Fill(bitmap, pixel);
+        return bitmap;
+    }
+
+    /// <summary>Writes <paramref name="pixel"/>(x, y) to every pixel of a BGRA <paramref name="bitmap"/>.</summary>
+    public static unsafe void Fill(WriteableBitmap bitmap, Func<int, int, uint> pixel)
+    {
         using var locked = bitmap.Lock();
-        for (int y = 0; y < height; y++)
+        for (int y = 0; y < locked.Size.Height; y++)
         {
             uint* row = (uint*)(locked.Address + (y * locked.RowBytes));
-            for (int x = 0; x < width; x++)
+            for (int x = 0; x < locked.Size.Width; x++)
             {
                 row[x] = pixel(x, y);
             }
         }
-
-        return bitmap;
     }
 
     /// <summary>The bitmap's pixels row after row, each as the word it is in memory (0xAARRGGBB for BGRA).</summary>
@@ -55,6 +60,75 @@ internal static class AvaloniaRenderer
         }
 
         return pixels;
+    }
+}
+
+/// <summary>
+/// A pin's bitmap whose pixel copies a test can stop at the door. Work that starts by copying the pin, as a smart
+/// selection's confirm does, then waits there, at a known point, while the test does something else.
+/// </summary>
+internal sealed class HeldCopyBitmap : WriteableBitmap
+{
+    private readonly object _lock = new();
+    private TaskCompletionSource? _hold;
+    private TaskCompletionSource _copyWaiting = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>A premultiplied BGRA bitmap, as <see cref="AvaloniaRenderer.Create"/> makes them.</summary>
+    public HeldCopyBitmap(int width, int height, Func<int, int, uint> pixel)
+        : base(new PixelSize(width, height), new Vector(96, 96), PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Premul)
+    {
+        AvaloniaRenderer.Fill(this, pixel);
+    }
+
+    /// <summary>Done once a copy held since the last <see cref="HoldCopies"/> is waiting at the door.</summary>
+    public Task CopyWaiting
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _copyWaiting.Task;
+            }
+        }
+    }
+
+    /// <summary>Holds every copy from now on until <see cref="ReleaseCopies"/>.</summary>
+    public void HoldCopies()
+    {
+        lock (_lock)
+        {
+            _copyWaiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+    }
+
+    public void ReleaseCopies()
+    {
+        TaskCompletionSource? hold;
+        lock (_lock)
+        {
+            hold = _hold;
+            _hold = null;
+        }
+
+        hold?.TrySetResult();
+    }
+
+    public override void CopyPixels(PixelRect sourceRect, IntPtr buffer, int bufferSize, int stride)
+    {
+        TaskCompletionSource? hold;
+        lock (_lock)
+        {
+            hold = _hold;
+            if (hold != null)
+            {
+                _copyWaiting.TrySetResult();
+            }
+        }
+
+        // Blocks whatever thread is copying, which is the point: it is the work being held.
+        hold?.Task.Wait();
+        base.CopyPixels(sourceRect, buffer, bufferSize, stride);
     }
 }
 
