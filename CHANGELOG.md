@@ -48,6 +48,9 @@
 
 ### ⚡ Performance
 
+- **Translating no longer takes a snapshot of every running process a dozen times per press.** A debug log line read
+  the app's memory use, which on Windows means a snapshot of every process, several times on the UI thread, and was
+  then thrown away unless debug logging was on. The memory use is now read only when debug logging is on.
 - **Text detection no longer throws away tens of megabytes per scan.** Reading the detection model's result made a
   small array for every pixel, about 38 MB of garbage for a 1280×736 scan. It is now read straight from the model's
   output.
