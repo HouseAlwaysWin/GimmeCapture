@@ -48,6 +48,9 @@
 
 ### ⚡ Performance
 
+- **A rejected translation falls back to translating line by line a whole generation sooner.** The rejected text was
+  first sent to the model again with the same languages, and the model answers the same text the same way every time,
+  so the wait bought the same answer. The line-by-line fallback now starts at once.
 - **A second translation within two minutes no longer loads the translation model again.** Each Translate press freed
   the 2.5 GB model when it finished, and each capture overlay started with a translation engine and cache of its own,
   so every press loaded the model again and no overlay reused another's translations. The model and the translations

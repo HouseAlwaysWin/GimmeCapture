@@ -44,18 +44,4 @@ internal sealed class TranslationEngineRunner
 
         return result ?? string.Empty;
     }
-
-    public Task<string> TranslateWithLlamaAsync(
-        string text,
-        OCRLanguage sourceLanguage,
-        TranslationLanguage targetLanguage,
-        CancellationToken cancellationToken)
-    {
-        return TranslateSelectedAsync(
-            text,
-            sourceLanguage,
-            targetLanguage,
-            TranslationEngine.LlamaSharp,
-            cancellationToken);
-    }
 }

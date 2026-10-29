@@ -26,15 +26,16 @@ public class TranslationEngineRunnerTests
     }
 
     [Fact]
-    public async Task TranslateWithLlamaAsync_ForwardsLanguagesAndText()
+    public async Task TranslateSelectedAsync_ForwardsLanguagesAndText()
     {
         var engine = new FakeEngine("\u3053\u3093\u306b\u3061\u306f");
         var runner = new TranslationEngineRunner([engine]);
 
-        string result = await runner.TranslateWithLlamaAsync(
+        string result = await runner.TranslateSelectedAsync(
             "hello",
             OCRLanguage.English,
             TranslationLanguage.Japanese,
+            TranslationEngine.LlamaSharp,
             CancellationToken.None);
 
         Assert.Equal("\u3053\u3093\u306b\u3061\u306f", result);

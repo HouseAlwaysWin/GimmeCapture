@@ -255,22 +255,10 @@ public partial class TranslationService : IDisposable
                 inferredFontSize = Math.Clamp(inferredFontSize, 8.0, 72.0);
             }
 
+            // A rejected translation goes straight to the per-block fallback. It used to be asked for again first, with
+            // the same text, languages and engine, but sampling is greedy or fixed-seed, so the same answer came back
+            // after a whole generation's wait.
             bool acceptable = _translationPipeline.IsAcceptable(mergedText, translated, _settings.TargetLanguage);
-            if (!acceptable)
-            {
-                string retriedTranslation = _translationPipeline.SanitizeTranslation(
-                    mergedText,
-                    await ForceTranslateAsync(mergedText, ocrLang, _settings.TargetLanguage, ct),
-                    _settings.TargetLanguage);
-                string retriedBestEffort = _translationPipeline.PromoteBestEffort(mergedText, retriedTranslation, _settings.TargetLanguage);
-                if (retriedBestEffort.Length > bestEffortTranslation.Length)
-                {
-                    bestEffortTranslation = retriedBestEffort;
-                }
-
-                translated = retriedTranslation;
-                acceptable = _translationPipeline.IsAcceptable(mergedText, translated, _settings.TargetLanguage);
-            }
 
             List<TranslatedBlock>? perBlockTranslation = null;
             if (!acceptable)
@@ -481,15 +469,6 @@ public partial class TranslationService : IDisposable
             sourceLang,
             _settings.TargetLanguage,
             _settings.SelectedTranslationEngine,
-            ct);
-    }
-
-    private async Task<string> ForceTranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct)
-    {
-        return await _translationEngineRunner.TranslateWithLlamaAsync(
-            text,
-            sourceLang,
-            targetLang,
             ct);
     }
 
