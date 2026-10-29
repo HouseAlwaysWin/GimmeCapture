@@ -94,11 +94,9 @@ public partial class FloatingVideoViewModel
                 return;
             }
 
-            // Move the export to a stable per-pin temp file so the GUID export dir can be reused/cleaned. The new
-            // pin owns this file and deletes it on dispose (a crash orphan is swept at next startup).
-            string pinDir = PinTempDirectory.EnsureDirectory();
-            string pinnedPath = Path.Combine(pinDir, $"crop_{Guid.NewGuid():N}{Path.GetExtension(exported)}");
-            File.Copy(exported, pinnedPath, true);
+            // The new pin owns this file and deletes it on dispose (a crash orphan is swept at next startup). On the
+            // pool: it used to be a copy of the whole clip on the UI thread.
+            string pinnedPath = await Task.Run(() => MoveExportToPinTempFile(exported));
 
             OpenPinnedVideoWindowAction?.Invoke(
                 pinnedPath,
@@ -127,6 +125,44 @@ public partial class FloatingVideoViewModel
         finally
         {
             IsProcessing = false;
+        }
+    }
+
+    /// <summary>
+    /// Moves a finished crop export to a <c>crop_*</c> file in <see cref="PinTempDirectory"/> and deletes the export's
+    /// own folder, returning the new path. Both are in the temp folder, so the move is a rename: the copy it replaces
+    /// duplicated the clip and left the export folder behind.
+    /// </summary>
+    internal static string MoveExportToPinTempFile(string exported)
+    {
+        string pinnedPath = Path.Combine(
+            PinTempDirectory.EnsureDirectory(), $"crop_{Guid.NewGuid():N}{Path.GetExtension(exported)}");
+        File.Move(exported, pinnedPath, overwrite: true);
+        TryDeleteExportFolder(exported);
+        return pinnedPath;
+    }
+
+    /// <summary>
+    /// Deletes the <c>GimmeCapture_Export_*</c> folder an export wrote <paramref name="exportedFile"/> into, once that
+    /// file has been moved or copied on. A file anywhere else is left alone. Best effort: the start-up sweep
+    /// (<see cref="TempWorkspaceCleaner"/>) removes a folder left behind.
+    /// </summary>
+    internal static void TryDeleteExportFolder(string exportedFile)
+    {
+        string? folder = Path.GetDirectoryName(exportedFile);
+        if (folder == null
+            || !Path.GetFileName(folder).StartsWith("GimmeCapture_Export_", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Debug("FloatingVideo.ExportCleanup", ex);
         }
     }
 
@@ -489,7 +525,8 @@ public partial class FloatingVideoViewModel
                 }
             }
 
-            File.Copy(videoOnly, outputPath, true);
+            // A rename within this export's own folder, off the UI thread: it was a copy of the whole clip on it.
+            await Task.Run(() => File.Move(videoOnly, outputPath, overwrite: true));
             return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0 ? outputPath : null;
         }
         catch (Exception ex)
@@ -630,7 +667,18 @@ public partial class FloatingVideoViewModel
             var produced = await ProduceExportFileAsync(targetExt);
             if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
             {
-                System.IO.File.Copy(produced, targetPath, true);
+                // On the pool: an unedited save copies the whole recording, and this ran on the UI thread. An export
+                // made for this save is copied too rather than moved, so the saved file gets the permissions of the
+                // folder it lands in, not the temp folder's; the export's folder goes afterwards.
+                bool ownExport = !string.Equals(produced, VideoPath, StringComparison.OrdinalIgnoreCase);
+                await Task.Run(() =>
+                {
+                    File.Copy(produced, targetPath, true);
+                    if (ownExport)
+                    {
+                        TryDeleteExportFolder(produced);
+                    }
+                });
                 await _sourceFiles.SavedAsAsync(targetPath);
                 FileLocationService.RevealInFileExplorer(targetPath);
                 return;

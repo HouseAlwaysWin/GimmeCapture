@@ -61,4 +61,54 @@ public class FloatingVideoCropTests
         Assert.Equal(0, crop.Width);
         Assert.Equal(0, crop.Height);
     }
+
+    [Fact]
+    public void MoveExportToPinTempFile_MovesTheClipIntoThePinFolder_AndDropsTheExportFolder()
+    {
+        // A crop copied its export into the pin folder on the UI thread, so the clip sat in the temp folder twice and
+        // its GimmeCapture_Export_* folder stayed until a start-up sweep half a day later.
+        string exportFolder = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(exportFolder);
+        string exported = Path.Combine(exportFolder, "output.mp4");
+        File.WriteAllBytes(exported, [1, 2, 3]);
+        string? pinned = null;
+        try
+        {
+            pinned = FloatingVideoViewModel.MoveExportToPinTempFile(exported);
+
+            Assert.True(PinTempDirectory.IsOwnedTempFile(pinned));
+            Assert.StartsWith("crop_", Path.GetFileName(pinned));
+            Assert.Equal(".mp4", Path.GetExtension(pinned));
+            Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(pinned));
+            Assert.False(Directory.Exists(exportFolder));
+        }
+        finally
+        {
+            PinTempDirectory.TryDeleteOwnedFile(pinned);
+            if (Directory.Exists(exportFolder))
+            {
+                Directory.Delete(exportFolder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void TryDeleteExportFolder_LeavesAFolderThatIsNotAnExportsAlone()
+    {
+        // The pin's own clip is no export: saving it unedited must not take its folder with it.
+        string folder = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string clip = Path.Combine(folder, "clip.mp4");
+        File.WriteAllBytes(clip, [1]);
+        try
+        {
+            FloatingVideoViewModel.TryDeleteExportFolder(clip);
+
+            Assert.True(File.Exists(clip));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

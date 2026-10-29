@@ -236,7 +236,7 @@ internal static class CompressPipeline
                 return false;
             }
 
-            File.Copy(finalTemp, outputPath, true);
+            await CopyToOutputAsync(finalTemp, outputPath);
             return true;
         }
         finally
@@ -286,7 +286,7 @@ internal static class CompressPipeline
                 return false;
             }
 
-            File.Copy(staged, outputPath, true);
+            await CopyToOutputAsync(staged, outputPath);
             progress.Report(1);
             return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
         }
@@ -364,7 +364,7 @@ internal static class CompressPipeline
                 return false;
             }
 
-            File.Copy(finalTemp, outputPath, true);
+            await CopyToOutputAsync(finalTemp, outputPath);
             progress.Report(1.0);
             return true;
         }
@@ -528,6 +528,12 @@ internal static class CompressPipeline
             catch (Exception ex) { AppLog.Error("Compress.Cleanup", ex); }
         }
     }
+
+    // Copies a finished encode from its temp folder to the user's output, on the pool: the batch runner resumes on the
+    // UI thread, and an output can run to gigabytes. A copy rather than a move, so the output gets the permissions of
+    // the folder it lands in; the caller deletes the temp folder either way.
+    private static Task CopyToOutputAsync(string stagedPath, string outputPath) =>
+        Task.Run(() => File.Copy(stagedPath, outputPath, true));
 
     // Settings the chunks were encoded with; a change invalidates persisted chunks (different pixels/bitstream).
     private static string BuildSegmentSettingsKey(CompressSettingsSnapshot s, int rotationDegrees, double trimStart, double trimEnd) =>

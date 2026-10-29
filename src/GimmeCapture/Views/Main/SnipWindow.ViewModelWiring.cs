@@ -590,7 +590,9 @@ public partial class SnipWindow : Window
                     string ext = System.IO.Path.GetExtension(clipPath).TrimStart('.');
                     if (string.IsNullOrEmpty(ext)) ext = "mp4";
                     string managed = captureHistory.CreateManagedCapturePath(ext);
-                    System.IO.File.Copy(clipPath, managed, true);
+                    // On the pool: the clip can be a whole recording, and this ran on the UI thread. A copy, not a
+                    // move, because the clipboard still offers the original.
+                    await Task.Run(() => System.IO.File.Copy(clipPath, managed, true));
                     await captureHistory.AddVideoAsync(managed, w, h, GimmeCapture.Models.CaptureHistorySource.PlainCopy);
                 }
                 catch (Exception ex)

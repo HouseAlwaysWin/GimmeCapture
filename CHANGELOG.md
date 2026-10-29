@@ -41,6 +41,10 @@
 
 ### ⚡ Performance
 
+- **Saving or cropping a video pin, and finishing a compress, no longer freeze the app while the file is copied.** The
+  finished file, for an unedited pin the whole recording, was copied on the UI thread; it now copies in the background
+  while the progress shows. A crop moves its clip instead, and a save or crop no longer leaves its export in the temp
+  folder.
 - **The app no longer loads FFmpeg and tests the graphics card's AV1 encoders at every launch.** The check that tells
   the Record tab whether AV1 and GIF recording are available ran at every start-up, a launch to the tray at login
   included. It now runs when the Record tab is first opened, or as an AV1 recording starts, and FFmpeg loads the first
