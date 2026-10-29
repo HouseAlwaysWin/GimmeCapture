@@ -2,6 +2,26 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.70.0 - 2026-10-29
+
+- **Faster all round** — the app opens about a third of a second sooner and its hotkeys work about half a second
+  sooner; the Windows download is a folder, 75 files and 49 MB smaller, that no longer unpacks itself after an
+  update; the History and Compress tabs, copying, saving and pinning no longer freeze the app.
+- **Typing elsewhere is never held up** — the hotkeys' keyboard hook and the capture overlay's run off the UI
+  thread, so a busy app no longer slows keys typed in other programs, and its hotkeys keep working.
+- **Fewer crashes** — a failing action, a smart-selection confirm, switching the translation model mid-translation,
+  a pinned video's save dialog or a model choice on the Modules tab can no longer close the app.
+- **Smart selection and background removal** — background removal runs on the GPU; smart selection works where the
+  graphics card cannot run it, takes about 2 ms of the UI thread a click on a 4K pin, and shows what it removes as
+  transparent.
+- **Recording** — recording a single window takes about half the CPU, starting and stopping a long recording no
+  longer freeze the app, a recording that fails to save is kept, and recordings never saved no longer pile up.
+- **Pinned videos** — seeking, dragging the seek bar, muting and editing the timeline no longer stall or stop the
+  clip, and a clip without sound no longer fills the log with warnings.
+- **Storage, accessibility and languages** — the data folder no longer only grows, AI Core is a 176 MB download
+  instead of 514 MB, screen readers can tell the buttons apart, keyboard focus is visible, and no text is left in
+  only one language.
+
 ## v0.68.1 - 2026-09-16
 
 - **Run on startup works in released builds again** — they no longer ask for administrator rights, which since
