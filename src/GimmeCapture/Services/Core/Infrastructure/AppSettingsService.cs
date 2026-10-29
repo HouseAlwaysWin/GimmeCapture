@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 
@@ -61,12 +62,19 @@ public class AppSettingsService : IAppSettingsService
             Path.GetFullPath(RuntimeExecutableDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
             StringComparison.OrdinalIgnoreCase);
 
-    private JsonSerializerOptions GetJsonOptions() => new JsonSerializerOptions 
-    { 
+    // One set of options for every load and save. System.Text.Json works out a type's serialization metadata once per
+    // options instance, and a new instance for each save made it work out AppSettings' again, on the UI thread, at every
+    // capture. Shared, the start-up read builds it on the thread pool for the saves too.
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
         WriteIndented = true,
         PropertyNameCaseInsensitive = true,
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
+
+    // One save at a time writes the config, in the order they were asked for: each serializes the settings on the thread
+    // that asked, and two writes in flight at once could land the older one last.
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
 
     /// <summary>
     /// v0 -> v1: migrate legacy Translate.HoldSingle / HoldMulti into SelectionHoldModifier
@@ -567,7 +575,7 @@ public class AppSettingsService : IAppSettingsService
     {
         int sourceVersion = DetectConfigVersion(json);
         string normalizedJson = NormalizeLegacyTranslationEngineJson(json);
-        var settings = JsonSerializer.Deserialize<AppSettings>(normalizedJson, GetJsonOptions());
+        var settings = JsonSerializer.Deserialize<AppSettings>(normalizedJson, JsonOptions);
         if (settings == null)
         {
             return new SavedConfig(source, null);
@@ -701,30 +709,28 @@ public class AppSettingsService : IAppSettingsService
     {
         try
         {
+            // Serialized on the caller's thread, the one that changes Settings, so the file gets them as they stood at
+            // this call.
             Settings.ConfigVersion = CurrentConfigVersion;
-            var options = GetJsonOptions();
-            var json = JsonSerializer.Serialize(Settings, options);
+            var json = JsonSerializer.Serialize(Settings, JsonOptions);
+            Language language = Settings.Language;
 
             if (IsRuntimeDefaultStorage)
                 BaseDataDirectory = RuntimeVersionedAppDataPath;
 
             string path = ConfigPath;
-            // A save asked for although nothing persisted changed leaves the file alone. Every launch used to rewrite
-            // it that way, and so did every capture, which saves before it opens.
-            if (await HoldsAsync(path, json))
+            string directory = BaseDataDirectory;
+            await _writeGate.WaitAsync().ConfigureAwait(false);
+            try
             {
-                AppLog.Debug("Settings.Save", "Unchanged; the config was not rewritten.");
-                return;
+                // The rest is file I/O, on the thread pool: the caller is the UI thread, at every capture. Awaiting it
+                // there did not leave that thread, as a read of a file the cache holds completes at once.
+                await Task.Run(() => WriteIfChangedAsync(path, directory, json, language)).ConfigureAwait(false);
             }
-
-            DebugLog($"Saving settings to {path}. Language: {Settings.Language}");
-
-            if (!Directory.Exists(BaseDataDirectory))
+            finally
             {
-                Directory.CreateDirectory(BaseDataDirectory);
+                _writeGate.Release();
             }
-            await AtomicFile.WriteAllTextAsync(path, json);
-            DebugLog($"Saved to {path} successfully.");
         }
         catch (Exception ex)
         {
@@ -732,12 +738,32 @@ public class AppSettingsService : IAppSettingsService
         }
     }
 
+    private async Task WriteIfChangedAsync(string path, string directory, string json, Language language)
+    {
+        // A save asked for although nothing persisted changed leaves the file alone. Every launch used to rewrite it that
+        // way, and so did every capture, which saves as it opens.
+        if (await HoldsAsync(path, json).ConfigureAwait(false))
+        {
+            AppLog.Debug("Settings.Save", "Unchanged; the config was not rewritten.");
+            return;
+        }
+
+        DebugLog($"Saving settings to {path}. Language: {language}");
+
+        if (!Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+        await AtomicFile.WriteAllTextAsync(path, json).ConfigureAwait(false);
+        DebugLog($"Saved to {path} successfully.");
+    }
+
     // Whether the config at path already holds exactly json.
     private static async Task<bool> HoldsAsync(string path, string json)
     {
         try
         {
-            return File.Exists(path) && await File.ReadAllTextAsync(path) == json;
+            return File.Exists(path) && await File.ReadAllTextAsync(path).ConfigureAwait(false) == json;
         }
         catch (Exception ex)
         {

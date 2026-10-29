@@ -26,16 +26,23 @@ public partial class MainWindowViewModel
             }
         }
 
-        // Persist without making the overlay wait for it. The snapshot is still taken here, so what lands on disk
-        // is the state at the moment of this capture — but the serialize + atomic file write no longer sit
-        // between the hotkey and the overlay appearing. That write is ordinary disk I/O: usually a few ms, and
-        // occasionally seconds when something else (antivirus, a busy disk) is in the way, which is exactly the
-        // "I pressed the hotkey and nothing happened" report. The debounced auto-save covers the same state
-        // anyway, so nothing is lost if this write finishes after the overlay is up.
-        SaveSettingsAsync().Forget("Settings.SaveOnCapture");
         RequestCaptureAction?.Invoke(mode);
         SetStatus("StatusSnip");
+
+        // Saved once the overlay is up. Started ahead of it, the save ran on this thread up to its first real wait, so the
+        // overlay waited for the settings snapshot, the serialize and, with the config cached, the read that leaves an
+        // unchanged file alone. The snapshot is now taken a frame after the hotkey, which writes nothing older: every
+        // settings change queues a save of its own (QueueSettingsSave), and what this one adds is having the state of
+        // this capture on disk straight away.
+        PostWhenIdle(() => SaveSettingsAsync().Forget("Settings.SaveOnCapture"));
     }
+
+    /// <summary>
+    /// Runs work on the UI thread once the work queued ahead of it, a capture overlay opening say, is done. Tests set their
+    /// own and run the work themselves.
+    /// </summary>
+    internal Action<Action> PostWhenIdle { get; set; } = static work =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(work, Avalonia.Threading.DispatcherPriority.Background);
 
     internal async Task<CaptureLaunchResult> RunCaptureActionAsync(
         CaptureMode mode,

@@ -41,6 +41,10 @@
 
 ### ⚡ Performance
 
+- **A capture hotkey opens its overlay without waiting for the settings to be saved.** Every capture saves the
+  settings, and its overlay waited while they were turned into text, a step that redid its preparation from scratch
+  each time, and while the saved file was read back to see whether anything had changed. The overlay now opens first,
+  and the save follows once it is up, reading and writing the file in the background.
 - **Saving a recording to another drive no longer freezes the app.** After the save dialog, or when a recording
   stopped by itself, the file was moved out of the temp folder on the UI thread. To another drive that is a full copy,
   about 58 MB for each minute of 1080p at 30 fps, and the app and its hotkeys stopped responding until it was done. The
