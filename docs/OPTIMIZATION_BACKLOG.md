@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 22 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 23 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -24,6 +24,15 @@ tool.
   ones from 172-210 ms to 162-173 ms. Opening audio and video in parallel was left out on purpose: it would save the
   ~55 ms the audio takes, but only by risking the first frame arriving before the audio captures, which puts the head
   out of step.
+- Done since batch 1: **the audio gate's precision**. Timestamps on every loopback burst (the same probe, three processes
+  of three recordings) showed the first burst written holding 3-68 ms (38 on average) from before the first frame, so
+  system audio started that much behind the picture. Against the audio handed over, burst arrivals spread by at most
+  10 ms, so a burst can be placed by when it arrived. `RecordingAudioGate` now cuts each burst at the first frame and
+  at the stop, a pause or stop waits (0-13 ms measured) until the capture has handed over its audio up to the stop, and
+  each segment's audio ends in silence where its video ends: the video runs on 45-105 ms past the stop, and segment
+  audio came out 6-120 ms (53 on average) short of its video, so every part after a pause played that much early.
+  After: the muxed tracks start together and differ in length only by AAC framing (+27 or +36 ms), and the audio
+  written matches the gate's open span within 7 ms. Each pause or stop logs `Recording.AudioGate`.
 
 ## Hand checks still owed for batch 1
 
@@ -39,6 +48,9 @@ These were covered by unit tests only; check them in the real app before a relea
   first `Recording.StartTimings` line (`n=1`) close to the later ones.
 - **System-audio keep-alive**: while recording, the app shows as a silent session in the Volume Mixer, and each segment
   starts about 65 ms later. Nothing should be audible.
+- **Audio gate**: each pause and stop logs a `Recording.AudioGate` line (`head`, `tail`, `pad`, `waited`), with `pad`
+  about 45-105 ms and `waited` a few ms. A recording paused once or twice should stay in step after each pause, which
+  no test covers: the probe records single segments.
 
 ## How to run a batch
 
@@ -98,14 +110,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   encoded only after stop (433 ms for 16 s of audio, est. half a minute per 30-minute recording); after a pause the
   video is rewritten twice. Drop the delay, stop everything then await together, encode AAC live or alongside the
   concat, concat and mux in one pass into the destination folder.
-- **The audio gate is only as fine as NAudio's 60-70 ms loopback bursts** (S-M). `WasapiLoopbackCapture` polls, so
-  each `DataAvailable` carries 60-70 ms (48 of them in a 3 s recording). The first burst written after the first frame
-  holds 41-64 ms captured before it, so system audio plays up to ~65 ms behind the picture: inside the ~125 ms that
-  late audio usually goes unnoticed, which is why recordings look in step. The last burst before stop is dropped, and
-  a cold stop let the video run 99 ms past the gate once; both only shorten the end. Fix: trim the first burst to what
-  came after the first frame (it ends about when it arrives and its length is its byte count), or capture loopback
-  event-driven (a `WasapiCapture` subclass with `useEventSync`, about 10 ms packets). `RecordingAvSyncTests` measures
-  only the length difference, which mixes both ends, so measure the head on its own first.
+- **The Linux audio still gates whole packets and ends each part short** (S; needs a Linux desktop to check).
+  `LinuxPulseAudioRecorder` keeps or drops each packet on `RecordingAudioGate.IsOpen` and writes no silence at the
+  end, so after a pause every later part plays early by the video's overrun (45-105 ms on Windows). Give it a `Feed`,
+  placing each packet by its arrival as on Windows, and the `PadToVideoLength` step; check a paused recording's file
+  with `RecordingAvSyncTests`' file mode.
 - **gdigrab vs Desktop Duplication** (M; zero-copy L). `LibavGdigrabMkvSession.cs:140`: BitBlt with CAPTUREBLT, two CPU
   copies and a CPU conversion, est. 20-50 ms per frame at 4K, so 4K30 likely drops frames unseen (gdigrab never counts
   drops). FFmpeg's `ddagrab` + `hwdownload,format=bgra` into the existing converter gives monitor choice, crop, a GPU
@@ -236,7 +245,7 @@ Disjoint file sets for parallel agents:
 
 1. OCR cold start, recognition passes, language swap, per-scan buffers (`OcrRuntimeService`, `AIScanSessionService`,
    `PaddleOCREngine`, `OcrScriptDetector`, `QuickOcrService`; the lease at `SnipWindowFactory.Open` needs that file).
-2. Recording: composite WGC, WGC readback pacing, BGRA into hardware encoders, finalize, audio-gate precision.
+2. Recording: composite WGC, WGC readback pacing, BGRA into hardware encoders, finalize, the Linux audio gate.
 3. Compress: persistent editor/compare decoder, GIF/WebM intermediate with progress and cancel, stream copy at or above
    source size, rotation in YUV, segmented path.
 4. Pins: resize region, opaque scan, persistent video decoder, shared background removal, save/copy paths, close and

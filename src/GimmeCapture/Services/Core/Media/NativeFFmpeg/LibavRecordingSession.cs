@@ -22,6 +22,9 @@ internal abstract class LibavRecordingSession : IDisposable
     /// <summary>How long opening <see cref="SelectedEncoderName"/> took (<see cref="RecordingSegmentWriter.EncoderOpenTime"/>).</summary>
     public TimeSpan? EncoderOpenTime { get; protected set; }
 
+    /// <summary>The finished segment's <see cref="RecordingSegmentWriter.VideoLength"/>, once its file is complete.</summary>
+    public TimeSpan? VideoLength { get; protected set; }
+
     /// <summary>
     /// When true (default) GPU / Media-Foundation encoders (NVENC/QSV/AMF/MF) are tried before the
     /// software libx264/265 fallback. Set false to force software encoding.
@@ -54,6 +57,7 @@ internal abstract class LibavRecordingSession : IDisposable
         LastWarningMessage = null;
         SelectedEncoderName = null;
         EncoderOpenTime = null;
+        VideoLength = null;
 
         try
         {

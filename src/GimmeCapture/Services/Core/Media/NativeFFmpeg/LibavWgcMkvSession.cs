@@ -278,6 +278,7 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
 
             writer.Flush();
             writer.WriteTrailer();
+            VideoLength = writer.VideoLength;
 
             if (writer.FrameCount == 0)
             {

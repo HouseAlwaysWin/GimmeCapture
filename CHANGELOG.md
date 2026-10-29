@@ -30,6 +30,13 @@
   after it played early against the picture, and a recording made while nothing played had no system audio at all.
   The app now plays silence of its own to the same device while it records, which keeps the sound coming without
   being heard.
+- **Recorded sound starts with the picture and stays with it after a pause.** A recording takes its sound in 50-70 ms
+  pieces and kept or dropped each piece whole, so the sound could start up to 68 ms (38 on average) before the first
+  frame and played that much behind the picture. Pieces are now cut where the picture starts, which puts the two
+  within about 10 ms. Each part of a paused recording also had 6-120 ms less sound than picture: the piece holding the
+  pause was dropped, and the picture takes a frame or two more after it. The parts are joined end to end, so everything
+  after a pause played that much early, more with each pause. Each part's sound now runs to the pause, then holds
+  silence until its picture ends.
 - **Exporting a long clip as a GIF no longer fills up the computer's memory.** The export kept every frame of the clip
   in memory until it reached the last one, over 1 GB a minute at Medium quality and about 12 GB a minute of 1080p at
   High, whether recording as GIF, saving a pin as GIF or compressing to GIF. It now reads the clip twice, once to pick

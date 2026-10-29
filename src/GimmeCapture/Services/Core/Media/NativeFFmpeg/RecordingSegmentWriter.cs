@@ -19,6 +19,8 @@ internal sealed unsafe class RecordingSegmentWriter : IDisposable
     private AVFrame* _frame;
     private AVDictionary* _encoderOptions;
     private long _packets;
+    private long _lastPts = -1;
+    private AVRational _timeBase;
 
     private RecordingSegmentWriter()
     {
@@ -41,6 +43,13 @@ internal sealed unsafe class RecordingSegmentWriter : IDisposable
 
     /// <summary>Packets written to the file so far.</summary>
     public long PacketCount => _packets;
+
+    /// <summary>
+    /// How long the segment's video runs: to its last frame's stamp plus one frame, which is where finalize starts the
+    /// next segment when it joins them.
+    /// </summary>
+    public TimeSpan VideoLength =>
+        _lastPts < 0 ? TimeSpan.Zero : TimeSpan.FromSeconds((_lastPts + 1) * ffmpeg.av_q2d(_timeBase));
 
     /// <summary>
     /// Opens the recording encoder for <paramref name="width"/> x <paramref name="height"/> at <paramref name="fps"/>
@@ -81,6 +90,7 @@ internal sealed unsafe class RecordingSegmentWriter : IDisposable
 
         EncoderName = encoderName;
         EncoderWarning = warning;
+        _timeBase = _encoder->time_base;
 
         AVFormatContext* output = null;
         int allocated = ffmpeg.avformat_alloc_output_context2(&output, null, "matroska", outputPath);
@@ -132,6 +142,7 @@ internal sealed unsafe class RecordingSegmentWriter : IDisposable
     public void EncodeFrame(long pts)
     {
         _frame->pts = pts;
+        _lastPts = Math.Max(_lastPts, pts);
         FrameCount++;
         ThrowIfErr(ffmpeg.avcodec_send_frame(_encoder, _frame), "send_frame(enc)");
         LibavRecordingEncoder.WriteEncodedPackets(_encoder, _output, _stream, _packet, ref _packets);
@@ -140,6 +151,7 @@ internal sealed unsafe class RecordingSegmentWriter : IDisposable
     /// <summary>Encodes a frame the caller allocated and stamped, then frees it.</summary>
     public void EncodeAndFree(AVFrame* frame, string context)
     {
+        _lastPts = Math.Max(_lastPts, frame->pts);
         int sent = ffmpeg.avcodec_send_frame(_encoder, frame);
         ffmpeg.av_frame_free(&frame);
         ThrowIfErr(sent, context);

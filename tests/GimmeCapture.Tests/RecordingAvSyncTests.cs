@@ -136,7 +136,7 @@ public sealed class RecordingAvSyncTests
                 var audio = Assert.Single(extents, e => e.Type == AVMediaType.AVMEDIA_TYPE_AUDIO);
                 double difference = audio.LengthSeconds - video.LengthSeconds;
                 differences.Add(difference);
-                _output.WriteLine($"{Path.GetFileName(file)}: video {video.LengthSeconds:F3}s, audio {audio.LengthSeconds:F3}s, audio minus video {difference:+0.000;-0.000}s");
+                _output.WriteLine($"{Path.GetFileName(file)}: video {video.LengthSeconds:F3}s, audio {audio.LengthSeconds:F3}s, audio minus video {difference:+0.000;-0.000}s, starts {audio.StartSeconds - video.StartSeconds:+0.000;-0.000}s apart");
             }
 
             // In sync, both streams cover the same stretch of wall-clock time: what is left is an audio buffer, a video
@@ -198,6 +198,7 @@ public sealed class RecordingAvSyncTests
                     _output.WriteLine($"recording {i}: {service.LastStartTimings}");
                     await Task.Delay(RecordMilliseconds);
                     await service.StopAsync(); // returns once the final mux is written
+                    _output.WriteLine($"recording {i}: {service.LastAudioGate}");
 
                     if (File.Exists(output))
                     {

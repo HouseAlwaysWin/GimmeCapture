@@ -73,9 +73,9 @@ public partial class RecordingService : ReactiveObject
     private WaveFileWriter? _audioWriter;
     private NAudio.CoreAudioApi.WasapiCapture? _micCapture;
     private WaveFileWriter? _micWriter;
-    // Audio is written only while this segment's video is capturing: shut until its first frame, shut again the
-    // moment stop is requested. See StartSegmentAsync.
-    private volatile bool _audioGateOpen;
+    // Audio is written only for the stretch this segment's video captures: from its first frame until stop is
+    // requested, cut inside each capture's bursts. See StartSegmentAsync and RecordingAudioGate.
+    private readonly RecordingAudioGate _audioGate = new();
     private NAudio.CoreAudioApi.MMDevice? _micDevice;
     private int _startInProgress;
     private string _lastSelectedVideoEncoderName = string.Empty;
@@ -116,6 +116,9 @@ public partial class RecordingService : ReactiveObject
 
     /// <summary>The <c>Recording.StartTimings</c> line of the last start or resume (see <see cref="RecordingStartTimings"/>).</summary>
     internal string? LastStartTimings { get; private set; }
+
+    /// <summary>The <c>Recording.AudioGate</c> line of the last pause or stop (see <see cref="StopAudioAtVideoEndAsync"/>).</summary>
+    internal string? LastAudioGate { get; private set; }
 
     public void ClearLastRecording() { _outputFile = string.Empty; }
     
@@ -350,7 +353,7 @@ public partial class RecordingService : ReactiveObject
         // during the video's start-up — encoder set-up, the capture source opening, the wait for the first frame —
         // has no picture to go with. Finalize lines both tracks up at 0, so that audio used to play behind the picture
         // by the whole start-up: 2.2 s on a first recording after launch.
-        _audioGateOpen = false;
+        _audioGate.Reset();
 
         // Calculate physical pixels for high-DPI
         // Keep coordinate conversion consistent with screen capture services:
@@ -394,7 +397,7 @@ public partial class RecordingService : ReactiveObject
         if (started)
         {
             // The session's start-up gate has seen the first frame by now (or timed out and started anyway).
-            _audioGateOpen = true;
+            _audioGate.Open(Stopwatch.GetTimestamp());
         }
         else
         {

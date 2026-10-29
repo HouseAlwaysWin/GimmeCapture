@@ -539,8 +539,9 @@ public partial class RecordingService
 
     private async Task StopCurrentSegmentAsync()
     {
-        // The video stops capturing now; audio from here on would run past its last frame.
-        _audioGateOpen = false;
+        // Audio is kept up to now, when the stop was asked for. The video still takes a frame or so, and the audio ends
+        // in silence there (StopAudioAtVideoEndAsync).
+        _audioGate.Close(Stopwatch.GetTimestamp());
 
         bool anyTrackSession = _tracks.AsValueEnumerable().Any(t => t.Session != null || t.GdigrabSession != null);
         if (_nativeRecorder == null && _nativeWgcRecorder == null && _nativeWgcCompositeRecorder == null && !anyTrackSession)
@@ -587,6 +588,7 @@ public partial class RecordingService
         }
         finally
         {
+            TimeSpan? videoLength = StoppedVideoLength();
             _nativeWgcCompositeRecorder?.Dispose();
             _nativeWgcCompositeRecorder = null;
             _nativeWgcRecorder?.Dispose();
@@ -600,8 +602,32 @@ public partial class RecordingService
             }
             _nativeRecorder?.Dispose();
             _nativeRecorder = null;
-            StopAudioCapture();
-            StopMicCapture();
+            await StopAudioAtVideoEndAsync(videoLength).ConfigureAwait(false);
+        }
+    }
+
+    // The length of the segment's video, from whichever session recorded it: the longest track's in separate-files mode,
+    // where every track shares the one audio. Null when no session finished its file, such as a stop that timed out.
+    private TimeSpan? StoppedVideoLength()
+    {
+        TimeSpan? longest = null;
+        Consider(_nativeRecorder?.VideoLength);
+        Consider(_nativeWgcRecorder?.VideoLength);
+        Consider(_nativeWgcCompositeRecorder?.VideoLength);
+        foreach (var track in _tracks)
+        {
+            Consider(track.Session?.VideoLength);
+            Consider(track.GdigrabSession?.VideoLength);
+        }
+
+        return longest;
+
+        void Consider(TimeSpan? length)
+        {
+            if (length is { } value && (longest is null || value > longest))
+            {
+                longest = value;
+            }
         }
     }
 

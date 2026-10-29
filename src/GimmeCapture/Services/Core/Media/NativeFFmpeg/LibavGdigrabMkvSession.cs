@@ -245,6 +245,7 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             }
 
             writer.WriteTrailer();
+            VideoLength = writer.VideoLength;
 
             if (writer.FrameCount == 0)
             {
