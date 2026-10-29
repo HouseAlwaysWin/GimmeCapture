@@ -13,6 +13,11 @@
 
 ### 🛡️ Reliability
 
+- **Exporting a long clip as a GIF no longer fills up the computer's memory.** The export kept every frame of the clip
+  in memory until it reached the last one, over 1 GB a minute at Medium quality and about 12 GB a minute of 1080p at
+  High, whether recording as GIF, saving a pin as GIF or compressing to GIF. It now reads the clip twice, once to pick
+  the colours and once to write the frames as it goes, so it stays under about 250 MB however long the clip is, and the
+  GIF comes out exactly as before.
 - **Videos with uncompressed PCM sound keep it when exported or pinned.** Audio that names no speaker layout, such as
   a plain WAV, was refused frame by frame and came out silent. It now decodes.
 - **Exporting a long video no longer hangs while building its sound.** Past about 93 minutes of audio the buffer that
