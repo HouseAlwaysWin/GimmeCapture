@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 29 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 30 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -56,6 +56,12 @@ tool.
   it (58 ms in the user's log). After: 40, 51 and 8-12 MB; 30 lines read in 0.5 s instead of 1.9; a first detection
   after a load 95-108 ms instead of 316-394, a later one 64-72 instead of 16. `OcrRuntimeServiceTests` has the opt-in
   measurement (OCR_MODELS_DIR).
+- Done since batch 1: **the Record tab's AV1 check on Direct3D 11**. Opening `av1_nvenc` with frames in memory makes
+  FFmpeg's NVENC create a CUDA context, and the driver kept 190 MB of the process for good (Release tests, two runs).
+  `ProbeHardwareAv1` now opens NVENC on Direct3D 11 frames first (a D3D11VA device picked with `vendor_id=0x10de`, so
+  an Optimus laptop gets the NVIDIA adapter) and leaves 33-34 MB; an `ENOSYS` answer (the GPU lacks AV1) skips the CUDA
+  retry. Recordings were tried the same way and left as they are, see the NVENC item under Idle, start-up and memory.
+  `LibavRecordingEncoderTests` has the opt-in measurement (NVENC_PROBE=1).
 - Done since batch 1: **OCR scans ran twice**. The user's log had two `OcrScan.Detected` lines 61-69 ms apart after
   most Esc presses: entering Detecting starts the scan (`SnipSelectionStateController`), and `DismissOrClose` started a
   second one, left from 7c54042c, when the first could be skipped. One Esc started 2 scans before and 1 after (a
@@ -100,6 +106,9 @@ These were covered by unit tests only; check them in the real app before a relea
   Manager's Details tab with the Commit size column, a capture with text boxes, then Translate or copy text, should add
   tens of MB, not hundreds, and the commit size should fall back within two minutes. Translating a screenful of text
   should not be slower than in 0.70.0.
+- **Record tab AV1 check** (NVIDIA PC): in a fresh run, open the Record tab. The log should show
+  `Recording.HardwareAv1Probe: available` as before, and the commit size should rise by about 35 MB, not 190. An AV1
+  recording should still record AV1.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a
@@ -289,12 +298,13 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   an update found there waits for the main window, because `UpdateDialog.ShowDialog` cannot open centred on screen.
 - **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab, the
   Record-mode warm-up and a recording start probing together (`LibavRecordingEncoder`).
-- **NVENC keeps 190-250 MB once it has opened** (measure first, M). Opening and freeing `h264_nvenc` left private
-  bytes 190 MB higher, and 245 from the second open on (Debug tests, six opens); libx264 left nothing. FFmpeg's nvenc
-  makes a CUDA context of its own when handed no device, and the CUDA driver keeps its memory. Entering Record mode
-  opens it (`RecordingService.WarmUpAsync`), as does every NVENC recording. Try handing nvenc a D3D11VA device
-  (`hw_device_ctx`), which skips CUDA, with the current path as the fallback: an Optimus laptop's default adapter has
-  no NVENC.
+- **NVENC's driver keeps 200-260 MB once a recording has used it** (L: a child process is the only fix found). Release
+  tests at 3968x1160, 120 frames, three encoders a process: 208-266 MB on frames in memory (CUDA), the same on CUDA
+  with 4, 8 or 16 `surfaces`, 198-256 on Direct3D 11 frames with a device each, and one Direct3D 11 device kept across
+  encoders grew to 456 MB. Only an encoder that encodes nothing gains from Direct3D 11 (the AV1 check, done). Direct3D
+  11 frames also cost a recording start the device, 140 ms on the default adapter and 300-330 with `vendor_id`, against
+  a CUDA open of 110-180 ms; with a kept device an open took 7-17 ms. Entering Record mode opens NVENC for the warm-up,
+  so the 190 MB is paid there even when nothing is recorded: the price of the faster first start.
 
 ## Suggested batch 2 split
 
@@ -309,7 +319,7 @@ Disjoint file sets for parallel agents:
    undo memory, pin WebM audio.
 5. Overlay: frozen open, OCR double scan and cache, candidate render control, hover timer, record meter, scroll buffers.
 6. Idle and memory: UiStall pause, history thumbnails, raw input, ColorPicker/locales; DirectML after background
-   removal and smart selection, NVENC's driver memory.
+   removal and smart selection.
 
 The LLM context reuse is its own piece of work: measure load and generation times with the real model first.
 

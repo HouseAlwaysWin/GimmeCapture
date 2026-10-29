@@ -101,6 +101,11 @@
   itself up again whenever the width of the text changed, and the first detection after OCR has been idle about 0.1 s
   instead of 0.3-0.4 s; only a detection right after another is slower, about 70 ms instead of 16. On Linux, where OCR
   already ran on the CPU, it now holds 40-50 MB while loaded instead of about 340.
+- **Opening the Record tab no longer leaves 190 MB behind on an NVIDIA graphics card.** The tab checks whether the
+  card can record AV1 by opening its encoder, which loaded CUDA, and CUDA's driver kept 190 MB of the app until it
+  closed, though nothing was recorded. The check now opens the encoder through Direct3D 11, which leaves about 35 MB.
+  Recording itself is unchanged: once the NVIDIA encoder has recorded, its driver keeps 200-260 MB of the app either
+  way.
 - **Opening the Compress tab with a long queue no longer freezes the app.** The queue built a row for every file at
   once, each with two dropdowns and eight buttons, though its box shows four or five: a 79-file queue came to 9,300
   controls and froze the app for 0.77 s the first time the tab opened. Only the rows in view are built now, and the

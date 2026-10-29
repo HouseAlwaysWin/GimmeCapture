@@ -35,6 +35,47 @@ public class LibavRecordingEncoderTests
         }
     }
 
+    [Theory]
+    [InlineData("h264_nvenc", true)]
+    [InlineData("hevc_nvenc", true)]
+    [InlineData("av1_nvenc", true)]
+    [InlineData("h264_qsv", false)]
+    [InlineData("hevc_amf", false)]
+    [InlineData("h264_mf", false)]
+    [InlineData("libx264", false)]
+    public void TheAv1Probe_TriesOnlyNvencOnDirect3D11FramesFirst_OnWindows(string encoderName, bool isNvenc)
+    {
+        // Given frames in memory, NVENC loads CUDA, whose driver keeps 190 MB of the process for good.
+        bool[] expected = isNvenc && OperatingSystem.IsWindows() ? [true, false] : [false];
+
+        Assert.Equal(expected, LibavRecordingEncoder.ProbeFrameAttempts(encoderName));
+    }
+
+    /// <summary>
+    /// The AV1 probe the Record tab runs leaves little of the process behind. On CUDA it left 190 MB for good, recording
+    /// or not. Opt-in: it needs an NVIDIA GPU with NVENC, and reads the private bytes of the whole test process, so it
+    /// is best run on its own.
+    /// </summary>
+    [OptInFact("NVENC_PROBE=1")]
+    public void TheAv1Probe_LeavesLittleOfTheProcessBehind()
+    {
+        FFmpegRuntime.EnsureInitialized();
+        long baseline = PrivateBytes();
+
+        LibavRecordingEncoder.ProbeHardwareAv1();
+
+        Assert.InRange(PrivateBytes() - baseline, long.MinValue, 80L * 1024 * 1024);
+    }
+
+    private static long PrivateBytes()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        return process.PrivateMemorySize64;
+    }
+
     [Fact]
     public void WarmUpEncoder_OpensTheEncoderARecordingWouldGet()
     {

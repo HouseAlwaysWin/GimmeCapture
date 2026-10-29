@@ -75,7 +75,8 @@ internal static unsafe class LibavRecordingEncoder
         return usable;
     }
 
-    private static bool ProbeHardwareAv1()
+    // Uncached, for a test to measure; everything else asks HasUsableHardwareAv1Encoder.
+    internal static bool ProbeHardwareAv1()
     {
         // Small but real: some encoders reject tiny or odd dimensions, so probe at a size a recording could use.
         const int ProbeWidth = 640;
@@ -91,34 +92,114 @@ internal static unsafe class LibavRecordingEncoder
                 continue;
             }
 
-            AVCodecContext* ctx = ffmpeg.avcodec_alloc_context3(candidate);
-            if (ctx == null)
+            foreach (bool gpuFrames in ProbeFrameAttempts(candidateName))
             {
-                continue;
-            }
-
-            AVDictionary* opts = null;
-            try
-            {
-                ConfigureEncoderContext(ctx, candidate, candidateName, ProbeWidth, ProbeHeight, ProbeFps, ProbeCrf, 0, &opts);
-                if (ffmpeg.avcodec_open2(ctx, candidate, &opts) >= 0)
+                AVCodecContext* ctx = ffmpeg.avcodec_alloc_context3(candidate);
+                if (ctx == null)
                 {
-                    LogNative($"Hardware AV1 encoder usable: {candidateName}");
-                    return true;
+                    break;
                 }
-            }
-            catch (Exception ex)
-            {
-                AppLog.Warning("Recording.Av1Probe", ex);
-            }
-            finally
-            {
-                if (opts != null) ffmpeg.av_dict_free(&opts);
-                if (ctx != null) ffmpeg.avcodec_free_context(&ctx);
+
+                AVDictionary* opts = null;
+                try
+                {
+                    ConfigureEncoderContext(ctx, candidate, candidateName, ProbeWidth, ProbeHeight, ProbeFps, ProbeCrf, 0, &opts);
+                    if (gpuFrames && !TryGiveGpuFrames(ctx))
+                    {
+                        continue;
+                    }
+
+                    int opened = ffmpeg.avcodec_open2(ctx, candidate, &opts);
+                    if (opened >= 0)
+                    {
+                        LogNative($"Hardware AV1 encoder usable: {candidateName}");
+                        return true;
+                    }
+
+                    if (gpuFrames && opened == GpuLacksIt)
+                    {
+                        // The GPU has no AV1 encoder, and would not have one on CUDA either.
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warning("Recording.Av1Probe", ex);
+                }
+                finally
+                {
+                    if (opts != null) ffmpeg.av_dict_free(&opts);
+                    if (ctx != null) ffmpeg.avcodec_free_context(&ctx);
+                }
             }
         }
 
         return false;
+    }
+
+    // NVENC's answer for a codec the GPU lacks: AVERROR(ENOSYS), and ENOSYS is 40 on Windows.
+    private const int GpuLacksIt = -40;
+
+    private static readonly bool[] GpuFramesFirst = [true, false];
+    private static readonly bool[] MemoryFramesOnly = [false];
+
+    /// <summary>
+    /// How the AV1 probe opens <paramref name="encoderName"/>: NVENC, on Windows, first on Direct3D 11 frames
+    /// (<see cref="TryGiveGpuFrames"/>) and then as a recording opens it; any other encoder only as a recording does.
+    /// </summary>
+    internal static bool[] ProbeFrameAttempts(string encoderName) =>
+        OperatingSystem.IsWindows() && encoderName.EndsWith("_nvenc", StringComparison.Ordinal)
+            ? GpuFramesFirst
+            : MemoryFramesOnly;
+
+    /// <summary>
+    /// Has an NVENC encoder take Direct3D 11 frames on the NVIDIA adapter, for the AV1 probe, which opens the encoder
+    /// and encodes nothing. Given frames in memory, FFmpeg's NVENC makes a CUDA context of its own, and the CUDA driver
+    /// keeps its memory once it has: the probe left the process 190 MB larger for good the first time the Record tab
+    /// opened, though nothing was recorded. On Direct3D 11 frames it left 34 MB. Recordings keep frames in memory:
+    /// once NVENC has encoded frames of a real capture's size the driver keeps 200-260 MB either way (3968x1160, 120
+    /// frames: 208-266 MB on CUDA, 198-256 on Direct3D 11), and making the device took 140-330 ms of every start.
+    /// Returns false, leaving the context as it was, where there is no NVIDIA adapter to make a device on.
+    /// </summary>
+    private static bool TryGiveGpuFrames(AVCodecContext* ctx)
+    {
+        AVBufferRef* device = null;
+        AVDictionary* deviceOptions = null;
+        // The NVIDIA adapter, which on a laptop with two GPUs is not the default one.
+        ffmpeg.av_dict_set(&deviceOptions, "vendor_id", "0x10de", 0);
+        int created = ffmpeg.av_hwdevice_ctx_create(&device, AVHWDeviceType.AV_HWDEVICE_TYPE_D3D11VA, null, deviceOptions, 0);
+        ffmpeg.av_dict_free(&deviceOptions);
+        if (created < 0 || device == null)
+        {
+            LogNative($"No Direct3D 11 device for NVENC: {FFmpegErrors.Describe(created)} ({created})");
+            return false;
+        }
+
+        // The frames context holds a reference of its own to the device.
+        AVBufferRef* frames = ffmpeg.av_hwframe_ctx_alloc(device);
+        ffmpeg.av_buffer_unref(&device);
+        if (frames == null)
+        {
+            return false;
+        }
+
+        var framesContext = (AVHWFramesContext*)frames->data;
+        framesContext->format = AVPixelFormat.AV_PIX_FMT_D3D11;
+        framesContext->sw_format = AVPixelFormat.AV_PIX_FMT_NV12;
+        framesContext->width = ctx->width;
+        framesContext->height = ctx->height;
+        int initialised = ffmpeg.av_hwframe_ctx_init(frames);
+        if (initialised < 0)
+        {
+            LogNative($"No Direct3D 11 frames for NVENC: {FFmpegErrors.Describe(initialised)} ({initialised})");
+            ffmpeg.av_buffer_unref(&frames);
+            return false;
+        }
+
+        // The encoder takes this reference over, and avcodec_free_context lets go of it.
+        ctx->pix_fmt = AVPixelFormat.AV_PIX_FMT_D3D11;
+        ctx->hw_frames_ctx = frames;
+        return true;
     }
 
     /// <summary>
