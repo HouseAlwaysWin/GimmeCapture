@@ -185,6 +185,34 @@ public class UpdateServiceTests
         Assert.Contains("Expected version: 2.0.0", File.ReadAllText(AppStoragePaths.GetFailedVerificationReportPath(appDirectory)));
     }
 
+    // Reading no longer creates the instance folder, so whatever writes into it has to. Builds before June 2026 kept
+    // the update state at the root, and the install such an update was for need not have a folder yet.
+    [Fact]
+    public void ReportingAFailedUpdate_CreatesTheInstanceFolderItNeeds()
+    {
+        string appDirectory = NewAppDirectory();
+        string exePath = Path.Combine(appDirectory, "GimmeCapture.exe");
+        string legacyStatePath = AppStoragePaths.GetLegacyPendingUpdateStatePath();
+        Directory.CreateDirectory(Path.GetDirectoryName(legacyStatePath)!);
+        File.WriteAllText(legacyStatePath, JsonSerializer.Serialize(
+            new PendingUpdateState { TargetVersion = "2.0.0", ExpectedExePath = exePath, AppDirectory = appDirectory },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        try
+        {
+            Assert.False(Directory.Exists(AppStoragePaths.GetInstallInstanceDirectory(appDirectory)));
+
+            var result = UpdateService.VerifyPendingUpdateOnStartup("1.0.0", exePath);
+
+            Assert.False(result.IsSuccess);
+            Assert.Contains("Expected version: 2.0.0", File.ReadAllText(AppStoragePaths.GetFailedVerificationReportPath(appDirectory)));
+        }
+        finally
+        {
+            // Every install reads the state at the root, so the tests after this one would find it too.
+            File.Delete(legacyStatePath);
+        }
+    }
+
     // Under the test run's storage root (TestStorageRoot), and new each time so no other test shares its instance key.
     private static string NewAppDirectory() =>
         Path.Combine(TestStorageRoot.RootDirectory, "apps", Guid.NewGuid().ToString("N"));
