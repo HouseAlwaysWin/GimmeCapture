@@ -10,9 +10,26 @@ namespace GimmeCapture.Views.Main.Tabs;
 
 public partial class SettingsCompressTab : UserControl
 {
+    private MainWindowViewModel? _wiredViewModel;
+
     public SettingsCompressTab()
     {
         InitializeComponent();
+    }
+
+    // The view model outlives the main window, which is let go of once it has sat hidden in the tray: what this tab wired
+    // into it would keep the tab, and through it the window. Leaving the logical tree is the window closing.
+    protected override void OnDetachedFromLogicalTree(Avalonia.LogicalTree.LogicalTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromLogicalTree(e);
+        if (_wiredViewModel is { } vm)
+        {
+            vm.PickCompressOutputFolderAction = null;
+            vm.PickCompressFilesAction = null;
+            vm.PickCompressFolderAction = null;
+            vm.OpenEditorAction = null;
+            _wiredViewModel = null;
+        }
     }
 
     // Wire the file pickers to THIS control's TopLevel StorageProvider once the
@@ -24,6 +41,8 @@ public partial class SettingsCompressTab : UserControl
         {
             return;
         }
+
+        _wiredViewModel = vm;
 
         // Batch queue: output-folder picker (empty = save each output next to its source).
         vm.PickCompressOutputFolderAction = async () =>

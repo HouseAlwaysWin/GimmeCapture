@@ -22,19 +22,15 @@ namespace GimmeCapture.Views.Main;
 public partial class MainWindow : Window
 {
     private readonly IDownloadWindowService _downloadWindowService;
-    private readonly ISnipWindowFactory _snipWindowFactory;
+    private IDisposable? _processingSubscription;
 
-    public MainWindow() : this(new MainWindowViewModel(), new NoOpDownloadWindowService(), new NoOpSnipWindowFactory())
+    public MainWindow() : this(new MainWindowViewModel(), new NoOpDownloadWindowService())
     {
     }
 
-    public MainWindow(
-        MainWindowViewModel? viewModel,
-        IDownloadWindowService? downloadWindowService,
-        ISnipWindowFactory? snipWindowFactory)
+    public MainWindow(MainWindowViewModel? viewModel, IDownloadWindowService? downloadWindowService)
     {
         _downloadWindowService = downloadWindowService ?? new NoOpDownloadWindowService();
-        _snipWindowFactory = snipWindowFactory ?? new NoOpSnipWindowFactory();
 
         InitializeComponent();
         DataContext = viewModel ?? new MainWindowViewModel();
@@ -78,6 +74,21 @@ public partial class MainWindow : Window
     {
         _isExiting = true;
         _downloadWindowService.Close();
+        Close();
+    }
+
+    /// <summary>
+    /// Closes this window for good, hidden in the tray as it is: what it wired into the view model, which outlives it, is
+    /// undone, so nothing keeps it and the memory it and its tabs hold can be collected. The next open builds a new one.
+    /// </summary>
+    internal void Release()
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            UnwireViewModel(vm);
+        }
+
+        _isExiting = true;
         Close();
     }
 

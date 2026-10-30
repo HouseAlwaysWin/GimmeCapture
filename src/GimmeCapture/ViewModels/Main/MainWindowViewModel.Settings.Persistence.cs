@@ -28,7 +28,8 @@ public partial class MainWindowViewModel
         nameof(Snip_SwitchToTranslate), nameof(Snip_SwitchToRecord)
     ];
 
-    private MainWindowSettingsSnapshot CreateSettingsSnapshot()
+    // Internal so a test can check that closing the main window leaves every setting alone.
+    internal MainWindowSettingsSnapshot CreateSettingsSnapshot()
     {
         return new MainWindowSettingsSnapshot
         {

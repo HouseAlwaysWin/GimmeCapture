@@ -39,6 +39,7 @@ public sealed class TrayController
         // surface that as "show the main window", same as clicking the tray icon.
         Program.StartActivationListener(() =>
             Dispatcher.UIThread.Post(ShowMainWindow));
+        _bootstrapper.MainWindowReleased += OnMainWindowReleased;
 
         try
         {
@@ -125,6 +126,18 @@ public sealed class TrayController
         mainWindow.Show();
         mainWindow.WindowState = WindowState.Normal;
         mainWindow.Activate();
+    }
+
+    // The main window was let go of in the tray. The tray host stands in as the lifetime's main window again, as in a launch
+    // to the tray: the lifetime would keep the old one, and the clipboard and dialogs need a top level that is shown.
+    private void OnMainWindowReleased()
+    {
+        var host = _bootstrapper.CreateTrayHostWindow();
+        _desktop.MainWindow = host;
+        if (!host.IsVisible)
+        {
+            host.Show();
+        }
     }
 
     private MainWindow EnsureMainWindow()

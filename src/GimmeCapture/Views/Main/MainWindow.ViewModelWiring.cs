@@ -104,33 +104,34 @@ public partial class MainWindow
                         ConfirmationMode.OkOnly).Forget("Hotkey.RegisterFailedDialog"));
             };
 
-            // Toasts and the capture-delay countdown are wired with the view model (AppBootstrapper), as a launch to the
-            // tray has no main window to wire them.
-            vm.RequestCaptureAction = OpenSnipWindow;
+            // Captures, toasts and the capture-delay countdown are wired with the view model (AppBootstrapper), as a
+            // launch to the tray has no main window to wire them.
             vm.RequestOpenModulesAction = OpenModulesTab;
-            vm.GetActiveSnipViewModelAction = ResolveActiveSnipViewModel;
             vm.ShowUpdateDialogAction = async (message, isUpdateAvailable) =>
             {
                 return await UpdateDialog.ShowDialog(this, message, isUpdateAvailable);
             };
 
             // Monitor Downloading Status to show/hide separate window
-            vm.WhenAnyValue(x => x.IsProcessing)
+            _processingSubscription?.Dispose();
+            _processingSubscription = vm.WhenAnyValue(x => x.IsProcessing)
               .ObserveOn(RxSchedulers.MainThreadScheduler)
               .Subscribe(_ => UpdateDownloadWindow());
         }
     }
 
-    private SnipWindowViewModel? ResolveActiveSnipViewModel()
+    // Undoes what OnDataContextChanged wired into the view model, which outlives this window: every action set there
+    // holds this window. The view model is left as a launch to the tray leaves it, before any main window is built.
+    private void UnwireViewModel(MainWindowViewModel vm)
     {
-        return _snipWindowFactory.GetActiveViewModel() as SnipWindowViewModel;
-    }
-
-    private void OpenSnipWindow(CaptureMode mode)
-    {
-        if (DataContext is MainWindowViewModel vm)
-        {
-            _snipWindowFactory.Open(vm, mode);
-        }
+        vm.PickFolderAction = null;
+        vm.PickGgufFileAction = null;
+        vm.ConfirmAction = null;
+        vm.ConfirmYesNoAction = null;
+        vm.HotkeyService.OnHotkeyRegistrationFailed = null;
+        vm.RequestOpenModulesAction = null;
+        vm.ShowUpdateDialogAction = null;
+        _processingSubscription?.Dispose();
+        _processingSubscription = null;
     }
 }

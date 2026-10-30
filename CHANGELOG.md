@@ -117,6 +117,14 @@
   closed, though nothing was recorded. The check now opens the encoder through Direct3D 11, which leaves about 35 MB.
   Recording itself is unchanged: once the NVIDIA encoder has recorded, its driver keeps 200-260 MB of the app either
   way.
+- **The settings window gives its memory back five minutes after it is closed to the tray.** Closing it only hid it,
+  with every tab it had built, for as long as the app ran. Five minutes after it is closed to the tray it is now closed
+  for good, and the next open builds it again, on its first tab. With every tab opened, the app's commit size fell
+  14-28 MB. Most of what opening the window cost still stays: the graphics card's share, the fonts and the libraries it
+  loaded.
+- **The idle clean-up hands back the memory .NET keeps free for later.** It compacted the heap but kept the space it
+  freed: after the settings window had been let go of, the heap held 35 MB and kept 51. The clean-up now returns the
+  difference, which took the commit size down 14 MB more there.
 - **Opening the Compress tab with a long queue no longer freezes the app.** The queue built a row for every file at
   once, each with two dropdowns and eight buttons, though its box shows four or five: a 79-file queue came to 9,300
   controls and froze the app for 0.77 s the first time the tab opened. Only the rows in view are built now, and the

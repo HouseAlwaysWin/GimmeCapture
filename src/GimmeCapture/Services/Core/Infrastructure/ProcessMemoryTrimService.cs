@@ -117,7 +117,10 @@ public static class ProcessMemoryTrimService
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
             GC.WaitForPendingFinalizers();
-            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+            // Aggressive also hands the heap's free space back to the system, which a compacting collection keeps
+            // committed for the next allocations: after the main window had been opened and let go of, the heap held
+            // 35 MB and kept 51 MB, and the commit size fell 14 MB more with it.
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
             ReturnFreedMemoryToOs();
 
             var after = CaptureSnapshot();

@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 30 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 34 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -89,8 +89,8 @@ on Direct3D 11 (Status), then, in a second session on 2026-10-30, the hand check
 idle app holds (Measured 2026-10-30, below). Pick up in this order:
 
 1. **Choose with the user what to do about the GPU's share**, the largest one: the options under Measured 2026-10-30.
-   A was measured (not a default) and C is done; B (a main window that can be freed) and the pin-resize stalls are
-   open.
+   A was measured (not a default), and B and C are done (B gave back less than hoped, see there); the pin-resize
+   stalls are open.
 2. **DirectML after background removal and smart selection** (under OCR, AI and translation): U2Net and SAM2 on the
    CPU against DirectML, measured like OCR's opt-in test (real models, a real size, a fresh process each, twice), and
    `BackgroundRemovalService`'s five-minute device hold.
@@ -162,8 +162,19 @@ Options to put to the user:
   0.3-1.5 s, one after another, while the pin was resized every frame: with the GPU the thread waited (about 20% CPU),
   in software it ran a dozen or more full GCs a second, a new bitmap per size. Check by hand by dragging a pin's
   corner quickly; it fits "Resizing rebuilds the window region 4-6 times per pointer move" under Pins.
-- **B. A main window that can be freed** when closed to the tray: find what keeps it alive, undo that wiring on close,
-  rebuild it on the next open. The gain is unknown until it can be collected; FFmpeg and the font caches stay anyway.
+- **B. A main window that can be freed** when closed to the tray: done 2026-10-30, and worth less than hoped. What
+  kept it was what it and the Compress tab wired into the view model, which outlives them: the window's dialog, picker
+  and update actions and its `IsProcessing` subscription, and the Compress tab's three file pickers and editor opener,
+  which shared one closure with the tab (found by dumping a headless test process and walking the GC roots with ClrMD,
+  `Microsoft.Diagnostics.Runtime` 3.1 from the local NuGet cache). `MainWindow.Release` undoes them and closes the
+  window, the Compress tab undoes its own on leaving the logical tree, and `AppBootstrapper` releases the window once it
+  has sat hidden for `IdleTrimDelay` (not while a module download or a Compress editor depends on it), the tray host
+  standing in as the lifetime's main window. `MainWindowReleaseTests` (MAIN_WINDOW_PROBE=1): collected, every setting
+  unchanged, reopened. A published build with a temporary probe (launched to the tray at 93-96 MB, every tab opened,
+  closed, released, twice): every tab opened 292-293 MB, hidden 275-293, released and collected 261-265, so 14-28 MB
+  back; then an aggressive GC took the heap from 51 MB committed to 35 and the commit to 242-247, which the full trim
+  now does (`GCCollectionMode.Aggressive`); `SKGraphics.PurgeAllCaches` gave nothing. About 150 MB above the tray stays:
+  native memory the window's first open loaded (the GPU's share, fonts, libraries), not held by the window.
 - **C. No FFmpeg for the Record tab's codec list**: done 2026-10-30. `HardwareCapabilityCache` keeps the probe's
   answer (hardware AV1, GIF) in `hardware-capabilities.json` beside the settings, keyed by the probe's version and the
   display adapters' device ids and driver versions from the registry; a match goes to
@@ -205,6 +216,11 @@ These were covered by unit tests only; check them in the real app before a relea
   `Recording.HardwareAv1Probe: available` as before, and the commit size should rise by about 35 MB, not 190. An AV1
   recording should still record AV1. Checked 2026-10-30 on an RTX 3050 (no AV1 encoder): `unavailable`, 2-6 MB once
   settled; the "available" path still needs an RTX 40 or newer.
+- **Settings window let go of** (a published build): close the settings window to the tray and leave it five minutes or
+  more; the log shows `MainWindow.Released`. Opened again from the tray, it comes up on its first tab, and the folder
+  and file pickers (Compress included), the dialogs, a hotkey that fails to register and the update offer work as before.
+  About ten minutes after closing, the commit size should sit 30-40 MB below where it was with the window hidden. With a
+  Compress editor open, or a module downloading, it is not let go of.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a

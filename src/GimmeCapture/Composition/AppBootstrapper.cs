@@ -24,6 +24,8 @@ public sealed class AppBootstrapper : IAsyncDisposable
     private readonly Lazy<IDownloadWindowService> _downloadWindowService;
     private readonly Lazy<IToastService> _toastService;
     private readonly Lazy<ISnipWindowFactory> _snipWindowFactory;
+    // Lets go of the main window once it has sat hidden in the tray for the app's idle delay (ReleaseHiddenMainWindow).
+    private readonly IdleReleaseScheduler _mainWindowRelease;
     private MainWindow? _mainWindow;
     private Window? _trayHostWindow;
 
@@ -79,6 +81,9 @@ public sealed class AppBootstrapper : IAsyncDisposable
         _downloadWindowService = new Lazy<IDownloadWindowService>(RuntimeServiceFactory.CreateDownloadWindowService);
         _toastService = new Lazy<IToastService>(RuntimeServiceFactory.CreateToastService);
         _snipWindowFactory = new Lazy<ISnipWindowFactory>(RuntimeServiceFactory.CreateSnipWindowFactory);
+        _mainWindowRelease = new IdleReleaseScheduler(
+            ProcessMemoryTrimService.IdleTrimDelay,
+            () => Avalonia.Threading.Dispatcher.UIThread.Post(ReleaseHiddenMainWindow));
 
         // The crash-free half of a failing command is registered with ReactiveUI before any window exists
         // (UnhandledCommandExceptionReporter); this adds the half the user sees, now that toasts can be shown.
@@ -133,10 +138,65 @@ public sealed class AppBootstrapper : IAsyncDisposable
 
     public MainWindow CreateMainWindow()
     {
-        return _mainWindow ??= new MainWindow(
-            _mainWindowViewModel.Value,
-            _downloadWindowService.Value,
-            _snipWindowFactory.Value);
+        if (_mainWindow == null)
+        {
+            var window = new MainWindow(_mainWindowViewModel.Value, _downloadWindowService.Value);
+            // Closed to the tray, it is let go of after the idle delay; opened again before then, it is kept.
+            window.PropertyChanged += (_, e) =>
+            {
+                if (e.Property != Visual.IsVisibleProperty)
+                {
+                    return;
+                }
+
+                if (window.IsVisible)
+                {
+                    _mainWindowRelease.Cancel();
+                }
+                else
+                {
+                    _mainWindowRelease.NotifyUse();
+                }
+            };
+            _mainWindow = window;
+        }
+
+        return _mainWindow;
+    }
+
+    /// <summary>
+    /// Raised on the UI thread once the main window has been let go of. The lifetime still names it as its main window,
+    /// which keeps it, and the clipboard and dialogs go through that: the tray host has to stand in again.
+    /// </summary>
+    public event Action? MainWindowReleased;
+
+    /// <summary>
+    /// Lets go of the main window when it is still hidden in the tray (<see cref="MainWindow.Release"/>). The app is left
+    /// as a launch to the tray leaves it, and the next open builds the window again. With every tab opened, that brought
+    /// the commit size down 14-28 MB, and the full trim that follows 14 MB more; the rest of what opening it cost stays
+    /// (the GPU's share, fonts, loaded libraries). Not while a module download reports through the window, or a Compress
+    /// editor confirms through it, which would then confirm unasked: it tries again after another idle delay.
+    /// </summary>
+    internal void ReleaseHiddenMainWindow()
+    {
+        if (_mainWindow is not { IsVisible: false } window)
+        {
+            return;
+        }
+
+        if (_mainWindowViewModel.Value.IsProcessing
+            || _mainWindowDependencies.Value.WindowManager.FindWindowOfType<VideoEditWindow>() != null)
+        {
+            _mainWindowRelease.NotifyUse();
+            return;
+        }
+
+        _mainWindow = null;
+        window.Release();
+        AppLog.Information("MainWindow.Released", "hidden in the tray for the idle delay");
+        MainWindowReleased?.Invoke();
+        // Nothing allocates in an idle app, so nothing would collect the window for a long time: the full trim does.
+        ProcessMemoryTrimService.RequestIdleTrimAsync("main-window-released").Forget("MemoryTrim.MainWindowReleased");
     }
 
     /// <summary>
