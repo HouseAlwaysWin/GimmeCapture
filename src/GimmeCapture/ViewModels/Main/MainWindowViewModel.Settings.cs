@@ -828,24 +828,37 @@ public partial class MainWindowViewModel
         }
     }
 
-    // Optimistic until FFmpeg is loaded: answering means loading ~150 MB of native libraries, which a binding must not
-    // do on the UI thread. The hardware probe (StartHardwareProbe) loads them on the pool and raises these two again.
+    // Optimistic until it is known: answering means loading ~150 MB of native libraries, which a binding must not do on
+    // the UI thread. The hardware probe (StartHardwareProbe) answers on the pool, from an earlier run's answer when
+    // there is one, and raises these two again.
     public bool IsGifAvailable =>
-        !Services.Core.Media.NativeFFmpeg.FFmpegRuntime.IsInitialized || RecordingFormatCapabilities.IsGifAvailable();
+        Services.Core.Media.NativeFFmpeg.FFmpegRuntime.IsInitialized
+            ? RecordingFormatCapabilities.IsGifAvailable()
+            : _knownGifAvailable ?? true;
     public string GifUnavailableReason => Localization["GifUnavailableReason"];
     public string[] AvailableRecordFormats => IsGifAvailable
         ? ["mp4", "mkv", "gif", "webm", "mov"]
         : ["mp4", "mkv", "webm", "mov"];
 
     private int _hardwareProbeStarted;
+    private bool? _knownGifAvailable;
+    private HardwareCapabilityCache? _hardwareCapabilities;
+
+    // What the hardware probe found on this machine, kept between runs. Tests hand in their own.
+    internal HardwareCapabilityCache HardwareCapabilities
+    {
+        get => _hardwareCapabilities ??= new HardwareCapabilityCache(_settingsService);
+        set => _hardwareCapabilities = value;
+    }
 
     /// <summary>
     /// Starts the hardware probe, once. Which codecs this machine can record is known only after loading FFmpeg and
     /// test-opening the AV1 hardware encoders: 1.75 s, measured on the UI thread at startup when the codec list did it
     /// for itself. It runs on the pool; the codec list and GIF availability catch up when it answers. The Record tab,
     /// the one place that shows them, starts it the first time it is shown. The app used to start it at every launch as
-    /// well, so every login loaded FFmpeg and opened GPU encoders for a list most sessions never show. An AV1 recording
-    /// runs the probe for itself as it starts.
+    /// well, so every login loaded FFmpeg and opened GPU encoders for a list most sessions never show. Later runs take
+    /// the answer an earlier one reached (HardwareCapabilityCache), so the tab no longer loads FFmpeg at all. An AV1
+    /// recording runs the probe for itself as it starts, unless that answer is already in.
     /// </summary>
     internal void StartHardwareProbe()
     {
@@ -854,9 +867,8 @@ public partial class MainWindowViewModel
             return;
         }
 
-        ApplyHardwareProbeWhenDoneAsync(
-                Task.Run(Services.Core.Media.NativeFFmpeg.LibavRecordingEncoder.HasUsableHardwareAv1Encoder))
-            .Forget("Startup.HardwareProbe");
+        var hardwareCapabilities = HardwareCapabilities;
+        ApplyHardwareProbeWhenDoneAsync(Task.Run(hardwareCapabilities.Get)).Forget("Startup.HardwareProbe");
     }
 
     public async Task LoadSettingsAsync()
@@ -937,11 +949,16 @@ public partial class MainWindowViewModel
         }
     }
 
-    private async Task ApplyHardwareProbeWhenDoneAsync(Task hardwareProbe)
+    private async Task ApplyHardwareProbeWhenDoneAsync(Task<HardwareCapabilityCache.Capabilities?> hardwareProbe)
     {
-        await hardwareProbe;
+        var capabilities = await hardwareProbe;
+        if (capabilities is { } known)
+        {
+            _knownGifAvailable = known.Gif;
+        }
+
         RecordingSettings.ApplyHardwareAv1ProbeResult();
-        // The probe also loaded FFmpeg, so GIF availability can be answered for real now.
+        // Either the probe loaded FFmpeg or an earlier run's answer came in: GIF availability is known now.
         this.RaisePropertyChanged(nameof(IsGifAvailable));
         this.RaisePropertyChanged(nameof(AvailableRecordFormats));
     }

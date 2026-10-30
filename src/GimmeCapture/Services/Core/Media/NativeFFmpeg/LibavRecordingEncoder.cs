@@ -19,8 +19,9 @@ internal static unsafe class LibavRecordingEncoder
     private static readonly string[] SoftwareH265Encoders = ["libx265", "libx264", "libopenh264", "mpeg4"];
     private static readonly string[] SoftwareH264Encoders = ["libx264", "libopenh264", "mpeg4"];
 
-    // 0 = not probed yet, 1 = usable, 2 = not usable. Only ever set from a probe that actually ran, so a probe
-    // attempted before the native libraries were loaded does not poison the answer for the rest of the session.
+    // 0 = not probed yet, 1 = usable, 2 = not usable. Only ever set from a probe that actually ran, in this run or an
+    // earlier one (RecallHardwareAv1), so a probe attempted before the native libraries were loaded does not poison the
+    // answer for the rest of the session.
     private static int _hardwareAv1State;
 
     /// <summary>
@@ -73,6 +74,19 @@ internal static unsafe class LibavRecordingEncoder
         System.Threading.Volatile.Write(ref _hardwareAv1State, usable ? 1 : 2);
         AppLog.Information($"Recording.HardwareAv1Probe: {(usable ? "available" : "unavailable")}");
         return usable;
+    }
+
+    /// <summary>
+    /// Takes the answer a probe reached in an earlier run on this machine as it is now (<see cref="HardwareCapabilityCache"/>),
+    /// so the Record tab can list the codecs without loading FFmpeg. A probe that already ran in this run wins. A stale
+    /// "usable" costs no recording: an AV1 recording still falls down its encoder ladder when the open fails.
+    /// </summary>
+    internal static void RecallHardwareAv1(bool usable)
+    {
+        if (System.Threading.Interlocked.CompareExchange(ref _hardwareAv1State, usable ? 1 : 2, 0) == 0)
+        {
+            AppLog.Information($"Recording.HardwareAv1Probe: {(usable ? "available" : "unavailable")} (remembered)");
+        }
     }
 
     // Uncached, for a test to measure; everything else asks HasUsableHardwareAv1Encoder.

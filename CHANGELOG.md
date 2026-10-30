@@ -58,6 +58,11 @@
 
 ### ⚡ Performance
 
+- **Opening the Record tab no longer loads FFmpeg in every run.** To list the codecs, the tab tested the graphics card's
+  AV1 encoders the first time it opened in each run, which loaded all of FFmpeg and kept it for the rest of the run
+  even when nothing was recorded. The answer is now kept beside the settings for the graphics adapters and drivers it
+  was found on, so later runs list the codecs without loading FFmpeg: about 18 MB less from then on, and about 47 MB
+  less just after the tab opens. A new graphics driver, a new GPU or an update of the app tests again.
 - **A rejected translation falls back to translating line by line a whole generation sooner.** The rejected text was
   first sent to the model again with the same languages, and the model answers the same text the same way every time,
   so the wait bought the same answer. The line-by-line fallback now starts at once.
