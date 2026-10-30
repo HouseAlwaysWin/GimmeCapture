@@ -38,7 +38,7 @@ Windows-only 螢幕擷取工具）移植到 Linux 的可行性、阻力點與工
 | 視窗列舉/幾何 | `Services/Platforms/Windows/WindowDetectionService.cs` | `EnumWindows` + dwmapi cloaked bounds + Registry 讀 Explorer |
 | Snip overlay 點擊穿透 + 排除自我擷取 | `Services/Interop/Win32Helpers.cs`、`Views/Main/SnipWindow.Win32.cs`、`SnipWindow.Win32.Region.cs` | `SetWindowRgn` / `WDA_EXCLUDEFROMCAPTURE` / `SetWindowLongPtr` / `WM_NCHITTEST` |
 | HWND 視窗樣式 | `Views/Main/ScrollingCaptureRegionWindow.cs`、`Views/Floating/FloatingImageWindow.axaml.cs`、`Views/Main/MainWindow.axaml.cs` | user32 window-long-ptr styling |
-| UAC 提權 | 無——Release／Debug 都是 `app.manifest`（asInvoker）；需要時由「以系統管理員重啟」提示處理 | Windows 專屬 |
+| UAC 提權 | 無——Release／Debug 都是 `app.manifest`（asInvoker）；需要時由「以系統管理員身分執行」設定在啟動時經 UAC 換成提權副本（`ElevatedLaunch`） | Windows 專屬 |
 | 記憶體修剪 | `Services/Core/Infrastructure/ProcessMemoryTrimService.cs` | psapi `EmptyWorkingSet`（2026-10-29 起不再呼叫：它不釋放任何記憶體，只讓長時間閒置後的第一次截圖從分頁檔讀回整個行程；現在只剩 Linux 的 `malloc_trim`） |
 
 ### (B) Windows-only 但有明確替代方案

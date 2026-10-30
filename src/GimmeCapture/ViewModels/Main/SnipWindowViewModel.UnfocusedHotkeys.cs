@@ -10,12 +10,13 @@ namespace GimmeCapture.ViewModels.Main;
 /// Capture-flow keys for an overlay that deliberately does NOT hold focus (CaptureWithoutStealingFocus, which
 /// applies while the overlay is live rather than frozen — recording, or screenshots with freeze-frame off).
 ///
-/// Those keys are normally matched in the process-wide low-level keyboard hook (SnipWindow.Win32.cs), and
-/// Windows stops feeding that hook the moment a window running at a higher integrity level has focus (UIPI).
-/// Recording an app that runs as administrator therefore left Esc / the action key / Ctrl+C / Ctrl+S quietly
-/// doing nothing. RegisterHotKey is not subject to UIPI — WM_HOTKEY reaches our message window whatever is in
-/// front — so for as long as the overlay stays unfocused the same keys are ALSO registered as temporary global
-/// hotkeys, exactly like a manual scrolling session does for finish/cancel (SnipWindowViewModel.ScrollingManual.cs).
+/// Those keys are normally matched in the process-wide low-level keyboard hook (SnipWindow.Win32.cs). For as long as
+/// the overlay stays unfocused the same keys are ALSO registered as temporary global hotkeys, exactly like a manual
+/// scrolling session does for finish/cancel (SnipWindowViewModel.ScrollingManual.cs). They were added because
+/// recording an app that runs as administrator left Esc / the action key / Ctrl+C / Ctrl+S quietly doing nothing,
+/// on the belief that WM_HOTKEY gets past UIPI. It does not: while a window of a higher integrity level has the
+/// foreground, Windows withholds every key from us, the hook's and WM_HOTKEY alike. Only running as administrator
+/// helps there (ElevatedLaunch).
 ///
 /// Only the core capture-flow keys are mirrored: dismiss, the active action, Copy/Save, and recording
 /// pause/stop. The rest of the unfocused set (mode switches, fullscreen select, toolbar toggle) stays hook-only

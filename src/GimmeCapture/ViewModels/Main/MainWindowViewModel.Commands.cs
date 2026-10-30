@@ -98,6 +98,7 @@ public partial class MainWindowViewModel
         
         // Populate ViewModel properties from the newly reset settings
         RunOnStartup = defaultSettings.RunOnStartup;
+        RunAsAdministrator = defaultSettings.RunAsAdministrator;
         AutoCheckUpdates = defaultSettings.AutoCheckUpdates;
         BorderThickness = defaultSettings.BorderThickness;
         AutoSave = defaultSettings.AutoSave;

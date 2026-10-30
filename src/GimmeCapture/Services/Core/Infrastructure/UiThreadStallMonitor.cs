@@ -69,6 +69,21 @@ internal static class UiThreadStallMonitor
         new Thread(() => RunWatchdog(stop)) { IsBackground = true, Name = "UiStall watchdog" }.Start();
     }
 
+    /// <summary>
+    /// Stops the monitor until the result is disposed, around a wait on the UI thread the user is in charge of, a UAC
+    /// prompt say, which is no stall. Nothing to undo when the monitor was not running.
+    /// </summary>
+    internal static IDisposable Pause()
+    {
+        if (_timer == null)
+        {
+            return System.Reactive.Disposables.Disposable.Empty;
+        }
+
+        Stop();
+        return System.Reactive.Disposables.Disposable.Create(Start);
+    }
+
     internal static void Stop()
     {
         _timer?.Stop();

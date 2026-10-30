@@ -34,6 +34,7 @@ public partial class MainWindowViewModel
         {
             Language = SelectedLanguageOption.Value,
             RunOnStartup = RunOnStartup,
+            RunAsAdministrator = RunAsAdministrator,
             AutoCheckUpdates = AutoCheckUpdates,
             BorderThickness = BorderThickness,
             BorderColor = BorderColor,
@@ -114,6 +115,7 @@ public partial class MainWindowViewModel
         ArgumentNullException.ThrowIfNull(snapshot);
 
         RunOnStartup = snapshot.RunOnStartup;
+        RunAsAdministrator = snapshot.RunAsAdministrator;
         AutoCheckUpdates = snapshot.AutoCheckUpdates;
         BorderThickness = snapshot.BorderThickness;
         AutoSave = snapshot.AutoSave;

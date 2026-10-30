@@ -10,15 +10,16 @@ public static class HotkeyIds
     public const int TextCopy = 9005;
     public const int ScrollingCapture = 9006;
 
-    // Temporary hotkeys registered only while a manual scrolling-capture session is active,
-    // so finish (Pin key) / cancel (Close key) work even when the target window is focused
-    // (the low-level keyboard hook can be blocked by an elevated foreground window).
+    // Temporary hotkeys registered only while a manual scrolling-capture session is active, so finish (Pin key) /
+    // cancel (Close key) also arrive as WM_HOTKEY while the target window is focused, besides the overlay's keyboard
+    // hook. Neither gets through while a window run as administrator has the foreground (see ElevatedLaunch).
     public const int ScrollingCaptureFinish = 9007;
     public const int ScrollingCaptureCancel = 9008;
 
     // Temporary hotkeys registered only while the capture overlay is deliberately unfocused
-    // (CaptureWithoutStealingFocus): the low-level keyboard hook that normally serves these keys is silenced by
-    // an elevated foreground window, while RegisterHotKey still fires. See SnipWindowViewModel.UnfocusedHotkeys.cs.
+    // (CaptureWithoutStealingFocus), mirroring keys the overlay's low-level keyboard hook serves. They were meant to get
+    // past an elevated foreground window, which they cannot: Windows withholds WM_HOTKEY there as it does the hook
+    // (see ElevatedLaunch). See SnipWindowViewModel.UnfocusedHotkeys.cs.
     public const int OverlayDismiss = 9009;
     public const int OverlayAction = 9010;
     public const int OverlayCopy = 9011;
@@ -28,9 +29,8 @@ public static class HotkeyIds
 
     /// <summary>
     /// Ids registered only for the lifetime of an overlay or a scrolling session, mirroring keys the low-level
-    /// keyboard hook already serves so they keep working over an elevated foreground window. Another app owning
-    /// the combo is an expected outcome for these — the hook still handles it — so a failure must not be
-    /// reported to the user the way a configured hotkey's failure is.
+    /// keyboard hook already serves. Another app owning the combo is an expected outcome for these — the hook
+    /// still handles it — so a failure must not be reported to the user the way a configured hotkey's failure is.
     /// </summary>
     public static bool IsTemporaryOverlayHotkey(int id) =>
         id is ScrollingCaptureFinish or ScrollingCaptureCancel

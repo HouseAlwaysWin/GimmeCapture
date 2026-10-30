@@ -478,9 +478,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             .Skip(1)
             .Subscribe(_ => this.RaisePropertyChanged(nameof(ShouldAvoidStealingFocus)))
             .DisposeWith(_disposables);
-        // The overlay's unfocused capture keys are served by a process-wide keyboard hook that an elevated
-        // foreground window silences, so they are mirrored as temporary global hotkeys whenever the overlay is
-        // not holding focus. Mode/translation/text-entry/freeze all change either that state or which keys apply.
+        // The overlay's unfocused capture keys are served by a process-wide keyboard hook, and mirrored as temporary
+        // global hotkeys whenever the overlay is not holding focus (SnipWindowViewModel.UnfocusedHotkeys.cs).
+        // Mode/translation/text-entry/freeze all change either that state or which keys apply.
         Observable.Merge(
                 this.WhenAnyValue(x => x.CurrentMode).Select(_ => Unit.Default),
                 this.WhenAnyValue(x => x.IsTranslationMode).Select(_ => Unit.Default),

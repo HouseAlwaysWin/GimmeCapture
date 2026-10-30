@@ -25,6 +25,7 @@ public class MainWindowSettingsPersistenceServiceTests
         {
             Language = Language.Japanese,
             RunOnStartup = true,
+            RunAsAdministrator = true,
             AutoCheckUpdates = false,
             BorderThickness = 4,
             BorderColor = Color.Parse("#123456"),
@@ -99,6 +100,7 @@ public class MainWindowSettingsPersistenceServiceTests
 
         Assert.Equal(snapshot.Language, persisted.Language);
         Assert.Equal(snapshot.RunOnStartup, persisted.RunOnStartup);
+        Assert.Equal(snapshot.RunAsAdministrator, persisted.RunAsAdministrator);
         Assert.Equal(snapshot.BorderColor, persisted.BorderColor);
         Assert.Equal(snapshot.ThemeColor, persisted.ThemeColor);
         Assert.Equal(snapshot.RecordFormat, persisted.RecordFormat);

@@ -49,6 +49,12 @@ public partial class App : Application
 
             _bootstrapper = new AppBootstrapper();
             StartupTrace.Mark("bootstrapper");
+            if (_bootstrapper.TryHandOverToElevatedCopy())
+            {
+                desktop.Shutdown();
+                return;
+            }
+
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
             desktop.Exit += (_, _) =>
                 _bootstrapper.DisposeAsync().AsTask().GetAwaiter().GetResult();

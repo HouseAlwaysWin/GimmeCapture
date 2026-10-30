@@ -13,6 +13,12 @@
 
 ### 🛡️ Reliability
 
+- **The hotkeys can work over Task Manager again: turn on "Run as administrator".** Since v0.68.1 the app has run
+  without administrator rights, on the belief that its hotkeys still reach it while a window run as administrator, Task
+  Manager say, is in front. They do not: Windows withholds every key from an app that is not elevated then, so pressing
+  a hotkey there did nothing. The new setting on the General tab starts the app with administrator rights, with Windows
+  asking for permission at every start, sign-in included. The first administrator window explains this once and offers
+  it; the notice used to appear only for a hotkey another program had taken, and said the others still worked.
 - **Mosaic and blur on a frozen screenshot preview the frozen picture.** They previewed the live screen while the
   frozen picture is what gets saved, so the preview could show what had changed since the freeze.
 - **A mosaic or blur preview can no longer show scrambled pixels or close the app.** It read the picture from a buffer

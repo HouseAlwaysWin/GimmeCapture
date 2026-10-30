@@ -26,6 +26,13 @@
                            Foreground="#FFC107"
                            TextWrapping="Wrap"
                            Margin="24,-4,0,0"/>
+                <!-- Windows withholds every hotkey from an app that is not elevated while a window run as administrator has
+                     the foreground. Hidden where it cannot work: off Windows, or for an account UAC cannot elevate as itself. -->
+                <StackPanel Spacing="2" IsVisible="{Binding CanRunAsAdministrator}">
+                    <CheckBox IsChecked="{Binding RunAsAdministrator}" Content="{Binding [RunAsAdministrator], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <TextBlock Text="{Binding [RunAsAdministratorHint], Source={x:Static services:LocalizationService.Instance}}"
+                               FontSize="12" Foreground="#888888" TextWrapping="Wrap" Margin="24,0,0,0"/>
+                </StackPanel>
                 <CheckBox IsChecked="{Binding AutoCheckUpdates}" Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}"/>
                 
                 <TextBlock Text="{Binding [Language], Source={x:Static services:LocalizationService.Instance}}" Margin="0,10,0,5"/>

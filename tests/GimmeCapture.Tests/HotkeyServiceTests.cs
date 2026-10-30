@@ -42,6 +42,11 @@ public class HotkeyServiceTests
             UnregCallCount++;
             return true;
         }
+
+        // Processes running at a higher integrity level than this one, as the foreground monitor would find them.
+        public HashSet<uint> ElevatedPids { get; } = new();
+
+        protected override bool IsProcessHigherIntegrity(uint pid) => ElevatedPids.Contains(pid);
     }
 
     [Fact]
@@ -222,32 +227,58 @@ public class HotkeyServiceTests
     }
 
     [Fact]
-    public void FirstHookOnlyHotkey_WhenEveryHotkeyRegistered_ReportsNothingBlocked()
+    public void AnAdministratorWindow_RaisesTheNotice_ForHotkeysRegisterHotKeyAccepted()
     {
-        // The elevated-window notice hangs off this: a hotkey RegisterHotKey accepted still fires while an
-        // administrator window is in front (WM_HOTKEY ignores UIPI), so warning about it would be pure noise.
+        // Windows withholds WM_HOTKEY from us under an administrator window as it does the hook. The notice used to
+        // assume WM_HOTKEY got through and spoke up only for hook-only hotkeys, so Shift+F1 just did nothing there.
         var service = new TestableHotkeyService();
         service.SetHandle(new IntPtr(1234));
-
         service.Register(HotkeyIds.Snip, "Shift+F1");
-        service.Register(HotkeyIds.Record, "Shift+F2");
+        service.ElevatedPids.Add(4242);
 
-        Assert.Null(service.FirstHookOnlyHotkey());
+        Assert.True(service.ShouldRaiseElevatedNotice(4242, nowMs: 10_000));
     }
 
     [Fact]
-    public void FirstHookOnlyHotkey_WhenRegistrationFailed_NamesTheHookOnlyHotkey()
+    public void AnAdministratorWindow_RaisesTheNotice_OncePerProcess()
     {
-        // PrintScreen already owned by the Snipping Tool: only the low-level hook can see it, and Windows stops
-        // feeding that hook over an administrator window — the one case the notice exists for.
         var service = new TestableHotkeyService();
         service.SetHandle(new IntPtr(1234));
+        service.Register(HotkeyIds.Snip, "Shift+F1");
+        service.ElevatedPids.Add(4242);
+        service.ElevatedPids.Add(4343);
 
-        service.Register(HotkeyIds.Record, "Shift+F2");
-        service.LastRegResult = false;
-        service.Register(HotkeyIds.Snip, "PrintScreen");
+        Assert.True(service.ShouldRaiseElevatedNotice(4242, nowMs: 10_000));
+        Assert.False(service.ShouldRaiseElevatedNotice(4242, nowMs: 20_000));
+        Assert.True(service.ShouldRaiseElevatedNotice(4343, nowMs: 30_000));
+    }
 
-        Assert.Equal("PrintScreen", service.FirstHookOnlyHotkey());
+    [Fact]
+    public void AnotherAdministratorWindow_WithinASecondAndAHalf_WaitsItsTurn()
+    {
+        var service = new TestableHotkeyService();
+        service.SetHandle(new IntPtr(1234));
+        service.Register(HotkeyIds.Snip, "Shift+F1");
+        service.ElevatedPids.Add(4242);
+        service.ElevatedPids.Add(4343);
+
+        Assert.True(service.ShouldRaiseElevatedNotice(4242, nowMs: 10_000));
+        Assert.False(service.ShouldRaiseElevatedNotice(4343, nowMs: 10_500));
+        Assert.True(service.ShouldRaiseElevatedNotice(4343, nowMs: 12_000));
+    }
+
+    [Fact]
+    public void NoNotice_WithoutHotkeys_OrForAWindowAtOurLevel()
+    {
+        var service = new TestableHotkeyService();
+        service.SetHandle(new IntPtr(1234));
+        service.ElevatedPids.Add(4242);
+
+        Assert.False(service.ShouldRaiseElevatedNotice(4242, nowMs: 10_000));
+
+        service.Register(HotkeyIds.Snip, "Shift+F1");
+        Assert.False(service.ShouldRaiseElevatedNotice(5555, nowMs: 20_000));
+        Assert.True(service.ShouldRaiseElevatedNotice(4242, nowMs: 30_000));
     }
 
     private const int VkF1 = 0x70;

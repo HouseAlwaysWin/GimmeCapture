@@ -268,10 +268,10 @@ public partial class SnipWindowViewModel
             $"strip={_manualAccumulated.Width}x{_manualAccumulated.Height} minOverlap={_manualMinOverlap} ignoreRight={_manualIgnoreRight}");
 
         // Register finish (Pin key) / cancel (Close key) as temporary GLOBAL hotkeys for the
-        // session. RegisterHotKey delivers WM_HOTKEY to a hidden message window regardless of
-        // focus — and even against elevated foreground windows — unlike the low-level keyboard
-        // hook, which is silently blocked there. Routed via HandleGlobalHotkey. The snip key
-        // hook + buttons remain as redundant fallbacks.
+        // session. RegisterHotKey delivers WM_HOTKEY to a hidden message window whichever of the
+        // user's windows has focus; routed via HandleGlobalHotkey. Not over a window run as
+        // administrator: Windows withholds WM_HOTKEY there as it does the hook (see ElevatedLaunch).
+        // The snip key hook + buttons remain as redundant fallbacks.
         _services?.Hotkeys.Register(HotkeyIds.ScrollingCaptureFinish, ActiveActionHotkey);
         _services?.Hotkeys.Register(HotkeyIds.ScrollingCaptureCancel, CloseHotkey);
 

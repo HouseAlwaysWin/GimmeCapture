@@ -108,13 +108,18 @@ namespace GimmeCapture.Views.Dialogs
             return await ShowConfirmation(owner, loc["UnsavedTitle"], loc["UnsavedMessage"]);
         }
 
-        public static async Task<ConfirmationResult> ShowConfirmation(Window owner, string title, string message, ConfirmationMode mode = ConfirmationMode.YesNoCancel, WindowStartupLocation? startupLocation = null)
+        /// <param name="topmost">
+        /// For a dialog the app raises on its own while another app has the foreground: Windows does not let it take the
+        /// foreground then, and without this it can open behind that app's window.
+        /// </param>
+        public static async Task<ConfirmationResult> ShowConfirmation(Window owner, string title, string message, ConfirmationMode mode = ConfirmationMode.YesNoCancel, WindowStartupLocation? startupLocation = null, bool topmost = false)
         {
             var dialog = new ConfirmationDialog
             {
                 DialogTitle = title,
                 DialogMessage = message,
-                Mode = mode
+                Mode = mode,
+                Topmost = topmost
             };
             if (startupLocation.HasValue)
             {

@@ -196,6 +196,9 @@
   "RunOnStartup": "スタートアップ起動",
   "RunOnStartupBlockedByOs": "⚠ Windows がこのスタートアップ項目を無効にしているため、ログイン時に起動しません。タスク マネージャー → スタートアップ アプリで GimmeCapture を有効にしてください。",
   "RunOnStartupEntryMissing": "⚠ スタートアップ項目が消えています。この PC 上の何かが削除しました（セキュリティソフトや「スタートアップ整理」ツールが一般的です）。上の設定をオフにしてからオンにすると再作成されます。消え続ける場合は、そのツールで GimmeCapture を除外設定に追加してください。",
+  "RunAsAdministrator": "管理者として実行",
+  "RunAsAdministratorHint": "タスク マネージャーなど、管理者として実行中のウィンドウが前面にあるときもホットキーが使えるようになります。管理者として実行していないアプリのホットキーは、Windows がすべてブロックします。GimmeCapture の起動のたびに Windows が確認します（UAC）。",
+  "RunAsAdministratorRestartMessage": "今すぐ GimmeCapture を管理者として再起動しますか？再起動しない場合は、次回の起動から有効になります。",
   "AutoCheckUpdates": "自動更新チェック",
   "BorderThickness": "枠線の太さ:",
   "BorderColor": "枠線の色:",
@@ -499,11 +502,11 @@
   "RefreshReleaseList": "一覧を再読み込み",
   "InstallSelectedVersion": "ダウンロードしてインストール",
   "InstallSelectedVersionReady": "バージョン {0} の準備ができました。今すぐ再起動してインストールしますか？",
-  "ElevatedWindowNoticeTitle": "管理者ウィンドウでホットキーがブロックされます",
+  "ElevatedWindowNoticeTitle": "管理者ウィンドウの上ではホットキーが効きません",
   "CommandFailedToast": "操作に失敗しました。詳細はログに記録されています。",
   "RecordingSaveFailedTitle": "録画を保存できませんでした",
   "RecordingSaveFailedKeptSegments": "録画を完了できませんでした：{0}\n\n何も削除していません。元の録画データはここに残っています：\n{1}",
-  "ElevatedWindowNoticeMessage": "{0} は他のプログラムが登録済みのため、GimmeCapture はキーボードフックでしか受け取れません。管理者として実行中のウィンドウがフォーカスされているあいだ、Windows はそのフックをブロックします。\n\n他のホットキーはここでも動作します。管理者ウィンドウ上で {0} を使うには、GimmeCapture を管理者として実行してください。\n\n今すぐ管理者として再起動しますか？"
+  "ElevatedWindowNoticeMessage": "前面のウィンドウは管理者として実行されています（タスク マネージャーなど）。その間、Windows は GimmeCapture のホットキーをすべてブロックするため、その上でホットキーを押しても反応しません。\n\n今後は GimmeCapture を管理者として実行し、今すぐ再起動しますか？起動のたびに Windows が確認します。「一般」タブでいつでも変更できます。\n\nこのメッセージは一度だけ表示されます。"
   ,"AIDownloadPrompt": "AI \u30e2\u30b8\u30e5\u30fc\u30eb\u3092\u30c0\u30a6\u30f3\u30ed\u30fc\u30c9\u3057\u307e\u3059\u304b\uff1f",
   "AIDownloadTitle": "AI \u30e2\u30b8\u30e5\u30fc\u30eb\u306e\u30c0\u30a6\u30f3\u30ed\u30fc\u30c9",
   "ActionStart": "\u958b\u59cb",

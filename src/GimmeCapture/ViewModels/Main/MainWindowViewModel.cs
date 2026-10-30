@@ -243,7 +243,6 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
     public Func<int, CancellationToken, Task>? ShowCaptureCountdownAction { get; set; }
     public Action? CloseCaptureCountdownAction { get; set; }
-    public Action<string>? RequestElevatedWindowPromptAction { get; set; }
     public Action? RequestOpenModulesAction { get; set; }
     public Func<SnipWindowViewModel?>? GetActiveSnipViewModelAction { get; set; }
     /// <summary>Shows a folder picker with the given (already localized) title; null when cancelled.</summary>
@@ -518,10 +517,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
             }
         };
 
-        HotkeyService.OnElevatedWindowFocused = blockedHotkey =>
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => RequestElevatedWindowPromptAction?.Invoke(blockedHotkey));
-        };
+        HotkeyService.OnElevatedWindowFocused = OfferRunAsAdministratorOnce;
 
         // Settings auto-save: any settings property change persists immediately (debounced).
         // Transient UI-state properties are excluded so they don't trigger save churn.

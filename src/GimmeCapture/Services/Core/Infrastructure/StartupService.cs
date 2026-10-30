@@ -12,8 +12,8 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// <c>HKCU\...\Run</c> at logon — no process, no error, nothing in the event log, and not a line in our own log
 /// because the app never reaches <c>Main</c>. Auto-start therefore never happened in a released build after
 /// v0.42.0, while the registry entry looked perfect and every self-check reported "registered". Elevation is now
-/// requested on demand (the "restart as administrator" notice) instead of at every launch, which keeps this
-/// backend honest: what is written here is what Windows actually runs.
+/// asked for at run time instead, by the app itself when "run as administrator" is on (ElevatedLaunch), which keeps
+/// this backend honest: what is written here is what Windows actually runs.
 /// </summary>
 public class StartupService
 {

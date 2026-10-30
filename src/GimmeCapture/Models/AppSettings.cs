@@ -108,6 +108,13 @@ public class AppSettings
     public int ConfigVersion { get; set; } = AppSettingsService.CurrentConfigVersion;
     public Language Language { get; set; } = Language.English;
     public bool RunOnStartup { get; set; }
+    /// <summary>
+    /// Asks UAC for an elevated copy at every start (ElevatedLaunch), so the hotkeys also work while a window run as
+    /// administrator, Task Manager say, has the foreground: Windows withholds every key from a process that is not elevated.
+    /// </summary>
+    public bool RunAsAdministrator { get; set; }
+    /// <summary>The one-time explanation of that, offered at the first administrator window, has been shown.</summary>
+    public bool ElevatedWindowNoticeShown { get; set; }
     public bool AutoCheckUpdates { get; set; }
     
     // Snip

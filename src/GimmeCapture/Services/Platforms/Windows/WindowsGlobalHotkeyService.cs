@@ -49,7 +49,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     public Action<HotkeyPress>? OnHotkeyPressed { get; set; }
     public Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
-    public Action<string>? OnElevatedWindowFocused { get; set; }
+    public Action? OnElevatedWindowFocused { get; set; }
 
     // The delegates native code calls back are kept in fields so they live as long as the service.
     private User32.WndProc? _messageWndProc;
@@ -186,7 +186,6 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
     private const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-    private const uint TOKEN_QUERY = 0x0008;
     private const int TokenIntegrityLevel = 25;
     private const int SECURITY_MANDATORY_MEDIUM_RID = 0x2000;
     private const int ERROR_ACCESS_DENIED = 5;
@@ -202,18 +201,6 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(uint dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, uint dwProcessId);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(IntPtr hObject);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetTokenInformation(IntPtr TokenHandle, int TokenInformationClass, IntPtr TokenInformation, uint TokenInformationLength, out uint ReturnLength);
 
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern IntPtr GetSidSubAuthority(IntPtr pSid, uint nSubAuthority);
@@ -666,65 +653,40 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             return;
         }
 
-        // Any process running at a higher integrity level than us blocks our hotkeys (Windows UIPI):
-        // Task Manager, Registry Editor, an elevated viewer/game, etc. This is integrity-based and not
-        // tied to any specific application.
-        if (!IsProcessHigherIntegrity(pid))
+        if (ShouldRaiseElevatedNotice(pid, Environment.TickCount64))
         {
-            return;
+            WriteDebugLog($"elevated foreground pid={pid} detected; raising hotkey-blocked notice");
+            PostToUi(() => OnElevatedWindowFocused?.Invoke(), "GlobalHotkey.ElevatedNotice");
         }
-
-        // A hotkey RegisterHotKey accepted still fires over an elevated window — WM_HOTKEY reaches our message
-        // window whatever has focus. Only a hook-only hotkey actually stops working there, so with none of those
-        // registered there is nothing to warn about and the notice would be pure noise.
-        string? blockedHotkey = FirstHookOnlyHotkey();
-        if (blockedHotkey == null)
-        {
-            return;
-        }
-
-        // Notify once per distinct elevated process so every privileged app is covered, while the same
-        // app does not nag repeatedly (including when focus returns from our own dialog).
-        if (_notifiedElevatedPids.Contains(pid))
-        {
-            return;
-        }
-
-        long now = Environment.TickCount64;
-        if (_lastElevationNoticeTicks != 0 && now - _lastElevationNoticeTicks < 1500)
-        {
-            // Storm guard: avoid back-to-back popups; this pid stays un-notified so it can fire later.
-            return;
-        }
-
-        _notifiedElevatedPids.Add(pid);
-        _lastElevationNoticeTicks = now;
-        WriteDebugLog($"elevated foreground pid={pid} detected; raising hotkey-blocked notice for {blockedHotkey}");
-        PostToUi(() => OnElevatedWindowFocused?.Invoke(blockedHotkey), "GlobalHotkey.ElevatedNotice");
     }
 
     /// <summary>
-    /// The first hotkey only the low-level keyboard hook can serve: RegisterHotKey refused it (typically
-    /// ERROR_HOTKEY_ALREADY_REGISTERED — PrintScreen owned by the Snipping Tool, a combo taken by another app),
-    /// so the hook matches it instead. Those are the only hotkeys an elevated foreground window silences, which
-    /// is what the notice is for. Null when every registered hotkey went through RegisterHotKey.
+    /// Whether the window of <paramref name="pid"/> taking the foreground warrants <see cref="OnElevatedWindowFocused"/>.
+    /// A process at a higher integrity level than ours (Task Manager, Registry Editor, an elevated game...) cuts off every
+    /// source this service has while it is in front: UIPI withholds WM_HOTKEY, raw input and the low-level hook alike.
+    /// That was once believed to spare WM_HOTKEY; a probe one level down (a low-integrity process under a medium-integrity
+    /// foreground) received none of the four, GetAsyncKeyState included, where a medium-integrity one received all of them.
+    /// Once per elevated process, and never two within 1.5 s.
     /// </summary>
-    internal string? FirstHookOnlyHotkey()
+    internal bool ShouldRaiseElevatedNotice(uint pid, long nowMs)
     {
-        foreach (var id in _registeredCombos.Keys)
+        if (_registeredCombos.Count == 0 || _notifiedElevatedPids.Contains(pid) || !IsProcessHigherIntegrity(pid))
         {
-            if (!_registeredIds.Contains(id)
-                && _hotkeyStrings.TryGetValue(id, out var hotkey)
-                && !string.IsNullOrWhiteSpace(hotkey))
-            {
-                return hotkey;
-            }
+            return false;
         }
 
-        return null;
+        if (_lastElevationNoticeTicks != 0 && nowMs - _lastElevationNoticeTicks < 1500)
+        {
+            // Storm guard: this pid stays un-notified so it can fire later.
+            return false;
+        }
+
+        _notifiedElevatedPids.Add(pid);
+        _lastElevationNoticeTicks = nowMs;
+        return true;
     }
 
-    private bool IsProcessHigherIntegrity(uint pid)
+    protected virtual bool IsProcessHigherIntegrity(uint pid)
     {
         IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
         if (hProcess == IntPtr.Zero)
@@ -737,7 +699,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         IntPtr hToken = IntPtr.Zero;
         try
         {
-            if (!OpenProcessToken(hProcess, TOKEN_QUERY, out hToken))
+            if (!Advapi32.OpenProcessToken(hProcess, Advapi32.TOKEN_QUERY, out hToken))
             {
                 return Marshal.GetLastWin32Error() == ERROR_ACCESS_DENIED;
             }
@@ -752,8 +714,8 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
         finally
         {
-            if (hToken != IntPtr.Zero) CloseHandle(hToken);
-            CloseHandle(hProcess);
+            if (hToken != IntPtr.Zero) Kernel32.CloseHandle(hToken);
+            Kernel32.CloseHandle(hProcess);
         }
     }
 
@@ -767,7 +729,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         _selfIntegrityResolved = true;
         _selfIntegrityLevel = SECURITY_MANDATORY_MEDIUM_RID;
 
-        if (OpenProcessToken(Kernel32.GetCurrentProcess(), TOKEN_QUERY, out IntPtr hToken))
+        if (Advapi32.OpenProcessToken(Kernel32.GetCurrentProcess(), Advapi32.TOKEN_QUERY, out IntPtr hToken))
         {
             try
             {
@@ -779,7 +741,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             }
             finally
             {
-                CloseHandle(hToken);
+                Kernel32.CloseHandle(hToken);
             }
         }
 
@@ -790,7 +752,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private static int GetTokenIntegrityLevel(IntPtr hToken)
     {
         uint size = 0;
-        GetTokenInformation(hToken, TokenIntegrityLevel, IntPtr.Zero, 0, out size);
+        Advapi32.GetTokenInformation(hToken, TokenIntegrityLevel, IntPtr.Zero, 0, out size);
         if (size == 0)
         {
             return -1;
@@ -799,7 +761,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         IntPtr buffer = Marshal.AllocHGlobal((int)size);
         try
         {
-            if (!GetTokenInformation(hToken, TokenIntegrityLevel, buffer, size, out size))
+            if (!Advapi32.GetTokenInformation(hToken, TokenIntegrityLevel, buffer, size, out size))
             {
                 return -1;
             }

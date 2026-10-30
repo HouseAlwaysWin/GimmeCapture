@@ -257,9 +257,19 @@ public class AppSettingsService : IAppSettingsService
     /// waits up to <paramref name="timeout"/> for it. The default on a first run, as a load would leave it. False when
     /// no read was started or it is still going.
     /// </summary>
-    internal bool TryGetReadLanguage(TimeSpan timeout, out Language language)
+    internal bool TryGetReadLanguage(TimeSpan timeout, out Language language) =>
+        TryGetReadValue(timeout, static saved => saved.Language, out language);
+
+    /// <summary>
+    /// Whether the saved settings ask to run as administrator, from the read <see cref="StartReadingInBackground"/>
+    /// began, as <see cref="TryGetReadLanguage"/> does: start-up decides on it before any window exists.
+    /// </summary>
+    internal bool TryGetReadRunAsAdministrator(TimeSpan timeout, out bool runAsAdministrator) =>
+        TryGetReadValue(timeout, static saved => saved.RunAsAdministrator, out runAsAdministrator);
+
+    private bool TryGetReadValue<T>(TimeSpan timeout, Func<AppSettings, T> select, out T value)
     {
-        language = Settings.Language;
+        value = select(Settings);
         try
         {
             if (_read is not { } read || !read.Wait(timeout))
@@ -269,7 +279,7 @@ public class AppSettingsService : IAppSettingsService
 
             if (read.Result?.Settings is { } saved)
             {
-                language = saved.Language;
+                value = select(saved);
             }
 
             return true;
@@ -314,6 +324,34 @@ public class AppSettingsService : IAppSettingsService
     /// </summary>
     public Language? PeekSavedLanguage()
     {
+        if (PeekSavedProperty(nameof(AppSettings.Language), "Settings.PeekLanguage") is not { } value)
+        {
+            return null;
+        }
+
+        if (value.ValueKind == JsonValueKind.String && Enum.TryParse(value.GetString(), out Language named))
+        {
+            return named;
+        }
+
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int number) && Enum.IsDefined(typeof(Language), number))
+        {
+            return (Language)number;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the saved settings ask to run as administrator, read the same way as <see cref="PeekSavedLanguage"/>, for a
+    /// start-up whose background read has not finished in time. False on a first run or when the config cannot be read.
+    /// </summary>
+    public bool PeekSavedRunAsAdministrator() =>
+        PeekSavedProperty(nameof(AppSettings.RunAsAdministrator), "Settings.PeekRunAsAdministrator") is { ValueKind: JsonValueKind.True };
+
+    // One top-level property of the config a load would read, without loading or migrating the rest.
+    private JsonElement? PeekSavedProperty(string name, string operation)
+    {
         if (FindConfigSource() is not { } source)
         {
             return null;
@@ -322,27 +360,13 @@ public class AppSettingsService : IAppSettingsService
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllBytes(source.Path));
-            if (!document.RootElement.TryGetProperty(nameof(AppSettings.Language), out JsonElement value))
-            {
-                return null;
-            }
-
-            if (value.ValueKind == JsonValueKind.String && Enum.TryParse(value.GetString(), out Language named))
-            {
-                return named;
-            }
-
-            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int number) && Enum.IsDefined(typeof(Language), number))
-            {
-                return (Language)number;
-            }
+            return document.RootElement.TryGetProperty(name, out JsonElement value) ? value.Clone() : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            AppLog.Warning("Settings.PeekLanguage", ex);
+            AppLog.Warning(operation, ex);
+            return null;
         }
-
-        return null;
     }
 
     // The config file a load reads, in order: one in an explicitly chosen data directory, this version's AppData
@@ -408,6 +432,8 @@ public class AppSettingsService : IAppSettingsService
         dest.ConfigVersion = source.ConfigVersion;
         dest.Language = source.Language;
         dest.RunOnStartup = source.RunOnStartup;
+        dest.RunAsAdministrator = source.RunAsAdministrator;
+        dest.ElevatedWindowNoticeShown = source.ElevatedWindowNoticeShown;
         dest.AutoCheckUpdates = source.AutoCheckUpdates;
         dest.BorderThickness = source.BorderThickness;
         dest.BorderColorHex = source.BorderColorHex;
