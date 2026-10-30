@@ -85,22 +85,91 @@ tool.
 
 The user asked to bring down what the app really holds: Task Manager's commit size (Details tab, Commit size column),
 not the Memory column the working-set trim used to empty. Done so far: OCR on the CPU and the Record tab's AV1 check
-on Direct3D 11 (Status). Pick up in this order:
+on Direct3D 11 (Status), then, in a second session on 2026-10-30, the hand checks of both and the breakdown of what the
+idle app holds (Measured 2026-10-30, below). Pick up in this order:
 
-1. **Hand-check both** on a published build: the "OCR memory" and "Record tab AV1 check" items below. A Debug build
-   never ran OCR on DirectML (it has no DirectML.dll), so it cannot show the change. The user's Debug instance started
-   2026-10-29 23:19 predates both and locks `bin\Debug`: close it before rebuilding.
-2. **Break down what the idle app holds.** That Debug instance sat at 331 MB private bytes after OCR had unloaded,
-   against 131 MB for a release build at start in an older note. On a published build, read the commit size after
-   each step: launched to the tray, main window opened, each settings tab opened, a capture with text boxes, OCR
-   unloaded (two minutes on), ten minutes on. Then split the largest steps between the GC heap (`GC.GetGCMemoryInfo`
-   in a debug-log line) and native memory (VMMap's private data and heaps). Known candidates, all under Idle, start-up
-   and memory: history thumbnails (about 70 MB at 300 entries), the CJK fonts copied into native memory (30 MB), and
-   what ONNX Runtime keeps after OCR unloads (6-12 MB, measured).
-3. **DirectML after background removal and smart selection** (under OCR, AI and translation): U2Net and SAM2 on the
+1. **Choose with the user what to do about the GPU's share**, the largest one: the options under Measured 2026-10-30.
+   A was measured (not a default) and C is done; B (a main window that can be freed) and the pin-resize stalls are
+   open.
+2. **DirectML after background removal and smart selection** (under OCR, AI and translation): U2Net and SAM2 on the
    CPU against DirectML, measured like OCR's opt-in test (real models, a real size, a fresh process each, twice), and
    `BackgroundRemovalService`'s five-minute device hold.
-4. **NVENC** only if the user wants a child process: nothing in-process helped (under Idle, start-up and memory).
+3. **NVENC** only if the user wants a child process: nothing in-process helped (under Idle, start-up and memory).
+
+### Measured 2026-10-30
+
+A published build of `f01bbcef` with a temporary probe, not committed: an environment-variable hook after
+`_trayController.Install()` in `App.axaml.cs` walked a launch to the tray through the main window, each tab, a frozen
+capture with text boxes, a full OCR of the screen and OCR's unload. After each step, two `GC.Collect`s, then it logged
+private bytes (the commit size), the GC's committed bytes, the Windows heaps (`GetProcessHeaps` + `HeapSummary`), the
+rest of the committed private memory (a `VirtualQuery` walk) and the DLLs the step loaded. A switch in `Program.cs`
+picked the renderer, the composition mode and Skia's GPU cache. The instance had a folder of its own, settings copied
+from the dev instance with the hotkeys on Ctrl+Alt+Shift+F8-F12 and update checks off, the Chinese UI and 45 history
+entries. Machine: Ryzen 5 7535HS with Radeon 660M plus RTX 3050 Laptop, 1920x1080 primary at 125%.
+
+Commit size in MB, GPU rendering (the default: ANGLE on Direct3D 11) against software rendering:
+
+| Step | GPU | Software |
+|---|---|---|
+| Launched to the tray, 25 s on | 92 | 32 |
+| Main window shown | 217 | 100 |
+| All nine tabs opened, window hidden | 287 | 186 |
+| Overlay up with its text boxes | 594 | 274 |
+| Overlay closed | 473 | 243 |
+| OCR unloaded, 2.5 min on (stays there at 10 min) | 389 | 218 |
+
+- **Record tab AV1 check**: `Recording.HardwareAv1Probe: unavailable` here, the RTX 3050 cannot encode AV1 ("Codec
+  not supported" on the Direct3D 11 open, no CUDA retry). The commit size rose 31-51 MB as the tab was built and settled
+  2-6 MB above where it was (two runs). The "available" path cannot be checked on this machine.
+- **OCR memory**: with software rendering, which takes the GPU out of the numbers, the Windows heaps went from 97 MB to
+  170 at the overlay (detector, the frozen still, the GDI+ grab), 168 after recognizing the screen (1092-1382
+  characters) and 126 after the unload: tens of MB, and about 28 MB stays.
+- **The GPU's share is the largest.** ANGLE and the driver cost 59 MB at a launch to the tray with no window on screen,
+  58 more once a window shows, and the overlay adds about 270 MB of private memory outside the heaps, of which about
+  60 MB stays after it closes (after OCR unloads: 389 against 218). This laptop's GPU memory is system memory, so all of
+  it is commit. No composition mode lowers the idle level (WinUI, DirectComposition, RedirectionSurface and the
+  low-latency swap chain all sat at 83-93 MB in the tray, 213-219 with the window, 415-440 ten seconds after the
+  overlay), WGL is worse (137 in the tray) and an 8 MB Skia GPU cache instead of the default 28 changed nothing
+  (40 s after the overlay: 417/402 default, 423/423 with 8 MB). Only software rendering removes it.
+- **The main window is never freed.** Hiding it keeps it and its tabs (about 195 MB with the GPU, 155 in software).
+  Closing it for real (`MainWindow.Shutdown()` and dropping the bootstrapper's `_mainWindow`) freed nothing either: a
+  `WeakReference` showed it still alive after three collections, so something it wired up keeps it (most likely the
+  view model's actions and subscriptions from `MainWindow.ViewModelWiring`).
+- **The Record tab loads all of FFmpeg** for its codec list: the seven DLLs plus `vulkan-1.dll`, 18 MB of writable
+  image sections and about 8 MB of heap, kept for the rest of the run even if nothing is ever recorded.
+- **Smaller ones**: the first window adds about 40 MB of heap even in software (HarfBuzz, the fonts); the Control and
+  History tabs about 13 MB of heap each; the GC heap peaked at 74 MB committed; the About tab fetches the release list
+  (the whole HTTP and TLS stack loads) and the working set jumps by 277 MB of file-backed pages there, not commit.
+
+Options to put to the user:
+
+- **A. Software rendering** (the most: -60 MB in the tray, -117 with the window, -170 after a capture). It moves all
+  drawing to the CPU. Measured the same day (the probe drove each case through the view models for 5-8 s and counted
+  `RequestAnimationFrame` callbacks, which run to about 115 a second here; two runs each, CPU in % of one core):
+
+  | Case | GPU | Software |
+  |---|---|---|
+  | Overlay at 1920x1080, a selection dragged every frame | 47-48%, 70-72 fps | 100-103%, 93-96 fps |
+  | Overlay hover animation, the point moving | 27-29% | 23-27% |
+  | An image pin (1280x720) resized every frame | 71-76%, 60 fps | 92-99%, 26 fps |
+  | The same pin moved every frame | 17-19%, 40 fps | 37%, 28 fps |
+  | A 720p video pin playing | 21% | 37-41% |
+
+  Software rendering doubles the CPU of full-screen and video drawing (and a 4K screen has four times the pixels) and
+  makes resizing a pin choppy, so it is not a default; at most an opt-in "use less memory" setting, for the user to
+  decide. The magnifier was not measured (it follows the real pointer).
+- **New lead from the same runs: resizing a pin stalls the UI thread.** Both renderers logged `UiStall` warnings of
+  0.3-1.5 s, one after another, while the pin was resized every frame: with the GPU the thread waited (about 20% CPU),
+  in software it ran a dozen or more full GCs a second, a new bitmap per size. Check by hand by dragging a pin's
+  corner quickly; it fits "Resizing rebuilds the window region 4-6 times per pointer move" under Pins.
+- **B. A main window that can be freed** when closed to the tray: find what keeps it alive, undo that wiring on close,
+  rebuild it on the next open. The gain is unknown until it can be collected; FFmpeg and the font caches stay anyway.
+- **C. No FFmpeg for the Record tab's codec list**: done 2026-10-30. `HardwareCapabilityCache` keeps the probe's
+  answer (hardware AV1, GIF) in `hardware-capabilities.json` beside the settings, keyed by the probe's version and the
+  display adapters' device ids and driver versions from the registry; a match goes to
+  `LibavRecordingEncoder.RecallHardwareAv1` without loading FFmpeg. Three fresh runs opening the Record tab: the first
+  probed (255 MB two seconds after the tab opened, 220 fifteen seconds on), the next two took the kept answer and loaded
+  no FFmpeg DLL (209/207 and 203/200). Linux has no key yet and probes every run, as before.
 
 What made the numbers trustworthy: private bytes after two `GC.Collect`s, one fresh test process per variant, each run
 twice, at the real capture size with real work. A 640x480 probe that encoded nothing made Direct3D 11 look as if it
@@ -130,10 +199,12 @@ These were covered by unit tests only; check them in the real app before a relea
 - **OCR memory** (a published build, which has DirectML.dll; a Debug build never ran OCR on DirectML): in Task
   Manager's Details tab with the Commit size column, a capture with text boxes, then Translate or copy text, should add
   tens of MB, not hundreds, and the commit size should fall back within two minutes. Translating a screenful of text
-  should not be slower than in 0.70.0.
+  should not be slower than in 0.70.0. Checked 2026-10-30 by a probe for the OCR part (Measured 2026-10-30): tens of
+  MB, about 28 MB staying; the translation speed was not checked.
 - **Record tab AV1 check** (NVIDIA PC): in a fresh run, open the Record tab. The log should show
   `Recording.HardwareAv1Probe: available` as before, and the commit size should rise by about 35 MB, not 190. An AV1
-  recording should still record AV1.
+  recording should still record AV1. Checked 2026-10-30 on an RTX 3050 (no AV1 encoder): `unavailable`, 2-6 MB once
+  settled; the "available" path still needs an RTX 40 or newer.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a
