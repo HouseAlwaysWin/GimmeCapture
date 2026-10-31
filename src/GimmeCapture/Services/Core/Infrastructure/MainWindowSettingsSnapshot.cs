@@ -10,6 +10,7 @@ public sealed class MainWindowSettingsSnapshot
     public required bool RunOnStartup { get; init; }
     public required bool RunAsAdministrator { get; init; }
     public required bool AutoCheckUpdates { get; init; }
+    public bool SoftwareRendering { get; init; }
     public required double BorderThickness { get; init; }
     public required Color BorderColor { get; init; }
     public required Color ThemeColor { get; init; }
@@ -92,6 +93,7 @@ public sealed class MainWindowSettingsSnapshot
             RunOnStartup = settings.RunOnStartup,
             RunAsAdministrator = settings.RunAsAdministrator,
             AutoCheckUpdates = settings.AutoCheckUpdates,
+            SoftwareRendering = settings.SoftwareRendering,
             BorderThickness = settings.BorderThickness,
             BorderColor = ParseColor(settings.BorderColorHex, "#E60012"),
             ThemeColor = ParseColor(settings.ThemeColorHex, "#E60012"),
@@ -174,6 +176,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.RunOnStartup = RunOnStartup;
         settings.RunAsAdministrator = RunAsAdministrator;
         settings.AutoCheckUpdates = AutoCheckUpdates;
+        settings.SoftwareRendering = SoftwareRendering;
         settings.BorderThickness = BorderThickness;
         settings.BorderColorHex = BorderColor.ToString();
         settings.ThemeColorHex = ThemeColor.ToString();

@@ -297,6 +297,8 @@ public sealed class AppBootstrapper : IAsyncDisposable
             ShowElevatedWindowNoticeAsync(viewModel).Forget("ElevatedNotice.Show");
         viewModel.RequestRestartAsAdministratorAction = () =>
             OfferRestartAsAdministratorAsync(viewModel).Forget("Elevation.OfferRestart");
+        viewModel.RequestRestartForRenderingAction = () =>
+            OfferRestartForRenderingAsync(viewModel).Forget("Rendering.OfferRestart");
 
         // Toasts and the capture-delay countdown are windows of their own, so they are wired here, with the view model.
         // The main window wired them, and a launch to the tray builds it only once the user opens it: until then no copy
@@ -350,14 +352,14 @@ public sealed class AppBootstrapper : IAsyncDisposable
         return false;
     }
 
-    private bool _isElevationDialogShowing;
+    private bool _isRestartDialogShowing;
 
     // The one-time explanation (MainWindowViewModel.OfferRunAsAdministratorOnce), raised while an administrator window has
     // the foreground: Yes turns the setting on and restarts elevated.
     private async Task ShowElevatedWindowNoticeAsync(MainWindowViewModel viewModel)
     {
         var loc = LocalizationService.Instance;
-        if (await ConfirmElevationAsync(loc["ElevatedWindowNoticeTitle"], loc["ElevatedWindowNoticeMessage"], topmost: true))
+        if (await ConfirmRestartAsync(loc["ElevatedWindowNoticeTitle"], loc["ElevatedWindowNoticeMessage"], topmost: true))
         {
             viewModel.SetRunAsAdministrator(true);
             await RestartAsAdministratorAsync(viewModel);
@@ -373,20 +375,36 @@ public sealed class AppBootstrapper : IAsyncDisposable
         }
 
         var loc = LocalizationService.Instance;
-        if (await ConfirmElevationAsync(loc["RunAsAdministrator"], loc["RunAsAdministratorRestartMessage"], topmost: false))
+        if (await ConfirmRestartAsync(loc["RunAsAdministrator"], loc["RunAsAdministratorRestartMessage"], topmost: false))
         {
             await RestartAsAdministratorAsync(viewModel);
         }
     }
 
-    private async Task<bool> ConfirmElevationAsync(string title, string message, bool topmost)
+    // The renderer setting changed (StartupRenderer): restart now, or leave it to the next launch. Nothing to ask once it
+    // is back to the renderer this process runs on.
+    private async Task OfferRestartForRenderingAsync(MainWindowViewModel viewModel)
     {
-        if (_isElevationDialogShowing)
+        if (viewModel.SoftwareRendering == StartupRenderer.IsSoftware || viewModel.IsCaptureInProgress)
+        {
+            return;
+        }
+
+        var loc = LocalizationService.Instance;
+        if (await ConfirmRestartAsync(loc["SoftwareRendering"], loc["SoftwareRenderingRestartMessage"], topmost: false))
+        {
+            await RestartAsync(viewModel, AppRestart.TryStartCopy, "Rendering.Restart: handed over to a new copy.");
+        }
+    }
+
+    private async Task<bool> ConfirmRestartAsync(string title, string message, bool topmost)
+    {
+        if (_isRestartDialogShowing)
         {
             return false;
         }
 
-        _isElevationDialogShowing = true;
+        _isRestartDialogShowing = true;
         try
         {
             var result = await ConfirmationDialog.ShowConfirmation(
@@ -400,12 +418,12 @@ public sealed class AppBootstrapper : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warning("Elevation.Confirm", ex);
+            AppLog.Warning("Restart.Confirm", ex);
             return false;
         }
         finally
         {
-            _isElevationDialogShowing = false;
+            _isRestartDialogShowing = false;
         }
     }
 
@@ -425,7 +443,10 @@ public sealed class AppBootstrapper : IAsyncDisposable
         return host;
     }
 
-    private async Task RestartAsAdministratorAsync(MainWindowViewModel viewModel)
+    private Task RestartAsAdministratorAsync(MainWindowViewModel viewModel) =>
+        RestartAsync(viewModel, static () => ElevatedLaunch.TryStartElevatedCopy([]), "Elevation.Restart: handed over to the elevated copy.");
+
+    private async Task RestartAsync(MainWindowViewModel viewModel, Func<bool> tryStartCopy, string handedOver)
     {
         // Restarting would end the capture or recording; the setting still applies from the next launch.
         if (viewModel.IsCaptureInProgress)
@@ -433,17 +454,17 @@ public sealed class AppBootstrapper : IAsyncDisposable
             return;
         }
 
-        // The elevated copy reads the config as it starts, so what was just turned on has to be on disk by then.
+        // The new copy reads the config as it starts, so what was just changed has to be on disk by then.
         await viewModel.SaveSettingsAsync();
 
-        // Let go of the single-instance mutex first. The elevated copy acquires it as it starts, while this
+        // Let go of the single-instance mutex first. The new copy acquires it as it starts, while this
         // process is still tearing down — if it loses that race it decides it is a duplicate and exits, so the
-        // user would consent to UAC and watch the app disappear instead of come back elevated.
+        // user would watch the app disappear instead of come back (having consented to UAC, for an elevated one).
         Program.ReleaseSingleInstanceForRestart();
 
-        if (ElevatedLaunch.TryStartElevatedCopy([]))
+        if (tryStartCopy())
         {
-            AppLog.Information("Elevation.Restart: handed over to the elevated copy.");
+            AppLog.Information(handedOver);
             if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
             {
                 desktop.Shutdown();
@@ -456,7 +477,7 @@ public sealed class AppBootstrapper : IAsyncDisposable
             return;
         }
 
-        // Declined (or it could not start): keep running unelevated, and take the guard back, or this instance would
+        // Declined (or it could not start): keep running as before, and take the guard back, or this instance would
         // stop being the one a later duplicate launch hands off to.
         Program.ReacquireSingleInstanceAfterFailedRestart();
     }

@@ -116,7 +116,13 @@ public class AppSettings
     /// <summary>The one-time explanation of that, offered at the first administrator window, has been shown.</summary>
     public bool ElevatedWindowNoticeShown { get; set; }
     public bool AutoCheckUpdates { get; set; }
-    
+    /// <summary>
+    /// Draws every window on the CPU instead of the GPU (StartupRenderer), which keeps what Direct3D and the graphics
+    /// driver hold out of the process: the most memory the app can give back, at the cost of more CPU for full-screen and
+    /// video drawing. Avalonia picks its renderer as the app starts, so a change takes effect at the next launch.
+    /// </summary>
+    public bool SoftwareRendering { get; set; }
+
     // Snip
     public double BorderThickness { get; set; } = 2.0;
     public string BorderColorHex { get; set; } = "#E60012";

@@ -32,4 +32,10 @@ internal static class SettingsPreload
 
     /// <summary>The settings service <see cref="Start"/> began reading, handed out once; null when nothing started one.</summary>
     internal static AppSettingsService? Take() => Interlocked.Exchange(ref _settingsService, null);
+
+    /// <summary>
+    /// That service without handing it out, for what Avalonia's own start-up decides before the bootstrapper takes it
+    /// (<see cref="StartupRenderer"/>). Null once taken, or when nothing started one.
+    /// </summary>
+    internal static AppSettingsService? Started => Volatile.Read(ref _settingsService);
 }

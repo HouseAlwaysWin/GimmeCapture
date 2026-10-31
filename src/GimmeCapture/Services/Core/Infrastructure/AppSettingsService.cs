@@ -267,6 +267,13 @@ public class AppSettingsService : IAppSettingsService
     internal bool TryGetReadRunAsAdministrator(TimeSpan timeout, out bool runAsAdministrator) =>
         TryGetReadValue(timeout, static saved => saved.RunAsAdministrator, out runAsAdministrator);
 
+    /// <summary>
+    /// Whether the saved settings ask for software rendering, from the read <see cref="StartReadingInBackground"/> began,
+    /// as <see cref="TryGetReadLanguage"/> does: Avalonia picks its renderer as its platform starts, before the app exists.
+    /// </summary>
+    internal bool TryGetReadSoftwareRendering(TimeSpan timeout, out bool softwareRendering) =>
+        TryGetReadValue(timeout, static saved => saved.SoftwareRendering, out softwareRendering);
+
     private bool TryGetReadValue<T>(TimeSpan timeout, Func<AppSettings, T> select, out T value)
     {
         value = select(Settings);
@@ -348,6 +355,13 @@ public class AppSettingsService : IAppSettingsService
     /// </summary>
     public bool PeekSavedRunAsAdministrator() =>
         PeekSavedProperty(nameof(AppSettings.RunAsAdministrator), "Settings.PeekRunAsAdministrator") is { ValueKind: JsonValueKind.True };
+
+    /// <summary>
+    /// Whether the saved settings ask for software rendering, read the same way as <see cref="PeekSavedLanguage"/>, for a
+    /// start-up whose background read has not finished in time. False on a first run or when the config cannot be read.
+    /// </summary>
+    public bool PeekSavedSoftwareRendering() =>
+        PeekSavedProperty(nameof(AppSettings.SoftwareRendering), "Settings.PeekSoftwareRendering") is { ValueKind: JsonValueKind.True };
 
     // One top-level property of the config a load would read, without loading or migrating the rest.
     private JsonElement? PeekSavedProperty(string name, string operation)
@@ -435,6 +449,7 @@ public class AppSettingsService : IAppSettingsService
         dest.RunAsAdministrator = source.RunAsAdministrator;
         dest.ElevatedWindowNoticeShown = source.ElevatedWindowNoticeShown;
         dest.AutoCheckUpdates = source.AutoCheckUpdates;
+        dest.SoftwareRendering = source.SoftwareRendering;
         dest.BorderThickness = source.BorderThickness;
         dest.BorderColorHex = source.BorderColorHex;
         dest.ThemeColorHex = source.ThemeColorHex;

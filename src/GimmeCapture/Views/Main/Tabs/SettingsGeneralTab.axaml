@@ -34,7 +34,14 @@
                                FontSize="12" Foreground="#888888" TextWrapping="Wrap" Margin="24,0,0,0"/>
                 </StackPanel>
                 <CheckBox IsChecked="{Binding AutoCheckUpdates}" Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}"/>
-                
+                <!-- Draws on the CPU instead of the GPU (StartupRenderer): less memory, more CPU. Only the Windows build
+                     picks its renderer from it, as it starts. -->
+                <StackPanel Spacing="2" IsVisible="{Binding CanUseSoftwareRendering}">
+                    <CheckBox IsChecked="{Binding SoftwareRendering}" Content="{Binding [SoftwareRendering], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <TextBlock Text="{Binding [SoftwareRenderingHint], Source={x:Static services:LocalizationService.Instance}}"
+                               FontSize="12" Foreground="#888888" TextWrapping="Wrap" Margin="24,0,0,0"/>
+                </StackPanel>
+
                 <TextBlock Text="{Binding [Language], Source={x:Static services:LocalizationService.Instance}}" Margin="0,10,0,5"/>
                 <ComboBox HorizontalAlignment="Stretch"
                           ItemsSource="{Binding AvailableLanguages}"

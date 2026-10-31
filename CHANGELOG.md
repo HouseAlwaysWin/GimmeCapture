@@ -174,6 +174,15 @@
   position once a frame and rebuilds its shape once or twice after it, and a removed background's shape is worked out
   once and then scaled: dragging a corner keeps the app 18-27% busy at 60 frames a second, and nothing waits more than
   about 45 ms. Video pins take the mouse once a frame too.
+- **A new setting trades processor time for memory: "Use less memory (draw with the CPU)".** It is on the General tab
+  and off unless you turn it on. Drawing with the graphics card makes Direct3D and the graphics driver hold memory
+  inside the app, the largest single part of what it holds while idle; drawing every window with the processor keeps
+  that out. With an RTX 4070 SUPER, the commit size Task Manager shows went from 94-95 MB to 30-32 MB with the app in
+  the tray, and from 188-196 MB to 96-97 MB with the settings window open; a laptop whose graphics share its memory
+  saved about as much, and 170 MB after a capture. In exchange the processor does all the drawing: on that laptop a
+  full-screen capture and a playing video pin took about twice the processor time, and resizing a pin draws about 20
+  frames a second instead of 60. The app picks how it draws as it starts, so changing the setting offers to restart
+  it. Windows only.
 
 ### 💾 Storage
 

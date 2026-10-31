@@ -100,6 +100,7 @@ public partial class MainWindowViewModel
         RunOnStartup = defaultSettings.RunOnStartup;
         RunAsAdministrator = defaultSettings.RunAsAdministrator;
         AutoCheckUpdates = defaultSettings.AutoCheckUpdates;
+        SoftwareRendering = defaultSettings.SoftwareRendering;
         BorderThickness = defaultSettings.BorderThickness;
         AutoSave = defaultSettings.AutoSave;
         SnipHotkey = defaultSettings.SnipHotkey;

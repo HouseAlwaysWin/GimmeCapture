@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 37 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 38 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -95,6 +95,22 @@ tool.
   and 21-27% busy, 1.7 rebuilds a frame (the second one because the pin ran past the bottom of the screen, which moves
   the toolbar each frame) at 0.7 and 1.6 ms, the tick at most 17-45 ms late. `ScalableRegionTests` holds the placed
   region to the rects and to a one-by-one union.
+- Done since batch 1, the user's call: **software rendering as a setting** (option A under Measured 2026-10-30), "Use
+  less memory (draw with the CPU)" on the General tab, off by default (`AppSettings.SoftwareRendering`). Avalonia picks
+  its renderer once, as its Win32 platform starts: `Program.BuildAvaloniaApp` hands it `StartupRenderer.Win32Options`
+  through `With<Win32PlatformOptions>(Func)`, which it calls only then, and which returns its defaults or
+  `RenderingMode = [Software]`. The setting comes from the read Main began when that has finished (0.1 ms), else from
+  the one property peeked from the config (0.6-0.7 ms in the published build), and `Startup.Renderer` logs which. A
+  change offers a restart when it differs from what the process started with (`AppRestart`, along the elevated
+  restart's path). Measured on the desktop (Ryzen 7 5700X, RTX 4070 SUPER, 60 Hz at 100%) with a published build in
+  the 2026-10-30 probe instance, launched to the tray, then the main window shown by a second launch and closed again,
+  GPU and software alternated twice: GPU 94-95 MB in the tray, 188-196 with the window, 186-191 closed; software
+  30-32, 96-97 and 94-96, with ANGLE never loaded. A dedicated GPU saves as much as the laptop's shared one did.
+  `PinResizeProbeTests` with PIN_RESIZE_RENDERER=software, twice each: the GPU 55-61 frames/s, the tick at most
+  19-36 ms late; software 19-20 frames/s with 43-44 gen2 GCs in the 5 s drag (0-1 on the GPU), the tick at most
+  55-63 ms late. The probe counts the UI thread only (6-12% busy in software), not the render thread that rasterizes,
+  and where the GCs come from was not looked into. Linux keeps the GPU: the setting is hidden off Windows, as nothing
+  measured X11's software path.
 - Done since batch 1: **the Record tab's AV1 check on Direct3D 11**. Opening `av1_nvenc` with frames in memory makes
   FFmpeg's NVENC create a CUDA context, and the driver kept 190 MB of the process for good (Release tests, two runs).
   `ProbeHardwareAv1` now opens NVENC on Direct3D 11 frames first (a D3D11VA device picked with `vendor_id=0x10de`, so
@@ -127,9 +143,9 @@ not the Memory column the working-set trim used to empty. Done so far: OCR on th
 on Direct3D 11 (Status), then, in a second session on 2026-10-30, the hand checks of both and the breakdown of what the
 idle app holds (Measured 2026-10-30, below). Pick up in this order:
 
-1. **Choose with the user what to do about the GPU's share**, the largest one: the options under Measured 2026-10-30.
-   A was measured (not a default), and B and C are done (B gave back less than hoped, see there); the pin-resize
-   stalls are fixed (Status).
+1. ~~**Choose with the user what to do about the GPU's share**~~: done 2026-10-31, A as a setting, off by default (the
+   user's choice), and B and C are done (B gave back less than hoped, see there); the pin-resize stalls are fixed
+   (Status).
 2. ~~**DirectML after background removal and smart selection**~~: done 2026-10-31, both on the CPU, and the DirectML
    package swapped for the CPU one (Status).
 3. **NVENC** only if the user wants a child process: nothing in-process helped (under Idle, start-up and memory).
@@ -195,7 +211,7 @@ Options to put to the user:
 
   Software rendering doubles the CPU of full-screen and video drawing (and a 4K screen has four times the pixels) and
   makes resizing a pin choppy, so it is not a default; at most an opt-in "use less memory" setting, for the user to
-  decide. The magnifier was not measured (it follows the real pointer).
+  decide. The magnifier was not measured (it follows the real pointer). Done 2026-10-31 as that setting (Status).
 - **New lead from the same runs: resizing a pin stalls the UI thread.** Both renderers logged `UiStall` warnings of
   0.3-1.5 s, one after another, while the pin was resized every frame: with the GPU the thread waited (about 20% CPU),
   in software it ran a dozen or more full GCs a second, a new bitmap per size. Check by hand by dragging a pin's
@@ -273,6 +289,14 @@ These were covered by unit tests only; check them in the real app before a relea
   Shift held. The pin should follow the mouse smoothly, end at the size where the mouse let go, undo in one step, and
   still let clicks through a removed background's transparent parts at its new size. The log should show no `UiStall`
   line during the drag. The probe stood in for the mouse; a real drag was not measured.
+- **Use less memory (software rendering)**: turn it on in the General tab and accept the restart. The app should come
+  back with the settings window open, and the log show `Startup.Renderer: software`. Then check that everything still
+  looks as it does on the GPU, which nobody has looked at in software: the capture overlay (dimming, selection,
+  magnifier, toolbar), a frozen capture with text boxes, an ordinary pin and one whose background was removed (its
+  transparent parts see-through and clickable), a video pin, the recording frame and toolbar, a translation overlay,
+  toasts and the countdown. Dragging a selection, playing a video pin and resizing a pin should stay usable (the probe
+  resized a pin at about 20 frames a second), and Task Manager's commit size should sit lower than with the setting off. Turning it off offers the restart again and brings
+  back `Startup.Renderer: GPU`; turning it on and off again without restarting asks nothing the second time.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a

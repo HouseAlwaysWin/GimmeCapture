@@ -37,6 +37,7 @@ public partial class MainWindowViewModel
             RunOnStartup = RunOnStartup,
             RunAsAdministrator = RunAsAdministrator,
             AutoCheckUpdates = AutoCheckUpdates,
+            SoftwareRendering = SoftwareRendering,
             BorderThickness = BorderThickness,
             BorderColor = BorderColor,
             ThemeColor = ThemeColor,
@@ -118,6 +119,7 @@ public partial class MainWindowViewModel
         RunOnStartup = snapshot.RunOnStartup;
         RunAsAdministrator = snapshot.RunAsAdministrator;
         AutoCheckUpdates = snapshot.AutoCheckUpdates;
+        SoftwareRendering = snapshot.SoftwareRendering;
         BorderThickness = snapshot.BorderThickness;
         AutoSave = snapshot.AutoSave;
         EnableHistory = snapshot.EnableHistory;

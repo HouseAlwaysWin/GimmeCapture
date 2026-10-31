@@ -27,6 +27,7 @@ public class MainWindowSettingsPersistenceServiceTests
             RunOnStartup = true,
             RunAsAdministrator = true,
             AutoCheckUpdates = false,
+            SoftwareRendering = true,
             BorderThickness = 4,
             BorderColor = Color.Parse("#123456"),
             ThemeColor = Color.Parse("#654321"),
@@ -101,6 +102,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.Language, persisted.Language);
         Assert.Equal(snapshot.RunOnStartup, persisted.RunOnStartup);
         Assert.Equal(snapshot.RunAsAdministrator, persisted.RunAsAdministrator);
+        Assert.Equal(snapshot.SoftwareRendering, persisted.SoftwareRendering);
         Assert.Equal(snapshot.BorderColor, persisted.BorderColor);
         Assert.Equal(snapshot.ThemeColor, persisted.ThemeColor);
         Assert.Equal(snapshot.RecordFormat, persisted.RecordFormat);
@@ -134,6 +136,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Contains($"\"ConfigVersion\": {AppSettingsService.CurrentConfigVersion}", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
         Assert.Contains("\"CaptureWithoutStealingFocus\": false", savedJson);
+        Assert.Contains("\"SoftwareRendering\": true", savedJson);
         Assert.Contains("\"FreezeScreenOnScreenshot\": false", savedJson);
         Assert.Contains("\"CaptureDelay\": \"FiveSeconds\"", savedJson);
         Assert.Contains("\"SnipToolbarPosition\": \"TopRight\"", savedJson);

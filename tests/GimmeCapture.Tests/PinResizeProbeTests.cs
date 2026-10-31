@@ -20,8 +20,10 @@ namespace GimmeCapture.Tests;
 /// several times: an opaque 1280x720 pin's drag kept the UI thread 96-98% busy with 32 rebuilds a frame and held a
 /// background job up to 3 s, and a cut-out one drew 34-41 frames a second. Now the newest move is applied once a
 /// frame, the region rebuilt once or twice after it, and a cut-out pin's opaque part placed instead of rebuilt: 18-27%
-/// busy, 60 frames, background jobs at most 45 ms late (Ryzen 7 5700X, a 60 Hz screen at 100%). Opt-in (PIN_RESIZE_PROBE=1):
-/// it sets up Avalonia on the real platform, which a process can do only once, and puts two pins on screen.
+/// busy, 60 frames, background jobs at most 45 ms late (Ryzen 7 5700X, a 60 Hz screen at 100%). Drawn on the CPU
+/// (PIN_RESIZE_RENDERER=software, as "Use less memory" draws), the same drags ran at 19-20 frames a second with a gen2
+/// GC about every other frame, background jobs at most 63 ms late. Opt-in (PIN_RESIZE_PROBE=1): it sets up Avalonia on
+/// the real platform, which a process can do only once, and puts two pins on screen.
 /// </summary>
 public sealed class PinResizeProbeTests : IDisposable
 {
@@ -37,7 +39,14 @@ public sealed class PinResizeProbeTests : IDisposable
     [OptInFact("PIN_RESIZE_PROBE=1")]
     public void DraggingAPinsCorner_KeepsTheUiThreadUpWithThePointer()
     {
-        AppBuilder.Configure<GimmeCapture.App>().UsePlatformDetect().WithInterFont().SetupWithoutStarting();
+        // PIN_RESIZE_RENDERER=software draws on the CPU, as "Use less memory" does (StartupRenderer).
+        bool software = Environment.GetEnvironmentVariable("PIN_RESIZE_RENDERER") == "software";
+        _output.WriteLine(software ? "Software rendering" : "GPU rendering");
+        AppBuilder.Configure<GimmeCapture.App>()
+            .UsePlatformDetect()
+            .With(GimmeCapture.Composition.StartupRenderer.Win32Options(software))
+            .WithInterFont()
+            .SetupWithoutStarting();
 
         var opaque = Drag(cutOut: false);
         var cutOut = Drag(cutOut: true);

@@ -107,6 +107,8 @@ class Program
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            // The GPU or the CPU (StartupRenderer), asked for only as the Win32 platform starts.
+            .With<Win32PlatformOptions>(StartupRenderer.Win32Options)
             .WithInterFont()
             .LogToTrace()
             // A command that fails with nobody listening would otherwise hit ReactiveUI's default handler, which
