@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 38 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 39 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -312,6 +312,10 @@ These were covered by unit tests only; check them in the real app before a relea
   resized a pin at 29-46 frames a second), and Task Manager's commit size should sit lower than with the setting off.
   Turning it off offers the restart again and brings back `Startup.Renderer: GPU`; turning it on and off again without
   restarting asks nothing the second time.
+- **Run as administrator at start**: with the setting on, start the app normally and accept the UAC prompt. No
+  "Application Startup Failed" dialog should appear, and the log should show `Elevation.RelaunchAtStart: handed over to
+  the elevated copy.` with no `Program.Startup` error after it. `AppShutdownBeforeStartTests` (STARTUP_EXIT_PROBE=direct
+  or posted) shows the cause and the fix in a headless app; the update hand-over takes the same path and was not tried.
 - **The glow and the checkerboard, on the GPU too**: they are drawn a new way in both renderers (`GlowDecorator`,
   `TransparencyCheckerboard`). The glow around a pin, a video pin, the capture frame and the General tab's style
   preview should look as before, follow a pin's opacity slider, and go with "hide decoration" or "hide border"; a

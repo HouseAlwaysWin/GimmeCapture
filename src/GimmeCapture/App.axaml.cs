@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using GimmeCapture.Composition;
 using GimmeCapture.Services.Core.Infrastructure;
 
@@ -31,7 +32,7 @@ public partial class App : Application
             var currentExePath = Environment.ProcessPath ?? string.Empty;
             if (UpdateService.TryRedirectToPendingUpdatedInstance(AppVersionInfo.CurrentVersion, currentExePath))
             {
-                desktop.Shutdown();
+                ShutdownBeforeStart(desktop);
                 return;
             }
 
@@ -41,7 +42,7 @@ public partial class App : Application
                 PlatformErrorDialog.ShowError(
                     $"Update verification failed.{Environment.NewLine}{Environment.NewLine}{verificationResult.FailureMessage}",
                     "Update Verification Failed");
-                desktop.Shutdown();
+                ShutdownBeforeStart(desktop);
                 return;
             }
 
@@ -51,7 +52,7 @@ public partial class App : Application
             StartupTrace.Mark("bootstrapper");
             if (_bootstrapper.TryHandOverToElevatedCopy())
             {
-                desktop.Shutdown();
+                ShutdownBeforeStart(desktop);
                 return;
             }
 
@@ -127,6 +128,16 @@ public partial class App : Application
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    /// <summary>
+    /// Ends the app from <see cref="OnFrameworkInitializationCompleted"/>, before the lifetime has started its main loop:
+    /// handed over to an elevated copy or an updated install, or a failed update. Avalonia 12 shuts the dispatcher down
+    /// as soon as Shutdown is called, and the main loop the lifetime then starts throws "Cannot perform requested operation
+    /// because the Dispatcher shut down", which Program.Main reported as a failed start-up: a fatal error after every UAC
+    /// prompt the setting asked for. Posted, the shutdown is the loop's first job and ends it as usual.
+    /// </summary>
+    internal static void ShutdownBeforeStart(IClassicDesktopStyleApplicationLifetime desktop) =>
+        Dispatcher.UIThread.Post(() => desktop.Shutdown());
 
     private void OnMainWindowFirstOpened(object? sender, EventArgs e)
     {
