@@ -5,6 +5,7 @@
              xmlns:vm="using:GimmeCapture.ViewModels.Main"
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              xmlns:converters="using:GimmeCapture.Converters"
+             xmlns:ctl="using:GimmeCapture.Views.Controls"
              mc:Ignorable="d" d:DesignWidth="550" d:DesignHeight="250"
              x:Class="GimmeCapture.Views.Controls.SnipStylePreview"
              x:DataType="vm:MainWindowViewModel">
@@ -26,9 +27,9 @@
                 
                 <!-- Selection Preview -->
                 <Grid Margin="15" VerticalAlignment="Center" HorizontalAlignment="Center" ClipToBounds="False">
+                    <ctl:GlowDecorator Glow="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
                     <Border CornerRadius="0"
-                            Background="#01FFFFFF"
-                            BoxShadow="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
+                            Background="#01FFFFFF">
                         <Border.BorderBrush>
                             <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
                                 <GradientStop Offset="0" Color="{Binding BorderColor}"/>
@@ -85,6 +86,7 @@
                             </Border>
                         </Border>
                     </Border>
+                    </ctl:GlowDecorator>
                 </Grid>
             </Grid>
         </Border>

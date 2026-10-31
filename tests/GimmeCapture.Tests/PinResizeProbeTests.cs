@@ -21,9 +21,12 @@ namespace GimmeCapture.Tests;
 /// background job up to 3 s, and a cut-out one drew 34-41 frames a second. Now the newest move is applied once a
 /// frame, the region rebuilt once or twice after it, and a cut-out pin's opaque part placed instead of rebuilt: 18-27%
 /// busy, 60 frames, background jobs at most 45 ms late (Ryzen 7 5700X, a 60 Hz screen at 100%). Drawn on the CPU
-/// (PIN_RESIZE_RENDERER=software, as "Use less memory" draws), the same drags ran at 19-20 frames a second with a gen2
-/// GC about every other frame, background jobs at most 63 ms late. Opt-in (PIN_RESIZE_PROBE=1): it sets up Avalonia on
-/// the real platform, which a process can do only once, and puts two pins on screen.
+/// (PIN_RESIZE_RENDERER=software, as "Use less memory" draws), the same drags ran at 19-20 frames a second, the render
+/// thread spending most of each frame blurring the pin's glow and filling the checkerboard under its image; 29-46 since
+/// <c>GlowDecorator</c> and <c>TransparencyCheckerboard</c> draw them. The gen2 GC about every other frame there is
+/// Avalonia reallocating its framebuffer for each new size (background GCs, 46 ms of pauses in 5 s). Opt-in
+/// (PIN_RESIZE_PROBE=1): it sets up Avalonia on the real platform, which a process can do only once, and puts two pins
+/// on screen.
 /// </summary>
 public sealed class PinResizeProbeTests : IDisposable
 {

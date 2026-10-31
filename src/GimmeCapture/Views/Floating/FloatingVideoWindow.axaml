@@ -60,20 +60,24 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="IsVisible" Value="{Binding !IsAnyToolActive}"/>
         </Style>
+        <Style Selector="controls|GlowDecorator.MainGlow">
+            <Setter Property="Glow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
+        </Style>
         <Style Selector="Border.MainBorder">
-            <Setter Property="BoxShadow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
             <Setter Property="BorderThickness" Value="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}"/>
         </Style>
+        <Style Selector="controls|GlowDecorator.MainGlow.hidden-border">
+            <Setter Property="Glow" Value="0 0 0 0 Transparent"/>
+        </Style>
         <Style Selector="Border.MainBorder.hidden-border">
-            <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
         </Style>
         <!-- Hiding decoration also drops the outer glow (box-shadow); the border line itself stays
              governed by hidden-border. Combined with WindowPadding collapsing the left/right band,
              this removes the thin glow "residual" that used to linger on the left/right edges. -->
-        <Style Selector="Border.MainBorder.hidden-decoration">
-            <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
+        <Style Selector="controls|GlowDecorator.MainGlow.hidden-decoration">
+            <Setter Property="Glow" Value="0 0 0 0 Transparent"/>
         </Style>
         <Style Selector="Border.InnerBorder.hidden-border">
             <Setter Property="BorderThickness" Value="0"/>
@@ -82,19 +86,22 @@
     
     <Grid Name="RootGrid" Background="Transparent" ClipToBounds="False">
 
-        <!-- BABYMETAL Style Border (Wraps VIDEO ONLY) -->
+        <!-- BABYMETAL Style Border (Wraps VIDEO ONLY); the decorator draws its glow around it. -->
+        <controls:GlowDecorator x:Name="MainGlow"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Top"
+                                Width="{Binding DisplayWidth}"
+                                Height="{Binding DisplayHeight}"
+                                Margin="{Binding WindowPadding}"
+                                Classes="MainGlow"
+                                Classes.hidden-border="{Binding HidePinBorder}"
+                                Classes.hidden-decoration="{Binding HidePinDecoration}"
+                                Opacity="{Binding ContentOpacity}">
         <Border x:Name="MainBorder"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Top"
-                Width="{Binding DisplayWidth}"
-                Height="{Binding DisplayHeight}"
-                Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
-                Classes.hidden-decoration="{Binding HidePinDecoration}"
                 CornerRadius="0"
                 ClipToBounds="False"
-                Opacity="{Binding ContentOpacity}"
                 Background="{DynamicResource GothicBlackBrush}">
             <Border.BorderBrush>
                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%" Opacity="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}">
@@ -217,6 +224,7 @@
                 </Grid>
             </Border>
         </Border>
+        </controls:GlowDecorator>
 
         <!-- Contextual sub-toolbar: floats at the top-center of the content; shows the open category's tools. -->
         <Border x:Name="SubToolbarBorder" Classes="no-window-drag" IsVisible="{Binding IsSubToolbarVisible}"

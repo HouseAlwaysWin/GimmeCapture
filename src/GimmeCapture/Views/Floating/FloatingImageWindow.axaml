@@ -59,20 +59,24 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="IsVisible" Value="{Binding !IsAnyToolActive}"/>
         </Style>
+        <Style Selector="ctl|GlowDecorator.MainGlow">
+            <Setter Property="Glow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
+        </Style>
         <Style Selector="Border.MainBorder">
-            <Setter Property="BoxShadow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
             <Setter Property="BorderThickness" Value="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}"/>
         </Style>
+        <Style Selector="ctl|GlowDecorator.MainGlow.hidden-border">
+            <Setter Property="Glow" Value="0 0 0 0 Transparent"/>
+        </Style>
         <Style Selector="Border.MainBorder.hidden-border">
-            <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
         </Style>
         <!-- Hiding decoration also drops the outer glow (box-shadow); the border line itself stays
              governed by hidden-border. Combined with WindowPadding collapsing the left/right band,
              this removes the thin glow "residual" that used to linger on the left/right edges. -->
-        <Style Selector="Border.MainBorder.hidden-decoration">
-            <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
+        <Style Selector="ctl|GlowDecorator.MainGlow.hidden-decoration">
+            <Setter Property="Glow" Value="0 0 0 0 Transparent"/>
         </Style>
         <Style Selector="Border.InnerBorder.hidden-border">
             <Setter Property="BorderThickness" Value="0"/>
@@ -81,19 +85,22 @@
     
     <Grid Name="RootGrid" Background="Transparent" ClipToBounds="False">
 
-        <!-- BABYMETAL Style Border (Wraps IMAGE ONLY) -->
+        <!-- BABYMETAL Style Border (Wraps IMAGE ONLY); the decorator draws its glow around it. -->
+        <ctl:GlowDecorator x:Name="MainGlow"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Top"
+                           Width="{Binding DisplayWidth}"
+                           Height="{Binding DisplayHeight}"
+                           Margin="{Binding WindowPadding}"
+                           Classes="MainGlow"
+                           Classes.hidden-border="{Binding HidePinBorder}"
+                           Classes.hidden-decoration="{Binding HidePinDecoration}"
+                           Opacity="{Binding ContentOpacity}">
         <Border x:Name="MainBorder"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Top"
-                Width="{Binding DisplayWidth}"
-                Height="{Binding DisplayHeight}"
-                Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
-                Classes.hidden-decoration="{Binding HidePinDecoration}"
                 CornerRadius="0"
                 ClipToBounds="False"
-                Opacity="{Binding ContentOpacity}"
                 Background="{DynamicResource GothicBlackBrush}">
             <Border.BorderBrush>
                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%" Opacity="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}">
@@ -110,18 +117,7 @@
                                 IsVisible="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}"/>
                         
                         <!-- Checkerboard Background for Transparency Visualization -->
-                        <Border IsHitTestVisible="False">
-                            <Border.Background>
-                                <VisualBrush TileMode="Tile" Stretch="None" SourceRect="0,0,10,10" DestinationRect="0,0,10,10">
-                                    <VisualBrush.Visual>
-                                        <Canvas Width="10" Height="10" Background="White">
-                                            <Rectangle Width="5" Height="5" Fill="#CCCCCC" />
-                                            <Rectangle Canvas.Left="5" Canvas.Top="5" Width="5" Height="5" Fill="#CCCCCC" />
-                                        </Canvas>
-                                    </VisualBrush.Visual>
-                                </VisualBrush>
-                            </Border.Background>
-                        </Border>
+                        <ctl:TransparencyCheckerboard IsHitTestVisible="False"/>
                                 
                         <!-- Center everything in a shared container to ensure PinnedImage and SelectionCanvas
                              share the exact same coordinate space even if window is larger than image.
@@ -256,6 +252,7 @@
                 </Grid>
             </Border>
         </Border>
+        </ctl:GlowDecorator>
 
         <!-- Contextual sub-toolbar: floats at the top-center of the content; shows the open category's tools. -->
         <Border x:Name="SubToolbarBorder" Classes="no-window-drag" IsVisible="{Binding IsSubToolbarVisible}"

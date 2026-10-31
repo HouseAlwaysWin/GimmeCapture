@@ -108,9 +108,23 @@ tool.
   30-32, 96-97 and 94-96, with ANGLE never loaded. A dedicated GPU saves as much as the laptop's shared one did.
   `PinResizeProbeTests` with PIN_RESIZE_RENDERER=software, twice each: the GPU 55-61 frames/s, the tick at most
   19-36 ms late; software 19-20 frames/s with 43-44 gen2 GCs in the 5 s drag (0-1 on the GPU), the tick at most
-  55-63 ms late. The probe counts the UI thread only (6-12% busy in software), not the render thread that rasterizes,
-  and where the GCs come from was not looked into. Linux keeps the GPU: the setting is hidden off Windows, as nothing
-  measured X11's software path.
+  55-63 ms late. Linux keeps the GPU: the setting is hidden off Windows, as nothing measured X11's software path.
+- Done since batch 1, the user's call: **a pin resized in software at 20 frames a second**. A sampling profile of the
+  probe's test host (a scratch console app on `Microsoft.Diagnostics.NETCore.Client` 0.2.510501 and `TraceEvent`
+  3.1.21 from the local NuGet cache: EventPipe's sample profiler and the runtime's GC events) showed the render thread
+  busy 68% of the drag, about 65% of that in `DrawingContextImpl.DrawRectangle`: the pin's glow, a `BoxShadow` that
+  Avalonia blurs with an image filter over a layer as large as the pin every frame, and the transparency checkerboard
+  under its image, a `VisualBrush` it records and fills again every frame. The image's own scaling was 12%. Taking
+  either out alone gave 22-23 frames/s, both 46-53; the checkerboard as a bitmap tile cost no more than none. The GCs
+  are `InducedNotForced` background gen2s, Avalonia's `UnmanagedBlob` adding memory pressure for each new framebuffer
+  size, 46 ms of pauses in all: not the cause. Now `GlowDecorator` draws the glow (pins, video pins, the capture frame,
+  the style preview) with Skia's mask blur through a custom draw operation, Border's own Render being sealed, and
+  `TransparencyCheckerboard` repeats a 10x10 tile with a Skia shader (an `ImageBrush` tile is drawn unscaled past 100%
+  by Avalonia 12). `GlowDecoratorRenderTests` (GLOW_PROBE=1) renders old and new with Avalonia's Skia renderer: the
+  glow within 3 levels at 100%, 5 at 125%, 7 at 150%; the checkerboard identical at 100% and 200%, its square edges
+  smoothed rather than antialiased at 125% and 150% (26 levels at most). After, software 29-46 frames/s over six
+  drags (mostly 30-36; a frame takes about 16 ms, so the 60 Hz ticks split them into 60 and 30), the GPU 60 as before;
+  the glow is under 1.5% of the render thread, the image's scaling now the largest part.
 - Done since batch 1: **the Record tab's AV1 check on Direct3D 11**. Opening `av1_nvenc` with frames in memory makes
   FFmpeg's NVENC create a CUDA context, and the driver kept 190 MB of the process for good (Release tests, two runs).
   `ProbeHardwareAv1` now opens NVENC on Direct3D 11 frames first (a D3D11VA device picked with `vendor_id=0x10de`, so
@@ -295,8 +309,13 @@ These were covered by unit tests only; check them in the real app before a relea
   magnifier, toolbar), a frozen capture with text boxes, an ordinary pin and one whose background was removed (its
   transparent parts see-through and clickable), a video pin, the recording frame and toolbar, a translation overlay,
   toasts and the countdown. Dragging a selection, playing a video pin and resizing a pin should stay usable (the probe
-  resized a pin at about 20 frames a second), and Task Manager's commit size should sit lower than with the setting off. Turning it off offers the restart again and brings
-  back `Startup.Renderer: GPU`; turning it on and off again without restarting asks nothing the second time.
+  resized a pin at 29-46 frames a second), and Task Manager's commit size should sit lower than with the setting off.
+  Turning it off offers the restart again and brings back `Startup.Renderer: GPU`; turning it on and off again without
+  restarting asks nothing the second time.
+- **The glow and the checkerboard, on the GPU too**: they are drawn a new way in both renderers (`GlowDecorator`,
+  `TransparencyCheckerboard`). The glow around a pin, a video pin, the capture frame and the General tab's style
+  preview should look as before, follow a pin's opacity slider, and go with "hide decoration" or "hide border"; a
+  background-removed pin still shows the checkerboard behind its soft edges. Compared by a test, not by eye.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a

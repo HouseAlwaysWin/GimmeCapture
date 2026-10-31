@@ -11,7 +11,7 @@ namespace GimmeCapture.Composition;
 /// and asks for <see cref="Win32Options()"/> only then, which gives the settings read Main began as long as possible to
 /// finish. Software rendering kept the commit size about 60 MB lower in the tray and 90-120 lower with the main window
 /// open, on a desktop with an RTX 4070 SUPER as on a laptop whose GPU shares system memory (170 lower there after a
-/// capture). It doubled the CPU of full-screen and video drawing on that laptop, and a pin being resized draws about 20
+/// capture). It doubled the CPU of full-screen and video drawing on that laptop, and a pin being resized draws 29-46
 /// frames a second instead of 60 (docs/OPTIMIZATION_BACKLOG.md), so it is a setting, off by default.
 /// </summary>
 internal static class StartupRenderer

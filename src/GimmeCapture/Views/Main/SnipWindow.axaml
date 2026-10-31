@@ -205,18 +205,7 @@
                    Canvas.Top="{Binding SelectionRect.Y}">
                 
                 <!-- Checkerboard Background for Transparency Visualization -->
-                <Border IsVisible="{Binding !!DrawingModeSnapshot}" IsHitTestVisible="False">
-                    <Border.Background>
-                        <VisualBrush TileMode="Tile" Stretch="None" SourceRect="0,0,10,10" DestinationRect="0,0,10,10">
-                            <VisualBrush.Visual>
-                                <Canvas Width="10" Height="10" Background="White">
-                                    <Rectangle Width="5" Height="5" Fill="#CCCCCC" />
-                                    <Rectangle Canvas.Left="5" Canvas.Top="5" Width="5" Height="5" Fill="#CCCCCC" />
-                                </Canvas>
-                            </VisualBrush.Visual>
-                        </VisualBrush>
-                    </Border.Background>
-                </Border>
+                <ctl:TransparencyCheckerboard IsVisible="{Binding !!DrawingModeSnapshot}" IsHitTestVisible="False"/>
 
                 <Image Source="{Binding DrawingModeSnapshot}"
                        Stretch="Fill"
@@ -257,23 +246,24 @@
                     </MultiBinding>
                 </Grid.IsVisible>
                   
-                <!-- Selection Border -->
-                <Border CornerRadius="0" Background="#01FFFFFF"
-                        Margin="{Binding SelectionBorderOuterMargin}"
-                        BoxShadow="{Binding SelectionShadowColor, Converter={StaticResource ColorToBoxShadowConverter}}"
-                        IsVisible="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
-                        IsHitTestVisible="False">
-                    <Border.BorderBrush>
-                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                            <GradientStop Offset="0" Color="{Binding SelectionBorderColor}"/>
-                            <GradientStop Offset="1" Color="{Binding SelectionBorderColor}"/>
-                        </LinearGradientBrush>
-                    </Border.BorderBrush>
-                    <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
-                            BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
-                        <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1" />
+                <!-- Selection Border, with its glow around it -->
+                <ctl:GlowDecorator Margin="{Binding SelectionBorderOuterMargin}"
+                                   Glow="{Binding SelectionShadowColor, Converter={StaticResource ColorToBoxShadowConverter}}"
+                                   IsVisible="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
+                                   IsHitTestVisible="False">
+                    <Border CornerRadius="0" Background="#01FFFFFF">
+                        <Border.BorderBrush>
+                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                <GradientStop Offset="0" Color="{Binding SelectionBorderColor}"/>
+                                <GradientStop Offset="1" Color="{Binding SelectionBorderColor}"/>
+                            </LinearGradientBrush>
+                        </Border.BorderBrush>
+                        <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
+                            <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1" />
+                        </Border>
                     </Border>
-                </Border>
+                </ctl:GlowDecorator>
                 
                 <!-- Resize Handles -->
                 <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-20,-20,0,0" Background="#01FFFFFF"

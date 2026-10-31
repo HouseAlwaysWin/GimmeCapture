@@ -180,9 +180,10 @@
   that out. With an RTX 4070 SUPER, the commit size Task Manager shows went from 94-95 MB to 30-32 MB with the app in
   the tray, and from 188-196 MB to 96-97 MB with the settings window open; a laptop whose graphics share its memory
   saved about as much, and 170 MB after a capture. In exchange the processor does all the drawing: on that laptop a
-  full-screen capture and a playing video pin took about twice the processor time, and resizing a pin draws about 20
-  frames a second instead of 60. The app picks how it draws as it starts, so changing the setting offers to restart
-  it. Windows only.
+  full-screen capture and a playing video pin took about twice the processor time, and resizing a pin draws 29-46
+  frames a second instead of 60. That was 19-20 until the glow around pins and the capture frame, and the checkerboard
+  behind a pin's image, were drawn in ways that cost the processor almost nothing; they look the same as before. The
+  app picks how it draws as it starts, so changing the setting offers to restart it. Windows only.
 
 ### 💾 Storage
 

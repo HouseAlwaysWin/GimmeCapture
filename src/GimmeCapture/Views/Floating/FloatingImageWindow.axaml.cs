@@ -11,6 +11,7 @@ using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interaction;
 using GimmeCapture.Services.Interop;
+using GimmeCapture.Views.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Media;
 using System.Reactive.Linq;
@@ -79,10 +80,11 @@ public partial class FloatingImageWindow : FloatingWindowBase
                 .Subscribe(_ => QueueWindowRegionRefresh());
         }
 
-        var mainBorder = this.FindControl<Border>("MainBorder");
-        if (mainBorder != null)
+        // MainBorder fills the decorator that draws its glow, which carries its place in the window.
+        var mainGlow = this.FindControl<GlowDecorator>("MainGlow");
+        if (mainGlow != null)
         {
-            _mainBorderBoundsSubscription = mainBorder.GetObservable(Visual.BoundsProperty)
+            _mainBorderBoundsSubscription = mainGlow.GetObservable(Visual.BoundsProperty)
                 .Subscribe(_ => QueueWindowRegionRefresh());
         }
 
