@@ -318,11 +318,14 @@ These were covered by unit tests only; check them in the real app before a relea
   toasts and the countdown. Dragging a selection, playing a video pin and resizing a pin should stay usable (the probe
   resized a pin at 29-46 frames a second), and Task Manager's commit size should sit lower than with the setting off.
   Turning it off offers the restart again and brings back `Startup.Renderer: GPU`; turning it on and off again without
-  restarting asks nothing the second time.
+  restarting asks nothing the second time. Partly checked by the user on 2026-10-31 (desktop, 100%): the restart came
+  back in software (log), a pin's black band was found and fixed (`582a7cfb`), and after that no black around pins,
+  their wings, the toolbars' corners or the menus, and a background-removed pin is see-through. The rest is still owed.
 - **Run as administrator at start**: with the setting on, start the app normally and accept the UAC prompt. No
   "Application Startup Failed" dialog should appear, and the log should show `Elevation.RelaunchAtStart: handed over to
   the elevated copy.` with no `Program.Startup` error after it. `AppShutdownBeforeStartTests` (STARTUP_EXIT_PROBE=direct
   or posted) shows the cause and the fix in a headless app; the update hand-over takes the same path and was not tried.
+  Checked 2026-10-31: the user's next start with the setting on logged the hand-over and no error after it.
 - **The glow and the checkerboard, on the GPU too**: they are drawn a new way in both renderers (`GlowDecorator`,
   `TransparencyCheckerboard`). The glow around a pin, a video pin, the capture frame and the General tab's style
   preview should look as before, follow a pin's opacity slider, and go with "hide decoration" or "hide border"; a
