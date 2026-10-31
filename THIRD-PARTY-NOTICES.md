@@ -56,7 +56,7 @@ GPLv3:
 | NAudio | MIT |
 | SkiaSharp | MIT |
 | LLamaSharp, LLamaSharp.Backend.Cpu | MIT |
-| Microsoft.ML.OnnxRuntime.DirectML | MIT |
+| Microsoft.ML.OnnxRuntime | MIT |
 | ZLinq | MIT |
 | Serilog, Serilog.Sinks.File | Apache-2.0 |
 

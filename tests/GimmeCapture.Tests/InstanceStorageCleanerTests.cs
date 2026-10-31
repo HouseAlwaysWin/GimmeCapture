@@ -176,6 +176,29 @@ public sealed class InstanceStorageCleanerTests : IDisposable
         Assert.True(File.Exists(model));
     }
 
+    // The updater copies a release over the install and removes nothing, so DirectML.dll stayed in every install
+    // updated past the release that dropped it.
+    [Fact]
+    public void AFileEarlierVersionsShippedBesideTheExecutable_IsRemoved_AndTheRestOfTheInstallKept()
+    {
+        string app = Path.Combine(_root, "app");
+        string directMl = Write(Path.Combine(app, "DirectML.dll"), 18);
+        string runtime = Write(Path.Combine(app, "onnxruntime.dll"), 13);
+        string executable = Write(Path.Combine(app, "GimmeCapture.exe"));
+        string model = Write(Path.Combine(AppAI, "models", "u2net.onnx"));
+
+        var result = InstanceStorageCleaner.Sweep(
+            new InstanceStorageCleaner.Layout(Instances, CurrentKey, SharedAI, AppAI, AppAI, app),
+            DateTime.UtcNow);
+
+        Assert.False(File.Exists(directMl));
+        Assert.True(File.Exists(runtime));
+        Assert.True(File.Exists(executable));
+        Assert.True(File.Exists(model));
+        Assert.Equal(1, result.FilesRemoved);
+        Assert.Equal(18, result.BytesFreed);
+    }
+
     // The record is how a later sweep, or the Modules tab, tells an install whose folder is gone from one still there.
     [Fact]
     public void ASweep_RecordsTheFolderThisInstallRunsFrom()

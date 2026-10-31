@@ -168,6 +168,14 @@
   WebM encoder on a single core. A 1080p H.265 compress now runs about 1.5× as fast and a WebM about twice as fast;
   H.264 and AV1 already used every core.
 
+### 💾 Storage
+
+- **The Windows download is about 10 MB smaller.** With background removal and smart selection on the CPU like OCR,
+  nothing used the graphics-card build of ONNX Runtime any more. The app now ships its CPU build, without DirectML:
+  the app's folder is 21 MB smaller and the zip about 10 MB. An update copies the new version over the old one and
+  removes nothing, so an updated install would keep the 18 MB `DirectML.dll` it no longer uses; the app deletes it
+  a few seconds after start-up.
+
 ---
 
 ## v0.70.0 - 2026-10-29

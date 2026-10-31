@@ -719,13 +719,12 @@
         "resolved": "0.30.0",
         "contentHash": "6j8qUfsVmNwTWBoLUVij//EptyoGZpwwjTSPHBOzehIyinnk6QKtwg5/+2aOWNh5rXkbpPUuuQYchW36UTM5ig=="
       },
-      "Microsoft.ML.OnnxRuntime.DirectML": {
+      "Microsoft.ML.OnnxRuntime": {
         "type": "Direct",
         "requested": "[1.24.4, )",
         "resolved": "1.24.4",
-        "contentHash": "rXEy9biJdgr55TdDaHrhl35K0FRXRCbvyRUv4S4C3jTxyxrqSh8YcEp5bzw4S9UlcqQKNfpb3sE+VWvO2DZY6A==",
+        "contentHash": "895huFBVrZkZEGjlsxBSZD3p6D32Cdz6q8DM9UcUps2YKFYdFR8TefaTggFBUTYlvcSyfNTpmOOU/ZkeL69izw==",
         "dependencies": {
-          "Microsoft.AI.DirectML": "1.15.4",
           "Microsoft.ML.OnnxRuntime.Managed": "1.24.4"
         }
       },
@@ -911,11 +910,6 @@
         "type": "Transitive",
         "resolved": "0.11.6",
         "contentHash": "NdNWGDiZ6eS/Mf/9+QHR91cj1K7Hy+PX9yrHI/zM7xFYuj9IWT2uxtB6sCHjrnxAeLV9fut1R6zHDUGKX6f9lQ=="
-      },
-      "Microsoft.AI.DirectML": {
-        "type": "Transitive",
-        "resolved": "1.15.4",
-        "contentHash": "UblWBtQxcXcxwcn+jh0pfbq4zv2b6w7ThJ35qUV9gd8niGofrFWzVqZ6yqYDMiE+IJf8LRpG+H1cZpswceOeiA=="
       },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
@@ -1171,13 +1165,12 @@
       }
     },
     "net10.0-windows10.0.19041/linux-x64": {
-      "Microsoft.ML.OnnxRuntime.DirectML": {
+      "Microsoft.ML.OnnxRuntime": {
         "type": "Direct",
         "requested": "[1.24.4, )",
         "resolved": "1.24.4",
-        "contentHash": "rXEy9biJdgr55TdDaHrhl35K0FRXRCbvyRUv4S4C3jTxyxrqSh8YcEp5bzw4S9UlcqQKNfpb3sE+VWvO2DZY6A==",
+        "contentHash": "895huFBVrZkZEGjlsxBSZD3p6D32Cdz6q8DM9UcUps2YKFYdFR8TefaTggFBUTYlvcSyfNTpmOOU/ZkeL69izw==",
         "dependencies": {
-          "Microsoft.AI.DirectML": "1.15.4",
           "Microsoft.ML.OnnxRuntime.Managed": "1.24.4"
         }
       },
@@ -1216,13 +1209,12 @@
       }
     },
     "net10.0-windows10.0.19041/win-x64": {
-      "Microsoft.ML.OnnxRuntime.DirectML": {
+      "Microsoft.ML.OnnxRuntime": {
         "type": "Direct",
         "requested": "[1.24.4, )",
         "resolved": "1.24.4",
-        "contentHash": "rXEy9biJdgr55TdDaHrhl35K0FRXRCbvyRUv4S4C3jTxyxrqSh8YcEp5bzw4S9UlcqQKNfpb3sE+VWvO2DZY6A==",
+        "contentHash": "895huFBVrZkZEGjlsxBSZD3p6D32Cdz6q8DM9UcUps2YKFYdFR8TefaTggFBUTYlvcSyfNTpmOOU/ZkeL69izw==",
         "dependencies": {
-          "Microsoft.AI.DirectML": "1.15.4",
           "Microsoft.ML.OnnxRuntime.Managed": "1.24.4"
         }
       },

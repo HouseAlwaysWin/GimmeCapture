@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 35 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 36 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -71,7 +71,14 @@ tool.
   load, then 0.38-0.40, 190 MB loaded and 18-20 once unloaded; smart selection a load of 2.7-2.8 s, the first prepare
   1.7 s, a click 120-130 ms with the mask's resize, 212 MB in use and 38 once unloaded. So a first removal is done
   sooner, smart selection's first mask comes about as soon as on DirectML (no warm-up), and only each further picture
-  prepares slower, 1.4 s instead of 0.17. The DirectML package is still referenced, for its CPU provider alone.
+  prepares slower, 1.4 s instead of 0.17.
+- Done since batch 1: **the DirectML package swapped for ONNX Runtime's CPU package**, which nothing missed once every
+  model ran on the CPU. The Windows publish lost `DirectML.dll`: 333 files and 589.0 MB before, 332 and 568.3 after; a
+  zip of it 228.1 MB before, 218.3 after. The two packages' `onnxruntime.dll` alternated three times each under the
+  SAM2 measurement ran the same (prepare 1.78-1.92 s with the CPU build, 1.81-1.84 with DirectML's, 212-214 MB in use
+  with either), and DirectML's build had never loaded `DirectML.dll` for a CPU session. The updater copies a release
+  over the install and removes nothing, so `InstanceStorageCleaner` now deletes the `DirectML.dll` it leaves. The
+  ceiling DirectML's package put on ONNX Runtime (1.24.4) is gone; a newer one is a change of its own.
 - Done since batch 1: **the Record tab's AV1 check on Direct3D 11**. Opening `av1_nvenc` with frames in memory makes
   FFmpeg's NVENC create a CUDA context, and the driver kept 190 MB of the process for good (Release tests, two runs).
   `ProbeHardwareAv1` now opens NVENC on Direct3D 11 frames first (a D3D11VA device picked with `vendor_id=0x10de`, so
@@ -107,9 +114,8 @@ idle app holds (Measured 2026-10-30, below). Pick up in this order:
 1. **Choose with the user what to do about the GPU's share**, the largest one: the options under Measured 2026-10-30.
    A was measured (not a default), and B and C are done (B gave back less than hoped, see there); the pin-resize
    stalls are open.
-2. ~~**DirectML after background removal and smart selection**~~: done 2026-10-31, both on the CPU (Status). Left:
-   whether to swap the DirectML package for the plain CPU one, which nothing would miss now (it drops DirectML.dll
-   from the download and lifts the 1.24.4 ceiling on ONNX Runtime); the user's call.
+2. ~~**DirectML after background removal and smart selection**~~: done 2026-10-31, both on the CPU, and the DirectML
+   package swapped for the CPU one (Status).
 3. **NVENC** only if the user wants a child process: nothing in-process helped (under Idle, start-up and memory).
 
 ### Measured 2026-10-30
@@ -243,6 +249,9 @@ These were covered by unit tests only; check them in the real app before a relea
   seconds of a removal, and as smart selection is left. The log shows `BackgroundRemoval.SessionCreated: CPU` and
   `Sam2Runtime.Loaded: Tiny on CPU`. Smart selection's first mask should come about as soon as before; a second pin
   takes about a second longer to get ready.
+- **DirectML.dll after an update**: update an install whose folder has `DirectML.dll` (0.70.0 or older) with the
+  in-app updater. A few seconds after the new version starts, the file is gone and the log's `InstanceStorage.Sweep`
+  line counts it (17 MB); OCR, background removal and smart selection all still work.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a

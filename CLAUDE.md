@@ -33,7 +33,7 @@ Current version: see `<Version>` in `src/GimmeCapture/GimmeCapture.csproj` and
 - **UI**: Avalonia 12, ReactiveUI.Avalonia, Fluent theme, compiled bindings (`AvaloniaUseCompiledBindingsByDefault=true`)
 - **Pattern**: MVVM with ReactiveUI (`ReactiveObject`, `ReactiveCommand`)
 - **Media**: FFmpeg.AutoGen 8 (native libav), NAudio
-- **AI**: Microsoft.ML.OnnxRuntime.DirectML (U2Net, SAM2 and PaddleOCR all on its CPU provider: DirectML kept 250-380 MB of the process for good), LLamaSharp + LLamaSharp.Backend.Cpu (GGUF translation)
+- **AI**: Microsoft.ML.OnnxRuntime, the CPU package (U2Net, SAM2 and PaddleOCR; the DirectML package went on 2026-10-31, as DirectML kept 250-380 MB of the process for good), LLamaSharp + LLamaSharp.Backend.Cpu (GGUF translation)
 - **Imaging**: SkiaSharp
 - **Logging**: Serilog (file sink) via `AppLog`
 - **Tests**: xUnit, Moq, coverlet; Benchmarks via BenchmarkDotNet

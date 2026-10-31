@@ -118,32 +118,19 @@
     <PackageReference Include="ZLinq" Version="1.5.6" />
   </ItemGroup>
 
-  <!-- ONNX Runtime: the DirectML package on Windows, the CPU package elsewhere. Same managed API surface.
-       Nothing appends the DirectML provider any more: every model runs on the CPU since 2026-10-31
-       (OnnxProviderConfigurator says why), so on Windows only the package's CPU provider is used.
-       Both heads stay on ONE version so that shared API surface really is shared. The ceiling is
-       the DirectML package: it stopped at 1.24.4 (2026-03-17) while the base package went on to
-       1.31, so going past this line means leaving DirectML, not just bumping a number. -->
-  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
-  </ItemGroup>
-  <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
+  <!-- ONNX Runtime's CPU package on both heads: every model runs on its CPU provider (OnnxProviderConfigurator
+       says why). Until 2026-10-31 the Windows head took the DirectML package, which also shipped DirectML.dll and
+       held both heads at 1.24.4, its last release (2026-03-17). That ceiling is gone; moving past 1.24.4 is a change
+       of its own. -->
+  <ItemGroup>
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.24.4" />
   </ItemGroup>
 
-  <!-- DirectML's package ships its symbols and its debug-layer DLL as ordinary native assets, so they reached the
-       Windows release even though the win-x64 profile sets DebugType=none precisely to keep symbols out of it:
-       DebugType governs this project's own output, not a package's runtimes/ folder. Nothing in the app enables the
-       DirectML debug layer, the only thing that loads DirectML.Debug.dll, and onnxruntime.lib is a C++ import
-       library. About 14 MB of the download, none of it ever loaded. DirectML.dll and onnxruntime.dll stay. -->
-  <Target Name="DropNativeDebugAssetsFromPublish" AfterTargets="ComputeResolvedFilesToPublishList"
-          Condition="$(TargetFramework.Contains('-windows'))">
+  <!-- ONNX Runtime's package ships its C++ import libraries (onnxruntime.lib, onnxruntime_providers_shared.lib) as
+       ordinary native assets, so they reached the Windows release. Nothing loads a .lib. -->
+  <Target Name="DropNativeImportLibrariesFromPublish" AfterTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>
-      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-                             Condition="'%(Filename)%(Extension)' == 'DirectML.pdb'
-                                     Or '%(Filename)%(Extension)' == 'DirectML.Debug.pdb'
-                                     Or '%(Filename)%(Extension)' == 'DirectML.Debug.dll'
-                                     Or '%(Filename)%(Extension)' == 'onnxruntime.lib'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.lib'" />
     </ItemGroup>
   </Target>
 

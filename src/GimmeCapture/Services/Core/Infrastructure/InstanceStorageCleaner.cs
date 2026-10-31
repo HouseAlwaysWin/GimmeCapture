@@ -15,6 +15,8 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// MarianMT translator, the Vosk speech models and MobileSAM, plus downloads a killed process left half done.</item>
 /// <item>The copy of every model that older versions made in the instance's shared AI folder while the settings kept
 /// using another one, the executable's own AI folder as a rule: 3.4 GB on one machine.</item>
+/// <item>Files earlier versions shipped beside the executable and this one does not. The updater copies a release over
+/// the install and removes nothing, so they stayed.</item>
 /// </list>
 /// It also records which folder this install runs from (<see cref="InstallInstanceRecord"/>). Another install's files
 /// are never deleted here: whether those can go is the user's call, in the Modules tab.
@@ -44,6 +46,10 @@ public static class InstanceStorageCleaner
     // MobileSAM, which SAM2 replaced.
     private static readonly string[] MobileSamFiles = { "mobile_sam_image_encoder.onnx", "sam_mask_decoder_multi.onnx" };
 
+    // What releases up to 2026-10-31 shipped beside the executable: DirectML (18 MB), which came with ONNX Runtime's
+    // DirectML package. The CPU package that replaced it loads nothing of the kind.
+    private static readonly string[] ObsoleteAppFiles = { "DirectML.dll" };
+
     // Where the downloaders write, and the kinds of file they write there.
     private static readonly (string Directory, string[] Extensions)[] DownloadTargets =
     {
@@ -52,12 +58,14 @@ public static class InstanceStorageCleaner
         (Path.Combine("llm", "models"), new[] { ".gguf" }),
     };
 
+    /// <param name="AppDirectory">The folder the executable runs from, or null to leave it alone.</param>
     internal sealed record Layout(
         string InstancesDirectory,
         string CurrentKey,
         string SharedAIDirectory,
         string LegacyAIDirectory,
-        string AIDirectoryInUse);
+        string AIDirectoryInUse,
+        string? AppDirectory = null);
 
     internal sealed record SweepResult(int EmptyInstancesRemoved, int FilesRemoved, long BytesFreed);
 
@@ -80,7 +88,8 @@ public static class InstanceStorageCleaner
                     Path.GetFileName(instanceDirectory),
                     AppStoragePaths.GetSharedAIResourcesDirectory(appDirectory),
                     Path.Combine(appDirectory, "AI"),
-                    aiDirectoryInUse),
+                    aiDirectoryInUse,
+                    appDirectory),
                 DateTime.UtcNow);
             if (result.EmptyInstancesRemoved > 0 || result.FilesRemoved > 0)
             {
@@ -107,6 +116,15 @@ public static class InstanceStorageCleaner
         }
 
         RemoveCopies(layout.AIDirectoryInUse, layout.SharedAIDirectory, removed);
+
+        if (layout.AppDirectory != null)
+        {
+            foreach (string name in ObsoleteAppFiles)
+            {
+                RemoveFile(new FileInfo(Path.Combine(layout.AppDirectory, name)), removed);
+            }
+        }
+
         return new SweepResult(emptyInstances, removed.Files, removed.Bytes);
     }
 

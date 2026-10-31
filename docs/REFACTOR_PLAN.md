@@ -56,8 +56,9 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
 ### Next
 - The rest of the 2026-10-29 optimisation analysis, with a suggested split for the next batch:
   [OPTIMIZATION_BACKLOG.md](OPTIMIZATION_BACKLOG.md). Its first batch landed as `665c8b94..85411bed`.
-- Library upgrades held back for PRs of their own: NAudio 3, ONNX Runtime past the DirectML 1.24 line, FFmpeg 9
-  (FFmpeg.AutoGen 9 and a new mirrored build)
+- Library upgrades held back for PRs of their own: NAudio 3, ONNX Runtime past 1.24.4 (the DirectML package that
+  held it there went on 2026-10-31; measure OCR, U2Net and SAM2 before and after), FFmpeg 9 (FFmpeg.AutoGen 9 and a
+  new mirrored build)
 
 ## Remaining `Application.Current` Usage
 In sanctioned locations (platform impls / composition root / view code-behind):

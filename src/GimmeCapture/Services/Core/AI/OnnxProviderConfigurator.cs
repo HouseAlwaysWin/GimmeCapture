@@ -5,10 +5,11 @@ namespace GimmeCapture.Services.Core.AI;
 
 /// <summary>
 /// What the ONNX Runtime sessions share. Every model runs on ONNX Runtime's CPU provider: OCR since 2026-10-29,
-/// background removal (U2Net) and smart selection (SAM2) since 2026-10-31. They ran on DirectML, the GPU provider in the
-/// Windows build's package, which does not give back all it allocates: after OCR's first use the process kept about
-/// 270 MB until it closed, after U2Net's 255 MB and after SAM2's 370-380 MB, and SAM2 took it up by 2.9 GB while it ran.
-/// See the remarks on each service's session builder for what the CPU costs in time.
+/// background removal (U2Net) and smart selection (SAM2) since 2026-10-31, and the Windows build has shipped the CPU
+/// package since. They ran on DirectML, the GPU provider of the package it shipped before, which does not give back all
+/// it allocates: after OCR's first use the process kept about 270 MB until it closed, after U2Net's 255 MB and after
+/// SAM2's 370-380 MB, and SAM2 took it up by 2.9 GB while it ran. See the remarks on each service's session builder for
+/// what the CPU costs in time.
 /// </summary>
 internal static class OnnxProviderConfigurator
 {

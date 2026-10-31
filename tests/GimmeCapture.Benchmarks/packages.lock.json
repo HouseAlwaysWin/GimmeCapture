@@ -230,11 +230,6 @@
         "resolved": "0.11.6",
         "contentHash": "NdNWGDiZ6eS/Mf/9+QHR91cj1K7Hy+PX9yrHI/zM7xFYuj9IWT2uxtB6sCHjrnxAeLV9fut1R6zHDUGKX6f9lQ=="
       },
-      "Microsoft.AI.DirectML": {
-        "type": "Transitive",
-        "resolved": "1.15.4",
-        "contentHash": "UblWBtQxcXcxwcn+jh0pfbq4zv2b6w7ThJ35qUV9gd8niGofrFWzVqZ6yqYDMiE+IJf8LRpG+H1cZpswceOeiA=="
-      },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
         "resolved": "10.0.13",
@@ -348,12 +343,11 @@
         "resolved": "6.0.0",
         "contentHash": "9+PnzmQFfEFNR9J2aDTfJGGupShHjOuGw4VUv+JB044biSHrnmCIMD+mJHmb2H7YryrfBEXDurxQ47gJZdCKNQ=="
       },
-      "Microsoft.ML.OnnxRuntime.DirectML": {
+      "Microsoft.ML.OnnxRuntime": {
         "type": "Transitive",
         "resolved": "1.24.4",
-        "contentHash": "rXEy9biJdgr55TdDaHrhl35K0FRXRCbvyRUv4S4C3jTxyxrqSh8YcEp5bzw4S9UlcqQKNfpb3sE+VWvO2DZY6A==",
+        "contentHash": "895huFBVrZkZEGjlsxBSZD3p6D32Cdz6q8DM9UcUps2YKFYdFR8TefaTggFBUTYlvcSyfNTpmOOU/ZkeL69izw==",
         "dependencies": {
-          "Microsoft.AI.DirectML": "1.15.4",
           "Microsoft.ML.OnnxRuntime.Managed": "1.24.4"
         }
       },
@@ -681,7 +675,7 @@
           "FFmpeg.AutoGen": "[8.0.0.1, )",
           "LLamaSharp": "[0.30.0, )",
           "LLamaSharp.Backend.Cpu": "[0.30.0, )",
-          "Microsoft.ML.OnnxRuntime.DirectML": "[1.24.4, )",
+          "Microsoft.ML.OnnxRuntime": "[1.24.4, )",
           "NAudio": "[2.2.1, )",
           "ReactiveUI.Avalonia.Reactive": "[12.1.6, )",
           "Serilog": "[4.4.0, )",
@@ -721,12 +715,11 @@
         "resolved": "8.3.1.3",
         "contentHash": "bx8CE8Js+XGX8PUxAHCBDEORt5aaBYtMN4Hr9QFs57Xithh6yjUyYqksizH6eRDhJkwsGI+SXWmPmMm8lZC9Pw=="
       },
-      "Microsoft.ML.OnnxRuntime.DirectML": {
+      "Microsoft.ML.OnnxRuntime": {
         "type": "Transitive",
         "resolved": "1.24.4",
-        "contentHash": "rXEy9biJdgr55TdDaHrhl35K0FRXRCbvyRUv4S4C3jTxyxrqSh8YcEp5bzw4S9UlcqQKNfpb3sE+VWvO2DZY6A==",
+        "contentHash": "895huFBVrZkZEGjlsxBSZD3p6D32Cdz6q8DM9UcUps2YKFYdFR8TefaTggFBUTYlvcSyfNTpmOOU/ZkeL69izw==",
         "dependencies": {
-          "Microsoft.AI.DirectML": "1.15.4",
           "Microsoft.ML.OnnxRuntime.Managed": "1.24.4"
         }
       },
