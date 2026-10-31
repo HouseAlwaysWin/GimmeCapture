@@ -109,6 +109,13 @@ tool.
   `PinResizeProbeTests` with PIN_RESIZE_RENDERER=software, twice each: the GPU 55-61 frames/s, the tick at most
   19-36 ms late; software 19-20 frames/s with 43-44 gen2 GCs in the 5 s drag (0-1 on the GPU), the tick at most
   55-63 ms late. Linux keeps the GPU: the setting is hidden off Windows, as nothing measured X11's software path.
+  Found by the user's first look in software: every pin drew a black band round its frame, where the glow and the
+  resize handles are. On the GPU (WinUI or DirectComposition) Avalonia makes every window transparent by default; on the
+  CPU only a window that asks (`TransparencyLevelHint="Transparent"`, granted through DWM's blur-behind on Windows 8 and
+  later), and the image, video and translation pins never asked. They do now; the probe asserts
+  `ActualTransparencyLevel` Transparent on both renderers, and with a lime window behind, the band showed lime in
+  software (R2 G253 B0). `TransparentWindowMarkupTests` fails any .axaml window with a transparent background that
+  does not ask; windows built in code (toasts, the countdown, the scrolling-capture windows) already did.
 - Done since batch 1, the user's call: **a pin resized in software at 20 frames a second**. A sampling profile of the
   probe's test host (a scratch console app on `Microsoft.Diagnostics.NETCore.Client` 0.2.510501 and `TraceEvent`
   3.1.21 from the local NuGet cache: EventPipe's sample profiler and the runtime's GC events) showed the render thread

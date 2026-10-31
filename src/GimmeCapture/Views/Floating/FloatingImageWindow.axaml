@@ -12,6 +12,7 @@
         x:Class="GimmeCapture.Views.Floating.FloatingImageWindow"
         x:DataType="vm:FloatingImageViewModel"
         Title="{Binding [WindowTitlePinnedImage], Source={x:Static services:LocalizationService.Instance}}"
+        TransparencyLevelHint="Transparent"
         WindowDecorations="None"
         Topmost="True"
         Background="Transparent"

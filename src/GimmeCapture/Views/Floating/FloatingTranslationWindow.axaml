@@ -10,6 +10,7 @@
         mc:Ignorable="d"
         x:Class="GimmeCapture.Views.Floating.FloatingTranslationWindow"
         Title="{Binding [WindowTitleTranslationResults], Source={x:Static infra:LocalizationService.Instance}}"
+        TransparencyLevelHint="Transparent"
         Background="Transparent"
         WindowDecorations="None"
         ShowInTaskbar="False"

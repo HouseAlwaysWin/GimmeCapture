@@ -61,10 +61,13 @@ public sealed class PinResizeProbeTests : IDisposable
             Assert.True(drag.Steps > 0 && drag.Frames > 0, "The drag never ran.");
             Assert.True(drag.Rebuilds <= (drag.Frames * 2) + 5, $"{drag.Rebuilds} region rebuilds for {drag.Frames} frames.");
             Assert.Equal(0, drag.LateTicks);
+            // On the CPU a window is opaque unless it asks to be see-through: the band round a pin, where its glow and
+            // resize handles are, drew black (TransparentWindowMarkupTests).
+            Assert.Equal(Avalonia.Controls.WindowTransparencyLevel.Transparent, drag.Transparency);
         }
     }
 
-    private sealed record DragResult(int Steps, int Frames, int Rebuilds, int LateTicks);
+    private sealed record DragResult(int Steps, int Frames, int Rebuilds, int LateTicks, Avalonia.Controls.WindowTransparencyLevel Transparency);
 
     private DragResult Drag(bool cutOut)
     {
@@ -78,6 +81,7 @@ public sealed class PinResizeProbeTests : IDisposable
         var window = new FloatingImageWindow { DataContext = vm, Position = new PixelPoint(200, 150) };
         window.Show();
         PumpFor(TimeSpan.FromSeconds(1));
+        var transparency = window.ActualTransparencyLevel;
 
         double scaling = window.RenderScaling;
         var corner = new Point(
@@ -178,8 +182,9 @@ public sealed class PinResizeProbeTests : IDisposable
             $"{rebuilds} region rebuilds ({(double)rebuilds / Math.Max(1, frames):0.0} a frame, {rebuildTime.TotalMilliseconds / Math.Max(1, rebuilds):0.00} ms each, " +
             $"{rebuildTime.TotalSeconds / seconds:P0} of the time), background job late by {maxLate.TotalMilliseconds:0} ms at most, " +
             $"{totalLate.TotalSeconds / seconds:P0} of the time, {lateTicks} ticks 250 ms late or more; " +
-            $"GCs {GC.CollectionCount(0) - gen0} gen0, {GC.CollectionCount(2) - gen2} gen2. Width {startWidth:0} -> {endWidth:0}.");
-        return new DragResult(steps, frames, rebuilds, lateTicks);
+            $"GCs {GC.CollectionCount(0) - gen0} gen0, {GC.CollectionCount(2) - gen2} gen2. Width {startWidth:0} -> {endWidth:0}. " +
+            $"Transparency {transparency}.");
+        return new DragResult(steps, frames, rebuilds, lateTicks, transparency);
     }
 
     private static void PumpFor(TimeSpan time)

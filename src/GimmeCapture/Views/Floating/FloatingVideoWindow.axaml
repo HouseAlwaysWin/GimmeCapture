@@ -13,6 +13,7 @@
         x:Class="GimmeCapture.Views.Floating.FloatingVideoWindow"
         x:DataType="vm:FloatingVideoViewModel"
         Title="{Binding [WindowTitlePinnedVideo], Source={x:Static services:LocalizationService.Instance}}"
+        TransparencyLevelHint="Transparent"
         WindowDecorations="None"
         Topmost="True"
         Background="Transparent"
