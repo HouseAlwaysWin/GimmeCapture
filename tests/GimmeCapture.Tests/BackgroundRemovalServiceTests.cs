@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using SkiaSharp;
-using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Xunit.Abstractions;
 
@@ -9,42 +8,60 @@ namespace GimmeCapture.Tests;
 
 public class BackgroundRemovalServiceTests
 {
-    // Path to u2net.onnx, the AI Core model (176 MB), for the opt-in test that runs it.
-    private const string ModelVariable = "GIMMECAPTURE_U2NET_MODEL";
+    // The AI folder of an install with the AI Core module (u2net.onnx), for the opt-in measurement.
+    private const string ModelsVariable = "AI_MODELS_DIR";
+    private const long Mb = 1024 * 1024;
 
     private readonly ITestOutputHelper _output;
 
     public BackgroundRemovalServiceTests(ITestOutputHelper output) => _output = output;
 
-    // Runs the real model in the session the service builds (DirectML, where there is a GPU) and in one on the CPU
-    // alone, and checks they give the same mask. An ONNX Runtime or DirectML update changes the GPU path without any
-    // of our code changing, so run it after one; it also reports how long each takes. Opt-in: it needs the model.
-    [OptInFact(ModelVariable)]
-    public void TheServiceSession_GivesTheSameMaskAsTheCpu()
+    /// <summary>
+    /// How much of the process the real U2Net model keeps: loaded, after three removals of a picture the size of two
+    /// screens, and once unloaded. On DirectML that was 1.09 GB, then about 480 MB while the device was kept for the next
+    /// removal and 255 MB for good; on the CPU with ONNX Runtime's arena, 1.24 GB after two runs. Now about 190 MB and
+    /// 20. Opt-in, naming the AI folder of an install with the AI Core module (<c>AI_MODELS_DIR</c>, usually
+    /// %LOCALAPPDATA%\GimmeCapture\AI), and best run on its own: it reads the private bytes of the whole test process.
+    /// It also reports how long the removals take.
+    /// </summary>
+    [OptInFact(ModelsVariable)]
+    public async Task TheRealModel_KeepsLittleOfTheProcess_LoadedOrNot()
     {
-        string modelPath = Environment.GetEnvironmentVariable(ModelVariable)!;
-        using var scene = CreateTestScene();
-        var input = BackgroundRemovalService.ExtractPixels(scene);
-
-        float[] cpu;
-        using (var cpuOptions = new SessionOptions())
+        string folder = Environment.GetEnvironmentVariable(ModelsVariable)!;
+        string baseDir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+        try
         {
-            cpu = RunModel("CPU", () => new InferenceSession(modelPath, cpuOptions), input);
+            var settings = new AppSettingsService(baseDir);
+            settings.Settings.AIResourcesDirectory = folder;
+            var pathService = new AIPathService(settings);
+            var aiResources = new AIResourceService(settings, pathService, new AIModelDownloader());
+            Assert.True(aiResources.IsAICoreReady(), $"No AI Core module in {folder}.");
+            using var scene = TestBitmaps.Scene(3968, 1160);
+            long baseline = PrivateBytes();
+
+            var service = new BackgroundRemovalService(aiResources, pathService);
+            var times = new List<long>();
+            for (int i = 0; i < 3; i++)
+            {
+                var stopwatch = Stopwatch.StartNew();
+                using var removed = await service.RemoveBackgroundAsync(scene);
+                times.Add(stopwatch.ElapsedMilliseconds);
+            }
+
+            long loaded = PrivateBytes() - baseline;
+            service.Dispose();
+            long unloaded = PrivateBytes() - baseline;
+            _output.WriteLine(
+                $"Removals took {string.Join(", ", times)} ms, the first with the load. Over the baseline: " +
+                $"{loaded / Mb} MB loaded, {unloaded / Mb} MB unloaded.");
+
+            Assert.InRange(loaded, long.MinValue, 300 * Mb);
+            Assert.InRange(unloaded, long.MinValue, 40 * Mb);
         }
-
-        string provider = "?";
-        float[] service = RunModel("service", () => BackgroundRemovalService.CreateSession(modelPath, out provider), input);
-        _output.WriteLine($"The service's session runs on: {provider}");
-
-        Assert.Equal(cpu.Length, service.Length);
-        double largest = 0;
-        for (int i = 0; i < cpu.Length; i++)
+        finally
         {
-            largest = Math.Max(largest, Math.Abs(cpu[i] - service[i]));
+            try { Directory.Delete(baseDir, recursive: true); } catch { /* best effort temp cleanup */ }
         }
-
-        _output.WriteLine($"Largest mask difference: {largest:G3}");
-        Assert.True(largest < 1e-3, $"The masks differ by up to {largest:G3}.");
     }
 
     [Fact]
@@ -223,51 +240,14 @@ public class BackgroundRemovalServiceTests
         Assert.Equal(ReadPixels(drawn), ReadPixels(composed));
     }
 
-    /// <summary>Runs the model once to keep, then ten times to time, and reports the times.</summary>
-    private float[] RunModel(string label, Func<InferenceSession> buildSession, DenseTensor<float> input)
+    // Collects as the idle trim does, whose second collection hands the heap's free space back to Windows.
+    private static long PrivateBytes()
     {
-        var stopwatch = Stopwatch.StartNew();
-        using var session = buildSession();
-        double build = stopwatch.Elapsed.TotalMilliseconds;
-        var inputs = new[] { NamedOnnxValue.CreateFromTensor("input.1", input) };
-
-        stopwatch.Restart();
-        float[] output = Run();
-        double first = stopwatch.Elapsed.TotalMilliseconds;
-        var times = new double[10];
-        for (int i = 0; i < times.Length; i++)
-        {
-            stopwatch.Restart();
-            Run();
-            times[i] = stopwatch.Elapsed.TotalMilliseconds;
-        }
-
-        Array.Sort(times);
-        _output.WriteLine($"{label}: session built in {build:F0} ms, first run {first:F0} ms, then {times[times.Length / 2]:F0} ms (median of {times.Length})");
-        return output;
-
-        float[] Run()
-        {
-            using var results = session.Run(inputs);
-            return results.First().AsTensor<float>().ToArray();
-        }
-    }
-
-    /// <summary>A dark disc and bar on a lit gradient, at the model's input size, so there is a subject to find.</summary>
-    private static SKBitmap CreateTestScene()
-    {
-        var scene = new SKBitmap(320, 320, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using var canvas = new SKCanvas(scene);
-        using var background = new SKPaint
-        {
-            Shader = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(320, 320),
-                [new SKColor(250, 220, 170), new SKColor(90, 140, 210)], SKShaderTileMode.Clamp),
-        };
-        canvas.DrawRect(new SKRect(0, 0, 320, 320), background);
-        using var subject = new SKPaint { Color = new SKColor(40, 30, 30), IsAntialias = true };
-        canvas.DrawCircle(160, 150, 80, subject);
-        canvas.DrawRect(new SKRect(140, 220, 180, 300), subject);
-        return scene;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+        using var process = Process.GetCurrentProcess();
+        return process.PrivateMemorySize64;
     }
 
     private static DenseTensor<float> CreateLeftOpaqueMaskTensor()

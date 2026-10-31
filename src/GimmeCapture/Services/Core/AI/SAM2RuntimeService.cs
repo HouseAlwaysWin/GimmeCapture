@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using Microsoft.ML.OnnxRuntime;
-using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace GimmeCapture.Services.Core.AI;
 
@@ -34,7 +33,6 @@ public sealed class SAM2RuntimeService : IDisposable
     private InferenceSession? _cachedEncoder;
     private InferenceSession? _cachedDecoder;
     private SAM2Variant? _cachedVariant;
-    private bool _isWarmedUp;
     private readonly SemaphoreSlim _modelLoadingLock = new(1, 1);
     private readonly object _leaseLock = new();
     private readonly HashSet<string> _activeLeases = new();
@@ -50,7 +48,6 @@ public sealed class SAM2RuntimeService : IDisposable
     }
 
     public bool IsLoaded => _cachedVariant.HasValue && _cachedEncoder != null && _cachedDecoder != null;
-    public bool IsLoadedAndWarmed => IsLoaded && _isWarmedUp;
     public SAM2Variant? LoadedVariant => _cachedVariant;
     public bool HasActiveLeases
     {
@@ -186,12 +183,11 @@ public sealed class SAM2RuntimeService : IDisposable
                     try
                     {
                         var stopwatch = Stopwatch.StartNew();
-                        (_cachedEncoder, _cachedDecoder) = CreateSessionsWithCpuFallback(paths.Encoder, paths.Decoder, out string provider);
+                        (_cachedEncoder, _cachedDecoder) = CreateSessions(paths.Encoder, paths.Decoder);
                         _cachedVariant = variant;
-                        _isWarmedUp = false;
                         AppLog.Information(
                             "Sam2Runtime.Loaded",
-                            $"{variant} on {provider} in {stopwatch.ElapsedMilliseconds} ms{(releasedOldPair ? " (replaced the previous variant)" : string.Empty)}");
+                            $"{variant} on {OnnxProviderConfigurator.CpuProvider} in {stopwatch.ElapsedMilliseconds} ms{(releasedOldPair ? " (replaced the previous variant)" : string.Empty)}");
                     }
                     catch (Exception ex)
                     {
@@ -200,8 +196,6 @@ public sealed class SAM2RuntimeService : IDisposable
                         throw;
                     }
                 }
-
-                WarmupSessions();
             });
         }
         finally
@@ -211,47 +205,26 @@ public sealed class SAM2RuntimeService : IDisposable
     }
 
     /// <summary>
-    /// Builds the encoder and decoder on the GPU (DirectML on Windows) and, when a GPU provider was appended but the
-    /// sessions fail to build, again on the CPU alone: DirectML can append cleanly and still fail inside the session
-    /// constructor on some Windows 10 configurations, and without the CPU attempt smart selection fails outright there.
-    /// Both sessions share one provider path so the encoder and decoder never split across backends.
+    /// Builds the encoder and decoder on the CPU, with ONNX Runtime's memory arena off and every graph optimization on.
     /// </summary>
-    private static (InferenceSession Encoder, InferenceSession Decoder) CreateSessionsWithCpuFallback(
-        string encoderPath,
-        string decoderPath,
-        out string provider)
-        => OnnxProviderConfigurator.CreateWithCpuFallback(
-            () => new SessionOptions
-            {
-                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_BASIC,
-                LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
-            },
-            options => OnnxProviderConfigurator.CreateSessionPair(options, encoderPath, decoderPath),
-            "Sam2Runtime",
-            out provider);
-
-    public async Task EnsureLoadedAndWarmedAsync(SAM2Variant variant)
+    /// <remarks>
+    /// They ran on DirectML, which took the process up by 2.9 GB once the encoder had run and kept 370-380 MB of it
+    /// for good after the unload (SAM2 Tiny, an RTX 4070 SUPER). On the CPU with the arena, which kept what each run
+    /// allocated, 2.4 GB; without it about 215 MB, and under 40 once unloaded. The encoder takes 1.4 s instead of 0.17
+    /// (1.7 s on its first run), the decoder 40-45 ms a click instead of 15-50 (Ryzen 7 5700X), and the load 2.7 s
+    /// instead of 3.3-4.2. The full graph optimizations, which <c>ORT_ENABLE_BASIC</c> left out, take 0.2 s off the
+    /// encoder's 1.6. There is no warm-up run any more: on the CPU it took 1.7 s and saved the first real run 0.3.
+    /// <c>SAM2RuntimeServiceTests</c> has the measurement.
+    /// </remarks>
+    private static (InferenceSession Encoder, InferenceSession Decoder) CreateSessions(string encoderPath, string decoderPath)
     {
-        await LoadModelsAsync(variant);
-        if (_cachedVariant != variant || _cachedEncoder == null || _cachedDecoder == null || _isWarmedUp)
+        using var options = new SessionOptions
         {
-            return;
-        }
-
-        await _modelLoadingLock.WaitAsync();
-        try
-        {
-            if (_cachedVariant != variant || _cachedEncoder == null || _cachedDecoder == null || _isWarmedUp)
-            {
-                return;
-            }
-
-            await Task.Run(WarmupSessions);
-        }
-        finally
-        {
-            _modelLoadingLock.Release();
-        }
+            EnableCpuMemArena = false,
+            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
+        };
+        return OnnxProviderConfigurator.CreateSessionPair(options, encoderPath, decoderPath);
     }
 
     /// <summary>
@@ -352,82 +325,7 @@ public sealed class SAM2RuntimeService : IDisposable
         _cachedDecoder = null;
 
         _cachedVariant = null;
-        _isWarmedUp = false;
         return releasedResources;
-    }
-
-    /// <summary>Runs one throwaway inference so the first real click is not the one paying for kernel setup.</summary>
-    private void WarmupSessions()
-    {
-        if (_isWarmedUp)
-        {
-            return;
-        }
-
-        using var sessionUse = BeginSessionUse();
-        var encoder = sessionUse.Encoder;
-        var decoder = sessionUse.Decoder;
-        if (encoder == null || decoder == null)
-        {
-            return;
-        }
-
-        try
-        {
-            var encoderInput = new DenseTensor<float>(new[] { 1, 3, 1024, 1024 });
-            var encInputMetaData = encoder.InputMetadata;
-            var encInputName = encInputMetaData.Keys.AsValueEnumerable().FirstOrDefault(k => k == "image" || k == "pixel_values") ?? "image";
-            var encInputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(encInputName, encoderInput) };
-            using var encResults = encoder.Run(encInputs);
-
-            var decInputMetaData = decoder.InputMetadata;
-            var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
-            var decInputs = new List<NamedOnnxValue>();
-
-            void AddMock(string[] aliases, int[] dims, float val = 0f)
-            {
-                var name = decInputNames.AsValueEnumerable().FirstOrDefault(n => aliases.AsValueEnumerable().Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
-                if (name == null) return;
-
-                var meta = decInputMetaData[name];
-                if (meta.ElementType == typeof(int))
-                {
-                    var data = new int[dims.AsValueEnumerable().Aggregate(1, (a, b) => a * b)];
-                    if (val != 0) Array.Fill(data, (int)val);
-                    decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<int>(data, dims)));
-                }
-                else if (meta.ElementType == typeof(long))
-                {
-                    var data = new long[dims.AsValueEnumerable().Aggregate(1, (a, b) => a * b)];
-                    if (val != 0) Array.Fill(data, (long)val);
-                    decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<long>(data, dims)));
-                }
-                else
-                {
-                    var data = new float[dims.AsValueEnumerable().Aggregate(1, (a, b) => a * b)];
-                    if (val != 0) Array.Fill(data, val);
-                    decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<float>(data, dims)));
-                }
-            }
-
-            AddMock(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, new[] { 1, 256, 64, 64 });
-            AddMock(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, new[] { 1, 32, 256, 256 });
-            AddMock(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, new[] { 1, 64, 128, 128 });
-            AddMock(new[] { "point_coords", "coords" }, new[] { 1, 1, 2 });
-            AddMock(new[] { "point_labels", "labels" }, new[] { 1, 1 }, 1f);
-            AddMock(new[] { "mask_input", "mask" }, new[] { 1, 1, 256, 256 });
-            AddMock(new[] { "has_mask_input", "has_mask" }, new[] { 1 }, 0f);
-            AddMock(new[] { "orig_im_size", "im_size" }, new[] { 2 }, 1024f);
-
-            using var decResults = decoder.Run(decInputs);
-
-            _isWarmedUp = true;
-        }
-        catch (Exception ex)
-        {
-            // Non-fatal: the first real inference simply pays the setup cost instead.
-            AppLog.Warning("Sam2Runtime.Warmup", ex);
-        }
     }
 }
 

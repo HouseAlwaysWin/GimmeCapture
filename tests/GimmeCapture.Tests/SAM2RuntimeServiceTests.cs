@@ -1,15 +1,86 @@
+using System.Diagnostics;
 using GimmeCapture.Models;
+using Xunit.Abstractions;
 
 namespace GimmeCapture.Tests;
 
 public sealed class SAM2RuntimeServiceTests : IDisposable
 {
+    // The AI folder of an install with the SAM2 Tiny module, for the opt-in measurement.
+    private const string ModelsVariable = "AI_MODELS_DIR";
+    private const long Mb = 1024 * 1024;
+
+    private readonly ITestOutputHelper _output;
     private readonly string _baseDir;
 
-    public SAM2RuntimeServiceTests()
+    public SAM2RuntimeServiceTests(ITestOutputHelper output)
     {
+        _output = output;
         _baseDir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", nameof(SAM2RuntimeServiceTests), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_baseDir);
+    }
+
+    /// <summary>
+    /// How much of the process the real SAM2 Tiny model keeps: loaded, with a picture the size of two screens prepared
+    /// and five clicks run on it, and once unloaded. On DirectML that was 2.9 GB, and 370-380 MB stayed for good after
+    /// the unload; on the CPU with ONNX Runtime's arena, 2.4 GB. Now about 215 MB and 40. Opt-in, naming the AI folder of
+    /// an install with the SAM2 Tiny module (<c>AI_MODELS_DIR</c>, usually %LOCALAPPDATA%\GimmeCapture\AI), and best run
+    /// on its own: it reads the private bytes of the whole test process. It also reports the load, prepare and click
+    /// times.
+    /// </summary>
+    [OptInFact(ModelsVariable)]
+    public async Task TheRealModels_KeepLittleOfTheProcess_InUseOrNot()
+    {
+        string folder = Environment.GetEnvironmentVariable(ModelsVariable)!;
+        var settings = new AppSettingsService(_baseDir);
+        settings.Settings.AIResourcesDirectory = folder;
+        settings.Settings.SelectedSAM2Variant = SAM2Variant.Tiny;
+        var pathService = new AIPathService(settings);
+        var aiResources = new AIResourceService(settings, pathService, new AIModelDownloader());
+        Assert.True(aiResources.IsSAM2Ready(SAM2Variant.Tiny), $"No SAM2 Tiny module in {folder}.");
+        using var scene = TestBitmaps.Scene(3968, 1160);
+        long baseline = PrivateBytes();
+
+        using var runtime = new SAM2RuntimeService(pathService);
+        var sam2 = new SAM2Service(runtime, settings);
+        var stopwatch = Stopwatch.StartNew();
+        await sam2.InitializeAsync();
+        long load = stopwatch.ElapsedMilliseconds;
+        stopwatch.Restart();
+        await sam2.EnsureImagePreparedAsync(scene);
+        long prepare = stopwatch.ElapsedMilliseconds;
+        var points = new List<(double X, double Y, bool IsPositive)>();
+        var clicks = new List<long>();
+        for (int i = 0; i < 5; i++)
+        {
+            points.Add((1984 + (i * 120), 520 + (i * 40), i != 3));
+            stopwatch.Restart();
+            using var mask = await sam2.GetMaskBitmapAsync(points);
+            clicks.Add(stopwatch.ElapsedMilliseconds);
+            Assert.NotNull(mask);
+        }
+
+        long inUse = PrivateBytes() - baseline;
+        sam2.Dispose();
+        runtime.UnloadModels();
+        long unloaded = PrivateBytes() - baseline;
+        _output.WriteLine(
+            $"Load {load} ms, prepare {prepare} ms, clicks {string.Join("/", clicks)} ms. Over the baseline: " +
+            $"{inUse / Mb} MB in use, {unloaded / Mb} MB unloaded.");
+
+        Assert.False(runtime.IsLoaded);
+        Assert.InRange(inUse, long.MinValue, 400 * Mb);
+        Assert.InRange(unloaded, long.MinValue, 100 * Mb);
+    }
+
+    // Collects as the idle trim does, whose second collection hands the heap's free space back to Windows.
+    private static long PrivateBytes()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+        using var process = Process.GetCurrentProcess();
+        return process.PrivateMemorySize64;
     }
 
     [Fact]
@@ -26,21 +97,6 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         Assert.Null(sessions.Encoder);
         Assert.Null(sessions.Decoder);
         Assert.False(sut.IsLoaded);
-        Assert.False(sut.IsLoadedAndWarmed);
-    }
-
-    [Fact]
-    public async Task EnsureLoadedAndWarmedAsync_WhenModelFilesMissing_LeavesRuntimeCold()
-    {
-        var settingsService = new AppSettingsService(_baseDir);
-        settingsService.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
-        var pathService = new AIPathService(settingsService);
-        using var sut = new SAM2RuntimeService(pathService);
-
-        await sut.EnsureLoadedAndWarmedAsync(SAM2Variant.Tiny);
-
-        Assert.False(sut.IsLoaded);
-        Assert.False(sut.IsLoadedAndWarmed);
         Assert.Null(sut.LoadedVariant);
     }
 
@@ -57,7 +113,6 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         Assert.Null(sessions.Encoder);
         Assert.Null(sessions.Decoder);
         Assert.False(sut.IsLoaded);
-        Assert.False(sut.IsLoadedAndWarmed);
     }
 
     [Fact]
@@ -74,7 +129,6 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
 
         Assert.False(sut.HasActiveLeases);
         Assert.False(sut.IsLoaded);
-        Assert.False(sut.IsLoadedAndWarmed);
     }
 
 

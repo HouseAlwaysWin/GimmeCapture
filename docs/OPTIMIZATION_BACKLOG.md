@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 34 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 35 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -55,7 +55,23 @@ tool.
   detection runs with the shrink option, and the warm-up run is gone, since on the CPU it only made the scan wait for
   it (58 ms in the user's log). After: 40, 51 and 8-12 MB; 30 lines read in 0.5 s instead of 1.9; a first detection
   after a load 95-108 ms instead of 316-394, a later one 64-72 instead of 16. `OcrRuntimeServiceTests` has the opt-in
-  measurement (OCR_MODELS_DIR).
+  measurement (AI_MODELS_DIR).
+- Done since batch 1: **background removal and smart selection on the CPU**, which leaves nothing on DirectML. Measured
+  on a Ryzen 7 5700X with an RTX 4070 SUPER (adapter 0), the installed U2Net and SAM2 Tiny, raw sessions in fresh
+  Release test processes, each variant twice, at 3968x1160. U2Net on DirectML: 1.09 GB with the model loaded, 476-483 MB
+  with the session freed and the device held, as `BackgroundRemovalService` held it for five minutes, then 252-260 for
+  good; a build of 1.0-1.2 s and runs of 8-38 ms. On the CPU: a build of 0.45-0.5 s, runs of 0.37-0.41 s, and 1.24 GB
+  after two runs with ONNX Runtime's arena, 206-216 MB with the shrink option, 174-185 with the arena off, nothing once
+  freed. SAM2 Tiny on DirectML: 2.9 GB once the encoder had run, 370-380 MB for good after the unload; a load of
+  3.3-4.2 s, the encoder 0.16-0.18 s, the decoder 15-49 ms. On the CPU: 2.4 GB with the arena, 250 with the shrink
+  option, 210-226 with it off; the encoder 1.5-1.7 s, 1.36-1.42 with `ORT_ENABLE_ALL` instead of BASIC; the decoder
+  40-60 ms; the warm-up's blank encoder run 1.7-2.0 s. Now both build CPU sessions with the arena off, SAM2 with every
+  graph optimization and no warm-up, and `GpuDeviceHold` and the GPU fallback are gone. Through the services
+  (`BackgroundRemovalServiceTests` and `SAM2RuntimeServiceTests`, opt-in, AI_MODELS_DIR): a removal 0.9-1.1 s with the
+  load, then 0.38-0.40, 190 MB loaded and 18-20 once unloaded; smart selection a load of 2.7-2.8 s, the first prepare
+  1.7 s, a click 120-130 ms with the mask's resize, 212 MB in use and 38 once unloaded. So a first removal is done
+  sooner, smart selection's first mask comes about as soon as on DirectML (no warm-up), and only each further picture
+  prepares slower, 1.4 s instead of 0.17. The DirectML package is still referenced, for its CPU provider alone.
 - Done since batch 1: **the Record tab's AV1 check on Direct3D 11**. Opening `av1_nvenc` with frames in memory makes
   FFmpeg's NVENC create a CUDA context, and the driver kept 190 MB of the process for good (Release tests, two runs).
   `ProbeHardwareAv1` now opens NVENC on Direct3D 11 frames first (a D3D11VA device picked with `vendor_id=0x10de`, so
@@ -91,9 +107,9 @@ idle app holds (Measured 2026-10-30, below). Pick up in this order:
 1. **Choose with the user what to do about the GPU's share**, the largest one: the options under Measured 2026-10-30.
    A was measured (not a default), and B and C are done (B gave back less than hoped, see there); the pin-resize
    stalls are open.
-2. **DirectML after background removal and smart selection** (under OCR, AI and translation): U2Net and SAM2 on the
-   CPU against DirectML, measured like OCR's opt-in test (real models, a real size, a fresh process each, twice), and
-   `BackgroundRemovalService`'s five-minute device hold.
+2. ~~**DirectML after background removal and smart selection**~~: done 2026-10-31, both on the CPU (Status). Left:
+   whether to swap the DirectML package for the plain CPU one, which nothing would miss now (it drops DirectML.dll
+   from the download and lifts the 1.24.4 ceiling on ONNX Runtime); the user's call.
 3. **NVENC** only if the user wants a child process: nothing in-process helped (under Idle, start-up and memory).
 
 ### Measured 2026-10-30
@@ -221,6 +237,12 @@ These were covered by unit tests only; check them in the real app before a relea
   and file pickers (Compress included), the dialogs, a hotkey that fails to register and the update offer work as before.
   About ten minutes after closing, the commit size should sit 30-40 MB below where it was with the window hidden. With a
   Compress editor open, or a module downloading, it is not let go of.
+- **Background removal and smart selection memory** (a published build): with Task Manager's Commit size column
+  showing, remove the background of a photo-like pin, and use smart selection on a pin with a few clicks. Each should
+  add about 200 MB at most while in use, not 1-3 GB, and the commit size should come back down: within about ten
+  seconds of a removal, and as smart selection is left. The log shows `BackgroundRemoval.SessionCreated: CPU` and
+  `Sam2Runtime.Loaded: Tiny on CPU`. Smart selection's first mask should come about as soon as before; a second pin
+  takes about a second longer to get ready.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a
@@ -256,11 +278,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **11 MB input tensor allocated per scan** (S). `PaddleOCREngine.cs:78`. Reuse belongs in `OcrRuntimeService`.
 - **Full-screen resize on the UI thread per OCR search** (S). `SnipWindowViewModel.Selection.AIScan.cs:216` resizes to
   1600 px (Mitchell), then `DetectText` resizes again to 1280. Do one resize, off the UI thread.
-- **DirectML still keeps ~270 MB after background removal or smart selection** (measure first, then M-L). OCR moved
-  to the CPU (see Status), but U2Net and SAM2 still run on DirectML, and `BackgroundRemovalService` holds the device for
-  five minutes after each use: its comment's 45 MB predates sessions having run on it, and the device OCR held kept
-  about 260 MB more than a closed one. Measure both on the CPU, and the hold; the alternative is AI work in a child
-  process that exits when idle.
 
 ### Recording
 
@@ -430,8 +447,7 @@ Disjoint file sets for parallel agents:
 4. Pins: resize region, opaque scan, persistent video decoder, shared background removal, save/copy paths, close and
    undo memory, pin WebM audio.
 5. Overlay: frozen open, OCR double scan and cache, candidate render control, hover timer, record meter, scroll buffers.
-6. Idle and memory: UiStall pause, history thumbnails, raw input, ColorPicker/locales; DirectML after background
-   removal and smart selection.
+6. Idle and memory: UiStall pause, history thumbnails, raw input, ColorPicker/locales.
 
 The LLM context reuse is its own piece of work: measure load and generation times with the real model first.
 

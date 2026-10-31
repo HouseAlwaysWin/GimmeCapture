@@ -23,15 +23,11 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
     private static readonly Lazy<byte[]> s_drawnUnpremulChannels = new(() => BuildDrawnChannels(SKAlphaType.Unpremul));
 
     private InferenceSession? _session;
-    // Keeps the DirectML device open across idle unloads, for the app's idle window after the last removal or until
-    // this service is disposed. The unload frees the session 10 s after a removal, and the session was the last thing
-    // holding the device: reopening it for the next removal cost ~0.2 s of every cold one.
-    private readonly GpuDeviceHold _gpuDevice = new(ProcessMemoryTrimService.IdleTrimDelay);
     private readonly AIResourceService _aiResourceService;
     private readonly AIPathService _pathService;
     private bool _isInitialized = false;
-    // Serializes session use vs. unload, and idle-unloads the ~hundreds-of-MB U2Net session when unused, so a
-    // one-off background removal doesn't keep the model resident. The next removal transparently reloads it.
+    // Serializes session use vs. unload, and idle-unloads the ~185 MB U2Net session when unused, so a one-off
+    // background removal doesn't keep the model resident. The next removal transparently reloads it.
     private readonly SemaphoreSlim _sessionGate = new(1, 1);
     private readonly IdleReleaseScheduler _idleUnload;
 
@@ -66,9 +62,8 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         {
             try
             {
-                _session = CreateSession(modelPath, out string provider);
+                _session = CreateSession(modelPath);
                 _isInitialized = true;
-                _gpuDevice.SessionBuilt(provider);
             }
             catch (TypeInitializationException ex)
             {
@@ -84,18 +79,25 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
     }
 
     /// <summary>
-    /// Builds the U2Net session: on DirectML on Windows, on the CPU elsewhere, and on the CPU too when the DirectML
-    /// session fails to build. <paramref name="provider"/> says which.
+    /// Builds the U2Net session, on the CPU with ONNX Runtime's memory arena off.
     /// </summary>
-    internal static InferenceSession CreateSession(string modelPath, out string provider)
+    /// <remarks>
+    /// It ran on DirectML, which held 1.09 GB of the process with the model loaded and does not give back all it
+    /// allocates: about 480 MB stayed while the device was kept for the next removal, and about 255 MB for good once it
+    /// closed. On the CPU the model's run takes 0.4 s instead of 0.01-0.04, but building the session 0.45-0.5 s instead
+    /// of 1.0-1.2, so a removal after the 10 s unload, the usual case, is done sooner: 0.9-1.1 s for a picture the size
+    /// of two screens (Ryzen 7 5700X against an RTX 4070 SUPER). The arena kept what each run allocated, 1.24 GB after
+    /// two runs; without it the session holds 175-185 MB and the runs are no slower. <c>BackgroundRemovalServiceTests</c>
+    /// has the measurement.
+    /// </remarks>
+    internal static InferenceSession CreateSession(string modelPath)
     {
         var stopwatch = Stopwatch.StartNew();
-        var session = OnnxProviderConfigurator.CreateWithCpuFallback(
-            () => new SessionOptions(),
-            options => new InferenceSession(modelPath, options),
-            "BackgroundRemoval",
-            out provider);
-        AppLog.Information("BackgroundRemoval.SessionCreated", $"{provider} in {stopwatch.ElapsedMilliseconds} ms");
+        using var options = new SessionOptions { EnableCpuMemArena = false };
+        var session = new InferenceSession(modelPath, options);
+        AppLog.Information(
+            "BackgroundRemoval.SessionCreated",
+            $"{OnnxProviderConfigurator.CpuProvider} in {stopwatch.ElapsedMilliseconds} ms");
         return session;
     }
 
@@ -189,7 +191,6 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
             // Start the idle-unload countdown from completion, so a slow removal can't trip it mid-run and a
             // fresh removal within the window keeps the model warm.
             _idleUnload.NotifyUse();
-            _gpuDevice.NotifyUse();
         }
     }
 
@@ -909,12 +910,6 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
             _session?.Dispose();
             _session = null;
             _isInitialized = false;
-            // An idle unload keeps the GPU device for the next removal, until the hold's own idle window ends;
-            // disposing the service lets it go now.
-            if (IsDisposed)
-            {
-                _gpuDevice.Release();
-            }
         }
         finally
         {

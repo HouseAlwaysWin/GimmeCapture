@@ -98,8 +98,8 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 
             ModelVariantName = variant.ToString();
 
-            // Use shared runtime sessions so SAM2 callers reuse the same warmed-up model pair.
-            await _runtimeService.EnsureLoadedAndWarmedAsync(variant);
+            // Use shared runtime sessions so SAM2 callers reuse the same model pair.
+            await _runtimeService.LoadModelsAsync(variant);
             var sessions = _runtimeService.GetSessions();
             
             _encoderSession = sessions.Encoder;

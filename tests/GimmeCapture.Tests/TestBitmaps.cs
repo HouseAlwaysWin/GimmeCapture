@@ -57,6 +57,25 @@ internal static class TestBitmaps
         return pixels;
     }
 
+    /// <summary>A dark disc and bar on a lit gradient, scaled to the size, so a model has a subject to find and
+    /// background removal's shortcuts for a solid background do not apply.</summary>
+    public static SKBitmap Scene(int width, int height)
+    {
+        var scene = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using var canvas = new SKCanvas(scene);
+        using var background = new SKPaint
+        {
+            Shader = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(width, height),
+                [new SKColor(250, 220, 170), new SKColor(90, 140, 210)], SKShaderTileMode.Clamp),
+        };
+        canvas.DrawRect(new SKRect(0, 0, width, height), background);
+        canvas.Scale(width / 320f, height / 320f);
+        using var subject = new SKPaint { Color = new SKColor(40, 30, 30), IsAntialias = true };
+        canvas.DrawCircle(160, 150, 80, subject);
+        canvas.DrawRect(new SKRect(140, 220, 180, 300), subject);
+        return scene;
+    }
+
     /// <summary>A repeatable, well-mixed 32-bit value for each pixel.</summary>
     public static uint Noise(int x, int y, int seed = 0)
     {

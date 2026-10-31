@@ -112,6 +112,16 @@
   itself up again whenever the width of the text changed, and the first detection after OCR has been idle about 0.1 s
   instead of 0.3-0.4 s; only a detection right after another is slower, about 70 ms instead of 16. On Linux, where OCR
   already ran on the CPU, it now holds 40-50 MB while loaded instead of about 340.
+- **Background removal and smart selection no longer take gigabytes and leave hundreds of MB behind.** Both ran on the
+  graphics card through DirectML, as OCR did. A background removal held about 1.1 GB, then 480 MB for the next five
+  minutes and 255 MB until the app closed; smart selection took the app up by 2.9 GB while in use and left 370-380 MB
+  until it closed. Both now run on the CPU: about 190 MB while background removal is loaded, which it stays for ten
+  seconds after a removal, and about 215 MB while smart selection is in use, with 20-40 MB left after either. A removal
+  after the model has unloaded, the usual case, is done sooner, as the model loads in half the time: about 1 s for a
+  picture the size of two screens, and 0.4 s for one right after it. Smart selection's first mask comes about as soon as
+  before, as the model loads faster and no longer runs once on a blank picture first; each further picture then takes
+  1.4 s to get ready instead of 0.2, and a click about as long as before. On Linux, where both already ran on the CPU,
+  they now hold about 190 and 215 MB instead of up to 1.2 and 2.4 GB.
 - **Opening the Record tab no longer leaves 190 MB behind on an NVIDIA graphics card.** The tab checks whether the
   card can record AV1 by opening its encoder, which loaded CUDA, and CUDA's driver kept 190 MB of the app until it
   closed, though nothing was recorded. The check now opens the encoder through Direct3D 11, which leaves about 35 MB.

@@ -22,7 +22,7 @@ public sealed class OcrRuntimeServiceTests : IDisposable
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(150);
-    private const string ModelsVariable = "OCR_MODELS_DIR";
+    private const string ModelsVariable = "AI_MODELS_DIR";
     private const long Mb = 1024 * 1024;
 
     private readonly ITestOutputHelper _output;
@@ -186,7 +186,7 @@ public sealed class OcrRuntimeServiceTests : IDisposable
     /// and once unloaded. On DirectML that was 500, 550 and, with the device held for the next scan, 530 MB, and about
     /// 270 MB stayed once the device closed. On the CPU, with ONNX Runtime keeping what each detection allocated, 338,
     /// 350 and 52 MB; now about 40, 50 and 6-12. Opt-in, naming the AI folder of an install with the Traditional
-    /// Chinese OCR module (<c>OCR_MODELS_DIR</c>, usually %LOCALAPPDATA%\GimmeCapture\AI), and best run on its own: it
+    /// Chinese OCR module (<c>AI_MODELS_DIR</c>, usually %LOCALAPPDATA%\GimmeCapture\AI), and best run on its own: it
     /// reads the private bytes of the whole test process.
     /// </summary>
     [OptInFact(ModelsVariable)]

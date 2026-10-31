@@ -118,8 +118,9 @@
     <PackageReference Include="ZLinq" Version="1.5.6" />
   </ItemGroup>
 
-  <!-- ONNX Runtime: DirectML (GPU) on Windows, CPU package elsewhere. Same managed API surface;
-       the DirectML-specific provider call in OnnxProviderConfigurator is behind #if WINDOWS.
+  <!-- ONNX Runtime: the DirectML package on Windows, the CPU package elsewhere. Same managed API surface.
+       Nothing appends the DirectML provider any more: every model runs on the CPU since 2026-10-31
+       (OnnxProviderConfigurator says why), so on Windows only the package's CPU provider is used.
        Both heads stay on ONE version so that shared API surface really is shared. The ceiling is
        the DirectML package: it stopped at 1.24.4 (2026-03-17) while the base package went on to
        1.31, so going past this line means leaving DirectML, not just bumping a number. -->
