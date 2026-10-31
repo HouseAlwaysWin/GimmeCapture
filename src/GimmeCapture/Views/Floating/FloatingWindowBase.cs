@@ -40,6 +40,11 @@ public abstract class FloatingWindowBase : Window
     protected double _startContentWidth;
     protected double _startContentHeight;
 
+    // The newest pointer of a drag-resize, applied once a frame (see ResizeToward).
+    private Point? _pendingResizePoint;
+    private bool _pendingResizeKeepsAspect;
+    private bool _resizeFrameRequested;
+
     // Move State
     protected bool _isMaybeMoving;
     protected Point _mouseDownPoint;
@@ -52,7 +57,7 @@ public abstract class FloatingWindowBase : Window
     protected bool _isSelecting;
     protected Point _selectionStartPoint;
 
-    protected enum ResizeDirection
+    protected internal enum ResizeDirection
     {
         None, TopLeft, TopRight, BottomLeft, BottomRight, Top, Bottom, Left, Right
     }
@@ -295,20 +300,13 @@ public abstract class FloatingWindowBase : Window
         var pProperties = pCurrentPoint.Properties;
 
         // 1. Resize handles check
-        if (pProperties.IsLeftButtonPressed && 
-            !vm.IsAnyToolActive && 
+        if (pProperties.IsLeftButtonPressed &&
+            !vm.IsAnyToolActive &&
             source != null && source.Classes.Contains("Handle"))
         {
-            _isResizing = true;
-            _resizeDirection = GetDirectionFromName(source.Name);
             try
             {
-                SizeToContent = SizeToContent.Manual;
-                _resizeStartPoint = this.PointToScreen(pointerPos).ToPoint(1.0);
-                _startPosition = Position;
-                _startSize = Bounds.Size;
-                _startContentWidth = vm.DisplayWidth;
-                _startContentHeight = vm.DisplayHeight;
+                BeginResize(GetDirectionFromName(source.Name), this.PointToScreen(pointerPos).ToPoint(1.0));
                 e.Pointer.Capture(this);
                 e.Handled = true;
             }
@@ -386,7 +384,7 @@ public abstract class FloatingWindowBase : Window
 
         if (_isResizing)
         {
-            PerformResizing(e, vm);
+            PerformResizing(e);
         }
         else if (_isSelecting)
         {
@@ -431,14 +429,8 @@ public abstract class FloatingWindowBase : Window
         
         if (_isResizing)
         {
-            e.Pointer.Capture(null); 
-            _isResizing = false;
-
-            if (DataContext is FloatingWindowViewModelBase vm)
-            {
-                vm.PushResizeAction(_startPosition, _startSize.Width, _startSize.Height, _startContentWidth, _startContentHeight,
-                                       Position, Width, Height, vm.DisplayWidth, vm.DisplayHeight);
-            }
+            e.Pointer.Capture(null);
+            EndResize();
         }
         else if (_isSelecting)
         {
@@ -472,14 +464,107 @@ public abstract class FloatingWindowBase : Window
         base.BeginMoveDrag(e);
     }
     
-    private void PerformResizing(PointerEventArgs e, FloatingWindowViewModelBase vm)
+    /// <summary>Starts a drag-resize from <paramref name="direction"/>'s handle, the pointer at
+    /// <paramref name="screenPoint"/> (screen pixels). Internal, with <see cref="ResizeToward"/> and
+    /// <see cref="EndResize"/>, so a test can drag a pin's corner without a mouse.</summary>
+    internal void BeginResize(ResizeDirection direction, Point screenPoint)
     {
+        if (DataContext is not FloatingWindowViewModelBase vm)
+        {
+            return;
+        }
+
+        _isResizing = true;
+        _resizeDirection = direction;
+        SizeToContent = SizeToContent.Manual;
+        _resizeStartPoint = screenPoint;
+        _startPosition = Position;
+        _startSize = Bounds.Size;
+        _startContentWidth = vm.DisplayWidth;
+        _startContentHeight = vm.DisplayHeight;
+    }
+
+    /// <summary>Ends the drag-resize at the newest pointer, leaving one undo step for all of it.</summary>
+    internal void EndResize()
+    {
+        if (!_isResizing)
+        {
+            return;
+        }
+
+        ApplyPendingResize();
+        _isResizing = false;
+        if (DataContext is FloatingWindowViewModelBase vm)
+        {
+            vm.PushResizeAction(_startPosition, _startSize.Width, _startSize.Height, _startContentWidth, _startContentHeight,
+                                   Position, Width, Height, vm.DisplayWidth, vm.DisplayHeight);
+        }
+    }
+
+    private void PerformResizing(PointerEventArgs e)
+    {
+        Point screenPoint;
+        try
+        {
+            screenPoint = this.PointToScreen(e.GetCurrentPoint(this).Position).ToPoint(1.0);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        ResizeToward(screenPoint, e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+    }
+
+    /// <summary>
+    /// Takes the pointer of a drag-resize at <paramref name="screenPoint"/> (screen pixels), and resizes for the newest
+    /// one as the next frame starts. A mouse sends several moves a frame, and each resize moved the window, set its size
+    /// and rebuilt its region: 330 resizes a second, for 60 frames, kept the UI thread busy all through a drag, and
+    /// anything queued behind it waited up to 3 s.
+    /// </summary>
+    internal void ResizeToward(Point screenPoint, bool keepAspectRatio)
+    {
+        if (!_isResizing)
+        {
+            return;
+        }
+
+        _pendingResizePoint = screenPoint;
+        _pendingResizeKeepsAspect = keepAspectRatio;
+        if (!_resizeFrameRequested)
+        {
+            _resizeFrameRequested = true;
+            RequestAnimationFrame(_ =>
+            {
+                _resizeFrameRequested = false;
+                ApplyPendingResize();
+            });
+        }
+    }
+
+    private void ApplyPendingResize()
+    {
+        if (_pendingResizePoint is not { } point)
+        {
+            return;
+        }
+
+        _pendingResizePoint = null;
+        ResizeTo(point, _pendingResizeKeepsAspect);
+    }
+
+    /// <summary>Resizes for the pointer at <paramref name="currentScreenPoint"/> (screen pixels), keeping the content's
+    /// aspect ratio when <paramref name="keepAspectRatio"/> (Shift held).</summary>
+    private void ResizeTo(Point currentScreenPoint, bool keepAspectRatio)
+    {
+        if (!_isResizing || DataContext is not FloatingWindowViewModelBase vm)
+        {
+            return;
+        }
+
         try
         {
             var padding = vm.WindowPadding;
-            var p = e.GetCurrentPoint(this);
-            var currentScreenPoint = this.PointToScreen(p.Position).ToPoint(1.0);
-            
             var deltaX = currentScreenPoint.X - _resizeStartPoint.X;
             var deltaY = currentScreenPoint.Y - _resizeStartPoint.Y;
 
@@ -490,7 +575,7 @@ public abstract class FloatingWindowBase : Window
             double contentW = _startContentWidth;
             double contentH = _startContentHeight;
 
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            if (keepAspectRatio)
             {
                 // Uniform Aspect Ratio Logic
                 double aspectRatio = vm.OriginalWidth / vm.OriginalHeight;

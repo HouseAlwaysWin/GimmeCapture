@@ -37,6 +37,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
     private Bitmap? _cachedOpaqueBitmap;
     private PixelSize _cachedOpaqueBitmapSize;
     private List<PixelRect>? _cachedOpaquePixelRects;
+    private ScalableRegion? _cachedOpaqueRegion;
     private readonly List<Rect> _interactiveHitTestRegions = new();
     private Win32HitTestPassThrough? _hitTestPassThrough;
 
@@ -65,7 +66,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
                     vm.ToolbarHeight = bounds.Height;
                 }
 
-                RefreshWindowRegion();
+                QueueWindowRegionRefresh();
             });
         }
 
@@ -75,18 +76,18 @@ public partial class FloatingImageWindow : FloatingWindowBase
         if (subToolbar != null)
         {
             _subToolbarBoundsSubscription = subToolbar.GetObservable(Visual.BoundsProperty)
-                .Subscribe(_ => RefreshWindowRegion());
+                .Subscribe(_ => QueueWindowRegionRefresh());
         }
 
         var mainBorder = this.FindControl<Border>("MainBorder");
         if (mainBorder != null)
         {
             _mainBorderBoundsSubscription = mainBorder.GetObservable(Visual.BoundsProperty)
-                .Subscribe(_ => RefreshWindowRegion());
+                .Subscribe(_ => QueueWindowRegionRefresh());
         }
 
         _windowBoundsSubscription = this.GetObservable(BoundsProperty)
-            .Subscribe(_ => RefreshWindowRegion());
+            .Subscribe(_ => QueueWindowRegionRefresh());
     }
 
     protected override Control? GetContentControl() => this.FindControl<Image>("PinnedImage");
@@ -177,7 +178,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
                     or nameof(FloatingImageViewModel.ToolbarMargin)
                     or nameof(FloatingImageViewModel.IsToolbarFlipped))
                 {
-                    RefreshWindowRegion();
+                    QueueWindowRegionRefresh();
                 }
             };
             vm.PropertyChanged += _boundViewModelPropertyChangedHandler;
@@ -277,6 +278,36 @@ public partial class FloatingImageWindow : FloatingWindowBase
         base.OnClosed(e);
     }
 
+    /// <summary>How many times the window region was rebuilt, and the time that took. For the resize probe test.</summary>
+    internal int WindowRegionRebuilds { get; private set; }
+
+    internal TimeSpan WindowRegionRebuildTime { get; private set; }
+
+    private bool _windowRegionRefreshQueued;
+
+    /// <summary>
+    /// Rebuilds the window region once the frame's layout is done. The view model's size, the window's, the content
+    /// border's and the toolbars' bounds all ask for it, several of them in one frame and the first ones before the
+    /// layout has caught up: a drag-resize rebuilt it 31 times a frame. Loaded priority runs after the layout and
+    /// render, so the one rebuild sees every change with the bounds it ended at.
+    /// </summary>
+    private void QueueWindowRegionRefresh()
+    {
+        if (_windowRegionRefreshQueued)
+        {
+            return;
+        }
+
+        _windowRegionRefreshQueued = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () =>
+            {
+                _windowRegionRefreshQueued = false;
+                RefreshWindowRegion();
+            },
+            Avalonia.Threading.DispatcherPriority.Loaded);
+    }
+
     private void RefreshWindowRegion()
     {
         if (!OperatingSystem.IsWindows())
@@ -290,9 +321,23 @@ public partial class FloatingImageWindow : FloatingWindowBase
             return;
         }
 
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            RebuildWindowRegion(hwnd);
+        }
+        finally
+        {
+            WindowRegionRebuilds++;
+            WindowRegionRebuildTime += System.Diagnostics.Stopwatch.GetElapsedTime(started);
+        }
+    }
+
+    private void RebuildWindowRegion(IntPtr hwnd)
+    {
         var opaqueRects = new List<Rect>();
         _interactiveHitTestRegions.Clear();
-        AddImageOpaqueRects(opaqueRects);
+        IntPtr imageRegion = AddImageOpaqueRects(opaqueRects);
         AddMainBorderFrameRects(opaqueRects);
         AddDecorationOpaqueRects(opaqueRects);
         AddSubtreeOpaqueRect("ResizeHandlesLayer", 2, opaqueRects, includeInHitTest: true);
@@ -301,7 +346,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
         AddSubtreeOpaqueRect("ToolbarBorder", 4, opaqueRects, includeInHitTest: true);
         AddSubtreeOpaqueRect("SubToolbarBorder", 4, opaqueRects, includeInHitTest: true);
 
-        if (opaqueRects.Count == 0)
+        if (opaqueRects.Count == 0 && imageRegion == IntPtr.Zero)
         {
             // Degenerate layout (e.g. a very tall image shrunk small enough that the rendered
             // image rect collapses): never drop the whole region, or the window becomes
@@ -323,16 +368,18 @@ public partial class FloatingImageWindow : FloatingWindowBase
         }
 
         opaqueRects.Add(new Rect(0, 0, 1, 1));
-        Win32Helpers.SetDisjointOpaqueRegions(hwnd, opaqueRects, null);
+        Win32Helpers.SetDisjointOpaqueRegions(hwnd, opaqueRects, null, imageRegion);
     }
 
-    private void AddImageOpaqueRects(List<Rect> dest)
+    /// <summary>Adds the image's opaque part: as a region placed where the image is drawn, which it returns and the
+    /// caller then owns, or as rects added to <paramref name="dest"/>, when it returns zero.</summary>
+    private IntPtr AddImageOpaqueRects(List<Rect> dest)
     {
         if (this.FindControl<Image>("PinnedImage") is not Image imageControl
             || DataContext is not FloatingImageViewModel vm
             || vm.Image == null)
         {
-            return;
+            return IntPtr.Zero;
         }
 
         // A scrolling-capture pin shows an opaque screenshot filling a fixed viewport that clips the (much
@@ -350,19 +397,19 @@ public partial class FloatingImageWindow : FloatingWindowBase
                 _interactiveHitTestRegions.Add(vpRect);
             }
 
-            return;
+            return IntPtr.Zero;
         }
 
         var renderedRect = GetImageRenderedRect(imageControl);
         if (renderedRect.Width <= 0 || renderedRect.Height <= 0)
         {
-            return;
+            return IntPtr.Zero;
         }
 
         var imageTopLeft = imageControl.TranslatePoint(new Point(0, 0), this);
         if (!imageTopLeft.HasValue)
         {
-            return;
+            return IntPtr.Zero;
         }
 
         var imageWindowRect = new Rect(
@@ -373,7 +420,8 @@ public partial class FloatingImageWindow : FloatingWindowBase
 
         var bitmap = vm.Image;
         // The scan reads every pixel, so it runs once per image; a resize or zoom only rescales its result. It used
-        // to rescan the whole bitmap whenever the drawn size changed — on every step of a drag-resize.
+        // to rescan the whole bitmap whenever the drawn size changed — on every step of a drag-resize. The region of
+        // its rects is built once per image too, and placed for each rebuild.
         if (_cachedOpaquePixelRects == null
             || !ReferenceEquals(_cachedOpaqueBitmap, bitmap)
             || _cachedOpaqueBitmapSize != bitmap.PixelSize)
@@ -381,16 +429,28 @@ public partial class FloatingImageWindow : FloatingWindowBase
             _cachedOpaqueBitmap = bitmap;
             _cachedOpaqueBitmapSize = bitmap.PixelSize;
             _cachedOpaquePixelRects = ScanOpaquePixelRects(bitmap);
+            _cachedOpaqueRegion = ScalableRegion.FromRects(_cachedOpaquePixelRects);
         }
 
         double scaling = RenderScaling;
         var imageRects = OpaqueRegionScanner.Map(
             _cachedOpaquePixelRects, bitmap.PixelSize.Width, bitmap.PixelSize.Height, imageWindowRect);
-        foreach (var rect in imageRects)
+        _interactiveHitTestRegions.AddRange(imageRects);
+
+        IntPtr placed = _cachedOpaqueRegion?.CreatePlaced(
+            imageWindowRect.Width / bitmap.PixelSize.Width * scaling,
+            imageWindowRect.Height / bitmap.PixelSize.Height * scaling,
+            imageWindowRect.X * scaling,
+            imageWindowRect.Y * scaling) ?? IntPtr.Zero;
+        if (placed == IntPtr.Zero)
         {
-            dest.Add(new Rect(rect.X * scaling, rect.Y * scaling, rect.Width * scaling, rect.Height * scaling));
-            _interactiveHitTestRegions.Add(rect);
+            foreach (var rect in imageRects)
+            {
+                dest.Add(new Rect(rect.X * scaling, rect.Y * scaling, rect.Width * scaling, rect.Height * scaling));
+            }
         }
+
+        return placed;
     }
 
     private void AddMainBorderFrameRects(List<Rect> dest)

@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Avalonia;
 using GimmeCapture.Services.Core.Infrastructure;
+using static GimmeCapture.Services.Interop.Gdi32;
 
 namespace GimmeCapture.Services.Interop;
 
@@ -13,12 +14,6 @@ namespace GimmeCapture.Services.Interop;
 public static class Win32Helpers
 {
     #region Win32 API Declarations
-
-    [DllImport("gdi32.dll")]
-    private static extern IntPtr CreateRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect);
-
-    [DllImport("gdi32.dll")]
-    private static extern int CombineRgn(IntPtr hrgnDest, IntPtr hrgnSrc1, IntPtr hrgnSrc2, int fnCombineMode);
 
     [DllImport("user32.dll")]
     private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
@@ -312,18 +307,22 @@ public static class Win32Helpers
     /// Hit-test region = OR of opaque rects only (no full-window base). Matches screenshot-style pass-through:
     /// clicks outside all rects reach windows below without WM_NCHITTEST tricks.
     /// </summary>
+    /// <param name="baseRegion">A region to add the rects to, a pinned image's opaque part say, which the call takes
+    /// over and deletes; zero for none. It goes in last, in one step: each rect ORed into a region of hundreds of bands
+    /// would cost as much as the whole of it.</param>
     public static bool SetDisjointOpaqueRegions(
         IntPtr hwnd,
         System.Collections.Generic.IEnumerable<Rect> opaqueRects,
-        Rect? toolbarRect = null)
+        Rect? toolbarRect = null,
+        IntPtr baseRegion = default)
     {
-        if (hwnd == IntPtr.Zero) return false;
-
         IntPtr fullRegion = IntPtr.Zero;
         IntPtr tempRegion = IntPtr.Zero;
 
         try
         {
+            if (hwnd == IntPtr.Zero) return false;
+
             fullRegion = CreateRectRgn(0, 0, 0, 0);
             if (fullRegion == IntPtr.Zero) return false;
 
@@ -359,6 +358,11 @@ public static class Win32Helpers
                 }
             }
 
+            if (baseRegion != IntPtr.Zero)
+            {
+                CombineRgn(fullRegion, fullRegion, baseRegion, RGN_OR);
+            }
+
             bool applied = ApplyWindowRegion(hwnd, fullRegion);
             fullRegion = IntPtr.Zero; // the window's now, or deleted
             return applied;
@@ -367,6 +371,7 @@ public static class Win32Helpers
         {
             if (tempRegion != IntPtr.Zero) Gdi32.DeleteObject(tempRegion);
             if (fullRegion != IntPtr.Zero) Gdi32.DeleteObject(fullRegion);
+            if (baseRegion != IntPtr.Zero) Gdi32.DeleteObject(baseRegion);
         }
     }
 

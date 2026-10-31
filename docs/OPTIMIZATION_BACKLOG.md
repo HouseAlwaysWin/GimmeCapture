@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 36 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 37 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -79,6 +79,22 @@ tool.
   with either), and DirectML's build had never loaded `DirectML.dll` for a CPU session. The updater copies a release
   over the install and removes nothing, so `InstanceStorageCleaner` now deletes the `DirectML.dll` it leaves. The
   ceiling DirectML's package put on ONNX Runtime (1.24.4) is gone; a newer one is a change of its own.
+- Done since batch 1: **resizing a pin stalled the UI thread** (the lead under Measured 2026-10-30, and Pins' "Resizing
+  rebuilds the window region 4-6 times per pointer move"). `PinResizeProbeTests` (PIN_RESIZE_PROBE=1, Release) drags a
+  corner of a real 1280x720 pin for 5 s, a mouse move every 2 ms posted only once the last was taken, as Windows
+  coalesces them, and counts frames, UI-thread CPU, region rebuilds and how late a Background-priority tick gets (what
+  `UiStall` measures). Before, twice each: an opaque pin 60 frames/s with the UI thread 96-98% busy, about 32 region
+  rebuilds a frame (61-62% of the time) and the tick up to 2.7-3.1 s late; a cut-out pin (an ellipse, about 700
+  rects) 34-41 frames/s, 93-100% busy, 4 rebuilds a frame at 5.7-6.6 ms each. Every move applied the resize (window
+  position, size, the view model's DisplayWidth and DisplayHeight, each of which queued its own rebuild before the layout
+  had caught up), and every bounds change after the layout rebuilt again, ORing the cut-out's rects one `CombineRgn` at
+  a time. Now `ResizeToward` keeps the newest pointer and applies it in a `RequestAnimationFrame` callback, the region
+  rebuild is posted once at Loaded priority, after the frame's layout, and the image's opaque part is a `ScalableRegion`:
+  its rects ORed half at a time once per bitmap, kept as `GetRegionData`, placed for each rebuild by one
+  `ExtCreateRegion` with an XFORM, and ORed into the other rects last. After, twice each: 60 frames/s for both, 17-20%
+  and 21-27% busy, 1.7 rebuilds a frame (the second one because the pin ran past the bottom of the screen, which moves
+  the toolbar each frame) at 0.7 and 1.6 ms, the tick at most 17-45 ms late. `ScalableRegionTests` holds the placed
+  region to the rects and to a one-by-one union.
 - Done since batch 1: **the Record tab's AV1 check on Direct3D 11**. Opening `av1_nvenc` with frames in memory makes
   FFmpeg's NVENC create a CUDA context, and the driver kept 190 MB of the process for good (Release tests, two runs).
   `ProbeHardwareAv1` now opens NVENC on Direct3D 11 frames first (a D3D11VA device picked with `vendor_id=0x10de`, so
@@ -113,7 +129,7 @@ idle app holds (Measured 2026-10-30, below). Pick up in this order:
 
 1. **Choose with the user what to do about the GPU's share**, the largest one: the options under Measured 2026-10-30.
    A was measured (not a default), and B and C are done (B gave back less than hoped, see there); the pin-resize
-   stalls are open.
+   stalls are fixed (Status).
 2. ~~**DirectML after background removal and smart selection**~~: done 2026-10-31, both on the CPU, and the DirectML
    package swapped for the CPU one (Status).
 3. **NVENC** only if the user wants a child process: nothing in-process helped (under Idle, start-up and memory).
@@ -183,7 +199,8 @@ Options to put to the user:
 - **New lead from the same runs: resizing a pin stalls the UI thread.** Both renderers logged `UiStall` warnings of
   0.3-1.5 s, one after another, while the pin was resized every frame: with the GPU the thread waited (about 20% CPU),
   in software it ran a dozen or more full GCs a second, a new bitmap per size. Check by hand by dragging a pin's
-  corner quickly; it fits "Resizing rebuilds the window region 4-6 times per pointer move" under Pins.
+  corner quickly; it fits "Resizing rebuilds the window region 4-6 times per pointer move" under Pins. Fixed
+  2026-10-31 (Status).
 - **B. A main window that can be freed** when closed to the tray: done 2026-10-30, and worth less than hoped. What
   kept it was what it and the Compress tab wired into the view model, which outlives them: the window's dialog, picker
   and update actions and its `IsProcessing` subscription, and the Compress tab's three file pickers and editor opener,
@@ -252,6 +269,10 @@ These were covered by unit tests only; check them in the real app before a relea
 - **DirectML.dll after an update**: update an install whose folder has `DirectML.dll` (0.70.0 or older) with the
   in-app updater. A few seconds after the new version starts, the file is gone and the log's `InstanceStorage.Sweep`
   line counts it (17 MB); OCR, background removal and smart selection all still work.
+- **Pin resize**: drag a pin's corner quickly, on an ordinary pin and on one whose background was removed, and with
+  Shift held. The pin should follow the mouse smoothly, end at the size where the mouse let go, undo in one step, and
+  still let clicks through a removed background's transparent parts at its new size. The log should show no `UiStall`
+  line during the drag. The probe stood in for the mouse; a real drag was not measured.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a
@@ -347,12 +368,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Pins
 
-- **Resizing rebuilds the window region 4-6 times per pointer move** (M). `FloatingImageWindow.axaml.cs:61-89,166-177,
-  218-265`, `Win32Helpers.cs` (~323-353): DisplayWidth and DisplayHeight each rebuild on stale bounds, then the window,
-  MainBorder and toolbar Bounds changes rebuild again; each walks toolbar subtrees and ORs rects one `CombineRgn` at a
-  time (O(n^2) for a cut-out pin's thousands of rects). Batch 1 made an unchanged region skip `SetWindowRgn`, not the
-  rebuild. Fix: a dirty flag rebuilt once per frame at Render priority; build the image part once per bitmap with
-  `ExtCreateRegion` and an XFORM to rescale.
 - **Opaque-pixel scan on the UI thread at every Image change** (S). `FloatingImageWindow.axaml.cs:315-322,481-510`
   copies into a 32 MiB rented array and scans every pixel, per crop, rotate, AI result, undo and redo (est. 20-30 ms at
   4K). Scan on the pool, cache per bitmap, skip for captures known to be opaque.
@@ -453,8 +468,8 @@ Disjoint file sets for parallel agents:
 2. Recording: composite WGC, WGC readback pacing, BGRA into hardware encoders, finalize, the Linux audio gate.
 3. Compress: persistent editor/compare decoder, GIF/WebM intermediate with progress and cancel, stream copy at or above
    source size, rotation in YUV, segmented path.
-4. Pins: resize region, opaque scan, persistent video decoder, shared background removal, save/copy paths, close and
-   undo memory, pin WebM audio.
+4. Pins: opaque scan, persistent video decoder, shared background removal, save/copy paths, close and undo memory,
+   pin WebM audio.
 5. Overlay: frozen open, OCR double scan and cache, candidate render control, hover timer, record meter, scroll buffers.
 6. Idle and memory: UiStall pause, history thumbnails, raw input, ColorPicker/locales.
 

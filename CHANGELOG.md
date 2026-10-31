@@ -167,6 +167,13 @@
 - **Compressing to H.265 and saving as WebM use every core.** The H.265 encoder worked on one frame at a time and the
   WebM encoder on a single core. A 1080p H.265 compress now runs about 1.5× as fast and a WebM about twice as fast;
   H.264 and AV1 already used every core.
+- **Resizing a pinned image keeps up with the mouse.** Every mouse move resized the pin and rebuilt the shape that
+  lets clicks through its see-through parts, several times over: about 32 rebuilds each frame, which kept the app busy
+  all through a drag and left everything else it had to do waiting, for up to 3 s at a time. A pin whose background had
+  been removed took 6-7 ms a rebuild and was redrawn only 34-41 times a second. A pin now takes the newest mouse
+  position once a frame and rebuilds its shape once or twice after it, and a removed background's shape is worked out
+  once and then scaled: dragging a corner keeps the app 18-27% busy at 60 frames a second, and nothing waits more than
+  about 45 ms. Video pins take the mouse once a frame too.
 
 ### 💾 Storage
 

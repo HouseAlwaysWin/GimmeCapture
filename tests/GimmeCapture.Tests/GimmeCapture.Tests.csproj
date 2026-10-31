@@ -32,6 +32,8 @@
     <Compile Remove="LibavRecordingSessionTests.cs" />
     <!-- Records a corner of the desktop with gdigrab. -->
     <Compile Remove="RecordingServiceStartTests.cs" />
+    <!-- Drags a pin's corner in a real Win32 window. -->
+    <Compile Remove="PinResizeProbeTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
