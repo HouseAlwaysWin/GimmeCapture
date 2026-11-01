@@ -7,6 +7,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.AI;
+using GimmeCapture.Services.Core.Infrastructure;
 using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Shared;
 using System;
@@ -409,5 +410,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         _interactiveSession.Cancel();
         _interactiveMask?.Dispose();
         _interactiveMask = null;
+        // The picture itself goes with the next collection, which in an idle app only the trim runs.
+        ProcessMemoryTrimService.RequestIdleTrimAsync("pin-closed").Forget("MemoryTrim.PinClosed");
     }
 }

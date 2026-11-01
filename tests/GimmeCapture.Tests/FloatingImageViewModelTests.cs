@@ -13,6 +13,8 @@ using GimmeCapture.Services.Core.AI;
 
 namespace GimmeCapture.Tests;
 
+// In the renderer's collection for the test that rotates a real picture.
+[Collection(AvaloniaRendererCollection.Name)]
 public class FloatingImageViewModelTests
 {
     class MockClipboardService : IClipboardService
@@ -103,6 +105,32 @@ public class FloatingImageViewModelTests
         vm.ReleaseSam2Resources();
 
         Assert.Null(vm.CurrentSam2ServiceForTesting);
+        Assert.False(sam2Runtime.HasActiveLeases);
+    }
+
+    [Fact]
+    public async Task Dispose_LetsGoOfThePicturesKeptForUndo_AndOfSmartSelection()
+    {
+        // A pin's window disposes its view model however it closes. Closed by Alt+F4 it did not, and every picture in the
+        // pin's undo history stayed in BitmapHistoryAction's table until the app exited, with smart selection's lease.
+        AvaloniaRenderer.EnsureRegistered();
+        var mockSettings = new Mock<IAppSettingsService>();
+        mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
+        var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
+        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, new Mock<AIModelDownloader>().Object);
+        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object);
+        var original = AvaloniaRenderer.Create(8, 6, static (x, y) => 0xFF000000u | ((uint)(x * 30) << 16) | (uint)(y * 40));
+        var vm = new FloatingImageViewModel(original, 8, 6, Avalonia.Media.Colors.Red, 2.0, false, false, new MockClipboardService(), mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object, new ResourceQueueService());
+        await vm.RotateRightCommand.Execute();
+        var rotated = vm.Image;
+        Assert.NotSame(original, rotated);
+        vm.EnsureSam2Lease();
+
+        vm.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => original.PixelSize);
+        // On screen until the window goes, so the history leaves it to the collector.
+        Assert.Equal(new PixelSize(6, 8), rotated!.PixelSize);
         Assert.False(sam2Runtime.HasActiveLeases);
     }
 }

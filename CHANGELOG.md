@@ -151,6 +151,10 @@
   about 32 MB each at 4K. A preview now reads only the part of the picture under it: with six on a 4K picture, the app
   holds about 190 MB less. Resizing a pin also no longer redraws every mosaic and blur on it at each step of the drag,
   as their look does not change with it.
+- **A pin closed with Alt+F4 gives back its memory.** Only a pin's close button, Ctrl+W and its menu's Close let go of
+  what it held. Closed with Alt+F4, a pin kept every picture in its undo history until the app closed, about 125 MB
+  for a 4K pin turned three times, and with smart selection picked it kept that model loaded as well. However a pin
+  closes, both are now let go of at once, and its picture goes at the next idle clean-up.
 - **The idle clean-up hands back the memory .NET keeps free for later.** It compacted the heap but kept the space it
   freed: after the settings window had been let go of, the heap held 35 MB and kept 51. The clean-up now returns the
   difference, which took the commit size down 14 MB more there.

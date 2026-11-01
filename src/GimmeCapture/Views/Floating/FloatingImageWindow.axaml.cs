@@ -278,6 +278,12 @@ public partial class FloatingImageWindow : FloatingWindowBase
 
         UninitializeWin32HitTestHook();
         base.OnClosed(e);
+
+        // However the pin closed, Alt+F4 included. Only its close command disposed the view model, so a pin closed any
+        // other way kept smart selection's model loaded (its lease) and every picture in its undo history (held in
+        // BitmapHistoryAction's table) until the app exited: 125 MB for three rotations of a 4K pin. A video pin
+        // disposes its own as it closes. A no-op after the close command.
+        (DataContext as FloatingImageViewModel)?.Dispose();
     }
 
     /// <summary>How many times the window region was rebuilt, and the time that took. For the resize probe test.</summary>

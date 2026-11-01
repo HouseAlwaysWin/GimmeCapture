@@ -174,7 +174,19 @@ tool.
   (`PreviewReferenceSize`: the size the annotation was drawn in, the control's only for one without). In CI the preview
   matches the whole-picture path pixel for pixel, mosaic and blur, both alpha formats, and copies one region. A video
   pin and the video editor still give each redaction a frame of its own (`GetContentSnapshot`, `CopyFrame`), which it
-  needs as the video moves on; only the Skia copy beside it is gone. Reading the picture at every redraw needs it
+  needs as the video moves on; only the Skia copy beside it is gone.
+- Done since batch 1, the user's pick: **a pin closed by Alt+F4 kept what it held** (from Pins). Only the close
+  command disposed an image pin's view model; a video pin disposes its own in `OnClosing`. `BitmapHistoryAction` keeps
+  every picture of the undo history in a static table until the history is disposed, so those stayed for the rest of
+  the run, and so did a smart-selection lease. `PinCloseMemoryTests` (PIN_CLOSE_PROBE=command|window, headless with
+  Skia: a 3840x2160 pin rotated three times, a SAM2 lease taken, then closed), twice each way. Before: the close
+  button +38-40 MB left, Alt+F4 +165-167 MB, the lease held and 4 pictures in the table; the view model itself was
+  collected both ways. After: both +38-39 MB, no lease, none in the table. `FloatingImageWindow.OnClosed` disposes the
+  view model (a no-op after the command), whose `Dispose` asks for an idle trim (`pin-closed`): the picture on screen
+  is left to the collector, since a save or copy may still be encoding it, and in an idle app only the trim collects.
+  33 MB of what stays either way is the opaque-pixel scan's array in the shared pool (see Pins). Not done:
+  `NotifyActivity` from pins, which calls a waiting trim off without asking for another, so it would keep a closed
+  pin's picture longer; and a cap on the undo history by bytes (Pins, the user's call). Reading the picture at every redraw needs it
   alive, and the old copy had hidden that it often was not: the capture overlay disposes its drawing snapshot on
   leaving drawing mode (Esc, or the tool clicked off) and grabs another on coming back, while the redactions drawn
   keep pointing at the old one; a pin's oldest image leaves its undo history disposed. Now the overlay points its
@@ -396,6 +408,9 @@ These were covered by unit tests only; check them in the real app before a relea
   `TransparencyCheckerboard`). The glow around a pin, a video pin, the capture frame and the General tab's style
   preview should look as before, follow a pin's opacity slider, and go with "hide decoration" or "hide border"; a
   background-removed pin still shows the checkerboard behind its soft edges. Compared by a test, not by eye.
+- **A pin closed with Alt+F4**: rotate a pin or pick smart selection on it, then close it with Alt+F4. The commit size
+  should drop as it does for the close button, and about five idle minutes later the log should show a
+  `MemoryTrim.Before.idle:` line naming `pin-closed`.
 - **Mosaic and blur**: draw a few on a pin and in the capture overlay, drag and resize them, change their strength,
   then resize the pin. The previews should look and follow as before; on a 4K screen the commit size should no longer
   climb about 32 MB with each one.
@@ -496,7 +511,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 - **Opaque-pixel scan on the UI thread at every Image change** (S). `FloatingImageWindow.axaml.cs:315-322,481-510`
   copies into a 32 MiB rented array and scans every pixel, per crop, rotate, AI result, undo and redo (est. 20-30 ms at
-  4K). Scan on the pool, cache per bitmap, skip for captures known to be opaque.
+  4K). Scan on the pool, cache per bitmap, skip for captures known to be opaque. The shared pool keeps that array after
+  the pin closes: 33 MB on the .NET heap after a 4K pin (`PinCloseMemoryTests`).
 - **A video pin reopens file, GPU device, decoder and audio at every loop and seek** (M-L).
   `FloatingVideoViewModel.Media.cs:279-313,371-373` (`loopPlayback = false`, a new `PlayFramesAsync` per pass),
   `LibavVideoFramePlayer.cs:670-718`; `UpdateAudioStateFromPlayback` reopens Media Foundation and WASAPI too. Keep one
@@ -510,10 +526,9 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   the temp file gets one encode, the clipboard path another plus a GDI+ decode (+0.33 s CPU per Ctrl+C at 4K); the
   flattened and cropped bitmaps (and rotate's flatten, :95) are never disposed; each copy makes a `GimmeCapture_Copy_*`
   folder swept only at start-up after 12 h.
-- **Closing a pin frees little** (S). Image view models are disposed only by CloseCommand, so Alt+F4 skips it and a
-  held SAM2 lease keeps SAM2 loaded (`FloatingImageWindow.axaml.cs:191-216`, `SAM2RuntimeService.cs:89-90`); Dispose
-  never frees `Image`; undo history is capped at 30 steps, not bytes (up to ~1 GB at 4K,
-  `AnnotationEditorState.cs:150`); pins never call `ProcessMemoryTrimService.NotifyActivity`.
+- **A pin's undo history is capped at 30 steps, not bytes** (S, the user's call): up to ~1 GB at 4K while the pin is
+  open (`AnnotationEditorState.cs:150`). A cap by bytes means fewer undo steps on large pictures. What a closed pin
+  kept is done (Status).
 - **WebM export from a video pin decodes the whole audio track and writes the WAV on the UI thread**, and leaves its
   trimmed intermediate folder behind (`FloatingVideoViewModel.Actions.cs`; found during batch 1).
 - **Lower**: video pins decode at full size and copy each frame twice (`LatestFrameHandoff.cs:40`, then
