@@ -187,9 +187,12 @@ public sealed class PinResizeProbeTests : IDisposable
         return new DragResult(steps, frames, rebuilds, lateTicks, transparency);
     }
 
+    // Cancelled by a job on the UI thread: Avalonia's loop reads the token only between messages, so with nothing posted
+    // it would sleep through a token cancelled from another thread (UiStallMonitorIdleProbeTests, for hours).
     private static void PumpFor(TimeSpan time)
     {
-        using var cts = new CancellationTokenSource(time);
+        using var cts = new CancellationTokenSource();
+        using var end = new Timer(_ => Dispatcher.UIThread.Post(cts.Cancel), null, time, Timeout.InfiniteTimeSpan);
         Dispatcher.UIThread.MainLoop(cts.Token);
     }
 
