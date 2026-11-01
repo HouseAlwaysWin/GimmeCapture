@@ -16,53 +16,44 @@ public sealed class AnnotationRenderService
 
     private AnnotationRenderService() { }
 
+    /// <summary>
+    /// The live mosaic/blur preview of <paramref name="annotation"/> over <paramref name="snapshot"/>. Only the region
+    /// the effect reads, padded as the blur needs, is copied out of the picture: each redaction on screen used to keep a
+    /// Skia copy of the whole picture, 32 MB at 4K, for as long as it was shown. Throws ObjectDisposedException for a
+    /// picture already disposed, which a caller with a preview drawn before can keep.
+    /// </summary>
     public WriteableBitmap? RenderAnnotationPreview(Bitmap? snapshot, Annotation annotation, double referenceWidth, double referenceHeight)
     {
-        if (snapshot == null)
-            return null;
-
-        using var source = ConvertAvaloniaBitmapToSkBitmap(snapshot);
-        if (source == null)
-            return null;
-
-        using var preview = RenderAnnotationPreviewToSkBitmap(source, annotation, referenceWidth, referenceHeight);
-        if (preview == null)
-            return null;
-
-        return ConvertSkBitmapToWriteableBitmap(preview);
-    }
-
-    /// <summary>
-    /// Caching variant for live mosaic/blur drag preview. The Avalonia→Skia conversion of <paramref name="snapshot"/>
-    /// (a full-image ~8&#160;MB copy at 1080p) is invariant for the whole drag, so it is done once and reused: the
-    /// caller holds <paramref name="cachedSource"/> / <paramref name="cachedSourceKey"/> and disposes the cached
-    /// bitmap when the control detaches. Only the cheap ROI effect re-runs per throttled drag tick.
-    /// </summary>
-    public WriteableBitmap? RenderAnnotationPreview(
-        Bitmap? snapshot, Annotation annotation, double referenceWidth, double referenceHeight,
-        ref SKBitmap? cachedSource, ref Bitmap? cachedSourceKey)
-    {
-        if (snapshot == null)
-            return null;
-
-        if (cachedSource == null || !ReferenceEquals(cachedSourceKey, snapshot))
+        if (snapshot == null
+            || MeasurePreview(snapshot.PixelSize.Width, snapshot.PixelSize.Height, annotation, referenceWidth, referenceHeight)
+                is not { } region)
         {
-            cachedSource?.Dispose();
-            cachedSource = ConvertAvaloniaBitmapToSkBitmap(snapshot);
-            cachedSourceKey = snapshot;
+            return null;
         }
 
-        if (cachedSource == null)
+        using var working = new SKBitmap(region.Padded.Width, region.Padded.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        if (!TryCopyRegion(snapshot, region.Padded, working))
             return null;
 
-        using var preview = RenderAnnotationPreviewToSkBitmap(cachedSource, annotation, referenceWidth, referenceHeight);
-        if (preview == null)
-            return null;
-
+        using var preview = FinishPreview(working, region, annotation);
         return ConvertSkBitmapToWriteableBitmap(preview);
     }
 
     public SKBitmap? RenderAnnotationPreviewToSkBitmap(SKBitmap snapshot, Annotation annotation, double referenceWidth, double referenceHeight)
+    {
+        if (MeasurePreview(snapshot.Width, snapshot.Height, annotation, referenceWidth, referenceHeight) is not { } region)
+            return null;
+
+        using var working = new SKBitmap(region.Padded.Width, region.Padded.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        CopyRect(snapshot, region.Padded.Left, region.Padded.Top, working, 0, 0, region.Padded.Width, region.Padded.Height);
+        return FinishPreview(working, region, annotation);
+    }
+
+    // A preview's region of the picture, in pixels: the annotation's, and that padded as far as the effect reads.
+    private readonly record struct PreviewRegion(SKRectI Roi, SKRectI Padded, float UniformScale);
+
+    private static PreviewRegion? MeasurePreview(
+        int snapshotWidth, int snapshotHeight, Annotation annotation, double referenceWidth, double referenceHeight)
     {
         if (annotation.Type != AnnotationType.Mosaic && annotation.Type != AnnotationType.Blur)
             return null;
@@ -71,12 +62,12 @@ public sealed class AnnotationRenderService
         if (logicalRect.Width <= 0 || logicalRect.Height <= 0)
             return null;
 
-        var roi = CreatePixelRect(logicalRect, referenceWidth, referenceHeight, snapshot.Width, snapshot.Height);
+        var roi = CreatePixelRect(logicalRect, referenceWidth, referenceHeight, snapshotWidth, snapshotHeight);
         if (roi.Width <= 0 || roi.Height <= 0)
             return null;
 
-        double scaleX = snapshot.Width / referenceWidth;
-        double scaleY = snapshot.Height / referenceHeight;
+        double scaleX = snapshotWidth / referenceWidth;
+        double scaleY = snapshotHeight / referenceHeight;
         float uniformScale = (float)Math.Min(scaleX, scaleY);
 
         // Operate on just the padded ROI instead of a full-snapshot copy (which is ~8 MB at 1080p and
@@ -90,21 +81,25 @@ public sealed class AnnotationRenderService
             pad = Math.Max(2, (int)Math.Ceiling(blurRadius * 3f));
         }
 
-        int padLeft = Math.Max(0, roi.Left - pad);
-        int padTop = Math.Max(0, roi.Top - pad);
-        int padRight = Math.Min(snapshot.Width, roi.Right + pad);
-        int padBottom = Math.Min(snapshot.Height, roi.Bottom + pad);
-        int padWidth = padRight - padLeft;
-        int padHeight = padBottom - padTop;
-        if (padWidth <= 0 || padHeight <= 0)
+        var padded = new SKRectI(
+            Math.Max(0, roi.Left - pad),
+            Math.Max(0, roi.Top - pad),
+            Math.Min(snapshotWidth, roi.Right + pad),
+            Math.Min(snapshotHeight, roi.Bottom + pad));
+        if (padded.Width <= 0 || padded.Height <= 0)
             return null;
 
-        using var working = new SKBitmap(padWidth, padHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
-        CopyRect(snapshot, padLeft, padTop, working, 0, 0, padWidth, padHeight);
+        return new PreviewRegion(roi, padded, uniformScale);
+    }
 
+    // Applies the effect to the padded region copied into working, and cuts the annotation's own region out of it.
+    private static SKBitmap FinishPreview(SKBitmap working, PreviewRegion region, Annotation annotation)
+    {
+        var roi = region.Roi;
         // ROI expressed in the cropped working buffer's coordinate space.
-        var workingRoi = new SKRect(roi.Left - padLeft, roi.Top - padTop, roi.Right - padLeft, roi.Bottom - padTop);
-        ApplyRedactionEffect(working, annotation, workingRoi, uniformScale);
+        var workingRoi = new SKRect(
+            roi.Left - region.Padded.Left, roi.Top - region.Padded.Top, roi.Right - region.Padded.Left, roi.Bottom - region.Padded.Top);
+        ApplyRedactionEffect(working, annotation, workingRoi, region.UniformScale);
 
         var preview = new SKBitmap(roi.Width, roi.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
         using (var canvas = new SKCanvas(preview))
@@ -486,16 +481,11 @@ public sealed class AnnotationRenderService
         return new SKRectI(left, top, right, bottom);
     }
 
-    private static SKBitmap? ConvertAvaloniaBitmapToSkBitmap(Bitmap bitmap)
+    // Copies one region of an Avalonia bitmap into a Skia bitmap of the region's size. False where the bitmap cannot be
+    // read (a transcoded one, say), which leaves the preview out; a disposed one throws (see RenderAnnotationPreview).
+    private static bool TryCopyRegion(Bitmap bitmap, SKRectI region, SKBitmap destination)
     {
-        int width = bitmap.PixelSize.Width;
-        int height = bitmap.PixelSize.Height;
-        if (width <= 0 || height <= 0)
-            return null;
-
-        var skBitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
-        var sourceRect = new PixelRect(0, 0, width, height);
-
+        var sourceRect = new PixelRect(region.Left, region.Top, region.Width, region.Height);
         try
         {
             if (bitmap.Format == PixelFormat.Bgra8888 && bitmap.AlphaFormat == AlphaFormat.Premul)
@@ -503,19 +493,18 @@ public sealed class AnnotationRenderService
                 // Laid out as Skia's are, so Avalonia copies straight into Skia's pixels, which the GC never moves.
                 // The copy used to go through a pooled array that was read after it was unpinned, and the idle memory
                 // trim compacts the large-object heap that array lives on: wrong pixels, or an access violation.
-                bitmap.CopyPixels(sourceRect, skBitmap.GetPixels(), skBitmap.ByteCount, skBitmap.RowBytes);
+                bitmap.CopyPixels(sourceRect, destination.GetPixels(), destination.ByteCount, destination.RowBytes);
             }
             else
             {
-                CopyThroughPinnedBuffer(bitmap, sourceRect, skBitmap);
+                CopyThroughPinnedBuffer(bitmap, sourceRect, destination);
             }
 
-            return skBitmap;
+            return true;
         }
-        catch
+        catch (Exception ex) when (ex is not ObjectDisposedException)
         {
-            skBitmap.Dispose();
-            return null;
+            return false;
         }
     }
 

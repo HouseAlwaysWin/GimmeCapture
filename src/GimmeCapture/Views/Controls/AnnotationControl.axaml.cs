@@ -35,9 +35,6 @@ public partial class AnnotationControl : UserControl
     }
 
     private IDisposable? _effectSubscription;
-    // Cached Avalonia→Skia conversion of the drag snapshot, reused across throttled ticks (see RegenerateEffectPreview).
-    private SkiaSharp.SKBitmap? _cachedPreviewSource;
-    private Bitmap? _cachedPreviewSourceKey;
 
     public AnnotationControl()
     {
@@ -60,7 +57,13 @@ public partial class AnnotationControl : UserControl
                 // change to follow (the settings type raises no notifications of its own).
                 ann.WhenAnyValue(a => a.EffectSettings),
                 this.GetObservable(BoundsProperty),
-                (start, end, snapshot, referenceSize, _, bounds) => (start, end, snapshot, referenceSize, bounds))
+                (start, end, snapshot, drawnIn, settings, bounds) =>
+                    (start, end, snapshot, PreviewReferenceSize(drawnIn, bounds.Size, picture: default), settings))
+                // Only what the preview is drawn from: the control's size counts for an annotation that has no size of
+                // its own, so resizing a pin, which resizes every annotation on it, redraws none. The first is drawn
+                // below, at once.
+                .DistinctUntilChanged()
+                .Skip(1)
                 .Throttle(TimeSpan.FromMilliseconds(16))
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ => RegenerateEffectPreview(ann));
@@ -78,10 +81,6 @@ public partial class AnnotationControl : UserControl
         var old = EffectPreviewBitmap;
         EffectPreviewBitmap = null;
         old?.Dispose();
-
-        _cachedPreviewSource?.Dispose();
-        _cachedPreviewSource = null;
-        _cachedPreviewSourceKey = null;
     }
 
     private void RegenerateEffectPreview(Annotation annotation)
@@ -90,22 +89,32 @@ public partial class AnnotationControl : UserControl
         if (snapshot == null)
             return;
 
-        double referenceWidth = annotation.DrawingModeReferenceSize.Width;
-        double referenceHeight = annotation.DrawingModeReferenceSize.Height;
-        if (double.IsNaN(referenceWidth) || referenceWidth <= 0)
-            referenceWidth = Bounds.Width;
-        if (double.IsNaN(referenceHeight) || referenceHeight <= 0)
-            referenceHeight = Bounds.Height;
-        if (double.IsNaN(referenceWidth) || referenceWidth <= 0)
-            referenceWidth = snapshot.PixelSize.Width;
-        if (double.IsNaN(referenceHeight) || referenceHeight <= 0)
-            referenceHeight = snapshot.PixelSize.Height;
+        WriteableBitmap? result;
+        try
+        {
+            Size reference = PreviewReferenceSize(annotation.DrawingModeReferenceSize, Bounds.Size, snapshot.PixelSize);
+            result = AnnotationRenderService.Shared.RenderAnnotationPreview(snapshot, annotation, reference.Width, reference.Height);
+        }
+        catch (ObjectDisposedException)
+        {
+            // The picture went before the annotation did, as a pin's oldest image leaves its undo history: the preview
+            // stays as last drawn. It used to come from a copy the control kept of the whole picture.
+            return;
+        }
 
-        var result = AnnotationRenderService.Shared.RenderAnnotationPreview(
-            snapshot, annotation, referenceWidth, referenceHeight,
-            ref _cachedPreviewSource, ref _cachedPreviewSourceKey);
         var old = EffectPreviewBitmap;
         EffectPreviewBitmap = result;
         old?.Dispose();
+    }
+
+    // The size the annotation's points are in: the content's when it was drawn, failing that the control's, failing
+    // that the picture's.
+    internal static Size PreviewReferenceSize(Size drawnIn, Size bounds, PixelSize picture)
+    {
+        double width = IsSize(drawnIn.Width) ? drawnIn.Width : IsSize(bounds.Width) ? bounds.Width : picture.Width;
+        double height = IsSize(drawnIn.Height) ? drawnIn.Height : IsSize(bounds.Height) ? bounds.Height : picture.Height;
+        return new Size(width, height);
+
+        static bool IsSize(double value) => !double.IsNaN(value) && value > 0;
     }
 }

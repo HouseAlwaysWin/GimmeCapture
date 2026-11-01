@@ -25,15 +25,7 @@ public class AnnotationRenderServiceTests
         using var avaloniaBitmap = new WriteableBitmap(
             new PixelSize(Width, Height), new Vector(96, 96), PixelFormat.Bgra8888, alphaFormat);
         AvaloniaRenderer.Fill(avaloniaBitmap, PatternPixel);
-        using var skiaBitmap = new SKBitmap(Width, Height, SKColorType.Bgra8888, SKAlphaType.Premul);
-        for (int y = 0; y < Height; y++)
-        {
-            for (int x = 0; x < Width; x++)
-            {
-                uint word = PatternPixel(x, y);
-                skiaBitmap.SetPixel(x, y, new SKColor((byte)(word >> 16), (byte)(word >> 8), (byte)word, 255));
-            }
-        }
+        using var skiaBitmap = PatternSkiaBitmap(Width, Height);
 
         var annotation = new Annotation
         {
@@ -52,6 +44,94 @@ public class AnnotationRenderServiceTests
         Assert.NotNull(expected);
         Assert.NotNull(preview);
         Assert.Equal(Words(expected!), AvaloniaRenderer.ReadPixels(preview!));
+    }
+
+    [Theory]
+    [InlineData(AnnotationType.Mosaic, AlphaFormat.Premul, 40, 30, 50, 40)]
+    [InlineData(AnnotationType.Blur, AlphaFormat.Premul, 28, 18, 74, 64)] // padded by the 12 pixels the blur reads
+    [InlineData(AnnotationType.Mosaic, AlphaFormat.Opaque, 40, 30, 50, 40)]
+    [InlineData(AnnotationType.Blur, AlphaFormat.Opaque, 28, 18, 74, 64)]
+    public void RenderAnnotationPreview_FromAnAvaloniaBitmap_CopiesOnlyTheRegionItReads(
+        AnnotationType type, AlphaFormat alphaFormat, int left, int top, int width, int height)
+    {
+        // Each mosaic or blur on screen used to copy the whole picture into Skia and keep the copy, 32 MB at 4K. The
+        // preview now copies the region it reads, and must draw what it drew from the whole picture.
+        const int PictureWidth = 160;
+        const int PictureHeight = 120;
+        AvaloniaRenderer.EnsureRegistered();
+        using var picture = new RegionRecordingBitmap(PictureWidth, PictureHeight, alphaFormat);
+        using var skiaPicture = PatternSkiaBitmap(PictureWidth, PictureHeight);
+        var annotation = new Annotation
+        {
+            Type = type,
+            // Drawn on the picture at half its size, as on a screen at 200%.
+            StartPoint = new Point(20, 15),
+            EndPoint = new Point(45, 35),
+            EffectSettings = new AnnotationEffectSettings { MosaicCellSize = 3, BlurRadius = 2f },
+            DrawingModeReferenceSize = new Size(PictureWidth / 2, PictureHeight / 2)
+        };
+
+        using var expected = AnnotationRenderService.Shared.RenderAnnotationPreviewToSkBitmap(
+            skiaPicture, annotation, PictureWidth / 2, PictureHeight / 2);
+        using var preview = AnnotationRenderService.Shared.RenderAnnotationPreview(
+            picture, annotation, PictureWidth / 2, PictureHeight / 2);
+
+        Assert.NotNull(expected);
+        Assert.NotNull(preview);
+        Assert.Equal(Words(expected!), AvaloniaRenderer.ReadPixels(preview!));
+        Assert.Equal(new PixelRect(left, top, width, height), Assert.Single(picture.Copied));
+    }
+
+    [Fact]
+    public void RenderAnnotationPreview_OfADisposedPicture_Throws_SoThePreviewDrawnBeforeCanStay()
+    {
+        // AnnotationControl keeps its preview on ObjectDisposedException. It used to draw from a copy of its own.
+        AvaloniaRenderer.EnsureRegistered();
+        var picture = new RegionRecordingBitmap(40, 30, AlphaFormat.Premul);
+        picture.Dispose();
+        var annotation = new Annotation
+        {
+            Type = AnnotationType.Mosaic,
+            StartPoint = new Point(5, 5),
+            EndPoint = new Point(20, 15),
+            DrawingModeReferenceSize = new Size(40, 30)
+        };
+
+        Assert.Throws<ObjectDisposedException>(
+            () => AnnotationRenderService.Shared.RenderAnnotationPreview(picture, annotation, 40, 30));
+    }
+
+    // A picture in the pattern below that records the regions copied out of it.
+    private sealed class RegionRecordingBitmap : WriteableBitmap
+    {
+        public RegionRecordingBitmap(int width, int height, AlphaFormat alphaFormat)
+            : base(new PixelSize(width, height), new Vector(96, 96), PixelFormat.Bgra8888, alphaFormat)
+        {
+            AvaloniaRenderer.Fill(this, PatternPixel);
+        }
+
+        public List<PixelRect> Copied { get; } = new();
+
+        public override void CopyPixels(PixelRect sourceRect, IntPtr buffer, int bufferSize, int stride)
+        {
+            Copied.Add(sourceRect);
+            base.CopyPixels(sourceRect, buffer, bufferSize, stride);
+        }
+    }
+
+    private static SKBitmap PatternSkiaBitmap(int width, int height)
+    {
+        var bitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                uint word = PatternPixel(x, y);
+                bitmap.SetPixel(x, y, new SKColor((byte)(word >> 16), (byte)(word >> 8), (byte)word, 255));
+            }
+        }
+
+        return bitmap;
     }
 
     // An opaque picture, as the word each pixel is in BGRA memory, with no two neighbours alike.

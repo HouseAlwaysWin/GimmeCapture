@@ -161,6 +161,27 @@ tool.
   of 271-273; the first start took 209-244 ms (`encoderOpen` 123-145, six runs) instead of 190-191 (92-95, three); after
   the recording the process was 240-244 MB above where it started instead of 270-286. `LibavRecordingEncoderTests` has
   the opt-in check (NVENC_PROBE=1: `cuInit`, under 40 MB kept). Linux not measured.
+- Done since batch 1, the user's pick: **each mosaic or blur preview kept a copy of the whole picture** (from Pins).
+  `AnnotationControl` converted the annotation's snapshot into an `SKBitmap` at its first preview and kept it until
+  detached, one per redaction on screen, to cut each drag tick's region out of; and its preview followed the control's
+  bounds, which a pin's resize changes for every annotation on it. `RedactionPreviewMemoryTests` (REDACTION_PROBE=1,
+  headless with Skia: six mosaics and blurs on a 3840x2160 picture drawn at half size, then the controls resized over
+  30 frames), twice each: before +214 MB shown, 179-180 redraws, the resize phase 2.15-2.29 s; after +24-25 MB, 0
+  redraws, 1.25-1.38 s (most of it the probe's own pumping); nothing grew over three more open-and-close cycles.
+  `AnnotationRenderService.RenderAnnotationPreview` now copies only the padded region out of the Avalonia bitmap
+  (decompiled: `Bitmap.CopyPixels` with a source rect locks Skia's pixels in place and copies just those rows), and the
+  caching overload is gone; `AnnotationControl` redraws only when what the preview is drawn from changes
+  (`PreviewReferenceSize`: the size the annotation was drawn in, the control's only for one without). In CI the preview
+  matches the whole-picture path pixel for pixel, mosaic and blur, both alpha formats, and copies one region. A video
+  pin and the video editor still give each redaction a frame of its own (`GetContentSnapshot`, `CopyFrame`), which it
+  needs as the video moves on; only the Skia copy beside it is gone. Reading the picture at every redraw needs it
+  alive, and the old copy had hidden that it often was not: the capture overlay disposes its drawing snapshot on
+  leaving drawing mode (Esc, or the tool clicked off) and grabs another on coming back, while the redactions drawn
+  keep pointing at the old one; a pin's oldest image leaves its undo history disposed. Now the overlay points its
+  mosaics and blurs at each new snapshot and at none while it has none (`AdoptDrawingModeSnapshot`,
+  `DrawingModeSnapshotTests`), and the control keeps its preview as drawn on `ObjectDisposedException` (the probe drags
+  one whose picture was disposed). By reading, the old code threw from `OnDataContextChanged` for a control made over
+  a disposed picture, as undoing a redaction's deletion after leaving drawing mode would; that one now has no preview.
 - Done since batch 1, the user's pick: **history thumbnails decoded for every entry and never released** (from Idle,
   start-up and memory). `LoadHistoryAsync` started a decode for every new entry, both kinds, and the view models
   outlive the window. `SettingsHistoryTabTests` (HISTORY_TAB_PROBE=1, headless with Skia, 300 entries with 320x180
@@ -375,6 +396,9 @@ These were covered by unit tests only; check them in the real app before a relea
   `TransparencyCheckerboard`). The glow around a pin, a video pin, the capture frame and the General tab's style
   preview should look as before, follow a pin's opacity slider, and go with "hide decoration" or "hide border"; a
   background-removed pin still shows the checkerboard behind its soft edges. Compared by a test, not by eye.
+- **Mosaic and blur**: draw a few on a pin and in the capture overlay, drag and resize them, change their strength,
+  then resize the pin. The previews should look and follow as before; on a 4K screen the commit size should no longer
+  climb about 32 MB with each one.
 - **Esc on a frozen capture**: select a region, press Esc. The text boxes should come back at once, and the log should
   hold one `OcrScan.Detected` per capture, not one more for each Esc.
 - **A capture after a long idle**: leave the app alone for an hour or more while the computer is in use, then press a
@@ -486,9 +510,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   the temp file gets one encode, the clipboard path another plus a GDI+ decode (+0.33 s CPU per Ctrl+C at 4K); the
   flattened and cropped bitmaps (and rotate's flatten, :95) are never disposed; each copy makes a `GimmeCapture_Copy_*`
   folder swept only at start-up after 12 h.
-- **Each mosaic or blur annotation holds a full-size SKBitmap** (S-M). `AnnotationControl.axaml.cs:39-40,104-106`,
-  `AnnotationRenderService.cs:48-52`: ~33 MB per redaction at 4K for the pin's lifetime, built on the UI thread. Share
-  one copy per snapshot and drop it when the drag ends; a resize also re-renders previews that do not depend on it.
 - **Closing a pin frees little** (S). Image view models are disposed only by CloseCommand, so Alt+F4 skips it and a
   held SAM2 lease keeps SAM2 loaded (`FloatingImageWindow.axaml.cs:191-216`, `SAM2RuntimeService.cs:89-90`); Dispose
   never frees `Image`; undo history is capped at 30 steps, not bytes (up to ~1 GB at 4K,

@@ -146,6 +146,11 @@
   whole file into memory, and the bold the interface uses, which these fonts have no face for, copied it once more:
   with the Chinese interface, about 35 MB. The fonts are now read where they already are, inside the app's own file,
   and the bold is drawn from there too: about 1 MB. Text looks exactly as before, to the pixel.
+- **Mosaic and blur previews no longer copy the whole picture.** Each mosaic or blur on a pin or in the capture
+  overlay made its own copy of the whole picture to draw its preview from, and kept it for as long as it was on screen:
+  about 32 MB each at 4K. A preview now reads only the part of the picture under it: with six on a 4K picture, the app
+  holds about 190 MB less. Resizing a pin also no longer redraws every mosaic and blur on it at each step of the drag,
+  as their look does not change with it.
 - **The idle clean-up hands back the memory .NET keeps free for later.** It compacted the heap but kept the space it
   freed: after the settings window had been let go of, the heap held 35 MB and kept 51. The clean-up now returns the
   difference, which took the commit size down 14 MB more there.

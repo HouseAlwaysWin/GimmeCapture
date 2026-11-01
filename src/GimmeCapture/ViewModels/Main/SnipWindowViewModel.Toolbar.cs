@@ -196,8 +196,7 @@ public partial class SnipWindowViewModel
                     return;
                 }
 
-                DisposeDrawingModeSnapshot();
-                DrawingModeSnapshot = snapshot;
+                AdoptDrawingModeSnapshot(snapshot);
                 snapshot = null;
             }
             catch (Exception ex)
@@ -255,6 +254,17 @@ public partial class SnipWindowViewModel
     /// <summary>Test hook: the drawing source <see cref="IsDrawingMode"/> takes, without the dispatcher.</summary>
     internal Task<Avalonia.Media.Imaging.Bitmap?> CaptureDrawingSourceForTestAsync() => CaptureDrawingSourceAsync();
 
+    /// <summary>
+    /// Makes <paramref name="snapshot"/> the selection's pixels, disposing the ones before, and has the mosaics and blurs
+    /// already drawn take it too: a preview reads the picture again whenever it redraws, as when one is dragged.
+    /// </summary>
+    internal void AdoptDrawingModeSnapshot(Avalonia.Media.Imaging.Bitmap snapshot)
+    {
+        DisposeDrawingModeSnapshot();
+        DrawingModeSnapshot = snapshot;
+        SetRedactionSnapshots(snapshot);
+    }
+
     private void DisposeDrawingModeSnapshot()
     {
         if (_drawingModeSnapshot == null)
@@ -264,7 +274,20 @@ public partial class SnipWindowViewModel
 
         var temp = _drawingModeSnapshot;
         DrawingModeSnapshot = null;
+        // The mosaics and blurs drawn on it keep their previews as drawn until the next snapshot comes.
+        SetRedactionSnapshots(null);
         temp.Dispose();
+    }
+
+    private void SetRedactionSnapshots(Avalonia.Media.Imaging.Bitmap? snapshot)
+    {
+        foreach (var annotation in Annotations)
+        {
+            if (annotation.Type is AnnotationType.Mosaic or AnnotationType.Blur)
+            {
+                annotation.DrawingModeSnapshot = snapshot;
+            }
+        }
     }
 
     public Color SelectedColor

@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.ViewModels.Main;
 using SkiaSharp;
@@ -62,6 +63,40 @@ public sealed class DrawingModeSnapshotTests
         Bitmap? source = await vm.CaptureDrawingSourceForTestAsync();
 
         Assert.Same(grabbed, source);
+    }
+
+    [Fact]
+    public void TheMosaicsAndBlursDrawn_FollowTheSelectionsSnapshot_AndNoneKeepsOneDisposed()
+    {
+        // A preview reads the picture again whenever it redraws, as when it is dragged. Leaving drawing mode disposes
+        // the snapshot, and entering it again grabs another.
+        AvaloniaRenderer.EnsureRegistered();
+        using var vm = new SnipWindowViewModel(Colors.Red, 2.0, new Mock<IScreenCaptureService>().Object);
+        var first = AvaloniaRenderer.Create(4, 4, static (_, _) => 0xFF000000u);
+        vm.AdoptDrawingModeSnapshot(first);
+        var mosaic = new Annotation { Type = AnnotationType.Mosaic, DrawingModeSnapshot = first };
+        var blur = new Annotation { Type = AnnotationType.Blur, DrawingModeSnapshot = first };
+        var arrow = new Annotation { Type = AnnotationType.Arrow };
+        vm.Annotations.Add(mosaic);
+        vm.Annotations.Add(blur);
+        vm.Annotations.Add(arrow);
+
+        var second = AvaloniaRenderer.Create(4, 4, static (_, _) => 0xFFFFFFFFu);
+        vm.AdoptDrawingModeSnapshot(second);
+
+        Assert.Same(second, vm.DrawingModeSnapshot);
+        Assert.Same(second, mosaic.DrawingModeSnapshot);
+        Assert.Same(second, blur.DrawingModeSnapshot);
+        Assert.Null(arrow.DrawingModeSnapshot);
+        Assert.Throws<ObjectDisposedException>(() => first.PixelSize);
+
+        vm.IsDrawingMode = true; // keeps the snapshot it has
+        vm.IsDrawingMode = false; // and lets it go
+
+        Assert.Null(vm.DrawingModeSnapshot);
+        Assert.Null(mosaic.DrawingModeSnapshot);
+        Assert.Null(blur.DrawingModeSnapshot);
+        Assert.Throws<ObjectDisposedException>(() => second.PixelSize);
     }
 
     // Each pixel of the still as the word it is in BGRA memory: opaque, and no two alike within the crop.
