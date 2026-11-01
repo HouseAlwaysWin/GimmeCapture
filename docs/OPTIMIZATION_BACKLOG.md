@@ -207,7 +207,18 @@ tool.
   changed (`Lock` bumps its version), so since the mosaic change a preview redraw makes the card take the pin's picture
   again; `RedactionDragProbeTests` (REDACTION_DRAG_PROBE=displayed|copy, a real window on the graphics card, a mosaic
   dragged over a 4K pin) found nothing measurable on the RTX 4070 SUPER: 34 frames/s against 30 when it reads a copy,
-  the process at 110-121% of a core against 114-116%. The drag's 30-34 frames/s is the same either way. Reading the picture at every redraw needs it
+  the process at 110-121% of a core against 114-116%. The drag's 30-34 frames/s is the same either way.
+- Done since batch 1, the user's pick: **saving an annotated pin swapped its `Image` for the whole dialog** (from
+  Pins). The save command flattened the annotations into a new bitmap before the dialog, cancelled or not, set it as
+  the pin's `Image` until the dialog returned, and never disposed it (the `Dispose` was commented out). Meanwhile the
+  pin drew the annotations twice (the flattened picture under the live annotation layer), the `Image` change reset
+  smart selection (`HandleImageChangedForSam2`: its prepared picture and points), and the window rescanned for
+  see-through pixels at each swap. The flattened copy took three full copies: the picture into Skia, back into a
+  WriteableBitmap, and into Skia again to encode. Now `SaveImageToPickedFileAsync` asks `EncodeForSaveAsync` once a
+  file is picked: one Skia copy, the annotations drawn into it, encoded (`TryEncodeSkBitmap`, split out of
+  `TryEncodeBitmap`) and disposed. `FloatingImageViewModelTests`: a cancelled save changes `Image` 0 times (it was 2), and
+  the saved PNG has a filled annotation's red where the pin's own picture stays white. Not timed: a 4K PNG encode at
+  full compression (over 2 s) dwarfs the copies. Reading the picture at every redraw needs it
   alive, and the old copy had hidden that it often was not: the capture overlay disposes its drawing snapshot on
   leaving drawing mode (Esc, or the tool clicked off) and grabs another on coming back, while the redactions drawn
   keep pointing at the old one; a pin's oldest image leaves its undo history disposed. Now the overlay points its
@@ -429,6 +440,9 @@ These were covered by unit tests only; check them in the real app before a relea
   `TransparencyCheckerboard`). The glow around a pin, a video pin, the capture frame and the General tab's style
   preview should look as before, follow a pin's opacity slider, and go with "hide decoration" or "hide border"; a
   background-removed pin still shows the checkerboard behind its soft edges. Compared by a test, not by eye.
+- **Saving an annotated pin**: draw a highlighter and pick smart selection's points on a pin, then Save and cancel the
+  dialog. While the dialog is open the highlighter should not turn darker, and after it the points should still be
+  there. Saved for real, the file should have the annotations.
 - **A pin's click-through after a change**: remove a pin's background, then rotate and crop it, undo and redo. Clicks
   should still go through its see-through parts and land on its picture, as before.
 - **A pin closed with Alt+F4**: rotate a pin or pick smart selection on it, then close it with Alt+F4. The commit size
@@ -538,9 +552,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   decoder per pin, do loops and seeks as requests to it, seek the audio on loop; 1-2 decode threads under D3D11VA.
 - **Each pin builds its own U2Net session** (S-M). `FloatingImageViewModel.AI.cs:684-687`: `new
   BackgroundRemovalService` per pin; sessions take 661-962 ms. One shared service owned by `AppBootstrapper`.
-- **Saving an annotated pin swaps `Image` for the whole dialog** (S). `FloatingImageViewModel.Actions.cs:33-58`:
-  flattens even on cancel, drops SAM2's prepared image and the selection points, rescans, leaves ~33 MB at 4K to the
-  finalizer. Make it `SaveAction(Bitmap)`, flatten after a path is picked, dispose after encoding.
 - **Copy encodes the PNG twice** (S-M). `FloatingImageViewModel.Actions.cs:145-196`, `ClipboardService.cs:172-177`:
   the temp file gets one encode, the clipboard path another plus a GDI+ decode (+0.33 s CPU per Ctrl+C at 4K); the
   flattened and cropped bitmaps (and rotate's flatten, :95) are never disposed; each copy makes a `GimmeCapture_Copy_*`

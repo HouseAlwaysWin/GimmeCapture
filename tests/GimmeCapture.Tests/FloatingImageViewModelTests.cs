@@ -109,6 +109,66 @@ public class FloatingImageViewModelTests
     }
 
     [Fact]
+    public async Task Saving_LeavesThePinsPictureAlone_CancelledOrNot()
+    {
+        // The save swapped a copy with the annotations drawn in for the pin's picture while its dialog was open: the pin
+        // drew them twice, and a new picture drops smart selection's prepared one and its points.
+        var vm = CreatePin(AvaloniaRenderer.Create(40, 30, static (_, _) => 0xFFFFFFFFu));
+        var picture = vm.Image;
+        vm.Annotations.Add(new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Point(10, 10),
+            EndPoint = new Point(20, 20),
+            IsFilled = true,
+            Color = Avalonia.Media.Colors.Red
+        });
+        int pictureChanges = 0;
+        vm.PropertyChanged += (_, e) => pictureChanges += e.PropertyName == nameof(vm.Image) ? 1 : 0;
+        vm.SaveAction = () => Task.CompletedTask; // the dialog cancelled
+
+        await vm.SaveCommand.Execute();
+
+        Assert.Equal(0, pictureChanges);
+        Assert.Same(picture, vm.Image);
+    }
+
+    [Fact]
+    public async Task WhatASaveWrites_HasTheAnnotationsDrawnIn()
+    {
+        var vm = CreatePin(AvaloniaRenderer.Create(40, 30, static (_, _) => 0xFFFFFFFFu));
+        vm.Annotations.Add(new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Point(10, 10),
+            EndPoint = new Point(20, 20),
+            IsFilled = true,
+            Color = Avalonia.Media.Colors.Red
+        });
+
+        var (encoded, bytes, _) = await vm.EncodeForSaveAsync(SkiaSharp.SKEncodedImageFormat.Png, 100);
+
+        Assert.True(encoded);
+        using var saved = SkiaSharp.SKBitmap.Decode(bytes);
+        Assert.Equal(new SkiaSharp.SKColor(255, 0, 0, 255), saved.GetPixel(15, 15));
+        Assert.Equal(SkiaSharp.SKColors.White, saved.GetPixel(2, 2));
+        // The pin's own picture stays as it was.
+        Assert.Equal(0xFFFFFFFFu, AvaloniaRenderer.ReadPixels(vm.Image!)[(15 * 40) + 15]);
+    }
+
+    private static FloatingImageViewModel CreatePin(Bitmap picture)
+    {
+        var mockSettings = new Mock<IAppSettingsService>();
+        mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
+        var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
+        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, new Mock<AIModelDownloader>().Object);
+        return new FloatingImageViewModel(
+            picture, picture.PixelSize.Width, picture.PixelSize.Height, Avalonia.Media.Colors.Red, 2.0, false, false,
+            new MockClipboardService(), mockAi.Object, new SAM2RuntimeService(mockAiPath.Object), mockSettings.Object,
+            mockAiPath.Object, new ResourceQueueService());
+    }
+
+    [Fact]
     public async Task Dispose_LetsGoOfThePicturesKeptForUndo_AndOfSmartSelection()
     {
         // A pin's window disposes its view model however it closes. Closed by Alt+F4 it did not, and every picture in the

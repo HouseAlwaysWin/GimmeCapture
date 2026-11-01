@@ -28,34 +28,14 @@ public partial class FloatingImageViewModel
     {
         // CloseCommand, ToggleToolbarCommand etc are in Base.
         
-        // Re-define SaveCommand with specific logic (Flattening)
+        // The window asks where to save, then has the picture encoded with its annotations (EncodeForSaveAsync).
         SaveCommand?.Dispose();
         SaveCommand = CreateAsyncCommand(async () =>
         {
-             if (SaveAction != null)
-             {
-                 // Temporary swap of Image for flattened version if we have annotations
-                 var originalImage = Image;
-                 var flattened = Annotations.AsValueEnumerable().Any() ? await GetFlattenedBitmapAsync() : null;
-                 
-                 if (flattened != null)
-                 {
-                     Image = flattened;
-                 }
-                 
-                 try 
-                 {
-                    await SaveAction();
-                 }
-                 finally
-                 {
-                     if (flattened != null)
-                     {
-                         Image = originalImage;
-                         // flattened.Dispose(); 
-                     }
-                 }
-             }
+            if (SaveAction != null)
+            {
+                await SaveAction();
+            }
         }, null, nameof(SaveCommand));
 
         var canUseSelection = this.WhenAnyValue(x => x.IsSelectionActive);
@@ -399,6 +379,48 @@ public partial class FloatingImageViewModel
         }
     }
     
+    /// <summary>
+    /// The pin's picture encoded as <paramref name="format"/>, with its annotations drawn in when it has any: what a save
+    /// writes, which the window asks for once a file is picked. The annotations are drawn into the copy that is encoded,
+    /// which goes once it is. The save command used to swap a flattened copy in as the pin's picture for the whole
+    /// dialog, cancelled or not: the pin drew its annotations twice meanwhile, smart selection lost its prepared picture
+    /// and its points, and the copy, 33 MB at 4K, was left to the collector.
+    /// </summary>
+    internal async Task<(bool Encoded, byte[] Bytes, string? Error)> EncodeForSaveAsync(SKEncodedImageFormat format, int quality)
+    {
+        // Read on the UI thread, where they change; the pool thread only sees this snapshot.
+        var image = Image;
+        if (image == null)
+        {
+            return (false, Array.Empty<byte>(), "The pin has no picture.");
+        }
+
+        var annotations = Annotations.ToArray();
+        double displayWidth = DisplayWidth;
+        double displayHeight = DisplayHeight;
+
+        // Off the UI thread: a 4K PNG takes over 2 s at full compression.
+        return await Task.Run(() =>
+        {
+            if (!FloatingBitmapConversionHelper.TryCopyToSkBitmap(image, out var pixels, out var error) || pixels == null)
+            {
+                return (false, Array.Empty<byte>(), error);
+            }
+
+            using (pixels)
+            {
+                if (annotations.Length > 0)
+                {
+                    AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
+                        pixels, annotations, displayWidth, displayHeight, pixels.Width, pixels.Height);
+                }
+
+                bool encoded = FloatingBitmapConversionHelper.TryEncodeSkBitmap(pixels, format, quality, out var bytes, out error);
+                return (encoded, bytes, error);
+            }
+        });
+    }
+
     // Create a flattened bitmap including annotations
     private async Task<Bitmap?> GetFlattenedBitmapAsync()
     {

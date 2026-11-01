@@ -151,6 +151,12 @@
   about 32 MB each at 4K. A preview now reads only the part of the picture under it: with six on a 4K picture, the app
   holds about 190 MB less. Resizing a pin also no longer redraws every mosaic and blur on it at each step of the drag,
   as their look does not change with it.
+- **Saving a pin with annotations leaves the pin alone while its dialog is open.** The save drew the annotations into a
+  copy of the picture and put that copy in the pin for as long as the dialog was open, cancelled or not: the pin drew
+  its annotations twice meanwhile, so a highlighter looked darker, a smart selection lost its points, and the copy (33
+  MB at 4K) stayed until the next clean-up. The annotations are now drawn only once a file is picked, into the copy that
+  is written, which goes as soon as it is; a save also copies the picture once instead of three times, and a cancelled
+  one not at all.
 - **A 4K pin no longer leaves 32 MB behind after a change, and checks its see-through parts in a third of the time.**
   Rotating, saving, copying or removing the background of a pin each copied the whole picture first, into memory the
   app then kept, and so did the check a pin runs whenever its picture changes, which works out its see-through parts

@@ -51,39 +51,57 @@ internal static class FloatingBitmapConversionHelper
 
             using (skBitmap)
             {
-                SKBitmap encodeSource = skBitmap;
-                SKBitmap? flattened = null;
-                // JPEG has no alpha channel: composite a transparent pin over white so it doesn't export with a
-                // black background (a premultiplied transparent pixel is RGB 0,0,0). PNG/WebP keep alpha as-is.
-                if (format == SKEncodedImageFormat.Jpeg && skBitmap.AlphaType != SKAlphaType.Opaque)
-                {
-                    flattened = new SKBitmap(skBitmap.Width, skBitmap.Height, SKColorType.Bgra8888, SKAlphaType.Opaque);
-                    using (var canvas = new SKCanvas(flattened))
-                    {
-                        canvas.Clear(SKColors.White);
-                        canvas.DrawBitmap(skBitmap, 0, 0);
-                    }
-                    encodeSource = flattened;
-                }
-
-                try
-                {
-                    using var data = format == SKEncodedImageFormat.Png && fastPng
-                        ? EncodeFastPng(encodeSource)
-                        : EncodeWithQuality(encodeSource, format, quality);
-                    if (data == null)
-                    {
-                        error = "Encoded bitmap bytes are empty.";
-                        return false;
-                    }
-
-                    bytes = data.ToArray();
-                }
-                finally
-                {
-                    flattened?.Dispose();
-                }
+                return TryEncodeSkBitmap(skBitmap, format, quality, out bytes, out error, fastPng);
             }
+        }
+        catch (Exception ex)
+        {
+            error = $"Bitmap encode failed: {ex.Message}";
+            return false;
+        }
+    }
+
+    /// <summary><see cref="TryEncodeBitmap"/> of pixels already in Skia, which stay the caller's.</summary>
+    public static bool TryEncodeSkBitmap(
+        SKBitmap skBitmap, SKEncodedImageFormat format, int quality, out byte[] bytes, out string? error, bool fastPng = false)
+    {
+        bytes = Array.Empty<byte>();
+        error = null;
+        try
+        {
+            SKBitmap encodeSource = skBitmap;
+            SKBitmap? flattened = null;
+            // JPEG has no alpha channel: composite a transparent pin over white so it doesn't export with a
+            // black background (a premultiplied transparent pixel is RGB 0,0,0). PNG/WebP keep alpha as-is.
+            if (format == SKEncodedImageFormat.Jpeg && skBitmap.AlphaType != SKAlphaType.Opaque)
+            {
+                flattened = new SKBitmap(skBitmap.Width, skBitmap.Height, SKColorType.Bgra8888, SKAlphaType.Opaque);
+                using (var canvas = new SKCanvas(flattened))
+                {
+                    canvas.Clear(SKColors.White);
+                    canvas.DrawBitmap(skBitmap, 0, 0);
+                }
+                encodeSource = flattened;
+            }
+
+            try
+            {
+                using var data = format == SKEncodedImageFormat.Png && fastPng
+                    ? EncodeFastPng(encodeSource)
+                    : EncodeWithQuality(encodeSource, format, quality);
+                if (data == null)
+                {
+                    error = "Encoded bitmap bytes are empty.";
+                    return false;
+                }
+
+                bytes = data.ToArray();
+            }
+            finally
+            {
+                flattened?.Dispose();
+            }
+
             if (bytes.Length == 0)
             {
                 error = "Encoded bitmap bytes are empty.";

@@ -186,8 +186,8 @@ public partial class FloatingImageWindow : FloatingWindowBase
         }
     }
 
-    // Asks where to save the pin's image, defaulting to the format picked in its toolbar, and writes it there. The
-    // save command has swapped in the image with its annotations drawn in by the time this reads it.
+    // Asks where to save the pin's image, defaulting to the format picked in its toolbar, and writes it there, with its
+    // annotations drawn in (FloatingImageViewModel.EncodeForSaveAsync).
     private async System.Threading.Tasks.Task SaveImageToPickedFileAsync(FloatingImageViewModel vm)
     {
         try
@@ -218,11 +218,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
                         "webp" => (SkiaSharp.SKEncodedImageFormat.Webp, 90),
                         _ => (SkiaSharp.SKEncodedImageFormat.Png, 100)
                     };
-                    // Encoded off the UI thread: a 4K PNG takes over 2 s at full compression.
-                    var image = vm.Image;
-                    var (encoded, bytes, encErr) = await System.Threading.Tasks.Task.Run(() =>
-                        (FloatingBitmapConversionHelper.TryEncodeBitmap(
-                            image, skFormat, quality, out var b, out var e), b, e));
+                    var (encoded, bytes, encErr) = await vm.EncodeForSaveAsync(skFormat, quality);
                     if (encoded)
                     {
                         using (var stream = new System.IO.FileStream(file.Path.LocalPath, System.IO.FileMode.Create))
