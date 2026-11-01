@@ -236,6 +236,11 @@
   frames a second instead of 60. That was 19-20 until the glow around pins and the capture frame, and the checkerboard
   behind a pin's image, were drawn in ways that cost the processor almost nothing; they look the same as before. The
   app picks how it draws as it starts, so changing the setting offers to restart it. Windows only.
+- **The start-up line in the log now says whether a slow start was working or waiting.** Started at sign-in from a
+  hard disk, the app took 67-77 s before its hotkeys worked, against a few seconds at most otherwise, and
+  `Startup.Timings` could not say why. Each stage now comes with the processor time it used, Avalonia's start-up is
+  split into its parts, and on Windows the line adds how busy the whole machine was, how many of the app's pages had to
+  be read from disk, whether the app's drive is a hard disk, and a priority Windows lowered.
 
 ### 💾 Storage
 

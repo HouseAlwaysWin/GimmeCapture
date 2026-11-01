@@ -16,16 +16,19 @@ public partial class App : Application
 
     public override void Initialize()
     {
+        StartupTrace.Mark("reactiveUI");
         // Before anything is laid out in a CJK font: LocalizationService names them from this collection.
         MappedFontCollection.Register();
+        StartupTrace.Mark("fonts");
         AvaloniaXamlLoader.Load(this);
+        StartupTrace.Mark("xaml");
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            StartupTrace.Mark("avalonia");
+            StartupTrace.Mark("afterSetup");
 
             // The one failure the log could never show: the UI thread blocked long enough that a hotkey press
             // only reaches the app seconds later, so "nothing happens" when the user asks for a capture. Started

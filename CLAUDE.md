@@ -229,7 +229,8 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
   freezes. `UiStall` warnings in the log (any freeze over ~0.35 s, with its length) are where these show up.
 - Every settings tab except General is built the first time it is shown (`EnsureLazyTabContent` in
   `MainWindow.Tabs.cs`), and set-up only one tab needs belongs there too (`EnsureCompressInitializedAsync`).
-  `Startup.Timings` in the log breaks a launch down by stage.
+  `Startup.Timings` in the log breaks a launch down by stage, each as `wall/cpu` ms; on Windows it adds what a slow
+  start waited on (`systemCpu`, `hardFaults`, `disk`).
 
 ### Accessibility
 - A screen reader names a button after its content, which for an icon is the icon's type name.

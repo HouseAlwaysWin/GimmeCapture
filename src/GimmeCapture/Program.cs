@@ -52,6 +52,7 @@ class Program
         StartupTrace.MainStarted();
         CommandLineArgs = args ?? [];
         AppLog.Initialize();
+        StartupTrace.Mark("log");
         try
         {
             // One running app per installed copy: a duplicate launch (double-clicked twice, autostart
@@ -81,6 +82,7 @@ class Program
             if (!string.IsNullOrEmpty(exeDir))
                 System.IO.Directory.SetCurrentDirectory(exeDir);
 
+            StartupTrace.Mark("guard");
             BuildAvaloniaApp()
                 .StartWithClassicDesktopLifetime(args ?? []);
         }
@@ -111,6 +113,8 @@ class Program
             .With<Win32PlatformOptions>(StartupRenderer.Win32Options)
             .WithInterFont()
             .LogToTrace()
+            // Ahead of UseReactiveUI's, so Startup.Timings has Avalonia's text, rendering and windowing set-up on its own.
+            .AfterPlatformServicesSetup(_ => StartupTrace.Mark("platform"))
             // A command that fails with nobody listening would otherwise hit ReactiveUI's default handler, which
             // rethrows on the UI thread and ends the process (see UnhandledCommandExceptionReporter). The scheduler
             // replaces the one UseReactiveUI has just set: work scheduled on the UI thread runs at once again, as it
