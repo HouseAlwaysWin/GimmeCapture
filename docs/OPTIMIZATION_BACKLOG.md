@@ -218,7 +218,20 @@ tool.
   file is picked: one Skia copy, the annotations drawn into it, encoded (`TryEncodeSkBitmap`, split out of
   `TryEncodeBitmap`) and disposed. `FloatingImageViewModelTests`: a cancelled save changes `Image` 0 times (it was 2), and
   the saved PNG has a filled annotation's red where the pin's own picture stays white. Not timed: a 4K PNG encode at
-  full compression (over 2 s) dwarfs the copies. Reading the picture at every redraw needs it
+  full compression (over 2 s) dwarfs the copies.
+- Done since batch 1, the user's pick: **a pin's copy encoded the PNG twice** (from Pins). The view model encoded the
+  file in the toolbar's format, then `ClipboardService.CopyFileAndImageAsync` encoded a PNG again for the picture beside
+  it (and decoded that through GDI+ for CF_BITMAP, which stays); an annotated pin made a flattened bitmap and a
+  selection a cropped one first, neither disposed. Now `EncodeForCopy` makes one Skia copy (of the selection alone when
+  nothing is drawn on it), draws the annotations in, cuts the selection out with `ExtractSubset` (no copy), encodes the
+  fast PNG once and the file again only for JPG or WebP, and `IClipboardService.CopyPngAsync` takes those bytes: on
+  Windows as before from them; elsewhere, and when the STA write fails with no file, Avalonia's clipboard gets a bitmap
+  decoded for it, since it hands pictures out when they are pasted. Neither path holds a bitmap of the caller's, and the
+  STA thread, which can outlive its timeout, holds only the bytes. A 3840x2160 picture of 8x8 colour blocks (a 1,070 KB
+  PNG), seven runs twice: 137-139 ms of encoding before, 68-69 after; the code's own note had 0.33 s for one fast PNG
+  of a real 4K screenshot. `SelectionPixelRect` now does the crop's maths for both the copy and `GetSelectedBitmapFromAsync`.
+  A rotation also disposes the flattened copy it draws from. `FloatingImageViewModelTests`: the file holds the
+  clipboard's PNG bytes; an annotated pin's selection comes out the selection's size with the annotation in it. Reading the picture at every redraw needs it
   alive, and the old copy had hidden that it often was not: the capture overlay disposes its drawing snapshot on
   leaving drawing mode (Esc, or the tool clicked off) and grabs another on coming back, while the redactions drawn
   keep pointing at the old one; a pin's oldest image leaves its undo history disposed. Now the overlay points its
@@ -440,6 +453,9 @@ These were covered by unit tests only; check them in the real app before a relea
   `TransparencyCheckerboard`). The glow around a pin, a video pin, the capture frame and the General tab's style
   preview should look as before, follow a pin's opacity slider, and go with "hide decoration" or "hide border"; a
   background-removed pin still shows the checkerboard behind its soft edges. Compared by a test, not by eye.
+- **Copying a pin**: Ctrl+C on a pin with annotations, with and without a selection, in PNG and in JPG. Paste into
+  an image editor and into a folder: both should have the annotations, cut to the selection, and a PNG with a removed
+  background should keep its transparency in an editor that takes the PNG format (Chrome, Discord).
 - **Saving an annotated pin**: draw a highlighter and pick smart selection's points on a pin, then Save and cancel the
   dialog. While the dialog is open the highlighter should not turn darker, and after it the points should still be
   there. Saved for real, the file should have the annotations.
@@ -552,10 +568,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   decoder per pin, do loops and seeks as requests to it, seek the audio on loop; 1-2 decode threads under D3D11VA.
 - **Each pin builds its own U2Net session** (S-M). `FloatingImageViewModel.AI.cs:684-687`: `new
   BackgroundRemovalService` per pin; sessions take 661-962 ms. One shared service owned by `AppBootstrapper`.
-- **Copy encodes the PNG twice** (S-M). `FloatingImageViewModel.Actions.cs:145-196`, `ClipboardService.cs:172-177`:
-  the temp file gets one encode, the clipboard path another plus a GDI+ decode (+0.33 s CPU per Ctrl+C at 4K); the
-  flattened and cropped bitmaps (and rotate's flatten, :95) are never disposed; each copy makes a `GimmeCapture_Copy_*`
-  folder swept only at start-up after 12 h.
+- **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
+  holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
+  last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done
+  (Status).
 - **A pin's undo history is capped at 30 steps, not bytes** (S, the user's call): up to ~1 GB at 4K while the pin is
   open (`AnnotationEditorState.cs:150`). A cap by bytes means fewer undo steps on large pictures. What a closed pin
   kept is done (Status).

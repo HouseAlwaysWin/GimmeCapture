@@ -199,6 +199,64 @@ public class ClipboardService : IClipboardService
         }
     }
 
+    public async Task<bool> CopyPngAsync(byte[] png, string? filePath = null)
+    {
+        try
+        {
+            string? fullPath = !string.IsNullOrEmpty(filePath) && File.Exists(filePath) ? Path.GetFullPath(filePath) : null;
+#if WINDOWS
+            if (OperatingSystem.IsWindows())
+            {
+                // As CopyFileAndImageAsync and CopyImageAsync write it, on a bounded STA thread, from the PNG given.
+                bool copied = await StaClipboard.RunAsync(() =>
+                {
+                    var data = new System.Windows.Forms.DataObject();
+                    if (fullPath != null)
+                    {
+                        var fileList = new System.Collections.Specialized.StringCollection();
+                        fileList.Add(fullPath);
+                        data.SetFileDropList(fileList);
+                    }
+
+                    try
+                    {
+                        using var msForBitmap = new MemoryStream(png);
+                        using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
+                        data.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
+                        data.SetData("PNG", false, new MemoryStream(png));
+                    }
+                    catch (Exception imgEx) when (fullPath != null)
+                    {
+                        // With a file, the file is what must land (see CopyFileAndImageAsync).
+                        AppLog.Warning("Clipboard.CopyPng.Picture", imgEx);
+                    }
+
+                    StaClipboard.SetDataObjectFlushed(data);
+                }, StaClipboard.WriteTimeout, "Clipboard.CopyPng", "ClipboardSetPng").ConfigureAwait(false);
+
+                // With a file nothing else is tried, as CopyFileAndImageAsync does; without one, Avalonia's clipboard next.
+                if (copied || fullPath != null)
+                {
+                    return copied;
+                }
+            }
+#endif
+            // That clipboard hands the picture out when it is pasted, so it gets one of its own.
+            if (GetTopLevel()?.Clipboard is { } clipboard)
+            {
+                await Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, new Bitmap(new MemoryStream(png)));
+                return true;
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Clipboard.CopyPng", ex);
+            return false;
+        }
+    }
+
     private TopLevel? GetTopLevel()
     {
         if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)

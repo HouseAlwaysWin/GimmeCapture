@@ -135,6 +135,25 @@ internal static class FloatingBitmapConversionHelper
     }
 
     /// <summary>
+    /// A premultiplied BGRA copy of <paramref name="region"/> of <paramref name="bitmap"/> alone, which becomes the
+    /// caller's; null where it cannot be read.
+    /// </summary>
+    public static SKBitmap? CopyRegionToSkBitmap(Bitmap bitmap, PixelRect region)
+    {
+        var result = new SKBitmap(region.Width, region.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        try
+        {
+            bitmap.CopyPixels(region, result.GetPixels(), result.ByteCount, result.RowBytes);
+            return result;
+        }
+        catch (Exception)
+        {
+            result.Dispose();
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Returns a new bitmap rotated by <paramref name="rotationDegrees"/> (0/90/180/270, clockwise) and/or
     /// mirrored. Dimensions swap for 90°/270°. Returns null on conversion failure.
     /// </summary>

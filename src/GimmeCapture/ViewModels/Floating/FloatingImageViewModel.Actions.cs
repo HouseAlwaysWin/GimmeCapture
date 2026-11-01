@@ -76,6 +76,12 @@ public partial class FloatingImageViewModel
 
         // Off the UI thread: three full copies plus the rotated draw, ~0.13 s for a 4K pin.
         Bitmap? transformed = await Task.Run(() => FloatingBitmapConversionHelper.TransformBitmap(source, rotationDegrees, flipH, flipV));
+        if (!ReferenceEquals(source, oldImage))
+        {
+            // The annotations flattened into a copy, which is drawn into the result now: it was left to the collector.
+            source.Dispose();
+        }
+
         if (transformed == null) return;
         if (!ReferenceEquals(Image, oldImage))
         {
@@ -117,40 +123,28 @@ public partial class FloatingImageViewModel
         PushUndoAction(new CompositeHistoryAction(new IHistoryAction[] { bitmapAction, transformAction }));
     }
 
-    private async Task CopyAsync()
-    {
-        if (Image == null) return;
-
-        // Use flattened bitmap if annotations exist, otherwise base image
-        var bitmapToCopy = Annotations.AsValueEnumerable().Any() ? await GetFlattenedBitmapAsync() : Image;
-        if (bitmapToCopy == null) bitmapToCopy = Image;
-
-        if (IsSelectionActive)
-        {
-             // Strategy:
-             // 1. Get flattened bitmap (entire image + annotations)
-             // 2. Crop it using the same logic as GetSelectedBitmapAsync but operating on the new bitmap.
-
-             var selected = await GetSelectedBitmapFromAsync(bitmapToCopy);
-             if (selected != null)
-             {
-                 await CopyBitmapInSelectedFormatAsync(selected);
-             }
-        }
-        else
-        {
-            await CopyBitmapInSelectedFormatAsync(bitmapToCopy);
-        }
-    }
-
-    // Puts the image on the clipboard as a file in the toolbar's SelectedImageFormat (so pasting into a folder
-    // yields the chosen format, like the pin's Save) alongside the raw bitmap (so pasting into an editor still
-    // works). Falls back to a plain image copy if encoding the file fails.
+    // Puts the picture, with its annotations drawn in and cut to the selection when there is one, on the clipboard as a
+    // file in the toolbar's SelectedImageFormat (so pasting into a folder yields the chosen format, like the pin's Save)
+    // alongside the picture itself (so pasting into an editor still works); the picture alone if the file cannot be made.
     //
     // A clipboard write can lose the race for the clipboard, and that leaves the PREVIOUS content in place — so
     // the outcome is logged rather than assumed; a pin has no status line to report it on.
-    private async Task CopyBitmapInSelectedFormatAsync(Bitmap bitmap)
+    private async Task CopyAsync()
     {
+        // Read on the UI thread, where they change; the pool thread only sees this snapshot.
+        var image = Image;
+        if (image == null) return;
+
+        Avalonia.PixelRect? selection = null;
+        if (IsSelectionActive)
+        {
+            selection = SelectionPixelRect(image);
+            if (selection == null) return;
+        }
+
+        var annotations = Annotations.ToArray();
+        double displayWidth = DisplayWidth;
+        double displayHeight = DisplayHeight;
         string fmt = (SelectedImageFormat ?? "PNG").ToLowerInvariant();
         var (skFormat, quality) = fmt switch
         {
@@ -159,10 +153,17 @@ public partial class FloatingImageViewModel
             _ => (SKEncodedImageFormat.Png, 100)
         };
 
-        // Off the UI thread: a 4K PNG took over 2 s. The file only sits on the clipboard, so PNG uses the fast settings.
-        var (encoded, bytes) = await Task.Run(() =>
-            (FloatingBitmapConversionHelper.TryEncodeBitmap(bitmap, skFormat, quality, out var b, out _, fastPng: true), b));
-        if (encoded)
+        // Off the UI thread: a 4K PNG took over 2 s, about 0.33 s with the fast settings the clipboard's gets.
+        var (png, file) = await Task.Run(() =>
+            EncodeForCopy(image, annotations, displayWidth, displayHeight, selection, skFormat, quality));
+        if (png == null)
+        {
+            WarnCopyDidNotLand("FloatingImage.Copy");
+            return;
+        }
+
+        string? temp = null;
+        if (file != null)
         {
             try
             {
@@ -170,25 +171,74 @@ public partial class FloatingImageViewModel
                     System.IO.Path.GetTempPath(), "GimmeCapture_Copy_" + Guid.NewGuid().ToString("N"));
                 System.IO.Directory.CreateDirectory(tempDir);
                 string ext = fmt == "jpeg" ? "jpg" : fmt;
-                string temp = System.IO.Path.Combine(
+                temp = System.IO.Path.Combine(
                     tempDir, GimmeCapture.Services.Core.Infrastructure.CaptureFileNameService.SuggestedBaseName() + "." + ext);
-                await System.IO.File.WriteAllBytesAsync(temp, bytes);
-                if (!await _clipboardService.CopyFileAndImageAsync(temp, bitmap))
-                {
-                    WarnCopyDidNotLand("FloatingImage.CopyFormat");
-                }
-
-                return;
+                await System.IO.File.WriteAllBytesAsync(temp, file);
             }
             catch (Exception ex)
             {
                 GimmeCapture.Services.Core.Infrastructure.AppLog.Error("FloatingImage.CopyFormat", ex);
+                temp = null;
             }
         }
 
-        if (!await _clipboardService.CopyImageAsync(bitmap))
+        if (!await _clipboardService.CopyPngAsync(png, temp))
         {
-            WarnCopyDidNotLand("FloatingImage.Copy");
+            WarnCopyDidNotLand(temp != null ? "FloatingImage.CopyFormat" : "FloatingImage.Copy");
+        }
+    }
+
+    /// <summary>
+    /// What a copy puts on the clipboard: the PNG, and the file in <paramref name="format"/>, the same bytes for a PNG and
+    /// null where that encode fails; nulls where the picture cannot be read. One copy of the picture, of the selection
+    /// alone when nothing is drawn on it, with the annotations drawn in and the selection cut out of it in place. A copy
+    /// used to make a whole new picture for the annotations and another for the selection, which it never disposed, and
+    /// encoded the PNG twice: once for the file, and again in the clipboard service.
+    /// </summary>
+    private static (byte[]? Png, byte[]? File) EncodeForCopy(
+        Bitmap image, Annotation[] annotations, double displayWidth, double displayHeight, Avalonia.PixelRect? selection,
+        SKEncodedImageFormat format, int quality)
+    {
+        bool drawnOn = annotations.Length > 0;
+        SKBitmap? pixels = !drawnOn && selection is { } region
+            ? FloatingBitmapConversionHelper.CopyRegionToSkBitmap(image, region)
+            : FloatingBitmapConversionHelper.ToSkBitmap(image);
+        if (pixels == null)
+        {
+            return (null, null);
+        }
+
+        using (pixels)
+        {
+            SKBitmap source = pixels;
+            using var cut = new SKBitmap();
+            if (drawnOn)
+            {
+                AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
+                    pixels, annotations, displayWidth, displayHeight, pixels.Width, pixels.Height);
+                if (selection is { } part)
+                {
+                    // Shares the pixels it is cut from: no copy.
+                    if (!pixels.ExtractSubset(cut, new SKRectI(part.X, part.Y, part.Right, part.Bottom)))
+                    {
+                        return (null, null);
+                    }
+
+                    source = cut;
+                }
+            }
+
+            if (!FloatingBitmapConversionHelper.TryEncodeSkBitmap(source, SKEncodedImageFormat.Png, 100, out var png, out _, fastPng: true))
+            {
+                return (null, null);
+            }
+
+            if (format == SKEncodedImageFormat.Png)
+            {
+                return (png, png);
+            }
+
+            return (png, FloatingBitmapConversionHelper.TryEncodeSkBitmap(source, format, quality, out var file, out _) ? file : null);
         }
     }
 
@@ -307,69 +357,52 @@ public partial class FloatingImageViewModel
     {
         return await GetSelectedBitmapFromAsync(Image);
     }
-    
-    private async Task<Bitmap?> GetSelectedBitmapFromAsync(Bitmap? source)
-    {
-        if (source == null) return null;
 
-        // Calculate actual pixel rect from SelectionRect (which is in Display coordinates)
-        // Image is displayed at DisplayWidth x DisplayHeight
-        // Actual Image is Image.Size.Width x Image.Size.Height
-        
-        // If Image is null or W/H is 0, return null
+    /// <summary>
+    /// The selection (<see cref="SelectionRect"/>, in the pin's display coordinates) in the pixels of
+    /// <paramref name="source"/>, clipped to it; null when it misses the picture.
+    /// </summary>
+    private Avalonia.PixelRect? SelectionPixelRect(Bitmap source)
+    {
+        // The picture is drawn at DisplayWidth x DisplayHeight.
         if (source.Size.Width <= 0 || source.Size.Height <= 0) return null;
 
         double scaleX = source.Size.Width / (DisplayWidth > 0 ? DisplayWidth : 1);
         double scaleY = source.Size.Height / (DisplayHeight > 0 ? DisplayHeight : 1);
-        
-        // Use the larger scale or specific axis scale? 
-        // usually uniform stretch.
-        
-        // SelectionRect is relative to local control 0,0.
-        
         var pixelRect = new Avalonia.Rect(
             SelectionRect.X * scaleX,
             SelectionRect.Y * scaleY,
             SelectionRect.Width * scaleX,
-            SelectionRect.Height * scaleY
-        );
-
-        // Intersect with image bounds
-        var imageRect = new Avalonia.Rect(0, 0, source.Size.Width, source.Size.Height);
-        var intersect = pixelRect.Intersect(imageRect);
-
+            SelectionRect.Height * scaleY);
+        var intersect = pixelRect.Intersect(new Avalonia.Rect(0, 0, source.Size.Width, source.Size.Height));
         if (intersect.Width <= 0 || intersect.Height <= 0) return null;
-        
+
+        int sourceWidth = (int)source.Size.Width;
+        int sourceHeight = (int)source.Size.Height;
+        int left = Math.Clamp((int)Math.Floor(intersect.X), 0, Math.Max(0, sourceWidth - 1));
+        int top = Math.Clamp((int)Math.Floor(intersect.Y), 0, Math.Max(0, sourceHeight - 1));
+        int right = Math.Clamp((int)Math.Ceiling(intersect.X + intersect.Width), left + 1, sourceWidth);
+        int bottom = Math.Clamp((int)Math.Ceiling(intersect.Y + intersect.Height), top + 1, sourceHeight);
+        return right - left <= 0 || bottom - top <= 0 ? null : new Avalonia.PixelRect(left, top, right - left, bottom - top);
+    }
+    
+    private async Task<Bitmap?> GetSelectedBitmapFromAsync(Bitmap? source)
+    {
+        if (source == null || SelectionPixelRect(source) is not { } crop) return null;
+
         try
         {
             return await Task.Run(() =>
             {
-                int sourceWidth = (int)source.Size.Width;
-                int sourceHeight = (int)source.Size.Height;
-
-                int left = Math.Clamp((int)Math.Floor(intersect.X), 0, Math.Max(0, sourceWidth - 1));
-                int top = Math.Clamp((int)Math.Floor(intersect.Y), 0, Math.Max(0, sourceHeight - 1));
-                int right = Math.Clamp((int)Math.Ceiling(intersect.X + intersect.Width), left + 1, sourceWidth);
-                int bottom = Math.Clamp((int)Math.Ceiling(intersect.Y + intersect.Height), top + 1, sourceHeight);
-
-                int cropWidth = right - left;
-                int cropHeight = bottom - top;
-                if (cropWidth <= 0 || cropHeight <= 0) return null;
-
                 var outBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
-                    new Avalonia.PixelSize(cropWidth, cropHeight),
+                    new Avalonia.PixelSize(crop.Width, crop.Height),
                     new Avalonia.Vector(96, 96),
                     Avalonia.Platform.PixelFormat.Bgra8888,
                     Avalonia.Platform.AlphaFormat.Premul);
 
                 using var lockedOut = outBitmap.Lock();
-                source.CopyPixels(
-                    new Avalonia.PixelRect(left, top, cropWidth, cropHeight),
-                    lockedOut.Address,
-                    lockedOut.RowBytes * lockedOut.Size.Height,
-                    lockedOut.RowBytes);
-
-                return outBitmap;
+                source.CopyPixels(crop, lockedOut.Address, lockedOut.RowBytes * lockedOut.Size.Height, lockedOut.RowBytes);
+                return (Bitmap?)outBitmap;
             });
         }
         catch (Exception ex)

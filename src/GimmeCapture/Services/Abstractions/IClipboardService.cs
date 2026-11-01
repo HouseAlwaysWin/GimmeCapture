@@ -17,4 +17,11 @@ public interface IClipboardService
     Task<bool> CopyTextAsync(string text);
     Task<bool> CopyFileAsync(string filePath);
     Task<bool> CopyFileAndImageAsync(string filePath, Bitmap bitmap);
+
+    /// <summary>
+    /// A picture already encoded as <paramref name="png"/>, with the file at <paramref name="filePath"/> beside it when
+    /// there is one, for pasting into a folder. The other two encode the PNG themselves, again for a caller that has
+    /// just encoded one. Nothing here holds on to a bitmap of the caller's, which it may then dispose.
+    /// </summary>
+    Task<bool> CopyPngAsync(byte[] png, string? filePath = null);
 }

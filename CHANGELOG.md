@@ -151,6 +151,11 @@
   about 32 MB each at 4K. A preview now reads only the part of the picture under it: with six on a 4K picture, the app
   holds about 190 MB less. Resizing a pin also no longer redraws every mosaic and blur on it at each step of the drag,
   as their look does not change with it.
+- **Copying a pin encodes its picture once.** Each Ctrl+C on a pin encoded the picture for the file it puts on the
+  clipboard, then again for the picture beside it: on a 4K picture, about 140 ms of work where 70 now do, and more for
+  a photo. An annotated pin, or a selection, also made a whole new picture for each copy, and a rotation one for its
+  annotations, which none of them let go of. The annotations are now drawn into the one copy that is encoded, and the
+  selection cut out of it in place.
 - **Saving a pin with annotations leaves the pin alone while its dialog is open.** The save drew the annotations into a
   copy of the picture and put that copy in the pin for as long as the dialog was open, cancelled or not: the pin drew
   its annotations twice meanwhile, so a highlighter looked darker, a smart selection lost its points, and the copy (33

@@ -32,6 +32,17 @@ public class FloatingImageViewModelTests
         public Task<bool> CopyTextAsync(string text) => Task.FromResult(true);
         public Task<bool> CopyFileAsync(string filePath) => Task.FromResult(true);
         public Task<bool> CopyFileAndImageAsync(string filePath, Avalonia.Media.Imaging.Bitmap bitmap) => Task.FromResult(true);
+
+        public byte[]? CopiedPng { get; private set; }
+        public string? CopiedFile { get; private set; }
+
+        public Task<bool> CopyPngAsync(byte[] png, string? filePath = null)
+        {
+            CopyCalled = true;
+            CopiedPng = png;
+            CopiedFile = filePath;
+            return Task.FromResult(true);
+        }
     }
 
     [Fact]
@@ -156,7 +167,54 @@ public class FloatingImageViewModelTests
         Assert.Equal(0xFFFFFFFFu, AvaloniaRenderer.ReadPixels(vm.Image!)[(15 * 40) + 15]);
     }
 
-    private static FloatingImageViewModel CreatePin(Bitmap picture)
+    [Fact]
+    public async Task Copying_EncodesThePngOnce_AndWritesTheSameBytesAsItsFile()
+    {
+        // The clipboard service encoded the PNG a second time for the picture it puts beside the file.
+        var clipboard = new MockClipboardService();
+        var vm = CreatePin(AvaloniaRenderer.Create(40, 30, static (x, y) => 0xFF000000u | (uint)(x * 6) << 8 | (uint)(y * 8)), clipboard);
+
+        await vm.CopyCommand.Execute();
+
+        Assert.NotNull(clipboard.CopiedPng);
+        Assert.NotNull(clipboard.CopiedFile);
+        Assert.Equal(clipboard.CopiedPng, File.ReadAllBytes(clipboard.CopiedFile!));
+        using var copied = SkiaSharp.SKBitmap.Decode(clipboard.CopiedPng);
+        Assert.Equal(40, copied.Width);
+        Assert.Equal(new SkiaSharp.SKColor(0, (byte)(13 * 6), (byte)(7 * 8), 255), copied.GetPixel(13, 7));
+        Directory.Delete(Path.GetDirectoryName(clipboard.CopiedFile)!, recursive: true);
+    }
+
+    [Fact]
+    public async Task CopyingASelection_OfAnAnnotatedPin_HasTheAnnotationDrawnIn_AndTheSelectionOnly()
+    {
+        var clipboard = new MockClipboardService();
+        var vm = CreatePin(AvaloniaRenderer.Create(40, 30, static (_, _) => 0xFFFFFFFFu), clipboard);
+        vm.Annotations.Add(new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Point(10, 10),
+            EndPoint = new Point(20, 20),
+            IsFilled = true,
+            Color = Avalonia.Media.Colors.Red
+        });
+        vm.SelectionRect = new Rect(5, 5, 20, 10);
+        Assert.True(vm.IsSelectionActive);
+
+        await vm.CopyCommand.Execute();
+
+        using var copied = SkiaSharp.SKBitmap.Decode(clipboard.CopiedPng);
+        Assert.Equal(20, copied.Width);
+        Assert.Equal(10, copied.Height);
+        Assert.Equal(SkiaSharp.SKColors.White, copied.GetPixel(1, 1)); // the picture at (6, 6)
+        Assert.Equal(new SkiaSharp.SKColor(255, 0, 0, 255), copied.GetPixel(10, 8)); // the annotation at (15, 13)
+        // The pin's own picture and annotations stay as they were.
+        Assert.Equal(0xFFFFFFFFu, AvaloniaRenderer.ReadPixels(vm.Image!)[(15 * 40) + 15]);
+        Assert.Single(vm.Annotations);
+        Directory.Delete(Path.GetDirectoryName(clipboard.CopiedFile)!, recursive: true);
+    }
+
+    private static FloatingImageViewModel CreatePin(Bitmap picture, IClipboardService? clipboard = null)
     {
         var mockSettings = new Mock<IAppSettingsService>();
         mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
@@ -164,7 +222,7 @@ public class FloatingImageViewModelTests
         var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, new Mock<AIModelDownloader>().Object);
         return new FloatingImageViewModel(
             picture, picture.PixelSize.Width, picture.PixelSize.Height, Avalonia.Media.Colors.Red, 2.0, false, false,
-            new MockClipboardService(), mockAi.Object, new SAM2RuntimeService(mockAiPath.Object), mockSettings.Object,
+            clipboard ?? new MockClipboardService(), mockAi.Object, new SAM2RuntimeService(mockAiPath.Object), mockSettings.Object,
             mockAiPath.Object, new ResourceQueueService());
     }
 
