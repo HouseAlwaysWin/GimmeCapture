@@ -151,6 +151,13 @@
   about 32 MB each at 4K. A preview now reads only the part of the picture under it: with six on a 4K picture, the app
   holds about 190 MB less. Resizing a pin also no longer redraws every mosaic and blur on it at each step of the drag,
   as their look does not change with it.
+- **A 4K pin no longer leaves 32 MB behind after a change, and checks its see-through parts in a third of the time.**
+  Rotating, saving, copying or removing the background of a pin each copied the whole picture first, into memory the
+  app then kept, and so did the check a pin runs whenever its picture changes, which works out its see-through parts
+  so that clicks pass through them: 32 MB for each size of picture, from the first such change on. A 4K pin turned
+  three times now holds 33 MB less while open, and leaves 6 MB instead of 39 once closed. The check reads the picture
+  a strip at a time and eight pixels at once: about 3 ms instead of 8 for a 4K picture, and 9 ms instead of 25 the
+  first time after launch.
 - **A pin closed with Alt+F4 gives back its memory.** Only a pin's close button, Ctrl+W and its menu's Close let go of
   what it held. Closed with Alt+F4, a pin kept every picture in its undo history until the app closed, about 125 MB
   for a 4K pin turned three times, and with smart selection picked it kept that model loaded as well. However a pin

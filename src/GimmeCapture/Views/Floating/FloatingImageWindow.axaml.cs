@@ -19,8 +19,6 @@ using Avalonia.Interactivity;
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Linq;
-using System.Buffers;
-using System.Runtime.InteropServices;
 using System.Collections.ObjectModel;
 using Avalonia.Controls.Shapes;
 
@@ -436,7 +434,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
         {
             _cachedOpaqueBitmap = bitmap;
             _cachedOpaqueBitmapSize = bitmap.PixelSize;
-            _cachedOpaquePixelRects = ScanOpaquePixelRects(bitmap);
+            _cachedOpaquePixelRects = OpaqueRegionScanner.Scan(bitmap);
             _cachedOpaqueRegion = ScalableRegion.FromRects(_cachedOpaquePixelRects);
         }
 
@@ -605,37 +603,6 @@ public partial class FloatingImageWindow : FloatingWindowBase
             {
                 _interactiveHitTestRegions.Add(rect);
             }
-        }
-    }
-
-    private static List<PixelRect> ScanOpaquePixelRects(Bitmap bitmap)
-    {
-        int width = bitmap.PixelSize.Width;
-        int height = bitmap.PixelSize.Height;
-        if (width <= 0 || height <= 0)
-        {
-            return [];
-        }
-
-        const int bytesPerPixel = 4;
-        int stride = width * bytesPerPixel;
-        byte[] rented = ArrayPool<byte>.Shared.Rent(stride * height);
-        GCHandle handle = default;
-
-        try
-        {
-            handle = GCHandle.Alloc(rented, GCHandleType.Pinned);
-            bitmap.CopyPixels(new PixelRect(0, 0, width, height), handle.AddrOfPinnedObject(), stride * height, stride);
-            return OpaqueRegionScanner.Scan(rented.AsSpan(0, stride * height), width, height, stride);
-        }
-        finally
-        {
-            if (handle.IsAllocated)
-            {
-                handle.Free();
-            }
-
-            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 

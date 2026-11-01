@@ -184,9 +184,30 @@ tool.
   collected both ways. After: both +38-39 MB, no lease, none in the table. `FloatingImageWindow.OnClosed` disposes the
   view model (a no-op after the command), whose `Dispose` asks for an idle trim (`pin-closed`): the picture on screen
   is left to the collector, since a save or copy may still be encoding it, and in an idle app only the trim collects.
-  33 MB of what stays either way is the opaque-pixel scan's array in the shared pool (see Pins). Not done:
+  33 MB of what stayed either way was a whole-picture array in the shared pool (next entry: now 6-7 MB). Not done:
   `NotifyActivity` from pins, which calls a waiting trim off without asking for another, so it would keep a closed
-  pin's picture longer; and a cap on the undo history by bytes (Pins, the user's call). Reading the picture at every redraw needs it
+  pin's picture longer; and a cap on the undo history by bytes (Pins, the user's call).
+- Done since batch 1, the user's pick: **the pin's opaque-pixel scan** (from Pins). At each new picture the window
+  copied the whole bitmap into an array from the shared pool, which then kept it (33 MB on the .NET heap at 4K), and
+  read its alpha a byte at a time on the UI thread. `OpaqueRegionScanner.Scan(Bitmap)` now reads it a megabyte of rows
+  at a time (`Bitmap.CopyPixels` with a source rect) into native memory freed at the end, and finds each row's runs
+  eight pixels at a time (`Find`: a pixel read as a word is see-through when it is at most `0x08FFFFFF`). `Find` is its
+  own `Vector256` loop compiled optimized from the first call: through the span's `IndexOfAnyInRange`, .NET ran its
+  generic search unoptimized until recompiling it, and an opaque 4K scan stayed at 9.5-10.4 ms for the first 24-30
+  scans of a process. `OpaqueRegionScanProbeTests` (OPAQUE_SCAN_PROBE=1, 3840x2160, the two scans in turn after five
+  warm-ups each, three processes): opaque 2.6-2.7 ms against 7.5-7.7, cut out (an ellipse with a ragged edge, 14,814
+  rects) 4.3-4.7 against 8.0-8.8, the first scan of a process 8.4-8.8 against 25.3-25.7, nothing left behind against
+  32 MB, and the same rects. `OpaqueRegionScannerTests` checks a bitmap read in three bands against its pixels. It
+  stays on the UI thread at these times. `PinCloseMemoryTests` still left 33 MB on the .NET heap after closing: the
+  pool's array came from `FloatingBitmapConversionHelper.TryCopyToSkBitmap` too, which every rotation, save, copy,
+  flatten and background removal goes through, and the video pin and editor's frames. It now copies straight into the
+  `SKBitmap` it returns, and converts for background removal from native memory it frees: a 3840x2160 pin rotated three
+  times held +155 MB open instead of +188, and left +6-7 MB closed (+1 on the .NET heap) instead of +38-40. Checked
+  while here: reading a WriteableBitmap through `CopyPixels` marks it
+  changed (`Lock` bumps its version), so since the mosaic change a preview redraw makes the card take the pin's picture
+  again; `RedactionDragProbeTests` (REDACTION_DRAG_PROBE=displayed|copy, a real window on the graphics card, a mosaic
+  dragged over a 4K pin) found nothing measurable on the RTX 4070 SUPER: 34 frames/s against 30 when it reads a copy,
+  the process at 110-121% of a core against 114-116%. The drag's 30-34 frames/s is the same either way. Reading the picture at every redraw needs it
   alive, and the old copy had hidden that it often was not: the capture overlay disposes its drawing snapshot on
   leaving drawing mode (Esc, or the tool clicked off) and grabs another on coming back, while the redactions drawn
   keep pointing at the old one; a pin's oldest image leaves its undo history disposed. Now the overlay points its
@@ -408,6 +429,8 @@ These were covered by unit tests only; check them in the real app before a relea
   `TransparencyCheckerboard`). The glow around a pin, a video pin, the capture frame and the General tab's style
   preview should look as before, follow a pin's opacity slider, and go with "hide decoration" or "hide border"; a
   background-removed pin still shows the checkerboard behind its soft edges. Compared by a test, not by eye.
+- **A pin's click-through after a change**: remove a pin's background, then rotate and crop it, undo and redo. Clicks
+  should still go through its see-through parts and land on its picture, as before.
 - **A pin closed with Alt+F4**: rotate a pin or pick smart selection on it, then close it with Alt+F4. The commit size
   should drop as it does for the close button, and about five idle minutes later the log should show a
   `MemoryTrim.Before.idle:` line naming `pin-closed`.
@@ -509,10 +532,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Pins
 
-- **Opaque-pixel scan on the UI thread at every Image change** (S). `FloatingImageWindow.axaml.cs:315-322,481-510`
-  copies into a 32 MiB rented array and scans every pixel, per crop, rotate, AI result, undo and redo (est. 20-30 ms at
-  4K). Scan on the pool, cache per bitmap, skip for captures known to be opaque. The shared pool keeps that array after
-  the pin closes: 33 MB on the .NET heap after a 4K pin (`PinCloseMemoryTests`).
 - **A video pin reopens file, GPU device, decoder and audio at every loop and seek** (M-L).
   `FloatingVideoViewModel.Media.cs:279-313,371-373` (`loopPlayback = false`, a new `PlayFramesAsync` per pass),
   `LibavVideoFramePlayer.cs:670-718`; `UpdateAudioStateFromPlayback` reopens Media Foundation and WASAPI too. Keep one

@@ -7,6 +7,8 @@ using Xunit;
 
 namespace GimmeCapture.Tests;
 
+// In the renderer's collection for the test that scans an Avalonia bitmap.
+[Collection(AvaloniaRendererCollection.Name)]
 public class OpaqueRegionScannerTests
 {
     [Fact]
@@ -60,6 +62,33 @@ public class OpaqueRegionScannerTests
         // Row 0 is one run (column 1); row 1 is a different run (both columns), so they do not merge. Were the
         // padding read as pixels, both runs would reach into it.
         Assert.Equal(new[] { new PixelRect(1, 0, 1, 1), new PixelRect(0, 1, 2, 1) }.OrderBy(Key), rects.OrderBy(Key));
+    }
+
+    [Fact]
+    public void ABitmap_ReadABandOfRowsAtATime_GivesWhatItsPixelsGive()
+    {
+        // The pin copied its whole picture first, into an array the shared pool then kept: 33 MB at 4K. 1000x700 is
+        // read in three bands, with opaque blocks running from one band into the next.
+        const int width = 1000, height = 700;
+        var random = new Random(7);
+        var alpha = new byte[width * height];
+        Array.Fill(alpha, (byte)255);
+        for (int i = 0; i < 40; i++)
+        {
+            int x0 = random.Next(width), y0 = random.Next(height);
+            int x1 = Math.Min(width - 1, x0 + random.Next(300)), y1 = Math.Min(height - 1, y0 + random.Next(400));
+            byte value = random.Next(2) == 0 ? (byte)0 : (byte)200;
+            for (int y = y0; y <= y1; y++)
+            {
+                Array.Fill(alpha, value, (y * width) + x0, x1 - x0 + 1);
+            }
+        }
+
+        AvaloniaRenderer.EnsureRegistered();
+        using var bitmap = AvaloniaRenderer.Create(width, height, (x, y) => ((uint)alpha[(y * width) + x] << 24) | 0x00406080u);
+        var pixels = Image(width, height, (x, y) => alpha[(y * width) + x]);
+
+        Assert.Equal(OpaqueRegionScanner.Scan(pixels, width, height, width * 4), OpaqueRegionScanner.Scan(bitmap));
     }
 
     [Fact]

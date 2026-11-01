@@ -3,7 +3,7 @@ using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using SkiaSharp;
-using System.Buffers;
+using System.Runtime.InteropServices;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -177,21 +177,35 @@ internal static class FloatingBitmapConversionHelper
 
         var result = new SKBitmap(width, height, SKColorType.Bgra8888, alphaType);
         int rowBytes = width * 4;
-        byte[] rented = ArrayPool<byte>.Shared.Rent(rowBytes * height);
+        var all = new PixelRect(0, 0, width, height);
 
         try
         {
-            unsafe
+            if (alphaType == SKAlphaType.Premul)
             {
-                // Pinned until the pixels are out again, not just while Avalonia writes them: the GC may move a small
-                // array in between.
-                fixed (byte* buffer = rented)
+                // As they are, straight into the result's pixels. The copy went through an array from the shared pool,
+                // which kept it: 32 MiB from a 4K pin's first rotation, save, copy or background removal on.
+                bitmap.CopyPixels(all, result.GetPixels(), result.ByteCount, result.RowBytes);
+            }
+            else
+            {
+                unsafe
                 {
-                    bitmap.CopyPixels(new PixelRect(0, 0, width, height), (IntPtr)buffer, rowBytes * height, rowBytes);
-                    if (!TryCopyFromPremulBgra((IntPtr)buffer, rowBytes, result, out error))
+                    // Converted from a copy of their own, which goes again at once.
+                    nuint byteCount = (nuint)rowBytes * (nuint)height;
+                    void* buffer = NativeMemory.Alloc(byteCount);
+                    try
                     {
-                        result.Dispose();
-                        return false;
+                        bitmap.CopyPixels(all, (IntPtr)buffer, checked((int)byteCount), rowBytes);
+                        if (!TryCopyFromPremulBgra((IntPtr)buffer, rowBytes, result, out error))
+                        {
+                            result.Dispose();
+                            return false;
+                        }
+                    }
+                    finally
+                    {
+                        NativeMemory.Free(buffer);
                     }
                 }
             }
@@ -204,10 +218,6 @@ internal static class FloatingBitmapConversionHelper
             result.Dispose();
             error = $"Bitmap to SKBitmap copy failed: {ex.Message}";
             return false;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 

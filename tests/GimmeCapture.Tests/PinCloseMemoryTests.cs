@@ -87,9 +87,9 @@ public sealed class PinCloseMemoryTests : IDisposable
             Assert.False(leased);
             Assert.Equal(0, heldForUndo);
             Assert.False(pin.IsAlive);
-            // About 39 MB stays either way, 33 of it on the .NET heap: the 32 MiB array the window's opaque-pixel scan
-            // rents from the shared pool, which keeps it. The pictures kept for undo were 125 MB more.
-            Assert.InRange(closed - before, long.MinValue, 80);
+            // 6-7 MB stays either way. It was 38-40, 33 of it on the .NET heap: the 32 MiB array a rotation copied the
+            // picture through, rented from the shared pool, which kept it. The pictures kept for undo were 125 MB more.
+            Assert.InRange(closed - before, long.MinValue, 25);
         }
         finally
         {
