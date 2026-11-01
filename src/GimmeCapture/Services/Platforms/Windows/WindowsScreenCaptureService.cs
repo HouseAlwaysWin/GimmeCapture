@@ -79,86 +79,186 @@ public class WindowsScreenCaptureService : IScreenCaptureService
 
                 if (width <= 0 || height <= 0) return new SKBitmap(1, 1);
 
-                using var bitmap = new System.Drawing.Bitmap(width, height);
-                using (var g = Graphics.FromImage(bitmap))
-                {
-                    g.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(width, height));
-                    
-                    if (includeCursor)
-                    {
-                        try 
-                        {
-                            CURSORINFO pci;
-                            pci.cbSize = Marshal.SizeOf(typeof(CURSORINFO));
-                            if (GetCursorInfo(out pci) && pci.flags == 0x00000001) // CURSOR_SHOWING
-                            {
-                                var hIcon = CopyIcon(pci.hCursor);
-                                if (hIcon != IntPtr.Zero)
-                                {
-                                    try
-                                    {
-                                        ICONINFO ii;
-                                        if (GetIconInfo(hIcon, out ii))
-                                        {
-                                            int cursorX = pci.ptScreenPos.X - x - ii.xHotspot;
-                                            int cursorY = pci.ptScreenPos.Y - y - ii.yHotspot;
-                                            
-                                            using var icon = Icon.FromHandle(hIcon);
-                                            g.DrawIcon(icon, cursorX, cursorY);
-                                            
-                                            if (ii.hbmMask != IntPtr.Zero) Gdi32.DeleteObject(ii.hbmMask);
-                                            if (ii.hbmColor != IntPtr.Zero) Gdi32.DeleteObject(ii.hbmColor);
-                                        }
-                                    }
-                                    finally
-                                    {
-                                        DestroyIcon(hIcon);
-                                    }
-                                }
-                            }
-                        }
-                        catch (Exception ex) { AppLog.Warning("ScreenCapture.DrawCursor", ex); }
-                    }
-                }
-                
-                // Convert System.Drawing.Bitmap to SKBitmap via direct pixel copy
-                // to avoid PNG encode/decode roundtrip allocations.
-                var skBitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
-                var bmpData = bitmap.LockBits(
-                    new System.Drawing.Rectangle(0, 0, width, height),
-                    System.Drawing.Imaging.ImageLockMode.ReadOnly,
-                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-
-                try
-                {
-                    IntPtr dstPixels = skBitmap.GetPixels();
-                    int dstStride = skBitmap.RowBytes;
-                    int srcStride = bmpData.Stride;
-
-                    unsafe
-                    {
-                        byte* srcBase = (byte*)bmpData.Scan0;
-                        byte* dstBase = (byte*)dstPixels;
-                        int copyBytesPerRow = width * 4;
-
-                        for (int row = 0; row < height; row++)
-                        {
-                            var srcRow = srcBase + (row * srcStride);
-                            var dstRow = dstBase + (row * dstStride);
-                            Buffer.MemoryCopy(srcRow, dstRow, dstStride, copyBytesPerRow);
-                        }
-                    }
-                }
-                finally
-                {
-                    bitmap.UnlockBits(bmpData);
-                }
-
-                return skBitmap;
+                return GrabScreen(x, y, width, height, includeCursor);
             }
-            
+
             return new SKBitmap(100, 100);
         });
+    }
+
+    /// <summary>
+    /// The screen's pixels at (<paramref name="x"/>, <paramref name="y"/>) in physical pixels, read into a DIB section and
+    /// copied out once, opaque. GDI+ (CopyFromScreen into a Bitmap, then LockBits) copied them twice more: a 3968x1160
+    /// desktop took 59 ms against 47 (FreezeGrabProbeTests).
+    /// </summary>
+    private static unsafe SKBitmap GrabScreen(int x, int y, int width, int height, bool includeCursor)
+    {
+        IntPtr screen = GetDC(IntPtr.Zero);
+        IntPtr memory = IntPtr.Zero;
+        IntPtr dib = IntPtr.Zero;
+        IntPtr previous = IntPtr.Zero;
+        try
+        {
+            memory = CreateCompatibleDC(screen);
+            // Top-down (a negative height), 32 bits a pixel: BGRA rows, as Skia's.
+            var info = new BITMAPINFO
+            {
+                bmiHeader = new BITMAPINFOHEADER
+                {
+                    biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(),
+                    biWidth = width,
+                    biHeight = -height,
+                    biPlanes = 1,
+                    biBitCount = 32,
+                },
+            };
+            dib = CreateDIBSection(screen, ref info, DibRgbColors, out IntPtr bits, IntPtr.Zero, 0);
+            if (dib == IntPtr.Zero || memory == IntPtr.Zero)
+            {
+                throw new System.ComponentModel.Win32Exception();
+            }
+
+            previous = SelectObject(memory, dib);
+            if (!BitBlt(memory, 0, 0, width, height, screen, x, y, SourceCopy))
+            {
+                throw new System.ComponentModel.Win32Exception();
+            }
+
+            if (includeCursor)
+            {
+                DrawCursor(memory, x, y);
+            }
+
+            // GDI batches its calls: done before the bits are read.
+            GdiFlush();
+            var result = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+            CopyOpaque((uint*)bits, (uint*)result.GetPixels(), (long)width * height);
+            return result;
+        }
+        finally
+        {
+            if (previous != IntPtr.Zero) SelectObject(memory, previous);
+            if (dib != IntPtr.Zero) Gdi32.DeleteObject(dib);
+            if (memory != IntPtr.Zero) DeleteDC(memory);
+            ReleaseDC(IntPtr.Zero, screen);
+        }
+    }
+
+    // The cursor where it is on screen, drawn into the grab at `memory`, whose top-left is (x, y) on screen.
+    private static void DrawCursor(IntPtr memory, int x, int y)
+    {
+        try
+        {
+            CURSORINFO pci;
+            pci.cbSize = Marshal.SizeOf(typeof(CURSORINFO));
+            if (GetCursorInfo(out pci) && pci.flags == 0x00000001) // CURSOR_SHOWING
+            {
+                var hIcon = CopyIcon(pci.hCursor);
+                if (hIcon != IntPtr.Zero)
+                {
+                    try
+                    {
+                        ICONINFO ii;
+                        if (GetIconInfo(hIcon, out ii))
+                        {
+                            int cursorX = pci.ptScreenPos.X - x - ii.xHotspot;
+                            int cursorY = pci.ptScreenPos.Y - y - ii.yHotspot;
+                            // What GDI+'s Graphics.DrawIcon did here, on the grab's own DC.
+                            DrawIconEx(memory, cursorX, cursorY, hIcon, 0, 0, 0, IntPtr.Zero, DiNormal);
+
+                            if (ii.hbmMask != IntPtr.Zero) Gdi32.DeleteObject(ii.hbmMask);
+                            if (ii.hbmColor != IntPtr.Zero) Gdi32.DeleteObject(ii.hbmColor);
+                        }
+                    }
+                    finally
+                    {
+                        DestroyIcon(hIcon);
+                    }
+                }
+            }
+        }
+        catch (Exception ex) { AppLog.Warning("ScreenCapture.DrawCursor", ex); }
+    }
+
+    // BitBlt leaves a 32-bit DIB's fourth byte as it finds it, which GDI does not promise is 255; the still is drawn
+    // premultiplied, so every pixel is made opaque on the way out. Compiled optimized from its first call, as a grab
+    // is seldom.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private static unsafe void CopyOpaque(uint* source, uint* destination, long count)
+    {
+        long i = 0;
+        if (System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated)
+        {
+            var alpha = System.Runtime.Intrinsics.Vector256.Create(0xFF000000u);
+            for (; i <= count - System.Runtime.Intrinsics.Vector256<uint>.Count; i += System.Runtime.Intrinsics.Vector256<uint>.Count)
+            {
+                System.Runtime.Intrinsics.Vector256.Store(System.Runtime.Intrinsics.Vector256.Load(source + i) | alpha, destination + i);
+            }
+        }
+
+        for (; i < count; i++)
+        {
+            destination[i] = source[i] | 0xFF000000u;
+        }
+    }
+
+    private const uint DibRgbColors = 0;
+    private const uint SourceCopy = 0x00CC0020;
+    private const uint DiNormal = 0x0003;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetDC(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DrawIconEx(
+        IntPtr hdc, int xLeft, int yTop, IntPtr hIcon, int cxWidth, int cyWidth, uint istepIfAniCur, IntPtr hbrFlickerFreeDraw, uint diFlags);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteDC(IntPtr hdc);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr hdc, IntPtr hgdiobj);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool BitBlt(IntPtr hdcDest, int xDest, int yDest, int width, int height, IntPtr hdcSrc, int xSrc, int ySrc, uint rop);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFO pbmi, uint usage, out IntPtr ppvBits, IntPtr hSection, uint offset);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GdiFlush();
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFOHEADER
+    {
+        public uint biSize;
+        public int biWidth;
+        public int biHeight;
+        public ushort biPlanes;
+        public ushort biBitCount;
+        public uint biCompression;
+        public uint biSizeImage;
+        public int biXPelsPerMeter;
+        public int biYPelsPerMeter;
+        public uint biClrUsed;
+        public uint biClrImportant;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFO
+    {
+        public BITMAPINFOHEADER bmiHeader;
+        public uint bmiColors;
     }
 
     public async Task<global::Avalonia.Media.Imaging.WriteableBitmap?> CaptureRegionBitmapAsync(global::Avalonia.Rect region, global::Avalonia.PixelPoint screenOffset, double visualScaling)

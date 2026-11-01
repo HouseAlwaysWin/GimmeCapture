@@ -231,7 +231,20 @@ tool.
   PNG), seven runs twice: 137-139 ms of encoding before, 68-69 after; the code's own note had 0.33 s for one fast PNG
   of a real 4K screenshot. `SelectionPixelRect` now does the crop's maths for both the copy and `GetSelectedBitmapFromAsync`.
   A rotation also disposes the flattened copy it draws from. `FloatingImageViewModelTests`: the file holds the
-  clipboard's PNG bytes; an annotated pin's selection comes out the selection's size with the annotation in it. Reading the picture at every redraw needs it
+  clipboard's PNG bytes; an annotated pin's selection comes out the selection's size with the annotation in it.
+- Done since batch 1, the user's pick: **the frozen screenshot's grab** (from Snip overlay). Screenshots freeze by
+  default (`FreezeScreenOnScreenshot`). The user's log, mode=Normal: warm opens `freezeGrab` 47-88 ms of a 89-140 ms
+  total, a run's first 85-446 of 539-1014 (`window` 191-215 and `viewModel` 119-150 before it), once 2,033 of 3,000+.
+  The grab waited for the window, services and view model, then went through GDI+ `CopyFromScreen` (a temporary DIB
+  copied back into the Bitmap), `LockBits` and a row copy into Skia. Now `SnipWindowFactory.Open` starts it first
+  (`StartDesktopGrab`: the area worked out as `ConfigureWindowBounds` does, from the screens the main window or the
+  tray host already knows) and, at the old point, takes it when the window's own area is the same and grabs that area
+  as before when not (`earlyGrab=used|unused|none` in `SnipOpen.Timings`); and `WindowsScreenCaptureService` grabs
+  with `BitBlt` into a DIB section and one vectorized copy that makes every pixel opaque (GDI does not promise the
+  fourth byte), the cursor drawn with `DrawIconEx` as GDI+'s `DrawIcon` did. `FreezeGrabProbeTests` (FREEZE_GRAB_PROBE=1,
+  the real 3968x1160 desktop, the two in turn, five processes): medians 41-58 ms against 56-73; a still window of the
+  probe's own read the same by both, 60,000 of 60,000 pixels (the busy rest of the screen differed as much between two
+  grabs of one kind as between kinds). Not measured: a whole open; the log will show it. Reading the picture at every redraw needs it
   alive, and the old copy had hidden that it often was not: the capture overlay disposes its drawing snapshot on
   leaving drawing mode (Esc, or the tool clicked off) and grabs another on coming back, while the redactions drawn
   keep pointing at the old one; a pin's oldest image leaves its undo history disposed. Now the overlay points its
@@ -453,6 +466,9 @@ These were covered by unit tests only; check them in the real app before a relea
   `TransparencyCheckerboard`). The glow around a pin, a video pin, the capture frame and the General tab's style
   preview should look as before, follow a pin's opacity slider, and go with "hide decoration" or "hide border"; a
   background-removed pin still shows the checkerboard behind its soft edges. Compared by a test, not by eye.
+- **A frozen screenshot**: take a few screenshots, one with a right-click menu or the tray's flyout open. The frozen
+  picture should show them as before, sharp and in place on both screens, and the log's `SnipOpen.Timings` lines
+  should say `earlyGrab=used` with a smaller `freezeGrab` than the 47-88 ms before.
 - **Copying a pin**: Ctrl+C on a pin with annotations, with and without a selection, in PNG and in JPG. Paste into
   an image editor and into a folder: both should have the annotations, cut to the selection, and a PNG with a removed
   background should keep its transparency in an editor that takes the PNG format (Chrome, Discord).
@@ -585,10 +601,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Snip overlay
 
-- **Frozen open grabs and builds the backdrop on the UI thread** (M). `SnipWindowFactory.cs:166-170` blocks in
-  `.GetAwaiter().GetResult()` over GDI+ `CopyFromScreen`, a row copy into an SKBitmap and another into the
-  WriteableBitmap (`WindowsScreenCaptureService.cs:82-85,126-150`): `freezeGrab=46` + `show=120` ms vs 14-26 ms for a
-  live open. BitBlt into a cached DIB section, copy once, build the display bitmap in the same Task.Run, reuse buffers.
+- **A frozen overlay keeps the desktop twice, and copies it for display on the UI thread** (S-M). The grab is done
+  (Status); `OverlayBackdrop` still holds the still as an `SKBitmap` (`Pixels`, for crops and OCR) and a WriteableBitmap
+  copy to show (`Image`, `DefaultToDisplay`: 6 ms, 16 the first time, at 3968x1160, made in `FreezeFromPreOverlayGrab`
+  on the UI thread), 18 MB each there. One buffer could back both, as long as nothing reads the shown one through
+  `CopyPixels`, which marks a WriteableBitmap changed (see the mosaic entry in Status).
 - **A cancelled OCR scan still runs a detection it has queued** (S, low value now). The token stops a detection only
   before the pool picks it up (`AIScanSessionService` `Task.Run(..., ct)`); one cancelled while waiting for the
   inference lock behind another still runs. Since the Esc double start went and a frozen still is no longer re-scanned,

@@ -36,6 +36,8 @@
     <Compile Remove="PinResizeProbeTests.cs" />
     <!-- Drags a mosaic over a pin in a real Win32 window, drawn on the graphics card. -->
     <Compile Remove="RedactionDragProbeTests.cs" />
+    <!-- Grabs the real screen through WindowsScreenCaptureService. -->
+    <Compile Remove="FreezeGrabProbeTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

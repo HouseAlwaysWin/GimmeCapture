@@ -151,6 +151,11 @@
   about 32 MB each at 4K. A preview now reads only the part of the picture under it: with six on a 4K picture, the app
   holds about 190 MB less. Resizing a pin also no longer redraws every mosaic and blur on it at each step of the drag,
   as their look does not change with it.
+- **A frozen screenshot opens sooner.** A screenshot freezes the screen by default, and its overlay waits for that grab
+  of the whole desktop. The grab began only once the overlay's window and the rest were built, and copied the screen
+  twice more through GDI+ than it needed. It now starts as the capture does and runs while they are built (13-34 ms of
+  a capture, about 300 of the first after launch), and reads the screen with one copy: on two screens of 3968x1160 in
+  all, 41-58 ms instead of 56-73. The log's `SnipOpen.Timings` line says whether that early grab was used.
 - **Copying a pin encodes its picture once.** Each Ctrl+C on a pin encoded the picture for the file it puts on the
   clipboard, then again for the picture beside it: on a 4K picture, about 140 ms of work where 70 now do, and more for
   a photo. An annotated pin, or a selection, also made a whole new picture for each copy, and a rotation one for its

@@ -86,6 +86,13 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
         double? waitedForUiThreadMs = CaptureOpenTrace.TakeWaitedForUiThreadMs();
         var openStopwatch = Stopwatch.StartNew();
 
+        // A frozen screenshot's grab only reads the screens, so it starts now, on the pool, and the overlay's window and
+        // view model are built meanwhile: they took 13-34 ms of a warm open and 300-360 of a run's first, before the
+        // grab (47-88 ms warm) even began.
+        bool freezeRequested = vm.FreezeScreenOnScreenshot
+            && (mode == CaptureMode.Normal || mode == CaptureMode.Copy || mode == CaptureMode.TextCopy || mode == CaptureMode.Pin);
+        var earlyGrab = freezeRequested ? StartDesktopGrab() : null;
+
         var snip = new SnipWindow(_screenLayoutService, _windowLayerService);
         ConfigureWindowBounds(snip);
         double afterWindowMs = openStopwatch.Elapsed.TotalMilliseconds;
@@ -173,30 +180,44 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
         // dropdowns) — which close the instant any full-screen overlay appears over them — are captured. The user
         // then selects/annotates on this frozen still (see FreezeScreenOnScreenshot). Grabbed here, before Show(),
         // so the overlay itself is never in the still (no self-exclusion needed).
-        bool freezeApplies = vm.FreezeScreenOnScreenshot
-            && (mode == CaptureMode.Normal || mode == CaptureMode.Copy || mode == CaptureMode.TextCopy || mode == CaptureMode.Pin)
-            && snip.Width > 1 && snip.Height > 1;
+        bool freezeApplies = freezeRequested && snip.Width > 1 && snip.Height > 1;
+        string earlyGrabUse = earlyGrab == null ? "none" : "unused";
         if (freezeApplies)
         {
             try
             {
-                var grabOffset = snip.Position;
-                double grabScaling = snip.Screens?.Primary?.Scaling ?? 1.0;
-                var grabRegion = new global::Avalonia.Rect(0, 0, snip.Width, snip.Height);
-                // CaptureScreenAsync awaits Task.Run internally; wrap in an outer Task.Run so blocking here (on the
-                // UI thread) can't deadlock on the captured context. A fast GDI grab (~tens of ms) — an acceptable
-                // pre-overlay pause, and it must complete before Show() so the still predates the overlay.
-                var frozen = System.Threading.Tasks.Task.Run(() =>
-                    _screenCaptureService.CaptureScreenAsync(grabRegion, grabOffset, grabScaling, includeCursor: false)
-                ).GetAwaiter().GetResult();
+                var grab = new DesktopGrabArea(
+                    snip.Position,
+                    snip.Screens?.Primary?.Scaling ?? 1.0,
+                    new global::Avalonia.Rect(0, 0, snip.Width, snip.Height));
+                // The early grab, when it read the area the window covers; otherwise a grab of that area now. Waited for
+                // on the UI thread on purpose: it must be done before Show() so the still predates the overlay. The grab
+                // awaits Task.Run inside, so it runs on the pool and cannot deadlock on this thread's context.
+                var pending = earlyGrab is { } early && early.Area == grab
+                    ? early.Pixels
+                    : System.Threading.Tasks.Task.Run(() =>
+                        _screenCaptureService.CaptureScreenAsync(grab.Region, grab.Offset, grab.Scaling, includeCursor: false));
+                if (ReferenceEquals(pending, earlyGrab?.Pixels))
+                {
+                    earlyGrabUse = "used";
+                }
+                else
+                {
+                    earlyGrab?.Discard();
+                }
+
+                earlyGrab = null;
+                var frozen = pending.GetAwaiter().GetResult();
                 // Takes ownership; falls back to live (disposing the still) if it can't be shown as a backdrop.
-                snipVm.Surface.FreezeFromPreOverlayGrab(frozen, grabScaling);
+                snipVm.Surface.FreezeFromPreOverlayGrab(frozen, grab.Scaling);
             }
             catch (Exception ex)
             {
                 GimmeCapture.Services.Core.Infrastructure.AppLog.Warning("SnipWindowFactory.FreezeGrab", ex);
             }
         }
+
+        earlyGrab?.Discard();
 
         double afterFreezeGrabMs = openStopwatch.Elapsed.TotalMilliseconds;
 
@@ -220,7 +241,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
             + $"viewModel={afterViewModelMs - afterServicesMs:F0} "
             + $"freezeGrab={afterFreezeGrabMs - afterViewModelMs:F0} "
             + $"show={openStopwatch.Elapsed.TotalMilliseconds - afterFreezeGrabMs:F0} "
-            + $"total={openStopwatch.Elapsed.TotalMilliseconds:F0}ms");
+            + $"total={openStopwatch.Elapsed.TotalMilliseconds:F0}ms "
+            + $"earlyGrab={earlyGrabUse}");
     }
 
     public object? GetActiveViewModel()
@@ -278,6 +300,63 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
                 }
             }, DispatcherPriority.Background);
         }, delay, DispatcherPriority.Background);
+    }
+
+    // What a frozen screenshot grabs: the area the overlay window covers, as CaptureScreenAsync takes it.
+    private readonly record struct DesktopGrabArea(global::Avalonia.PixelPoint Offset, double Scaling, global::Avalonia.Rect Region);
+
+    private sealed record DesktopGrab(DesktopGrabArea Area, System.Threading.Tasks.Task<SkiaSharp.SKBitmap> Pixels)
+    {
+        // Not used after all: its pixels go once the grab is done, and a grab that failed is no error of anyone's.
+        public void Discard() =>
+            Pixels.ContinueWith(
+                static grab =>
+                {
+                    if (grab.IsCompletedSuccessfully)
+                    {
+                        grab.Result.Dispose();
+                    }
+                    else
+                    {
+                        _ = grab.Exception;
+                    }
+                },
+                System.Threading.CancellationToken.None,
+                System.Threading.Tasks.TaskContinuationOptions.None,
+                System.Threading.Tasks.TaskScheduler.Default);
+    }
+
+    /// <summary>
+    /// The area the overlay will cover, worked out as <see cref="ConfigureWindowBounds"/> does from the screens another
+    /// window already knows (the main window, or the tray's host), and grabbed on the pool. Null where none can tell.
+    /// </summary>
+    private DesktopGrab? StartDesktopGrab()
+    {
+        try
+        {
+            var screens = _windowManager.GetMainWindow()?.Screens;
+            var allScreens = screens?.All;
+            if (screens == null || allScreens == null || allScreens.Count == 0)
+            {
+                return null;
+            }
+
+            var screenBounds = allScreens.AsValueEnumerable().Select(s => s.Bounds).ToList();
+            double scaling = (screens.Primary ?? allScreens.AsValueEnumerable().First()).Scaling;
+            if (!_screenLayoutService.TryGetUnifiedDesktopPlacement(screenBounds, scaling, out var position, out var size))
+            {
+                return null;
+            }
+
+            var area = new DesktopGrabArea(position, scaling, new global::Avalonia.Rect(0, 0, size.Width, size.Height));
+            return new DesktopGrab(area, System.Threading.Tasks.Task.Run(() =>
+                _screenCaptureService.CaptureScreenAsync(area.Region, area.Offset, area.Scaling, includeCursor: false)));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Debug("SnipWindowFactory.EarlyFreezeGrab", ex);
+            return null;
+        }
     }
 
     private void ConfigureWindowBounds(Window snip)
