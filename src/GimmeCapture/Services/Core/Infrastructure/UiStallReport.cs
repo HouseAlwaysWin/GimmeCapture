@@ -67,31 +67,24 @@ internal static class UiStallReport
     }
 
     /// <summary>A stall that has ended, written by the UI thread once it pumps again.</summary>
-    /// <param name="stalled">How late the tick that ended it was.</param>
-    /// <param name="lastPump">Taken at the tick before the stall.</param>
-    /// <param name="now">Taken at the tick that ended it.</param>
-    internal static string DescribeEnded(TimeSpan stalled, UiThreadSample lastPump, UiThreadSample now) =>
-        $"The UI thread did not pump for {stalled.TotalMilliseconds:F0}ms ({Diagnose(lastPump, now)}). Anything the "
+    /// <param name="stalled">How long the probe that ended it waited.</param>
+    /// <param name="posted">Taken as that probe was posted.</param>
+    /// <param name="now">Taken as it ran.</param>
+    internal static string DescribeEnded(TimeSpan stalled, UiThreadSample posted, UiThreadSample now) =>
+        $"The UI thread did not pump for {stalled.TotalMilliseconds:F0}ms ({Diagnose(posted, now)}). Anything the "
         + "user pressed in that window (a capture hotkey included) only got through afterwards.";
 
     /// <summary>A stall still going, written by the watchdog: the end of it may never be logged.</summary>
-    internal static string DescribeOngoing(TimeSpan stalled, UiThreadSample lastPump, UiThreadSample now) =>
-        $"The UI thread has not pumped for {stalled.TotalMilliseconds:F0}ms so far ({Diagnose(lastPump, now)}). "
+    internal static string DescribeOngoing(TimeSpan stalled, UiThreadSample posted, UiThreadSample now) =>
+        $"The UI thread has not pumped for {stalled.TotalMilliseconds:F0}ms so far ({Diagnose(posted, now)}). "
         + "Logged while it lasts, in case the app does not come back from it.";
 
-    /// <summary>
-    /// Whether the watchdog writes down the stall that followed the tick at <paramref name="lastPumpTimestamp"/>: once it
-    /// has gone on for <see cref="OngoingReportThreshold"/>, and only once.
-    /// </summary>
-    internal static bool ShouldReportOngoing(TimeSpan stalled, long lastPumpTimestamp, long? reportedPumpTimestamp) =>
-        stalled >= OngoingReportThreshold && lastPumpTimestamp != reportedPumpTimestamp;
-
-    private static string Diagnose(UiThreadSample lastPump, UiThreadSample now)
+    private static string Diagnose(UiThreadSample posted, UiThreadSample now)
     {
-        // Measured from the last pump, so the window is the stall plus up to one tick interval.
-        TimeSpan window = Stopwatch.GetElapsedTime(lastPump.Timestamp, now.Timestamp);
-        TimeSpan? cpu = lastPump.ThreadCpu is { } before && now.ThreadCpu is { } after ? after - before : null;
-        TimeSpan gcPause = now.GcPause - lastPump.GcPause;
+        // The probe's wait: the stall as far as it was measured.
+        TimeSpan window = Stopwatch.GetElapsedTime(posted.Timestamp, now.Timestamp);
+        TimeSpan? cpu = posted.ThreadCpu is { } before && now.ThreadCpu is { } after ? after - before : null;
+        TimeSpan gcPause = now.GcPause - posted.GcPause;
 
         string cause = Classify(window, cpu, gcPause) switch
         {
@@ -106,9 +99,9 @@ internal static class UiStallReport
             : "UI thread CPU unknown";
 
         return $"{cause}: {cpuText}, GC paused {gcPause.TotalMilliseconds:F0}ms, collections "
-            + $"gen0 +{now.Gen0Collections - lastPump.Gen0Collections} "
-            + $"gen1 +{now.Gen1Collections - lastPump.Gen1Collections} "
-            + $"gen2 +{now.Gen2Collections - lastPump.Gen2Collections}";
+            + $"gen0 +{now.Gen0Collections - posted.Gen0Collections} "
+            + $"gen1 +{now.Gen1Collections - posted.Gen1Collections} "
+            + $"gen2 +{now.Gen2Collections - posted.Gen2Collections}";
     }
 
     // CPU time is counted in scheduler ticks (15.6 ms on Windows), so over a short window it can come out above 100%.

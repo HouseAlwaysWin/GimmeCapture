@@ -241,6 +241,12 @@
   `Startup.Timings` could not say why. Each stage now comes with the processor time it used, Avalonia's start-up is
   split into its parts, and on Windows the line adds how busy the whole machine was, how many of the app's pages had to
   be read from disk, whether the app's drive is a hard disk, and a priority Windows lowered.
+- **The app wakes up about a third as often while it sits idle.** The check that notices a frozen app, which writes
+  the `UiStall` lines in the log, ran a 100 ms timer on the app's main thread, and each tick woke it eight to eleven
+  times: 80-110 wakeups a second, in the tray too, nearly all the app did while it waited. A thread of its own now asks
+  the main thread to answer every 100 ms, posted the way a hotkey press is: about 35 wakeups a second in all, and about
+  40% less processor time, which was never more than a millisecond a second. A freeze is still measured to within
+  0.1 s, now by how long a hotkey press would have waited.
 
 ### 💾 Storage
 

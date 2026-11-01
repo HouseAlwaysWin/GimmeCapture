@@ -100,19 +100,4 @@ public sealed class UiStallReportTests
 
         Assert.StartsWith("The UI thread has not pumped for 2016ms so far (busy: UI thread CPU 2003ms (95%)", line, StringComparison.Ordinal);
     }
-
-    [Fact]
-    public void ShouldReportOngoing_OncePerStallAndOnlyPastTheThreshold()
-    {
-        long firstStall = Timestamp(1000);
-        long secondStall = Timestamp(9000);
-        var threshold = UiStallReport.OngoingReportThreshold;
-
-        Assert.False(UiStallReport.ShouldReportOngoing(threshold - TimeSpan.FromMilliseconds(1), firstStall, null));
-        Assert.True(UiStallReport.ShouldReportOngoing(threshold, firstStall, null));
-        // Reported already: the watchdog keeps checking the same stall, and must not write it again.
-        Assert.False(UiStallReport.ShouldReportOngoing(threshold + TimeSpan.FromSeconds(5), firstStall, firstStall));
-        // A tick came in between: a new stall, reported in its own right.
-        Assert.True(UiStallReport.ShouldReportOngoing(threshold, secondStall, firstStall));
-    }
 }

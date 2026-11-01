@@ -300,6 +300,20 @@ tool.
   that closing the window wrote null into every built row's preset and category (the ComboBoxes lose their
   `$parent` options first), and the category is saved on change, so queued files lost it at exit:
   `IgnoreNullWriteBackConverter` drops those writes. Switching tabs and hiding the window never did it.
+- Done since batch 1: **the UiStall monitor's idle wakeups**. The item guessed 14 a second; the user's app on the old
+  monitor, settings window open, woke 84 times a second, 77 on the UI thread and 7 on the watchdog, and no other
+  thread woke at all: the 100 ms `DispatcherTimer` cost 8-11 UI-thread wakeups a tick. The watchdog thread now posts
+  one probe at a time every 100 ms (`UiStallProbe`), and how long it waits is the stall, as the tick's lateness was.
+  `UiStallMonitorIdleProbeTests` (STALL_MONITOR_PROBE=1: real Win32 Avalonia, each thread's context switches and
+  cycles after a 30 s warm-up), no window: UI thread + watchdog 84-113 + 5-6 wakeups a second before, 19-21 + 16-18
+  after; about 40% fewer cycles, from about 1 ms of CPU a second. Any post from another thread costs the UI thread about
+  two wakeups here, even a bare `PostThreadMessage`, and no poster priority changed that; at Background priority, as
+  the timer ran, about 2.6, so probes go at Default, the hotkey press's own. Six 600 ms holds read 531-615 ms before and
+  507-599 after. Stop/`Pause` ends a probe generation, so a watchdog caught mid-beat posts nothing that would wait out
+  the UAC prompt. The user's logs since 2026-10-26 hold no `UiStall` over 10 s: no sign of the false stall across Modern
+  Standby the item guessed. Left: fewer probes while no window is shown, at the cost of precision when a hotkey arrives
+  in the tray. The probe also found that `Dispatcher.MainLoop(token)` sleeps through a token cancelled from another
+  thread (10 min and 2 h 44 min, until a UAC prompt); the three probes' `PumpFor` cancel from the UI thread now.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -640,10 +654,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Idle, start-up and memory
 
-- **The UiStall monitor never sleeps** (S). `UiThreadStallMonitor.cs:28,33,62,69`: a 100 ms DispatcherTimer and a 250 ms
-  watchdog, about 14 wakeups a second in the tray, the app's only scheduled idle work; probably logs a false stall
-  across Modern Standby. Pause both while no window is visible and resume on a hotkey or window show, or post one
-  probe a second.
 - **Cinzel lacks ▶ ◀ → ⚠ ✓** (S), so English falls back through the JP chain for those (found with the CJK font item,
   done: Status). Since the CJK fonts are read in place, that fallback costs no copy either.
 - **The raw-input sink duplicates the keyboard hook** (S). `WindowsGlobalHotkeyService.cs:488,537-577`: about four
