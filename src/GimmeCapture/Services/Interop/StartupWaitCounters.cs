@@ -18,7 +18,8 @@ internal static class StartupWaitCounters
     private const int SystemProcessInformation = 5;
     private const int StatusInfoLengthMismatch = unchecked((int)0xC0000004);
     private const int ProcessIoPriority = 33;
-    private const int IoPriorityNormal = 2;
+    private const int IoPriorityVeryLow = 0;
+    private const int IoPriorityLow = 1;
     private const uint IdlePriorityClass = 0x40;
     private const uint BelowNormalPriorityClass = 0x4000;
     private const uint FileShareReadWrite = 0x1 | 0x2;
@@ -173,18 +174,27 @@ internal static class StartupWaitCounters
         }
 
         IntPtr process = Kernel32.GetCurrentProcess();
-        string? cpu = GetPriorityClass(process) switch
-        {
-            IdlePriorityClass => "idle",
-            BelowNormalPriorityClass => "belowNormal",
-            _ => null,
-        };
         string? io = NtQueryInformationProcess(process, ProcessIoPriority, out int hint, sizeof(int), out _) == 0
-            && hint < IoPriorityNormal
-            ? hint == 0 ? "veryLow" : "low"
+            ? LoweredIoPriority(hint)
             : null;
-        return (cpu, io);
+        return (LoweredCpuPriority(GetPriorityClass(process)), io);
     }
+
+    /// <summary>The name of a priority class below normal; null for normal and above.</summary>
+    internal static string? LoweredCpuPriority(uint priorityClass) => priorityClass switch
+    {
+        IdlePriorityClass => "idle",
+        BelowNormalPriorityClass => "belowNormal",
+        _ => null,
+    };
+
+    /// <summary>The name of an I/O priority hint below normal; null for normal and above.</summary>
+    internal static string? LoweredIoPriority(int hint) => hint switch
+    {
+        IoPriorityVeryLow => "veryLow",
+        IoPriorityLow => "low",
+        _ => null,
+    };
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

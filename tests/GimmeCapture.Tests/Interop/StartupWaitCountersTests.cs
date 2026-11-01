@@ -89,10 +89,44 @@ public sealed class StartupWaitCountersTests
         Assert.Contains(StartupWaitCounters.DriveKind(AppContext.BaseDirectory), new[] { "hdd", "ssd", null });
     }
 
-    [WindowsFact]
-    public void LoweredPriority_IsNothing_ForAProcessStartedNormally()
+    [Theory]
+    [InlineData(0x20u, null)] // normal
+    [InlineData(0x8000u, null)] // above normal
+    [InlineData(0x80u, null)] // high
+    [InlineData(0x4000u, "belowNormal")]
+    [InlineData(0x40u, "idle")]
+    public void LoweredCpuPriority_NamesOnlyTheClassesBelowNormal(uint priorityClass, string? expected)
     {
-        Assert.Equal((null, null), StartupWaitCounters.LoweredPriority());
+        Assert.Equal(expected, StartupWaitCounters.LoweredCpuPriority(priorityClass));
+    }
+
+    [Theory]
+    [InlineData(0, "veryLow")]
+    [InlineData(1, "low")]
+    [InlineData(2, null)] // normal
+    [InlineData(3, null)] // high
+    public void LoweredIoPriority_NamesOnlyTheHintsBelowNormal(int hint, string? expected)
+    {
+        Assert.Equal(expected, StartupWaitCounters.LoweredIoPriority(hint));
+    }
+
+    [WindowsFact]
+    public void LoweredPriority_ReadsTheClassWindowsGivesThisProcess()
+    {
+        // What started the test host decides its priority: a GitHub runner starts it below normal, with low I/O.
+        using var process = Process.GetCurrentProcess();
+        string? expected = process.PriorityClass switch
+        {
+            ProcessPriorityClass.Idle => "idle",
+            ProcessPriorityClass.BelowNormal => "belowNormal",
+            _ => null,
+        };
+
+        var (cpu, io) = StartupWaitCounters.LoweredPriority();
+
+        Assert.Equal(expected, cpu);
+        // .NET has no reading of a process's I/O priority to compare with; the hints are named above.
+        Assert.Contains(io, new[] { null, "low", "veryLow" });
     }
 
     private static byte[] Snapshot(params (long ProcessId, uint FromDisk, uint All)[] processes)
