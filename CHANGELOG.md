@@ -136,6 +136,11 @@
   for good, and the next open builds it again, on its first tab. With every tab opened, the app's commit size fell
   14-28 MB. Most of what opening the window cost still stays: the graphics card's share, the fonts and the libraries it
   loaded.
+- **The History tab keeps only the thumbnails on screen.** Opening it decoded the thumbnail of every entry, 300 with
+  the history full, and kept them all for as long as the app ran: about 90 MB, which leaving the tab never gave back.
+  It now decodes the thumbnails of the cards in view as they scroll in, 12-16 at a time in a window of 1100x900, and
+  lets them go as they scroll out or the tab is left. With the history full, the app held about 60 MB with the tab open
+  instead of 130.
 - **The idle clean-up hands back the memory .NET keeps free for later.** It compacted the heap but kept the space it
   freed: after the settings window had been let go of, the heap held 35 MB and kept 51. The clean-up now returns the
   difference, which took the commit size down 14 MB more there.

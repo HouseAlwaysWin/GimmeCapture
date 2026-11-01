@@ -162,13 +162,13 @@ public partial class MainWindowViewModel
     }
 
     /// <summary>
-    /// Loads the history index into the panel. Entries already shown keep their view model and thumbnail, so a new
-    /// capture adds one card instead of rebuilding, and re-decoding, all of them.
+    /// Loads the history index into the panel. Entries already shown keep their view model, so a new capture adds one
+    /// card instead of rebuilding all of them. Thumbnails are decoded by the cards on screen, not here.
     /// </summary>
     public async Task LoadHistoryAsync()
     {
         var entries = await CaptureHistory.GetItemsAsync();
-        var (items, created, removed) = MergeHistoryItems(_allHistoryItems, entries, entry => new HistoryItemViewModel(
+        var (items, _, removed) = MergeHistoryItems(_allHistoryItems, entries, entry => new HistoryItemViewModel(
             entry,
             OpenHistoryItemCommand,
             CopyHistoryItemCommand,
@@ -179,11 +179,6 @@ public partial class MainWindowViewModel
         foreach (var gone in removed)
         {
             gone.Dispose();
-        }
-
-        foreach (var added in created)
-        {
-            added.LoadThumbnailAsync().Forget("History.Thumbnail");
         }
     }
 

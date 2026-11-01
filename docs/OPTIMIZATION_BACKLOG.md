@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 39 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 40 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -132,6 +132,19 @@ tool.
   smoothed rather than antialiased at 125% and 150% (26 levels at most). After, software 29-46 frames/s over six
   drags (mostly 30-36; a frame takes about 16 ms, so the 60 Hz ticks split them into 60 and 30), the GPU 60 as before;
   the glow is under 1.5% of the render thread, the image's scaling now the largest part.
+- Done since batch 1, the user's pick: **history thumbnails decoded for every entry and never released** (from Idle,
+  start-up and memory). `LoadHistoryAsync` started a decode for every new entry, both kinds, and the view models
+  outlive the window. `SettingsHistoryTabTests` (HISTORY_TAB_PROBE=1, headless with Skia, 300 entries with 320x180
+  thumbnails, a 1100x900 window), twice each: before, 300 decoded with the tab open and 300 still after leaving it,
+  private bytes 41 MB before opening, 128-131 MB open and after leaving. Now `HistoryItemViewModel.ShowThumbnail` and
+  `HideThumbnail` count the cards showing an entry, the first decodes (on the pool, two at a time, nothing if the card
+  scrolled away before its turn) and the last disposes; `SettingsHistoryTab` calls them from the rows host's
+  `ContainerPrepared` (the row taken by index: the panel registers the container only after the event) and
+  `ContainerClearing`, and for every row built as the tab enters or leaves the window. After: 12 decoded open, at most
+  16 while scrolling to the end, 0 after leaving, 12 back on it, 0 once the window closed; 60-61 MB with the tab open.
+  The thumbnails are still decoded at their file's size (at most 320 wide): at 12-16 that is about 3 MB, not worth the
+  card-width decode the item suggested. A hidden main window keeps its tab, so the cards on screen keep theirs until
+  the window is let go of five minutes later.
 - Done since batch 1: **the Record tab's AV1 check on Direct3D 11**. Opening `av1_nvenc` with frames in memory makes
   FFmpeg's NVENC create a CUDA context, and the driver kept 190 MB of the process for good (Release tests, two runs).
   `ProbeHardwareAv1` now opens NVENC on Direct3D 11 frames first (a D3D11VA device picked with `vendor_id=0x10de`, so
@@ -493,9 +506,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   watchdog, about 14 wakeups a second in the tray, the app's only scheduled idle work; probably logs a false stall
   across Modern Standby. Pause both while no window is visible and resume on a hotkey or window show, or post one
   probe a second.
-- **History thumbnails decoded for every entry and never released** (S-M). `MainWindowViewModel.History.cs:149-156,
-  184-187`, `HistoryItemViewModel.cs:126`: about 70 MB at the 300-entry cap for the rest of the session. Decode when a
-  row is realized, at card width, dispose when the tab detaches or the window hides.
 - **CJK fonts copied whole into native memory** (M). `LocalizationService.cs:63-68,109-114`: 16.8 MB for zh-TW,
   12.9 MB for ja-JP, on the UI thread. Subset the UI-chrome fonts, or load during the idle warm-up. Cinzel lacks
   ▶ ◀ → ⚠ ✓, so English falls back through the JP chain for those.

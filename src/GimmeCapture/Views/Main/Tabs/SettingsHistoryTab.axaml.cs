@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using Avalonia;
@@ -17,14 +18,21 @@ public partial class SettingsHistoryTab : UserControl
     private const double CardSlotWidth = 222;
 
     private readonly ObservableCollection<HistoryRow> _rows = new();
+    // The rows the virtualizing list has built cards for, by container. Their thumbnails are decoded while the tab is in
+    // the window and let go of as a row scrolls away or the tab leaves it.
+    private readonly Dictionary<Control, HistoryRow> _rowsBuilt = new();
     private MainWindowViewModel? _viewModel;
     private int _columns; // 0 until the grid has been laid out once
     private bool _rebuildQueued;
+    private bool _showingThumbnails;
 
     public SettingsHistoryTab()
     {
         InitializeComponent();
-        this.FindControl<ItemsControl>("HistoryRowsHost")!.ItemsSource = _rows;
+        var rowsHost = this.FindControl<ItemsControl>("HistoryRowsHost")!;
+        rowsHost.ItemsSource = _rows;
+        rowsHost.ContainerPrepared += OnRowContainerPrepared;
+        rowsHost.ContainerClearing += (_, e) => ForgetRowContainer(e.Container);
         this.FindControl<ScrollViewer>("HistoryScroller")!.SizeChanged += (_, e) => OnGridWidthChanged(e.NewSize.Width);
     }
 
@@ -40,6 +48,13 @@ public partial class SettingsHistoryTab : UserControl
 
         // Activating loads the list now and keeps it auto-refreshing while the tab is shown.
         _viewModel?.SetHistoryViewActive(true);
+
+        // Rows built before the tab last left the window keep their cards and get no new containers.
+        _showingThumbnails = true;
+        foreach (var row in _rowsBuilt.Values)
+        {
+            ShowThumbnails(row);
+        }
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -52,6 +67,52 @@ public partial class SettingsHistoryTab : UserControl
         }
 
         _viewModel = null;
+        foreach (var row in _rowsBuilt.Values)
+        {
+            HideThumbnails(row);
+        }
+
+        _showingThumbnails = false;
+    }
+
+    private void OnRowContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        // A container the list hands to another row may come without a clearing first. The row comes by index: the
+        // panel registers the container only after this, so ItemFromContainer has nothing for it yet.
+        ForgetRowContainer(e.Container);
+        if (e.Index >= 0 && e.Index < _rows.Count)
+        {
+            var row = _rows[e.Index];
+            _rowsBuilt[e.Container] = row;
+            if (_showingThumbnails)
+            {
+                ShowThumbnails(row);
+            }
+        }
+    }
+
+    private void ForgetRowContainer(Control container)
+    {
+        if (_rowsBuilt.Remove(container, out var row) && _showingThumbnails)
+        {
+            HideThumbnails(row);
+        }
+    }
+
+    private static void ShowThumbnails(HistoryRow row)
+    {
+        foreach (var item in row.Items)
+        {
+            item.ShowThumbnail();
+        }
+    }
+
+    private static void HideThumbnails(HistoryRow row)
+    {
+        foreach (var item in row.Items)
+        {
+            item.HideThumbnail();
+        }
     }
 
     private void OnHistoryItemsChanged(object? sender, NotifyCollectionChangedEventArgs e) => QueueRowRebuild();
