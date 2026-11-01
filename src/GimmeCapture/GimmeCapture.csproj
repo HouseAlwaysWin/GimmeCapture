@@ -38,7 +38,10 @@
     <Compile Remove="bin\**\*.cs;obj\**\*.cs;bin-*\**\*.cs;obj-*\**\*.cs" />
     <EmbeddedResource Remove="bin\**;obj\**;bin-*\**;obj-*\**" />
     <None Remove="bin\**;obj\**;bin-*\**;obj-*\**" />
-    <AvaloniaResource Include="Assets\**" />
+    <!-- The CJK fonts are plain manifest resources, read in place from the assembly's image (MappedFontCollection):
+         through avares:// SkiaSharp copied each whole file into native memory, 16.8 MB for Chinese. -->
+    <AvaloniaResource Include="Assets\**" Exclude="Assets\Fonts\Noto_Serif_*\*.ttf" />
+    <EmbeddedResource Include="Assets\Fonts\Noto_Serif_*\*.ttf" LogicalName="GimmeCapture.Fonts.%(Filename)%(Extension)" />
     <None Update="config.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>

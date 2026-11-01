@@ -59,10 +59,10 @@ namespace GimmeCapture.Services.Core.Infrastructure;
             private set => this.RaiseAndSetIfChanged(ref _currentButtonFontFamily, value);
         }
 
-        // Font Paths
+        // Font Paths. The CJK fonts come from MappedFontCollection, which reads them in place rather than copying them.
         private const string CinzelSource = "avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel";
-        private const string ChineseSource = "avares://GimmeCapture/Assets/Fonts/Noto_Serif_TC/NotoSerifTC-VariableFont_wght.ttf#Noto Serif TC";
-        private const string JapaneseSource = "avares://GimmeCapture/Assets/Fonts/Noto_Serif_JP/NotoSerifJP-VariableFont_wght.ttf#Noto Serif JP";
+        internal const string ChineseSource = Platforms.Avalonia.MappedFontCollection.KeyText + "#Noto Serif TC";
+        internal const string JapaneseSource = Platforms.Avalonia.MappedFontCollection.KeyText + "#Noto Serif JP";
         private readonly FontFamily _fontEnglish = new FontFamily(CinzelSource);
         private readonly FontFamily _fontChinese = new FontFamily(ChineseSource);
         private readonly FontFamily _fontJapanese = new FontFamily(JapaneseSource);

@@ -141,6 +141,11 @@
   It now decodes the thumbnails of the cards in view as they scroll in, 12-16 at a time in a window of 1100x900, and
   lets them go as they scroll out or the tab is left. With the history full, the app held about 60 MB with the tab open
   instead of 130.
+- **The Chinese and Japanese interface no longer copies its font into memory, twice.** The fonts for the Chinese and
+  Japanese interface (16.8 and 12.9 MB) were read from inside the app the way any font file is read, which copied the
+  whole file into memory, and the bold the interface uses, which these fonts have no face for, copied it once more:
+  with the Chinese interface, about 35 MB. The fonts are now read where they already are, inside the app's own file,
+  and the bold is drawn from there too: about 1 MB. Text looks exactly as before, to the pixel.
 - **The idle clean-up hands back the memory .NET keeps free for later.** It compacted the heap but kept the space it
   freed: after the settings window had been let go of, the heap held 35 MB and kept 51. The clean-up now returns the
   difference, which took the commit size down 14 MB more there.

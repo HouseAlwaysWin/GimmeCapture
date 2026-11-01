@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using GimmeCapture.Composition;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Platforms.Avalonia;
 
 namespace GimmeCapture;
 
@@ -15,6 +16,8 @@ public partial class App : Application
 
     public override void Initialize()
     {
+        // Before anything is laid out in a CJK font: LocalizationService names them from this collection.
+        MappedFontCollection.Register();
         AvaloniaXamlLoader.Load(this);
     }
 

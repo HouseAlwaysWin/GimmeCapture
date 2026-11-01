@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 40 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 41 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -132,6 +132,21 @@ tool.
   smoothed rather than antialiased at 125% and 150% (26 levels at most). After, software 29-46 frames/s over six
   drags (mostly 30-36; a frame takes about 16 ms, so the 60 Hz ticks split them into 60 and 30), the GPU 60 as before;
   the glow is under 1.5% of the render thread, the image's scaling now the largest part.
+- Done since batch 1, the user's pick: **CJK fonts copied whole into native memory** (from Idle, start-up and memory).
+  Decompiled (ICSharpCode.Decompiler 7.1 from the local NuGet cache): avares:// fonts reach Avalonia.Skia's
+  `TryCreateGlyphTypeface(Stream)`, `SKTypeface.FromStream`, and SkiaSharp turns the managed stream into an
+  `SKMemoryStream`, a copy of the whole file. Each font has one face, ExtraLight, so the SemiBold and Bold the UI uses are
+  synthesized, and `FontCollectionBase.TryCreateSyntheticGlyphTypeface` makes the bold face from `TryGetStream` (the
+  whole font into a `byte[]`) through the same copying call. Headless with Skia, Noto Serif TC: +16.9-17.2 MB of
+  private bytes loaded, +36 MB once regular and bold text was drawn; Microsoft JhengHei, a system font DirectWrite maps,
+  about 0. Now the TC and JP fonts are manifest resources, not AvaloniaResource, and `MappedFontCollection`
+  (`fonts:GimmeCapture`, registered in `App.Initialize`) wraps each resource's pointer in the mapped assembly image in
+  an `SKData` without a copy, makes the face with Avalonia.Skia's internal `SkiaTypeface` by reflection, and overrides
+  the synthetic face to make another typeface over the same bytes. `MappedFontCollectionTests` (FONT_PROBE=1): ~0 MB
+  loaded, +0.5-1.8 MB once drawn in Normal, SemiBold and Bold, and the render identical to the font read through a
+  stream, 0 of 512,000 bytes different; two guards run in CI, the resources being in memory and the reflected
+  constructor existing (an Avalonia update that changes it falls back to the copy). Linux's single file is compressed,
+  so the assembly is already a private copy there; it still saves SkiaSharp's two.
 - Done since batch 1, the user's pick: **history thumbnails decoded for every entry and never released** (from Idle,
   start-up and memory). `LoadHistoryAsync` started a decode for every new entry, both kinds, and the view models
   outlive the window. `SettingsHistoryTabTests` (HISTORY_TAB_PROBE=1, headless with Skia, 300 entries with 320x180
@@ -506,9 +521,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   watchdog, about 14 wakeups a second in the tray, the app's only scheduled idle work; probably logs a false stall
   across Modern Standby. Pause both while no window is visible and resume on a hotkey or window show, or post one
   probe a second.
-- **CJK fonts copied whole into native memory** (M). `LocalizationService.cs:63-68,109-114`: 16.8 MB for zh-TW,
-  12.9 MB for ja-JP, on the UI thread. Subset the UI-chrome fonts, or load during the idle warm-up. Cinzel lacks
-  ▶ ◀ → ⚠ ✓, so English falls back through the JP chain for those.
+- **Cinzel lacks ▶ ◀ → ⚠ ✓** (S), so English falls back through the JP chain for those (found with the CJK font item,
+  done: Status). Since the CJK fonts are read in place, that fallback costs no copy either.
 - **The raw-input sink duplicates the keyboard hook** (S). `WindowsGlobalHotkeyService.cs:488,537-577`: about four
   hotkey-thread wakeups per keystroke typed elsewhere. Register the sink only when the hook fails or stops counting.
 - **The `avalonia=` start-up stage (~375 ms) is the largest left** (measure first). It includes the whole ColorPicker
