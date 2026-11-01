@@ -156,6 +156,10 @@
   twice more through GDI+ than it needed. It now starts as the capture does and runs while they are built (13-34 ms of
   a capture, about 300 of the first after launch), and reads the screen with one copy: on two screens of 3968x1160 in
   all, 41-58 ms instead of 56-73. The log's `SnipOpen.Timings` line says whether that early grab was used.
+- **A frozen screenshot holds the desktop once.** While a frozen screenshot is open, the app kept the grab of the whole
+  desktop and a copy of it to show: 35 MB on two screens of 3968x1160 in all (a copy is 4 bytes a pixel, 66 MB for two
+  4K screens side by side). What is shown and what is cropped, pinned and read for text now share one copy, 19 MB
+  there, and it is made before the overlay shows instead of on the overlay's thread as it opens.
 - **Copying a pin encodes its picture once.** Each Ctrl+C on a pin encoded the picture for the file it puts on the
   clipboard, then again for the picture beside it: on a 4K picture, about 140 ms of work where 70 now do, and more for
   a photo. An annotated pin, or a selection, also made a whole new picture for each copy, and a rotation one for its

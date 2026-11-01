@@ -192,12 +192,9 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
                     new global::Avalonia.Rect(0, 0, snip.Width, snip.Height));
                 // The early grab, when it read the area the window covers; otherwise a grab of that area now. Waited for
                 // on the UI thread on purpose: it must be done before Show() so the still predates the overlay. The grab
-                // awaits Task.Run inside, so it runs on the pool and cannot deadlock on this thread's context.
-                var pending = earlyGrab is { } early && early.Area == grab
-                    ? early.Pixels
-                    : System.Threading.Tasks.Task.Run(() =>
-                        _screenCaptureService.CaptureScreenAsync(grab.Region, grab.Offset, grab.Scaling, includeCursor: false));
-                if (ReferenceEquals(pending, earlyGrab?.Pixels))
+                // runs on the pool and cannot deadlock on this thread's context.
+                var pending = earlyGrab is { } early && early.Area == grab ? early.Backdrop : GrabBackdrop(grab);
+                if (ReferenceEquals(pending, earlyGrab?.Backdrop))
                 {
                     earlyGrabUse = "used";
                 }
@@ -207,9 +204,12 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
                 }
 
                 earlyGrab = null;
-                var frozen = pending.GetAwaiter().GetResult();
-                // Takes ownership; falls back to live (disposing the still) if it can't be shown as a backdrop.
-                snipVm.Surface.FreezeFromPreOverlayGrab(frozen, grab.Scaling);
+                // Null where it cannot be shown as a backdrop: the overlay then opens live.
+                if (pending.GetAwaiter().GetResult() is { } backdrop)
+                {
+                    // Takes ownership.
+                    snipVm.Surface.FreezeFromPreOverlayGrab(backdrop);
+                }
             }
             catch (Exception ex)
             {
@@ -305,16 +305,16 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
     // What a frozen screenshot grabs: the area the overlay window covers, as CaptureScreenAsync takes it.
     private readonly record struct DesktopGrabArea(global::Avalonia.PixelPoint Offset, double Scaling, global::Avalonia.Rect Region);
 
-    private sealed record DesktopGrab(DesktopGrabArea Area, System.Threading.Tasks.Task<SkiaSharp.SKBitmap> Pixels)
+    private sealed record DesktopGrab(DesktopGrabArea Area, System.Threading.Tasks.Task<OverlayBackdrop?> Backdrop)
     {
         // Not used after all: its pixels go once the grab is done, and a grab that failed is no error of anyone's.
         public void Discard() =>
-            Pixels.ContinueWith(
+            Backdrop.ContinueWith(
                 static grab =>
                 {
                     if (grab.IsCompletedSuccessfully)
                     {
-                        grab.Result.Dispose();
+                        grab.Result?.Dispose();
                     }
                     else
                     {
@@ -325,6 +325,14 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
                 System.Threading.Tasks.TaskContinuationOptions.None,
                 System.Threading.Tasks.TaskScheduler.Default);
     }
+
+    // The frozen screenshot's backdrop of `area`, made on the pool: the grab, and the copy the overlay shows, which was
+    // made on the UI thread (6 ms for 3968x1160, 16 the first time) and is now the backdrop's only copy of the desktop.
+    private System.Threading.Tasks.Task<OverlayBackdrop?> GrabBackdrop(DesktopGrabArea area) =>
+        System.Threading.Tasks.Task.Run(async () => OverlayBackdrop.TryCreate(
+            await _screenCaptureService.CaptureScreenAsync(area.Region, area.Offset, area.Scaling, includeCursor: false),
+            area.Scaling,
+            OverlayBackdrop.DefaultToDisplay));
 
     /// <summary>
     /// The area the overlay will cover, worked out as <see cref="ConfigureWindowBounds"/> does from the screens another
@@ -349,8 +357,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
             }
 
             var area = new DesktopGrabArea(position, scaling, new global::Avalonia.Rect(0, 0, size.Width, size.Height));
-            return new DesktopGrab(area, System.Threading.Tasks.Task.Run(() =>
-                _screenCaptureService.CaptureScreenAsync(area.Region, area.Offset, area.Scaling, includeCursor: false)));
+            return new DesktopGrab(area, GrabBackdrop(area));
         }
         catch (Exception ex)
         {

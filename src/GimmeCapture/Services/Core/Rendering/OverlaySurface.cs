@@ -123,6 +123,16 @@ public sealed class OverlaySurface : ReactiveObject, IDisposable
     }
 
     /// <summary>
+    /// Pre-overlay freeze with the backdrop made already, off the UI thread, as the factory's grab makes it. Takes
+    /// ownership: a backdrop the activity gate refuses is disposed.
+    /// </summary>
+    public OverlaySurfaceState FreezeFromPreOverlayGrab(OverlayBackdrop backdrop)
+    {
+        ArgumentNullException.ThrowIfNull(backdrop);
+        return AdoptBackdrop(backdrop, FrozenOrigin.PreOverlay);
+    }
+
+    /// <summary>
     /// Mid-session freeze (the toolbar toggle). Grabs the whole viewport through
     /// <see cref="RunGrabExcludingOverlay"/> so the overlay isn't baked into the still and the user sees no
     /// flicker. Idempotent — already frozen returns the current state without a second grab. Never throws for a
@@ -257,6 +267,17 @@ public sealed class OverlaySurface : ReactiveObject, IDisposable
         // display-conversion fallback is the absence of a Frozen state, not a rollback of a half-built one.
         var backdrop = OverlayBackdrop.TryCreate(still, grabScaling, _toDisplay);
         if (backdrop == null) return _state;
+
+        return AdoptBackdrop(backdrop, origin);
+    }
+
+    private OverlaySurfaceState AdoptBackdrop(OverlayBackdrop backdrop, FrozenOrigin origin)
+    {
+        if (_disposed || _activity != OverlayActivity.Screenshot)
+        {
+            backdrop.Dispose();
+            return _state;
+        }
 
         if (_state is OverlaySurfaceState.Frozen previous)
         {

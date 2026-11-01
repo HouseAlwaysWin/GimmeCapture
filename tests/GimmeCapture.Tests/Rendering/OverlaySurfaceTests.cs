@@ -207,6 +207,32 @@ public class OverlaySurfaceTests
     }
 
     [Fact]
+    public void FreezeFromPreOverlayGrab_OfABackdropMadeAlready_AdoptsIt_OrDisposesItOutsideAScreenshot()
+    {
+        // The factory makes the backdrop on the pool, display copy and all, so the UI thread only adopts it.
+        using var surface = NewSurface(CaptureReturning());
+        var backdrop = OverlayBackdrop.TryCreate(new SKBitmap(800, 600), 1.5, toDisplay: null)!;
+
+        surface.FreezeFromPreOverlayGrab(backdrop);
+
+        Assert.True(surface.IsFrozen);
+        using (var lease = surface.LeaseFrozenStill())
+        {
+            Assert.Same(backdrop.Pixels, lease!.Still);
+            Assert.Equal(1.5, lease.GrabScaling);
+        }
+
+        using var recording = NewSurface(CaptureReturning());
+        recording.ConstrainTo(OverlayActivity.Recording);
+        var refused = OverlayBackdrop.TryCreate(new SKBitmap(800, 600), 1.0, toDisplay: null)!;
+
+        recording.FreezeFromPreOverlayGrab(refused);
+
+        Assert.False(recording.IsFrozen);
+        Assert.Equal(IntPtr.Zero, refused.Pixels.Handle);
+    }
+
+    [Fact]
     public async Task FrozenCrop_UsesTheGrabScaling_NotTheOverlaysCurrentScaling()
     {
         // A DPI change after the grab moves VisualScaling; the crop must follow the still, not the overlay.

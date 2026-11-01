@@ -244,7 +244,18 @@ tool.
   fourth byte), the cursor drawn with `DrawIconEx` as GDI+'s `DrawIcon` did. `FreezeGrabProbeTests` (FREEZE_GRAB_PROBE=1,
   the real 3968x1160 desktop, the two in turn, five processes): medians 41-58 ms against 56-73; a still window of the
   probe's own read the same by both, 60,000 of 60,000 pixels (the busy rest of the screen differed as much between two
-  grabs of one kind as between kinds). Not measured: a whole open; the log will show it. Reading the picture at every redraw needs it
+  grabs of one kind as between kinds). Not measured: a whole open; the log will show it.
+- Done since batch 1, the user's pick: **a frozen overlay held the desktop twice** (from Snip overlay).
+  `OverlayBackdrop` kept the grab (`Pixels`, for crops, pins and OCR) beside the WriteableBitmap it shows (`Image`,
+  `DefaultToDisplay`), and `FreezeFromPreOverlayGrab` made that copy on the UI thread (6 ms at 3968x1160, 16 the first
+  time). Every reader of `Pixels` only reads (crops draw it into a new bitmap; OCR takes a `Copy()`), so `TryCreate` now
+  makes `Pixels` a view of the shown bitmap's own pixels (`InstallPixels` at the address its `Lock` gives once; it stays
+  put while the bitmap lives, and reading the view takes no lock, which would mark it changed) and disposes the grab;
+  `Dispose` disposes the view first. `SnipWindowFactory`'s grab task makes the whole backdrop on the pool, and the
+  surface adopts it (`FreezeFromPreOverlayGrab(OverlayBackdrop)`). `FreezeGrabProbeTests` on the real 3968x1160 desktop,
+  twice: a frozen backdrop holds 18.9 MB (one picture is 17.6) against 35.2 for the grab beside its copy.
+  `OverlayBackdropTests` checks the view is the shown bitmap's memory and the grab is gone; `OverlaySurfaceTests`
+  that a made backdrop is adopted, or disposed outside a screenshot. Reading the picture at every redraw needs it
   alive, and the old copy had hidden that it often was not: the capture overlay disposes its drawing snapshot on
   leaving drawing mode (Esc, or the tool clicked off) and grabs another on coming back, while the redactions drawn
   keep pointing at the old one; a pin's oldest image leaves its undo history disposed. Now the overlay points its
@@ -468,7 +479,8 @@ These were covered by unit tests only; check them in the real app before a relea
   background-removed pin still shows the checkerboard behind its soft edges. Compared by a test, not by eye.
 - **A frozen screenshot**: take a few screenshots, one with a right-click menu or the tray's flyout open. The frozen
   picture should show them as before, sharp and in place on both screens, and the log's `SnipOpen.Timings` lines
-  should say `earlyGrab=used` with a smaller `freezeGrab` than the 47-88 ms before.
+  should say `earlyGrab=used` with a smaller `freezeGrab` than the 47-88 ms before. A selection copied or pinned from
+  it, and the text boxes OCR finds on it, should match what the frozen picture shows.
 - **Copying a pin**: Ctrl+C on a pin with annotations, with and without a selection, in PNG and in JPG. Paste into
   an image editor and into a folder: both should have the annotations, cut to the selection, and a PNG with a removed
   background should keep its transparency in an editor that takes the PNG format (Chrome, Discord).
@@ -601,11 +613,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Snip overlay
 
-- **A frozen overlay keeps the desktop twice, and copies it for display on the UI thread** (S-M). The grab is done
-  (Status); `OverlayBackdrop` still holds the still as an `SKBitmap` (`Pixels`, for crops and OCR) and a WriteableBitmap
-  copy to show (`Image`, `DefaultToDisplay`: 6 ms, 16 the first time, at 3968x1160, made in `FreezeFromPreOverlayGrab`
-  on the UI thread), 18 MB each there. One buffer could back both, as long as nothing reads the shown one through
-  `CopyPixels`, which marks a WriteableBitmap changed (see the mosaic entry in Status).
 - **A cancelled OCR scan still runs a detection it has queued** (S, low value now). The token stops a detection only
   before the pool picks it up (`AIScanSessionService` `Task.Run(..., ct)`); one cancelled while waiting for the
   inference lock behind another still runs. Since the Esc double start went and a frozen still is no longer re-scanned,

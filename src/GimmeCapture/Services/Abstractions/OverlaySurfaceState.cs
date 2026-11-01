@@ -107,7 +107,48 @@ public sealed class OverlayBackdrop : IDisposable
             return null;
         }
 
+        // The still is read from the shown copy's own pixels from now on, and the grab's goes: the desktop held once
+        // instead of twice, 18 MB each for 3968x1160.
+        if (ViewOf(image, pixels.Info) is { } shared)
+        {
+            pixels.Dispose();
+            pixels = shared;
+        }
+
         return new OverlayBackdrop(pixels, image, scaling > 0 ? scaling : 1.0);
+    }
+
+    // A Skia view of the pixels of `image` itself, when it is a WriteableBitmap laid out as `info`: nothing is copied, and
+    // the view must go before the image (Dispose). Nothing writes to a still, and reading the view does not lock the
+    // image, which would mark it changed and have the graphics card take it again.
+    private static SKBitmap? ViewOf(Avalonia.Media.Imaging.Bitmap image, SKImageInfo info)
+    {
+        if (image is not Avalonia.Media.Imaging.WriteableBitmap writeable
+            || writeable.PixelSize.Width != info.Width
+            || writeable.PixelSize.Height != info.Height
+            || writeable.Format != Avalonia.Platform.PixelFormat.Bgra8888
+            || writeable.AlphaFormat != Avalonia.Platform.AlphaFormat.Premul)
+        {
+            return null;
+        }
+
+        IntPtr address;
+        int rowBytes;
+        // Its pixels stay where they are for as long as it lives; only the address is wanted here.
+        using (var locked = writeable.Lock())
+        {
+            address = locked.Address;
+            rowBytes = locked.RowBytes;
+        }
+
+        var view = new SKBitmap();
+        if (!view.InstallPixels(new SKImageInfo(info.Width, info.Height, SKColorType.Bgra8888, SKAlphaType.Premul), address, rowBytes))
+        {
+            view.Dispose();
+            return null;
+        }
+
+        return view;
     }
 
     /// <summary>The production Skia→Avalonia conversion. Needs a render platform.</summary>
@@ -119,6 +160,7 @@ public sealed class OverlayBackdrop : IDisposable
 
     public void Dispose()
     {
+        // In this order: Pixels may be a view of Image's pixels (TryCreate).
         Pixels.Dispose();
         Image?.Dispose();
     }

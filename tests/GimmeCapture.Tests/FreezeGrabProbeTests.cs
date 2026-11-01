@@ -64,6 +64,28 @@ public sealed class FreezeGrabProbeTests
 
         _output.WriteLine($"now: median {Median(now):F0} ms (fastest {now.Min():F0}); GDI+: median {Median(before):F0} ms (fastest {before.Min():F0})");
 
+        // What a frozen overlay holds of it: the grab and its display copy were both kept, 2 x 4 bytes a pixel.
+        AvaloniaRenderer.EnsureRegistered();
+        long held = PrivateBytes();
+        var made = Stopwatch.StartNew();
+        using (var backdrop = OverlayBackdrop.TryCreate(
+            service.CaptureScreenAsync(region, offset, 1.0).GetAwaiter().GetResult(), 1.0, OverlayBackdrop.DefaultToDisplay))
+        {
+            double makeMs = made.Elapsed.TotalMilliseconds;
+            long frozen = PrivateBytes() - held;
+            double onePicture = (double)width * height * 4 / (1024 * 1024);
+            _output.WriteLine($"a frozen backdrop holds {frozen / (1024.0 * 1024):F1} MB (one picture is {onePicture:F1}); grab and display copy took {makeMs:F0} ms");
+            Assert.InRange(frozen, long.MinValue, (long)(onePicture * 1.5 * 1024 * 1024));
+        }
+
+        // As the backdrop was: the grab kept beside the copy shown.
+        held = PrivateBytes();
+        using (var grab = service.CaptureScreenAsync(region, offset, 1.0).GetAwaiter().GetResult())
+        using (var shown = OverlayBackdrop.DefaultToDisplay(grab))
+        {
+            _output.WriteLine($"the grab beside its display copy, as kept before: {(PrivateBytes() - held) / (1024.0 * 1024):F1} MB");
+        }
+
         // Where the screen holds still, the two must read the same: a window of the probe's own, kept on top.
         using var pattern = new System.Drawing.Bitmap(400, 300);
         for (int py = 0; py < 300; py++)
@@ -161,6 +183,15 @@ public sealed class FreezeGrabProbeTests
 
         differing = right < 0 ? "nothing" : $"({left}, {top})-({right}, {bottom})";
         return same;
+    }
+
+    private static long PrivateBytes()
+    {
+        GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+        using var process = Process.GetCurrentProcess();
+        return process.PrivateMemorySize64;
     }
 
     private static double Median(List<double> values)
