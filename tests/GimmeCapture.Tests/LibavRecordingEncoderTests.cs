@@ -67,6 +67,35 @@ public class LibavRecordingEncoderTests
         Assert.InRange(PrivateBytes() - baseline, long.MinValue, 80L * 1024 * 1024);
     }
 
+    [Theory]
+    [InlineData(VideoCodec.H264, true, true)]
+    [InlineData(VideoCodec.H265, true, true)]
+    [InlineData(VideoCodec.Av1, true, true)]
+    [InlineData(VideoCodec.H264, false, false)]
+    [InlineData(VideoCodec.H265, false, false)]
+    [InlineData(VideoCodec.Av1, false, false)]
+    public void TheRecordingWarmUp_StartsCudaInsteadOfOpeningNvenc(VideoCodec codec, bool preferHardware, bool expected)
+    {
+        // Every hardware ladder starts with NVENC, whose CUDA context the driver would keep 190 MB of for good.
+        Assert.Equal(expected, LibavRecordingEncoder.WarmsUpThroughCuda(codec, preferHardware));
+    }
+
+    /// <summary>
+    /// Entering Record mode leaves little of the process behind. Opening NVENC there kept 190 MB for good, recording or
+    /// not; starting the CUDA driver alone keeps about 8. Opt-in like the AV1 probe above, and for the same reasons.
+    /// </summary>
+    [OptInFact("NVENC_PROBE=1")]
+    public void TheRecordingWarmUp_LeavesLittleOfTheProcessBehind()
+    {
+        FFmpegRuntime.EnsureInitialized();
+        long baseline = PrivateBytes();
+
+        string warmedUp = LibavRecordingEncoder.WarmUpEncoder(VideoCodec.H264, preferHardware: true);
+
+        Assert.Equal("cuInit", warmedUp);
+        Assert.InRange(PrivateBytes() - baseline, long.MinValue, 40L * 1024 * 1024);
+    }
+
     private static long PrivateBytes()
     {
         GC.Collect();

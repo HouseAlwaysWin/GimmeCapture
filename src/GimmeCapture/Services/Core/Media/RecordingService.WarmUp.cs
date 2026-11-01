@@ -12,10 +12,11 @@ public partial class RecordingService
 
     /// <summary>
     /// Loads, while the user is still choosing what to record, what a run's first recording would otherwise load during
-    /// its start: the FFmpeg libraries (about 50 ms), the recording encoder (a run's first NVENC open took 135-260 ms and
-    /// every later one 80-100 ms), the system-audio endpoint and the answer to whether WGC works. The capture overlay
-    /// calls this on entering Record mode. It runs once a run, on the thread pool, and never fails: a step that does
-    /// not work here is done again by the start, which reports it.
+    /// its start: the FFmpeg libraries (about 50 ms), what the recording encoder loads the first time it opens (for NVENC
+    /// only the CUDA driver, see <see cref="LibavRecordingEncoder.WarmUpEncoder"/>), the system-audio endpoint and the
+    /// answer to whether WGC works. The capture overlay calls this on entering Record mode, whether anything is then
+    /// recorded or not. It runs once a run, on the thread pool, and never fails: a step that does not work here is done
+    /// again by the start, which reports it.
     /// </summary>
     public Task WarmUpAsync()
     {
@@ -36,10 +37,10 @@ public partial class RecordingService
             }
 
             timings.Mark("ffmpeg");
-            Step("encoderOpen", () =>
+            Step("encoder", () =>
             {
                 bool preferHardware = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly;
-                timings.Note("encoder", LibavRecordingEncoder.WarmUpEncoder(ResolveRecordingCodec(), preferHardware));
+                timings.Note("encoderWarmUp", LibavRecordingEncoder.WarmUpEncoder(ResolveRecordingCodec(), preferHardware));
             });
 
             if (OperatingSystem.IsWindows())

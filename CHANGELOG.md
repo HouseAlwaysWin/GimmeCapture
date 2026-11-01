@@ -167,7 +167,9 @@
 - **The first recording after launch starts about as quickly as the rest.** Nothing is recorded until a start
   finishes, and the first one also loaded FFmpeg and opened the video encoder for the first time: 0.35-0.39 s on the
   machine measured, against 0.17-0.21 s for every later recording. Entering Record mode now gets both ready in the
-  background while you pick what to record, which brings the first start to about 0.2 s. Every region recording also
+  background while you pick what to record, which brings the first start to 0.21-0.24 s. On an NVIDIA graphics card it
+  starts only the encoder's driver and does not open the encoder: an opened encoder made the driver keep about 190 MB
+  of the app until it closed, recorded with or not, and the driver alone keeps about 8 MB. Every region recording also
   starts about 17 ms sooner: each start asked Windows whether window capture works, which only a recording of picked
   windows needs, and a window recording now asks once a run instead of twice a recording.
 - **A capture hotkey opens its overlay without waiting for the settings to be saved.** Every capture saves the

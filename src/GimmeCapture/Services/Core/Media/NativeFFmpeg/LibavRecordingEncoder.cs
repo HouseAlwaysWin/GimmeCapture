@@ -352,11 +352,23 @@ internal static unsafe class LibavRecordingEncoder
     }
 
     /// <summary>
-    /// Opens and frees the encoder a recording of <paramref name="codec"/> would get, so what that encoder loads the
-    /// first time it opens (NVENC's driver libraries, say) is loaded before a recording waits on it. Returns its name.
+    /// Loads what the encoder a recording of <paramref name="codec"/> would get loads the first time it opens, before a
+    /// recording waits on it, and returns what it did: <c>cuInit</c>, or the name of the encoder it opened and freed.
+    ///
+    /// NVENC is not opened. On frames in memory it makes a CUDA context, and once a process has made one the CUDA driver
+    /// keeps 190 MB of it for good, whether anything is recorded or not. Only starting the driver kept 8 MB, and took a
+    /// recording's first NVENC open from 144-200 ms to 122-130 (89-95 after an opened NVENC, 86-108 on every later one;
+    /// 1280x720, fresh processes). NVENC_PROBE in <c>LibavRecordingEncoderTests</c> checks what this keeps.
     /// </summary>
     public static string WarmUpEncoder(VideoCodec codec, bool preferHardware)
     {
+        if (WarmsUpThroughCuda(codec, preferHardware) && CudaDriver.TryInitialize())
+        {
+            return "cuInit";
+        }
+
+        // Software only, or no NVIDIA driver to start: NVENC then fails to open, and a recording goes on down its ladder
+        // as this does.
         AVDictionary* options = null;
         AVCodecContext* context = OpenRecordingEncoderContext(
             codec, preferHardware, 640, 480, 30, 0, 0, &options, out string name, out _);
@@ -364,6 +376,10 @@ internal static unsafe class LibavRecordingEncoder
         ffmpeg.avcodec_free_context(&context);
         return name;
     }
+
+    /// <summary>Whether the encoder a recording tries first is NVENC, which the warm-up does not open. Pure.</summary>
+    internal static bool WarmsUpThroughCuda(VideoCodec codec, bool preferHardware) =>
+        BuildEncoderLadder(codec, preferHardware)[0].EndsWith("_nvenc", StringComparison.Ordinal);
 
     // Internal so a test can check what it sets without opening an encoder.
     internal static void ConfigureEncoderContext(

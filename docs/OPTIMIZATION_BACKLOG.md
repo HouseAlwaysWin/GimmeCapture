@@ -147,6 +147,20 @@ tool.
   stream, 0 of 512,000 bytes different; two guards run in CI, the resources being in memory and the reflected
   constructor existing (an Avalonia update that changes it falls back to the copy). Linux's single file is compressed,
   so the assembly is already a private copy there; it still saves SkiaSharp's two.
+- Done since batch 1, the user's pick: **the Record-mode warm-up kept NVENC's 190 MB** (from Idle, start-up and
+  memory). Entering Record mode opened NVENC on frames in memory, and the CUDA context that made left the driver holding
+  190 MB of the process until exit, recorded or not. A temporary probe (fresh Release test processes, five per variant
+  in alternating order, NVENC at 1280x720) timed a recording's first open after each warm-up: none 144-200 ms; loading
+  `nvcuda.dll` and `nvEncodeAPI64.dll` 137-149 (nothing kept); `cuInit` alone 122-130 (7.6-7.8 MB kept, 21-22 ms);
+  the old NVENC open 89-95 (190 MB, 164-174 ms); every later open 86-108. One run each: `cuInit` plus a context made
+  and destroyed 96 (175 MB), so the context is what the driver keeps; NVENC on Direct3D 11 frames 135 (35 MB, 422 ms).
+  `WarmUpEncoder` now only starts the CUDA driver (`CudaDriver.TryInitialize`: `nvcuda.dll` from System32,
+  `libcuda.so.1` on Linux) where the ladder starts with NVENC, and opens the encoder as before elsewhere or without the
+  driver; `Recording.WarmUp` notes `encoderWarmUp=cuInit`. Through `RecordingService` (warm-up, then a 1280x720
+  recording with system audio): the warm-up kept 35-36 MB instead of 220, FFmpeg included, and took 125-132 ms instead
+  of 271-273; the first start took 209-244 ms (`encoderOpen` 123-145, six runs) instead of 190-191 (92-95, three); after
+  the recording the process was 240-244 MB above where it started instead of 270-286. `LibavRecordingEncoderTests` has
+  the opt-in check (NVENC_PROBE=1: `cuInit`, under 40 MB kept). Linux not measured.
 - Done since batch 1, the user's pick: **history thumbnails decoded for every entry and never released** (from Idle,
   start-up and memory). `LoadHistoryAsync` started a decode for every new entry, both kinds, and the view models
   outlive the window. `SettingsHistoryTabTests` (HISTORY_TAB_PROBE=1, headless with Skia, 300 entries with 320x180
@@ -197,7 +211,8 @@ idle app holds (Measured 2026-10-30, below). Pick up in this order:
    (Status).
 2. ~~**DirectML after background removal and smart selection**~~: done 2026-10-31, both on the CPU, and the DirectML
    package swapped for the CPU one (Status).
-3. **NVENC** only if the user wants a child process: nothing in-process helped (under Idle, start-up and memory).
+3. **NVENC** only if the user wants a child process: nothing in-process helped (under Idle, start-up and memory). The
+   Record-mode warm-up's 190 MB with nothing recorded is done (Status).
 
 ### Measured 2026-10-30
 
@@ -299,9 +314,11 @@ These were covered by unit tests only; check them in the real app before a relea
 - **Overlay close**: after a recording whose overlay was excluded from capture, no yellow frame ghost stays on screen;
   a plain snip's close no longer repaints every window.
 - **Save** on a pin opened from part of another pin, and on a Compress editor freeze-frame pin.
-- **First recording of a run**: entering Record mode now warms FFmpeg, the encoder, the audio endpoint and the WGC
-  check up in the background (see Status). After a launch, the log should show one `Recording.WarmUp` line and the
-  first `Recording.StartTimings` line (`n=1`) close to the later ones.
+- **First recording of a run**: entering Record mode now warms FFmpeg, the encoder (on NVIDIA only the CUDA driver),
+  the audio endpoint and the WGC check up in the background (see Status). After a launch, the log should show one
+  `Recording.WarmUp` line (`encoderWarmUp=cuInit` on NVIDIA) and the first `Recording.StartTimings` line (`n=1`) within
+  about 50 ms of the later ones; entering Record mode and leaving without recording should leave the commit size about
+  35 MB higher, not 220.
 - **System-audio keep-alive**: while recording, the app shows as a silent session in the Volume Mixer, and each segment
   starts about 65 ms later. Nothing should be audible.
 - **Audio gate**: each pause and stop logs a `Recording.AudioGate` line (`head`, `tail`, `pad`, `waited`), with `pad`
@@ -537,8 +554,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   with 4, 8 or 16 `surfaces`, 198-256 on Direct3D 11 frames with a device each, and one Direct3D 11 device kept across
   encoders grew to 456 MB. Only an encoder that encodes nothing gains from Direct3D 11 (the AV1 check, done). Direct3D
   11 frames also cost a recording start the device, 140 ms on the default adapter and 300-330 with `vendor_id`, against
-  a CUDA open of 110-180 ms; with a kept device an open took 7-17 ms. Entering Record mode opens NVENC for the warm-up,
-  so the 190 MB is paid there even when nothing is recorded: the price of the faster first start.
+  a CUDA open of 110-180 ms; with a kept device an open took 7-17 ms. The Record-mode warm-up no longer opens NVENC,
+  only starts the CUDA driver, so entering Record mode without recording keeps about 8 MB of it, not 190 (Status).
 
 ## Suggested batch 2 split
 
