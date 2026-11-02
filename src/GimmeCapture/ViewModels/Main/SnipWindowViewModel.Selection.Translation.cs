@@ -6,6 +6,7 @@ using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Translation;
 using GimmeCapture.ViewModels.Floating;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -93,22 +94,26 @@ public partial class SnipWindowViewModel
 
                 if (bitmap == null) continue;
 
-                using var resizedBitmap = CreateOptimizedTranslationBitmap(
-                    bitmap,
-                    VisualScaling,
-                    TranslationSelectionCaptureMaxLongSide,
-                    out var effectiveScale);
-                var translationBitmap = resizedBitmap ?? bitmap;
-                LogTranslationMemoryState("translate-selection-capture", selectionBounds: sel.Bounds, bitmap: translationBitmap);
+                LogTranslationMemoryState("translate-selection-capture", selectionBounds: sel.Bounds, bitmap: bitmap);
 
                 token.ThrowIfCancellationRequested();
+                double visualScaling = VisualScaling;
                 var (blocks, errorKey) = await Task.Run(
-                    async () => await translationSession.AnalyzeAndTranslateAsync(
-                        translationBitmap,
-                        effectiveScale,
-                        settings.SourceLanguage,
-                        settings.TargetLanguage,
-                        token),
+                    async () =>
+                    {
+                        // Brought down to size here, on the pool, with the reading: it was done on the UI thread.
+                        using var resizedBitmap = CreateOptimizedTranslationBitmap(
+                            bitmap,
+                            visualScaling,
+                            TranslationSelectionCaptureMaxLongSide,
+                            out var effectiveScale);
+                        return await translationSession.AnalyzeAndTranslateAsync(
+                            resizedBitmap ?? bitmap,
+                            effectiveScale,
+                            settings.SourceLanguage,
+                            settings.TargetLanguage,
+                            token);
+                    },
                     token);
                 
                 if (token.IsCancellationRequested) break;
@@ -378,21 +383,15 @@ public partial class SnipWindowViewModel
                 AppLog.Debug("SnipWindowViewModel.Selection.Translation", "[TranslationMode] ScanAllText: FAILED to capture screen");
                 return;
             }
-            using var resizedBitmap = CreateOptimizedTranslationBitmap(
-                bitmap,
-                VisualScaling,
-                TranslationSearchCaptureMaxLongSide,
-                out _);
-            var detectionBitmap = resizedBitmap ?? bitmap;
-            AppLog.Debug("SnipWindowViewModel.Selection.Translation", $"[TranslationMode] ScanAllText: Captured bitmap {detectionBitmap.Width}x{detectionBitmap.Height}");
-            LogTranslationMemoryState("translation-scan-all-capture", bitmap: detectionBitmap);
+            AppLog.Debug("SnipWindowViewModel.Selection.Translation", $"[TranslationMode] ScanAllText: Captured bitmap {bitmap.Width}x{bitmap.Height}");
+            LogTranslationMemoryState("translation-scan-all-capture", bitmap: bitmap);
 
             // 使用 PaddleOCR 偵測文字區域
             using var ocrEngine = _ocrEngineFactory.Create(_services.AIResources, _services.SettingsService, _services.OcrRuntime);
             var ocrLang = _services.SettingsService.Settings.SourceLanguage;
             await ocrEngine.EnsureLoadedAsync(ocrLang);
             
-            var textBoxes = await Task.Run(() => ocrEngine.DetectText(detectionBitmap));
+            var (textBoxes, detectionWidth, detectionHeight) = await DetectWholeScreenTextAsync(ocrEngine, bitmap);
 
             AppLog.Debug("SnipWindowViewModel.Selection.Translation", $"[TranslationMode] Found {textBoxes.Count} text regions");
 
@@ -411,8 +410,8 @@ public partial class SnipWindowViewModel
                 foreach (var box in textBoxes)
                 {
                     // 座標從 bitmap 空間轉換回螢幕邏輯座標
-                    double scaleX = ViewportSize.Width / detectionBitmap.Width;
-                    double scaleY = ViewportSize.Height / detectionBitmap.Height;
+                    double scaleX = ViewportSize.Width / detectionWidth;
+                    double scaleY = ViewportSize.Height / detectionHeight;
 
                     var bounds = new Rect(
                         box.Left * scaleX,
@@ -813,7 +812,23 @@ public partial class SnipWindowViewModel
         return totalLines;
     }
 
-    private SKBitmap? CreateOptimizedTranslationBitmap(
+    /// <summary>
+    /// The text boxes of a grab of the whole screen, found in a copy at most
+    /// <see cref="TranslationSearchCaptureMaxLongSide"/> px long, and the width and height of the copy they are measured
+    /// in. All of it on the pool: the copy was made on the UI thread, which it kept for about 33 ms on a 1920x1080 or a
+    /// 4K screen and 18 ms on two screens side by side (it costs by the copy's size; Ryzen 5 7535HS,
+    /// <c>SnipWindowViewModelTranslationBitmapTests</c>).
+    /// </summary>
+    private static Task<(List<SKRectI> Boxes, int Width, int Height)> DetectWholeScreenTextAsync(
+        GimmeCapture.Services.Core.Interfaces.IOCREngine engine, SKBitmap screen) => Task.Run(() =>
+    {
+        using SKBitmap? resized =
+            CreateOptimizedTranslationBitmap(screen, 1, TranslationSearchCaptureMaxLongSide, out _);
+        SKBitmap detection = resized ?? screen;
+        return (engine.DetectText(detection), detection.Width, detection.Height);
+    });
+
+    internal static SKBitmap? CreateOptimizedTranslationBitmap(
         SKBitmap sourceBitmap,
         double baseScale,
         int maxLongSide,

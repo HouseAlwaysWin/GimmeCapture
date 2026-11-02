@@ -111,6 +111,10 @@
   kept, even when the first was already sure of every character. A line now stops at a reading that is sure throughout:
   on 50 real captures (610 lines) that left out a third of the readings and changed one character in 6626. Quick OCR,
   translation and the automatic choice of OCR language all read this way.
+- **Translation mode's text search no longer holds up the overlay while it copies the screen.** Finding the text on the
+  whole screen began with a smaller copy of it, made on the app's main thread each time the search ran: about 33 ms at
+  1920x1080 or 4K. A large selection was brought down to size there too before it was translated. Both copies are now
+  made in the background, with the reading.
 - **A capture's text boxes come up sooner when OCR has been idle.** The capture overlay looked for text only once it
   was on screen, and OCR, which unloads after two minutes unused, then loaded both its models, though the overlay only
   finds text and never reads it, and ran its first detection slowly while the graphics card set itself up: 0.6-0.8 s
@@ -273,6 +277,9 @@
 
 ### 💾 Storage
 
+- **A two-pass compress no longer writes a second copy of the video to the temporary folder.** Its first pass, run only
+  for the encoder's statistics, also wrote the whole video there, about as large as the finished file, and nothing read
+  it. It now writes no video, and the finished file is the same.
 - **The Windows download is about 10 MB smaller.** With background removal and smart selection on the CPU like OCR,
   nothing used the graphics-card build of ONNX Runtime any more. The app now ships its CPU build, without DirectML:
   the app's folder is 21 MB smaller and the zip about 10 MB. An update copies the new version over the old one and

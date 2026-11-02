@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 55 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 57 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -369,6 +369,17 @@ tool.
   changed, `Racing)` read as `Racing>`, which the capture does not settle. A weakest character of 0.5 changed 7 boxes,
   0.4 changed 14. Reading a dark crop inverted first, as the item suggested, ran more passes, not fewer (1433 against
   1142 at 0.9): the model reads light text on dark well. Batching boxes by width is still open.
+- Done since batch 1: **the OCR search's whole-screen copy on the UI thread** (OCR's "Full-screen resize" item, the
+  off-the-UI-thread half) and **two-pass pass 1's `pass1.mp4`** (from Compress's rotation item). The search and Scan All
+  made the 1600 px Mitchell copy of the grab on the UI thread before the detection's `Task.Run`, and a translated
+  selection over 1600 px likewise; `DetectWholeScreenTextAsync` and the selection's own `Task.Run` now make it on the
+  pool. `SnipWindowViewModelTranslationBitmapTests` (opt-in OCR_SEARCH_RESIZE_PROBE=1, the laptop): 33.4 ms median at
+  1920x1080, 34.6 at 2560x1440, 17.6 at 3968x1160, 33.6 at 3840x2160 (the copy's size sets the cost).
+  `LibavClipExporter` sends a two-pass encode's first pass to FFmpeg's null muxer, as `ffmpeg -pass 1 -f null` does;
+  `LibavClipExporterTwoPassTests` fails against the old exporter, and its opt-in TWOPASS_PROBE=<clip> gave the same
+  files before and after on two recordings (2.82 and 2.95 MB for 3 MB targets, 6.2 and 3.2 s). Also struck as stale:
+  "`GimmeCapture_*` folders in %TEMP% are never swept after a crash", since `TempWorkspaceCleaner` deletes every
+  `GimmeCapture_*` folder older than 12 h at start-up.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -582,7 +593,8 @@ These were covered by unit tests only; check them in the real app before a relea
   WebM. The pin should keep playing smoothly while it exports, both files should have the sound, and the temp folder
   should keep no new `GimmeCapture_Export_*` folder after the save (the copy keeps one, holding just its WebM).
 - **Reading text**: Quick OCR and translate a light window and a dark one (a dark-themed editor, say). The text should
-  come out as before, a little sooner.
+  come out as before, a little sooner. In Translate mode, the text search's boxes should land on the text as before,
+  on each screen.
 
 ## How to run a batch
 
@@ -603,12 +615,15 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   `StatelessExecutor`, which creates a context (KV cache for 2048 tokens) and prefills from zero per call. Fix: one
   long-lived context, the per-language-pair instruction prefix decoded once and forked per request
   (BatchedExecutor/Conversation), blocks batched into one prompt. Measure first; no load-time log exists yet.
-- **Auto re-probes the language in every overlay** (S). `OcrScriptDetector.cs:85-112`: keep the Auto verdict app-wide.
-  Each probe swaps recognizers, which now costs ~135 ms each (the shared detector stays loaded). Only matters with
-  several OCR languages installed.
+- **Auto re-probes the language in every overlay** (S, the user's call). `OcrScriptDetector.cs:85-112`: keep the Auto
+  verdict app-wide. Each probe swaps recognizers, which now costs ~135 ms each (the shared detector stays loaded). Only
+  matters with several OCR languages installed, as the user has (Auto, with Simplified and Traditional Chinese). The
+  detector keeps its verdict for one overlay on purpose: kept app-wide, a capture in the other script (a Simplified
+  Chinese page after Traditional ones) would be read with the wrong model until something re-probes.
 - **11 MB input tensor allocated per scan** (S). `PaddleOCREngine.cs:78`. Reuse belongs in `OcrRuntimeService`.
-- **Full-screen resize on the UI thread per OCR search** (S). `SnipWindowViewModel.Selection.AIScan.cs:216` resizes to
-  1600 px (Mitchell), then `DetectText` resizes again to 1280. Do one resize, off the UI thread.
+- **Two resizes per OCR search** (S). The search copies the grab to 1600 px (Mitchell, now on the pool: Status), then
+  `DetectText` resizes again to 1280. One would do, but it changes what the detector sees: compare the boxes found on
+  real captures first.
 
 ### Recording
 
@@ -659,10 +674,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   bar shows 100%, then remuxes. Write chunks in place, concatenate straight into the final mux, build audio alongside.
 - **Rotation round-trips every frame through BGRA** (S-M). `LibavClipExporter.cs` (~338, 913-956): sws to BGRA, Skia
   rotate, sws back. Use transpose/hflip,vflip in the YUV graph or display-matrix rotation; render static annotations
-  once. Two-pass pass 1 also writes a `pass1.mp4` nobody reads.
+  once.
 - **Small ones**: every CRF-slider tick saves `compress-session.json` on the UI thread
-  (`MainWindowViewModel.VideoCompress.cs:552-559`); `GimmeCapture_*` folders in %TEMP% are never swept after a crash;
-  preview frames are decoded on the GPU, downloaded at full size and scaled on the CPU.
+  (`MainWindowViewModel.VideoCompress.cs:552-559`; a small file, written without a flush, and a delayed save could lose
+  the last change at exit: measure before changing it); preview frames are decoded on the GPU, downloaded at full size
+  and scaled on the CPU.
 
 ### Pins
 

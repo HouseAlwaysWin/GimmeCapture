@@ -276,8 +276,8 @@ internal static class LibavClipExporter
 
         try
         {
-            // True two-pass (libx264 target-size only): pass 1 writes stats to a temp log, pass 2 reads them.
-            // H.265 / CRF fall through to the single encode. Progress spans both passes (0..0.5, 0.5..1).
+            // True two-pass (libx264 target-size only): pass 1 writes stats to a temp log and no video, pass 2 reads
+            // them. H.265 / CRF fall through to the single encode. Progress spans both passes (0..0.5, 0.5..1).
             bool realTwoPass = opt.TwoPass && opt.TargetVideoBitrateKbps > 0 && opt.Codec == VideoCodec.H264;
             if (realTwoPass)
             {
@@ -504,7 +504,11 @@ internal static class LibavClipExporter
             // to H.264/H.265, which must stay on the original 8-bit path.
             bool isAv1 = enc->id == AVCodecID.AV_CODEC_ID_AV1;
 
-            ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, "mp4", outputPath), "clip_alloc_output");
+            // The first of two passes runs for x264's statistics alone, so its packets go to FFmpeg's null muxer, which
+            // writes nothing, as `ffmpeg -pass 1 -f null` does. It wrote an MP4 of the whole video that nothing read.
+            ThrowIfErr(
+                ffmpeg.avformat_alloc_output_context2(&outFmt, null, passNumber == 1 ? "null" : "mp4", outputPath),
+                "clip_alloc_output");
             if (outFmt == null)
             {
                 throw new InvalidOperationException("Failed to allocate clip output context.");
