@@ -324,10 +324,15 @@ public partial class SnipWindowViewModel
     // the write lands, so the spinner's job is to say what is unfinished, not just that something is.
     private Task ExecuteCopyCaptureAsync() => RunCaptureCommitAsync("StatusCopyingToClipboard", async bitmap =>
     {
+        // One PNG for the clipboard and the history copy, with the fast settings, off the UI thread. The clipboard
+        // encoded one at full compression and the history another, and the overlay stayed up for both: 342 + 350 ms
+        // on a 1920x1080 desktop, against 73 ms now, for a PNG 17% larger (SnipCopyProbeTests).
+        byte[]? png = await Task.Run(() => EncodeCopyPng(bitmap));
+
         // A clipboard write that loses the race for the clipboard leaves the PREVIOUS content in place, so
         // reporting an unconditional "copied" here is what made the next paste silently yield the previous
         // capture. Report what actually happened; the capture is still persisted to history either way.
-        bool copied = await _captureService.CopyToClipboardAsync(bitmap);
+        bool copied = png != null && await _captureService.CopyPngToClipboardAsync(png);
 
         // The confirmation carries a thumbnail of what landed, so the answer to "what am I about to paste?" is
         // on screen instead of something you have to paste to find out. Built here because the ritual disposes
@@ -335,14 +340,48 @@ public partial class SnipWindowViewModel
         _host.SetCopyStatus(copied, copied ? _clipboardPreviewFactory(bitmap) : null);
 
         // Copies are clipboard-only by default; when history is on, persist a managed copy so it
-        // shows up in the history panel (and is cleaned up on remove/prune).
-        if (_settings != null && _settings.EnableHistory && _services != null)
+        // shows up in the history panel (and is cleaned up on remove/prune). Not waited for: nothing on screen
+        // depends on it, so the overlay closes once the clipboard has the picture.
+        if (png != null && _settings != null && _settings.EnableHistory && CopyHistory is { } keep)
         {
-            var copyPath = _services.CaptureHistory.CreateManagedCapturePath("png");
-            await _captureService.SaveToFileAsync(bitmap, copyPath);
-            _services.CaptureHistory.AddImageAsync(copyPath, GimmeCapture.Models.CaptureHistorySource.PlainCopy).Forget("CaptureHistory.AddCopy");
+            keep(png).Forget("CaptureHistory.AddCopy");
         }
     });
+
+    private static byte[]? EncodeCopyPng(SKBitmap bitmap)
+    {
+        if (FloatingBitmapConversionHelper.TryEncodeSkBitmap(
+                bitmap, SKEncodedImageFormat.Png, 100, out var png, out var error, fastPng: true))
+        {
+            return png;
+        }
+
+        AppLog.Warning("SnipCapture.CopyEncode", error ?? "The capture could not be encoded.");
+        return null;
+    }
+
+    private Func<byte[], Task>? _copyHistoryForTest;
+
+    /// <summary>
+    /// Test seam: where a copy's PNG goes when history is on, which without the app's services (the ViewModel tests
+    /// have none) is nowhere. Production never calls this.
+    /// </summary>
+    internal void UseCopyHistoryForTest(Func<byte[], Task> keep) => _copyHistoryForTest = keep;
+
+    private Func<byte[], Task>? CopyHistory => _copyHistoryForTest
+        ?? (_services is { } services ? png => KeepCopyInHistoryAsync(services.CaptureHistory, png) : null);
+
+    /// <summary>Writes a copy's PNG, as the clipboard got it, into the history's own folder and adds it there.</summary>
+    internal static async Task KeepCopyInHistoryAsync(CaptureHistoryService history, byte[] png)
+    {
+        string copyPath = await Task.Run(() =>
+        {
+            string path = history.CreateManagedCapturePath("png");
+            System.IO.File.WriteAllBytes(path, png);
+            return path;
+        });
+        await history.AddImageAsync(copyPath, CaptureHistorySource.PlainCopy);
+    }
 
     // Test hook: drives the private copy-capture flow directly (the production trigger is a ReactiveCommand), so
     // the shared commit ritual can be unit-tested without a UI thread — specifically that a frozen commit reads

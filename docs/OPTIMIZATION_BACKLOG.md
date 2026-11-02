@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 41 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 51 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -314,6 +314,19 @@ tool.
   Standby the item guessed. Left: fewer probes while no window is shown, at the cost of precision when a hotkey arrives
   in the tray. The probe also found that `Dispatcher.MainLoop(token)` sleeps through a token cancelled from another
   thread (10 min and 2 h 44 min, until a UAC prompt); the three probes' `PumpFor` cancel from the UI thread now.
+- Done since batch 1: **a copy from the overlay encoded its PNG twice** (from Snip overlay, the copy half of "Frozen
+  commits keep the overlay up"). History is on by default, and a copy encoded the picture at full compression on the
+  clipboard's STA thread, decoded it through GDI+ for CF_BITMAP, then encoded it again into the history's file, all
+  before the capture ritual closed the overlay, which a frozen screenshot (the default) keeps on screen meanwhile.
+  `SnipCopyProbeTests` (SNIP_COPY_PROBE=1, the real 1920x1080 desktop of the Ryzen 5 7535HS laptop, eight runs of
+  each in turn, medians, two screen contents): before 342 + 28 + 350 ms and 124 + 10 + 125; now one fast PNG (zlib 1,
+  Sub, as pins' copies use) 73 + 20 and 25 + 8, the history's file written from the same bytes in 1-2 ms. The PNG is
+  17% and 30% larger (1226 to 1438 KB, 585 to 762). `ExecuteCopyCaptureAsync` now encodes on the pool and hands the
+  bytes to `IScreenCaptureService.CopyPngToClipboardAsync` (it took an `SKBitmap` and encoded it on the STA thread, or
+  on Linux on the UI thread), and `KeepCopyInHistoryAsync` writes them and adds the entry without the overlay waiting.
+  `SnipWindowViewModelTests` hold the clipboard's PNG and the history's to the same bytes and the close to not wait;
+  SNIP_COPY_PROBE=clipboard writes to the real clipboard and reads back the PNG and the bitmap, and was not run (it
+  replaces what the clipboard holds). Save still encodes the user's file at full compression with the overlay up.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -516,6 +529,10 @@ These were covered by unit tests only; check them in the real app before a relea
   `MemoryTrim.WorkingSet*` lines. Only one such press has been measured, before the change.
 - **Compress tab**: open it with the long queue: no `UiStall`, and scrolling the queue shows each file's own preset and
   category. Pick a category for a file, exit from the tray, start again: the category is still there.
+- **Copying a screenshot** (history on, as by default): select a large part of the screen on a frozen screenshot and
+  press Ctrl+C, then the same on a live one. The overlay should go about as soon as the key is pressed, and the toast
+  show the thumbnail. Paste into Paint (it takes the bitmap) and into Chrome or Discord (they take the PNG): both
+  should show the capture. The History tab should have the copy, and it should open, copy and pin from there as before.
 
 ## How to run a batch
 
@@ -638,9 +655,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **Hover animation renders at 60 Hz while the overlay sits idle** (S). `Selection.AIScan.cs:26` (16 ms timer, no
   settled exit at :564-570), `HoverRectangleAnimationController.cs:63`; the dirty rect is often the whole screen. Stop
   once the move ends or tick at 30 Hz or less.
-- **Frozen commits keep the overlay up while the pin window is built** (M). `Capture.cs:464`; copy with history on
-  re-encodes the PNG the clipboard path already encoded (`:342`, `WindowsScreenCaptureService.cs:440-441`). Hide the
-  frozen overlay right after the crop, reuse the PNG bytes. (Explains the 307 ms "blocked" stall before close.)
+- **Frozen commits keep the overlay up while the pin window is built** (M). `Capture.cs:464`: hide the frozen overlay
+  right after the crop. (Explains the 307 ms "blocked" stall before close.) The copy's second encode is done (Status);
+  a Save still keeps a frozen overlay up through its full-compression encode, 0.35 s for a 1920x1080 screen, which the
+  user's own file should keep.
 - **Record-mode audio meter** (S). `SnipWindowViewModel.cs:507`: a 120 ms timer in Record mode even when idle, MMDevice
   COM objects created on the UI thread at the first tick (`AudioLevelMonitorService.cs:54-59`), the mic metered when not
   recorded, at least six notifications per tick (`:749-772`). A long-lived meter off the UI thread posting changes only.

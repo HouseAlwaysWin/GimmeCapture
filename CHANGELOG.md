@@ -165,6 +165,11 @@
   a photo. An annotated pin, or a selection, also made a whole new picture for each copy, and a rotation one for its
   annotations, which none of them let go of. The annotations are now drawn into the one copy that is encoded, and the
   selection cut out of it in place.
+- **Copying a screenshot is done sooner, and encodes the picture once.** A copy encoded the picture as a PNG for the
+  clipboard and again for its copy in the history, both at full compression, and a frozen screenshot's overlay stayed
+  on screen until both were done: 0.26-0.72 s for a whole 1920x1080 screen, seconds at 4K. One PNG with the faster
+  settings now goes to both, in 0.03-0.09 s for the same screen, and the history's copy is written after the overlay
+  has closed. Those history copies take 17-30% more disk space for it.
 - **Saving a pin with annotations leaves the pin alone while its dialog is open.** The save drew the annotations into a
   copy of the picture and put that copy in the pin for as long as the dialog was open, cancelled or not: the pin drew
   its annotations twice meanwhile, so a highlighter looked darker, a smart selection lost its points, and the copy (33

@@ -119,7 +119,7 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
         });
     }
 
-    public async Task<bool> CopyToClipboardAsync(SKBitmap bitmap)
+    public async Task<bool> CopyPngToClipboardAsync(byte[] png)
     {
         // Reports failure honestly: a silent miss here leaves the PREVIOUS clipboard content in place,
         // and the UI would otherwise claim "Copied" over a stale image.
@@ -133,9 +133,7 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
                     return false;
                 }
 
-                using var image = SKImage.FromBitmap(bitmap);
-                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                using var stream = data.AsStream();
+                using var stream = new System.IO.MemoryStream(png, writable: false);
                 var avaloniaBitmap = new global::Avalonia.Media.Imaging.Bitmap(stream);
                 await global::Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
                 return true;

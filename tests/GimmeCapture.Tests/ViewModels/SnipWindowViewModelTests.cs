@@ -667,7 +667,7 @@ public class SnipWindowViewModelTests
                 It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
             .ReturnsAsync(new SkiaSharp.SKBitmap(40, 30));
         capture
-            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .Setup(c => c.CopyPngToClipboardAsync(It.IsAny<byte[]>()))
             .ReturnsAsync(writeLanded);
 
         var coordinator = new Mock<ICaptureVisibilityCoordinator>();
@@ -702,7 +702,7 @@ public class SnipWindowViewModelTests
                 It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
             .ReturnsAsync(new SkiaSharp.SKBitmap(40, 30));
         capture
-            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .Setup(c => c.CopyPngToClipboardAsync(It.IsAny<byte[]>()))
             .ReturnsAsync(writeLanded);
 
         var coordinator = new Mock<ICaptureVisibilityCoordinator>();
@@ -737,7 +737,7 @@ public class SnipWindowViewModelTests
                 It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
             .ReturnsAsync(new SkiaSharp.SKBitmap(400, 300));
         capture
-            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .Setup(c => c.CopyPngToClipboardAsync(It.IsAny<byte[]>()))
             .ReturnsAsync(writeLanded);
 
         var coordinator = new Mock<ICaptureVisibilityCoordinator>();
@@ -805,7 +805,7 @@ public class SnipWindowViewModelTests
 
         var writeLanded = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         capture
-            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .Setup(c => c.CopyPngToClipboardAsync(It.IsAny<byte[]>()))
             .Returns(writeLanded.Task);
 
         var coordinator = new Mock<ICaptureVisibilityCoordinator>();
@@ -853,7 +853,7 @@ public class SnipWindowViewModelTests
                 It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
             .ReturnsAsync(new SkiaSharp.SKBitmap(40, 30));
         capture
-            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .Setup(c => c.CopyPngToClipboardAsync(It.IsAny<byte[]>()))
             .ReturnsAsync(true);
 
         var coordinator = new Mock<ICaptureVisibilityCoordinator>();
@@ -889,7 +889,7 @@ public class SnipWindowViewModelTests
         var capture = new Mock<IScreenCaptureService>();
         var writeLanded = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         capture
-            .Setup(c => c.CopyToClipboardAsync(It.IsAny<SkiaSharp.SKBitmap>()))
+            .Setup(c => c.CopyPngToClipboardAsync(It.IsAny<byte[]>()))
             .Returns(writeLanded.Task);
 
         var coordinator = new Mock<ICaptureVisibilityCoordinator>();
@@ -916,6 +916,125 @@ public class SnipWindowViewModelTests
 
         Assert.Equal(0, shown);
         Assert.False(vm.ShowProcessingOverlay); // the overlay spinner is torn down at the end, as before
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CopyCapture_KeepsTheClipboardsOwnPng_InTheHistory(bool historyOn)
+    {
+        // The clipboard and the history each encoded the capture at full compression, and the overlay stayed up for
+        // both. One PNG of the captured picture now goes to the clipboard and, with history on, to the history.
+        var (snip, capture) = await CreateLiveCopyAsync(historyOn);
+        using var vm = snip;
+        byte[]? copied = null;
+        capture
+            .Setup(c => c.CopyPngToClipboardAsync(It.IsAny<byte[]>()))
+            .Callback<byte[]>(png => copied = png)
+            .ReturnsAsync(true);
+        var kept = new List<byte[]>();
+        vm.UseCopyHistoryForTest(png =>
+        {
+            kept.Add(png);
+            return Task.CompletedTask;
+        });
+
+        await vm.RunCopyCaptureForTestAsync();
+
+        Assert.NotNull(copied);
+        using (var decoded = SKBitmap.Decode(copied))
+        {
+            Assert.Equal((40, 30), (decoded.Width, decoded.Height));
+            Assert.Equal(SKColors.CornflowerBlue, decoded.GetPixel(20, 15));
+        }
+
+        if (historyOn)
+        {
+            Assert.Same(copied, Assert.Single(kept));
+        }
+        else
+        {
+            Assert.Empty(kept);
+        }
+    }
+
+    [Fact]
+    public async Task CopyCapture_ClosesOnceTheClipboardHasIt_WithoutWaitingForTheHistory()
+    {
+        // Nothing on screen depends on the history's copy, so a frozen overlay no longer stays up while it is
+        // written, nor a live one's stand-in spinner.
+        var (snip, capture) = await CreateLiveCopyAsync(historyOn: true);
+        using var vm = snip;
+        capture.Setup(c => c.CopyPngToClipboardAsync(It.IsAny<byte[]>())).ReturnsAsync(true);
+        var historyWritten = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        vm.UseCopyHistoryForTest(_ => historyWritten.Task);
+        int closed = 0;
+        vm.CloseAction = () => closed++;
+
+        await vm.RunCopyCaptureForTestAsync();
+
+        Assert.Equal(1, closed);
+        Assert.False(historyWritten.Task.IsCompleted);
+        historyWritten.SetResult();
+    }
+
+    [Fact]
+    public async Task KeepCopyInHistory_WritesThePngItWasGiven_AsAPlainCopy()
+    {
+        string dir = Path.Combine(
+            Path.GetTempPath(), "GimmeCapture.Tests", nameof(SnipWindowViewModelTests), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var history = new CaptureHistoryService(new AppSettingsService(dir), rootDirectoryOverride: dir);
+            using var picture = new SKBitmap(40, 30);
+            picture.Erase(SKColors.CornflowerBlue);
+            using var encoded = picture.Encode(SKEncodedImageFormat.Png, 100);
+            byte[] png = encoded.ToArray();
+
+            await SnipWindowViewModel.KeepCopyInHistoryAsync(history, png);
+
+            var item = Assert.Single(await history.GetItemsAsync());
+            Assert.Equal(CaptureHistorySource.PlainCopy, item.Source);
+            Assert.Equal(png, File.ReadAllBytes(item.FilePath));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>A live overlay whose commit grabs a 40x30 CornflowerBlue picture, the main view model as its host.</summary>
+    private static async Task<(SnipWindowViewModel Vm, Mock<IScreenCaptureService> Capture)>
+        CreateLiveCopyAsync(bool historyOn)
+    {
+        var capture = new Mock<IScreenCaptureService>();
+        capture
+            .Setup(c => c.CaptureScreenWithAnnotationsAsync(
+                It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(),
+                It.IsAny<IEnumerable<Annotation>>(), It.IsAny<IEnumerable<UserSelectionRect>>(),
+                It.IsAny<IEnumerable<TranslatedBlock>>(), It.IsAny<bool>()))
+            .ReturnsAsync(() =>
+            {
+                var grabbed = new SKBitmap(40, 30);
+                grabbed.Erase(SKColors.CornflowerBlue);
+                return grabbed;
+            });
+
+        var coordinator = new Mock<ICaptureVisibilityCoordinator>();
+        coordinator
+            .Setup(c => c.HideAndWaitForCaptureAsync(It.IsAny<Action>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        mainVm.EnableHistory = historyOn;
+
+        var vm = new SnipWindowViewModel(
+            Colors.Red, 2.0, capture.Object, captureVisibilityCoordinator: coordinator.Object, host: mainVm, settings: mainVm);
+        vm.UseClipboardPreviewFactoryForTest(_ => null);
+        vm.SelectionRect = new Rect(10, 10, 40, 30);
+        return (vm, capture);
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)

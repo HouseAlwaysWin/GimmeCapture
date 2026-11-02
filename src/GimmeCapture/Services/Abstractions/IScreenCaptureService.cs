@@ -14,10 +14,11 @@ public interface IScreenCaptureService
         IEnumerable<UserSelectionRect>? translationSelections = null,
         IEnumerable<TranslatedBlock>? translationBlocks = null,
         bool includeCursor = false);
-    /// <summary>Copy an image to the clipboard. Returns <c>true</c> if the write succeeded, <c>false</c> if it
-    /// failed or timed out. A failed write leaves the PREVIOUS clipboard content in place, so callers must not
-    /// report a successful copy on <c>false</c> — that is what makes the next paste yield the previous image.</summary>
-    Task<bool> CopyToClipboardAsync(SKBitmap bitmap);
+    /// <summary>Copy an image, encoded as <paramref name="png"/>, to the clipboard. Returns <c>true</c> if the write
+    /// succeeded, <c>false</c> if it failed or timed out. A failed write leaves the PREVIOUS clipboard content in
+    /// place, so callers must not report a successful copy on <c>false</c> — that is what makes the next paste yield
+    /// the previous image.</summary>
+    Task<bool> CopyPngToClipboardAsync(byte[] png);
 
     /// <summary>Copy text to the clipboard. Returns <c>true</c> if the write succeeded, <c>false</c> if it
     /// failed or timed out — so callers don't falsely report a successful copy.</summary>

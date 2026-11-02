@@ -523,7 +523,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         canvas.DrawPath(path, paint);
     }
 
-    public async Task<bool> CopyToClipboardAsync(SKBitmap bitmap)
+    public async Task<bool> CopyPngToClipboardAsync(byte[] png)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -531,20 +531,14 @@ public class WindowsScreenCaptureService : IScreenCaptureService
              * Windows-specific implementation using System.Windows.Forms.Clipboard for maximum compatibility
              * with other Windows apps. The OLE write is SYNCHRONOUS and can wedge for a long time — a large image
              * racing the Windows clipboard-history listeners (or another app holding the clipboard open) can stall
-             * it. Running it on the UI thread froze the whole app, so do the encode + write on a dedicated STA
+             * it. Running it on the UI thread froze the whole app, so do the decode + write on a dedicated STA
              * thread bounded by a timeout. The write flushes the data (copy:true), so it persists on the clipboard
              * after the worker thread exits.
              */
             var copied = await StaClipboard.RunAsync(() =>
             {
-                using var image = SKImage.FromBitmap(bitmap);
-                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                using var stream = data.AsStream();
-                using var ms = new MemoryStream();
-                stream.CopyTo(ms);
-                ms.Position = 0;
-
-                using var winBitmap = new System.Drawing.Bitmap(ms);
+                using var forBitmap = new MemoryStream(png, writable: false);
+                using var winBitmap = new System.Drawing.Bitmap(forBitmap);
 
                 // Same payload Clipboard.SetImage would write, but routed through the shared retry budget:
                 // SetImage's built-in ~1s of retries is shorter than a clipboard manager can hold the clipboard
@@ -554,8 +548,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 payload.SetData(System.Windows.Forms.DataFormats.Bitmap, autoConvert: true, winBitmap);
                 // PNG alongside the bitmap so modern apps (Chrome/Discord/Slack) keep transparency,
                 // matching the pin-window copy path.
-                ms.Position = 0;
-                payload.SetData("PNG", false, ms);
+                payload.SetData("PNG", false, new MemoryStream(png, writable: false));
                 StaClipboard.SetDataObjectFlushed(payload);
             }, StaClipboard.WriteTimeout, "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
 
@@ -579,13 +572,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                     return false;
                 }
 
-                using var image = SKImage.FromBitmap(bitmap);
-                using var encodedData = image.Encode(SKEncodedImageFormat.Png, 100);
-                using var stream = encodedData.AsStream();
-                using var ms = new MemoryStream();
-                stream.CopyTo(ms);
-                ms.Position = 0;
-
+                using var ms = new MemoryStream(png, writable: false);
                 var avaloniaBitmap = new global::Avalonia.Media.Imaging.Bitmap(ms);
                 await global::Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
                 return true;
