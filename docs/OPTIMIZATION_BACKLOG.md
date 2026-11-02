@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 58 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 60 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -395,6 +395,24 @@ tool.
   warmer processor), which first showed the kept decoder slower at software steps back. Open, the decoder holds 70-90 MB
   of the process, on the CPU or the GPU. Not done: a step back still decodes from the keyframe; keeping the few frames
   before the one shown would make repeated steps back instant.
+- Done since batch 1: **GIF/WebM output's extra encode, and its Pause** (Compress and the editor). `EncodeGifWebmAsync`
+  transcodes the source itself when `NeedsNoIntermediate` (the whole clip at its own speed, no crop, rotation, burn-in
+  or filter, and for a WebM sound not mixed to mono: the transcoders' sound is stereo, as the intermediate's AAC is) and
+  `CapsLeaveTheSource` (no size cap below the source's height, and for a WebM no frame-rate cap below its rate, probed
+  only when a cap is set) hold. The GIF and WebM transcoders wait on the pause gate before every packet, as the clip
+  exporter does. `CompressPipelineGifWebmTests`: an unedited clip makes no intermediate, each kind of edit still does,
+  both ways give the same frames, length, size and sound on a constant-rate clip, and a pause during the transcode stops
+  it both ways (all four fail with the transcoders' waits taken out); the progress and cancel tests run both ways. Its
+  opt-in COMPRESS_GIFWEBM_PROBE=<clip> (COMPRESS_GIFWEBM_PROBE_FORMATS=.gif) runs each way twice, through, from, from,
+  through, with the tab's defaults (CRF 22, medium) on the laptop: a 4.1 s 1054x630 H.264 recording's GIF took
+  5.14-5.22 s through the intermediate against 4.21-4.30 from the source, a 34.6 s 1450x900 HEVC one's 20.45-20.49
+  against 14.81-14.95. Run once each way, through first: the 16.3 s 2432x660 one's GIF 9.13 against 5.78 s, and the
+  three WebMs 8.36 against 6.15, 33.89 against 29.28 and 35.47 against 28.55 s. The 4.1 s clip's first run, through
+  then from in a fresh process, took 7.04 and 7.40 s, which first looked like no gain. The HEVC recording's GIF
+  came out at 6.6 MB against 14.2 (the other two 1-5% smaller), 34.27 s long with 513 frames against 34.67 and 520: its
+  video ends at 34.27 s, and the intermediate held the last frame to the end of the 34.6 s sound. Correction to the
+  entry on its cancel above: the 41% for a 4.2 s clip's GIF counted the transcode's palette pass as the intermediate's
+  (a GIF's file appears only at its second pass); the WebMs' shares were right.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -602,11 +620,19 @@ These were covered by unit tests only; check them in the real app before a relea
   show the thumbnail. Paste into Paint (it takes the bitmap) and into Chrome or Discord (they take the PNG): both
   should show the capture. The History tab should have the copy, and it should open, copy and pin from there as before.
 - **Compressing to GIF or WebM**: queue a recording of half a minute or more with GIF as the output and start it. The
-  bar should keep moving to the end instead of sitting at 100% for most of the time. Start it again and cancel past
-  the middle: the file should end as cancelled, not done, with no GIF in the output folder. Then the same with WebM.
+  bar should keep moving to the end instead of sitting at 100% for most of the time, and with nothing edited the GIF
+  should come out sooner than in 0.70.0 and play as before. Pause past the middle: the bar should stop until Resume, and
+  the file still come out whole; do it once more with the recording trimmed in the editor. Start it again and cancel
+  past the middle: the file should end as cancelled, not done, with no GIF in the output folder. Then the same with
+  WebM, whose sound should stay with the picture.
 - **Exporting a pinned video as WebM**: pin a recording with sound, cut a piece out of it, then Save as WebM and Copy as
   WebM. The pin should keep playing smoothly while it exports, both files should have the sound, and the temp folder
   should keep no new `GimmeCapture_Export_*` folder after the save (the copy keeps one, holding just its WebM).
+- **Stepping in the Compress editor**: open a recording of a minute or so in the editor, step forward and back, skip 5 s
+  both ways, drop the slider, rotate and turn crop on and off. Each should answer at once, a step back a little slower,
+  and show the right frame. Open the quality comparison, step there too and close it: the log should have no
+  `Compress.Compare` or `Compress.Edit` errors. Leave the editor alone for a minute, then step again: it should still
+  work. Close the editor and rename the recording in Explorer: it should not be in use.
 - **Reading text**: Quick OCR and translate a light window and a dark one (a dark-themed editor, say). The text should
   come out as before, a little sooner. In Translate mode, the text search's boxes should land on the text as before,
   on each screen.
@@ -672,11 +698,9 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Compress and the editor
 
-- **GIF/WebM output: an extra encode** (S-M). `CompressPipeline.EncodeGifWebmAsync`: an H.264 CRF 18 intermediate at the
-  user's preset even with no edits; transcode the source directly when nothing is edited. Compress's progress and cancel
-  are done (Status); still open there: Pause during the transcode. The recording's and the pin's GIF and WebM show the
-  indeterminate bar every progress window has (the user's call: a bar that fills changes its look; the transcoders can
-  report).
+- **The recording's and the pin's GIF and WebM show an indeterminate bar** (S, the user's call), as every progress
+  window does: a bar that fills changes its look; the transcoders can report. Compress's GIF and WebM (the extra encode,
+  progress, cancel and pause) are done (Status).
 - **A target size at or above the source's size still encodes** (S). `CompressBatchRunner.cs:116-124`: stream-copy
   with `LibavMuxer.RemuxAllStreams` when unedited, otherwise cap at the source bitrate. Audio-only M4A from an AAC
   source can stream-copy too.

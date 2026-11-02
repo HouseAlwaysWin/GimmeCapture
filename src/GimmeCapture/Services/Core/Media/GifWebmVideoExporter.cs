@@ -29,9 +29,10 @@ internal static class GifWebmVideoExporter
     /// </summary>
     public static bool TranscodeToGif(
         string sourcePath, string outputPath, int gifFps, int maxWidth,
-        IProgress<double>? progress = null, CancellationToken ct = default)
+        IProgress<double>? progress = null, CancellationToken ct = default, ManualResetEventSlim? pauseGate = null)
     {
-        LibavGifTranscoder.TranscodeToGif(sourcePath, outputPath, gifFps, maxWidth, progress: progress, cancellationToken: ct);
+        LibavGifTranscoder.TranscodeToGif(
+            sourcePath, outputPath, gifFps, maxWidth, progress: progress, cancellationToken: ct, pauseGate: pauseGate);
         return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
     }
 
@@ -39,17 +40,17 @@ internal static class GifWebmVideoExporter
     /// WebM: VP9 video at the source fps, then (when <paramref name="keepAudio"/>) decode the audio into a WAV
     /// (<see cref="WriteAudioAsWav"/>) and mux it as Opus — otherwise video-only. Uses <paramref name="tempDir"/> for
     /// the intermediate video-only WebM and WAV. Returns true when a non-empty file is produced; cancelling throws
-    /// <see cref="OperationCanceledException"/>.
+    /// <see cref="OperationCanceledException"/>. A reset <paramref name="pauseGate"/> holds the video's transcode.
     /// </summary>
     public static bool TranscodeToWebm(
         string sourcePath, string outputPath, string tempDir, VideoQuality quality, bool keepAudio, CancellationToken ct,
-        IProgress<double>? progress = null)
+        IProgress<double>? progress = null, ManualResetEventSlim? pauseGate = null)
     {
         int webmFps = Math.Clamp(LibavClipExporter.ProbeFps(sourcePath), 1, 60);
         string videoOnly = Path.Combine(tempDir, "video.webm");
         LibavWebmTranscoder.TranscodeToWebm(
             sourcePath, videoOnly, webmFps, quality,
-            progress == null ? null : new InlineProgress(value => progress.Report(WebmVideoShare * value)), ct);
+            progress == null ? null : new InlineProgress(value => progress.Report(WebmVideoShare * value)), ct, pauseGate);
         if (!File.Exists(videoOnly) || new FileInfo(videoOnly).Length == 0)
         {
             return false;

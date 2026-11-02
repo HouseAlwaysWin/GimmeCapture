@@ -138,6 +138,11 @@ internal static class CompressPipeline
     }
 
     /// <summary>
+    /// Where the run that stands for the whole file ends when its length is not known: past the end of any clip.
+    /// </summary>
+    internal const double UnknownLengthEndSeconds = 24 * 60 * 60;
+
+    /// <summary>
     /// Encodes one input to outputPath with the snapshot settings (incl. the H.265 single-pass corrective
     /// re-encode). Returns true on success; throws <see cref="OperationCanceledException"/> if cancelled.
     /// Manages its own temp dir and sets no shared UI state, so single + batch runs share one code path.
@@ -155,20 +160,21 @@ internal static class CompressPipeline
             .ToList();
         if (runs.Count == 0)
         {
-            runs.Add((0, durationSeconds > 0 ? durationSeconds : 24 * 60 * 60, 1.0));
+            runs.Add((0, durationSeconds > 0 ? durationSeconds : UnknownLengthEndSeconds, 1.0));
         }
         // Output span honors per-run speed; used by the H.265 target-size corrective re-encode below.
         double effectiveDuration = runs.Sum(r => (r.End - r.Start) / (r.Speed > 0 ? r.Speed : 1.0));
         var ranges = runs.Select(r => new LibavClipExporter.SourceRange(r.Start, r.End, r.Speed)).ToArray();
         bool hasSpeed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
 
-        // GIF/WebM: the transcoders take a whole file and apply no edits, so render an all-edits-applied
-        // intermediate mp4 first, then transcode. Target-size / two-pass / segmented-resume don't apply here.
+        // GIF/WebM: the transcoders take a whole file and apply no edits, so an edited clip is rendered to an
+        // intermediate mp4 first. Target-size / two-pass / segmented-resume don't apply here.
         string outFmtExt = Path.GetExtension(outputPath).ToLowerInvariant();
         if (outFmtExt == ".gif" || outFmtExt == ".webm")
         {
             return await EncodeGifWebmAsync(
-                input, outputPath, outFmtExt, s, ranges, rotationDegrees, crop, burnInComposite, progress, pauseGate, token);
+                input, outputPath, outFmtExt, s, durationSeconds, ranges, rotationDegrees, crop, burnInComposite, progress,
+                pauseGate, token);
         }
 
         // Audio-only (WAV/MP3/M4A/OGG): extract the ORIGINAL file's audio track whole — editor
@@ -255,10 +261,6 @@ internal static class CompressPipeline
         }
     }
 
-    // GIF/WebM output for the compress pipeline. The GIF/WebM encoders take a whole file and apply no edits, so
-    // render an all-edits-applied intermediate mp4 (trim/crop/rotate/filters/downscale/fps/burn-in) via the clip
-    // exporter, then transcode it (shared with the pin via GifWebmVideoExporter). Quality follows the CRF slider;
-    // target-size / two-pass / segmented-resume don't apply (the transcoders are quality-driven).
     /// <summary>
     /// Audio-only tail: decode → (temp WAV) → per-extension encode inside a temp dir, publishing to the
     /// real output only on success so a failure never leaves a partial file at the user's location.
@@ -297,19 +299,59 @@ internal static class CompressPipeline
     }
 
     /// <summary>
-    /// The part of a GIF's progress the edited intermediate covers; the GIF transcode covers the rest. With the Compress
-    /// tab's defaults, on screen recordings of 4 and 31 seconds, the intermediate took 41% and 31% of the time; the
-    /// longer the clip, the smaller its part.
+    /// The part of a GIF's progress an intermediate covers; the GIF transcode covers the rest. With the Compress tab's
+    /// defaults, on screen recordings of 4, 16 and 35 seconds, the intermediate took 18%, 37% and 27% of the time: what a
+    /// GIF made from the source saves.
     /// </summary>
     internal const double GifIntermediateShare = 0.3;
 
     /// <summary>
-    /// The same for a WebM, whose VP9 encode is slower: 24% and 12% of the time on the same recordings.
+    /// The same for a WebM, whose VP9 encode is slower: 26%, 14% and 20% on the same recordings.
     /// </summary>
     internal const double WebmIntermediateShare = 0.15;
 
+    /// <summary>
+    /// Whether a GIF or WebM can be transcoded from the source itself, with no intermediate: the whole clip at its own
+    /// speed, uncropped and unrotated with nothing drawn on it and no filter, and for a WebM keeping its sound stereo
+    /// (the transcoders apply none of those; the intermediate's AAC is stereo unless mono is asked for, and so is the
+    /// WebM's sound decoded from the source). The size and frame-rate caps are <see cref="CapsLeaveTheSource"/>'s.
+    /// </summary>
+    internal static bool NeedsNoIntermediate(
+        LibavClipExporter.SourceRange[] ranges, double durationSeconds, int rotationDegrees, VideoEditCrop? crop,
+        bool burnsIn, CompressSettingsSnapshot s, bool isGif)
+    {
+        double end = durationSeconds > 0 ? durationSeconds : UnknownLengthEndSeconds;
+        bool wholeClip = ranges.Length == 1
+            && ranges[0].StartSeconds <= 0.001
+            && ranges[0].EndSeconds >= end - 0.001
+            && Math.Abs(ranges[0].Speed - 1.0) <= 0.001;
+        return wholeClip
+            && LibavClipExporter.NormalizeRotation(rotationDegrees) == 0
+            && crop == null
+            && !burnsIn
+            && s.Denoise == DenoiseMode.Off
+            && s.Sharpen == SharpenMode.Off
+            && !s.Deblock
+            && !s.Grayscale
+            && (isGif || s.DropAudio || s.AudioChannels != 1);
+    }
+
+    /// <summary>
+    /// Whether the size cap, and for a WebM the frame-rate cap, leave a source of this height and rate as it is: the
+    /// intermediate only scales down to the cap and lowers the rate to it. A GIF's rate is a setting of the GIF's own.
+    /// A size or rate not known (0) counts as capped.
+    /// </summary>
+    internal static bool CapsLeaveTheSource(CompressSettingsSnapshot s, bool isGif, int sourceHeight, int sourceFps) =>
+        (s.MaxHeight <= 0 || (sourceHeight > 0 && sourceHeight <= s.MaxHeight))
+        && (isGif || s.MaxFps <= 0 || (sourceFps > 0 && sourceFps <= s.MaxFps));
+
+    // GIF/WebM output for the compress pipeline, through GifWebmVideoExporter as the pin's. The transcoders take a whole
+    // file and apply no edits, so an edited clip is first rendered to an intermediate mp4 with every edit applied
+    // (trim/speed/crop/rotate/filters/downscale/fps/burn-in) by the clip exporter; an unedited one is transcoded as it
+    // is, which spares an encode of the whole clip and a generation of loss. Quality follows the CRF slider;
+    // target-size / two-pass / segmented-resume don't apply (the transcoders are quality-driven).
     private static async Task<bool> EncodeGifWebmAsync(
-        string input, string outputPath, string outExt, CompressSettingsSnapshot s,
+        string input, string outputPath, string outExt, CompressSettingsSnapshot s, double durationSeconds,
         LibavClipExporter.SourceRange[] ranges, int rotationDegrees, VideoEditCrop? crop,
         Action<SKBitmap, double>? burnInComposite, IProgress<double> progress,
         ManualResetEventSlim? pauseGate, CancellationToken token)
@@ -318,48 +360,70 @@ internal static class CompressPipeline
         // Loosely map the CRF slider (x265 scale) to the transcoders' quality tier.
         VideoQuality quality = s.Crf <= 20 ? VideoQuality.High : s.Crf >= 30 ? VideoQuality.Low : VideoQuality.Medium;
 
+        bool straight = NeedsNoIntermediate(ranges, durationSeconds, rotationDegrees, crop, burnInComposite != null, s, isGif);
+        if (straight && (s.MaxHeight > 0 || (!isGif && s.MaxFps > 0)))
+        {
+            try
+            {
+                using var player = new LibavVideoFramePlayer();
+                LibavVideoFramePlayer.MediaInfo info = await player.ProbeAsync(input, token);
+                straight = CapsLeaveTheSource(s, isGif, info.Height, info.Fps);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLog.Debug("Compress.GifWebmProbe", ex); // the intermediate's own open reports a file it cannot read
+                straight = false;
+            }
+        }
+
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
         try
         {
             Directory.CreateDirectory(tempDir);
 
-            // 1. Fully-edited intermediate mp4 (near-lossless CRF to limit generational loss before the transcode).
-            string intermediate = Path.Combine(tempDir, "intermediate.mp4");
-            var interOptions = new LibavExportOptions
+            string transcodeSource = input;
+            double intermediateShare = 0;
+            if (!straight)
             {
-                Codec = VideoCodec.H264,
-                CrfOverride = 18,
-                Preset = s.Preset,
-                MaxHeight = s.MaxHeight,
-                MaxFps = s.MaxFps,
-                RotationDegrees = rotationDegrees,
-                Denoise = s.Denoise,
-                Sharpen = s.Sharpen,
-                Deblock = s.Deblock,
-                Grayscale = s.Grayscale,
-                DropAudio = isGif || s.DropAudio, // GIF has no audio; WebM keeps it (unless dropped) for the Opus mux
-                AudioBitrateKbps = s.AudioBitrateKbps,
-                AudioChannels = s.AudioChannels
-            };
-            // The intermediate reported the whole bar, so it sat at 100% through the transcode, the slower part.
-            double intermediateShare = isGif ? GifIntermediateShare : WebmIntermediateShare;
-            bool built = await Task.Run(() => LibavClipExporter.TryExport(
-                input, ranges, intermediate, VideoQuality.Medium, crop: crop, cancellationToken: token,
-                options: interOptions, progress: new StageProgress(progress, 0, intermediateShare), pauseGate: pauseGate,
-                frameCompositeAfterTransform: burnInComposite), token);
-            if (!built || !File.Exists(intermediate) || new FileInfo(intermediate).Length == 0)
-            {
-                return false;
+                // 1. Fully-edited intermediate mp4 (near-lossless CRF to limit generational loss before the transcode).
+                string intermediate = Path.Combine(tempDir, "intermediate.mp4");
+                var interOptions = new LibavExportOptions
+                {
+                    Codec = VideoCodec.H264,
+                    CrfOverride = 18,
+                    Preset = s.Preset,
+                    MaxHeight = s.MaxHeight,
+                    MaxFps = s.MaxFps,
+                    RotationDegrees = rotationDegrees,
+                    Denoise = s.Denoise,
+                    Sharpen = s.Sharpen,
+                    Deblock = s.Deblock,
+                    Grayscale = s.Grayscale,
+                    DropAudio = isGif || s.DropAudio, // GIF has no audio; WebM keeps it (unless dropped) for the Opus mux
+                    AudioBitrateKbps = s.AudioBitrateKbps,
+                    AudioChannels = s.AudioChannels
+                };
+                // The intermediate reported the whole bar, so it sat at 100% through the transcode, the slower part.
+                intermediateShare = isGif ? GifIntermediateShare : WebmIntermediateShare;
+                bool built = await Task.Run(() => LibavClipExporter.TryExport(
+                    input, ranges, intermediate, VideoQuality.Medium, crop: crop, cancellationToken: token,
+                    options: interOptions, progress: new StageProgress(progress, 0, intermediateShare), pauseGate: pauseGate,
+                    frameCompositeAfterTransform: burnInComposite), token);
+                if (!built || !File.Exists(intermediate) || new FileInfo(intermediate).Length == 0)
+                {
+                    return false;
+                }
+
+                token.ThrowIfCancellationRequested();
+                transcodeSource = intermediate;
             }
 
-            token.ThrowIfCancellationRequested();
-
-            // 2. Transcode the intermediate to the final format INTO the temp dir, then copy to the real output
-            //    only on success — so a mid-transcode failure never leaves a partial file at the user's location.
-            //    MaxHeight/MaxFps are already baked into the intermediate, so let the GIF ladder only kick in when
-            //    the user left resolution/fps at Original.
+            // 2. Transcode to the final format INTO the temp dir, then copy to the real output only on success — so a
+            //    mid-transcode failure never leaves a partial file at the user's location. An intermediate already has
+            //    MaxHeight/MaxFps baked in, and a source taken as it is is within them, so the GIF ladder only kicks
+            //    in when the user left resolution/fps at Original.
             //    The transcode gets the token too: it only kept the transcode from starting, so a cancel during it
-            //    ran it to the end and the file came out as done.
+            //    ran it to the end and the file came out as done. It waits while paused, as the intermediate does.
             string finalTemp = Path.Combine(tempDir, "output" + outExt);
             var transcodeProgress = new StageProgress(progress, intermediateShare, 1 - intermediateShare);
             bool ok;
@@ -369,12 +433,13 @@ internal static class CompressPipeline
                 int gifFps = s.MaxFps > 0 ? s.MaxFps : ladderFps;
                 int maxWidth = s.MaxHeight > 0 ? 0 : ladderWidth;
                 ok = await Task.Run(() => GifWebmVideoExporter.TranscodeToGif(
-                    intermediate, finalTemp, gifFps, maxWidth, transcodeProgress, token), token);
+                    transcodeSource, finalTemp, gifFps, maxWidth, transcodeProgress, token, pauseGate), token);
             }
             else
             {
                 ok = await Task.Run(() => GifWebmVideoExporter.TranscodeToWebm(
-                    intermediate, finalTemp, tempDir, quality, keepAudio: !s.DropAudio, ct: token, transcodeProgress), token);
+                    transcodeSource, finalTemp, tempDir, quality, keepAudio: !s.DropAudio, ct: token, transcodeProgress,
+                    pauseGate), token);
             }
 
             if (!ok || !File.Exists(finalTemp) || new FileInfo(finalTemp).Length == 0)

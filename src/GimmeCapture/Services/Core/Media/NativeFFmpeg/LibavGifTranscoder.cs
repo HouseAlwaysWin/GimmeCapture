@@ -31,7 +31,8 @@ internal static class LibavGifTranscoder
     /// Transcodes to GIF. Tries the optimal-palette path (palettegen → paletteuse, two passes over the clip) for
     /// much better color, and falls back to the single-pass RGB8 path if the filters are unavailable or fail — so
     /// GIF export never regresses. <paramref name="progress"/> gets 0..1 across both passes. Cancelling throws
-    /// <see cref="OperationCanceledException"/>, and an export that does not finish deletes the GIF it started.
+    /// <see cref="OperationCanceledException"/>, and an export that does not finish deletes the GIF it started. While
+    /// <paramref name="pauseGate"/> is reset, the transcode waits before its next packet.
     /// </summary>
     public static void TranscodeToGif(
         string inputPath,
@@ -40,19 +41,21 @@ internal static class LibavGifTranscoder
         int maxWidth,
         string paletteuseArgs = "dither=sierra2_4a",
         IProgress<double>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ManualResetEventSlim? pauseGate = null)
     {
         FFmpegRuntime.EnsureInitialized();
         cancellationToken.ThrowIfCancellationRequested();
         var reporter = new GifProgress(progress);
         try
         {
-            TranscodeToGifWithPalette(inputPath, outputPath, targetFps, maxWidth, paletteuseArgs, reporter, cancellationToken);
+            TranscodeToGifWithPalette(
+                inputPath, outputPath, targetFps, maxWidth, paletteuseArgs, reporter, pauseGate, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             AppLog.Warning("Gif.PaletteTranscode", ex); // falls back to single-pass RGB8
-            TranscodeToGifRgb8(inputPath, outputPath, targetFps, maxWidth, reporter, cancellationToken);
+            TranscodeToGifRgb8(inputPath, outputPath, targetFps, maxWidth, reporter, pauseGate, cancellationToken);
         }
     }
 
@@ -63,6 +66,7 @@ internal static class LibavGifTranscoder
         int targetFps,
         int maxWidth,
         GifProgress progress,
+        ManualResetEventSlim? pauseGate,
         CancellationToken cancellationToken)
     {
         using var source = new GifFrameSource(inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB8, evenSize: false);
@@ -75,7 +79,7 @@ internal static class LibavGifTranscoder
 
         try
         {
-            while (source.NextFrame(frame, cancellationToken))
+            while (source.NextFrame(frame, pauseGate, cancellationToken))
             {
                 writer.Write(frame);
                 progress.Report(0, 1, source.Progress);
@@ -103,6 +107,7 @@ internal static class LibavGifTranscoder
         int maxWidth,
         string paletteuseArgs,
         GifProgress progress,
+        ManualResetEventSlim? pauseGate,
         CancellationToken cancellationToken)
     {
         AVFilter* bufferF = ffmpeg.avfilter_get_by_name("buffer");
@@ -170,7 +175,7 @@ internal static class LibavGifTranscoder
                 ThrowIfErr(ffmpeg.avfilter_link(puCtx, 0, encodeSink, 0), "gifp_link_pu_sink");
                 ThrowIfErr(ffmpeg.avfilter_graph_config(encodeGraph, null), "gifp_graph2_config");
 
-                while (firstPass.NextFrame(frame, cancellationToken))
+                while (firstPass.NextFrame(frame, pauseGate, cancellationToken))
                 {
                     ThrowIfErr(ffmpeg.av_buffersrc_add_frame(paletteFrameSrc, frame), "gifp_src_push"); // consumes frame
                     CountColors(paletteSink, frame);
@@ -199,7 +204,7 @@ internal static class LibavGifTranscoder
             using var secondPass = new GifFrameSource(
                 inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB24, evenSize: true);
             using var writer = new GifWriter(outputPath, width, height, fps, AVPixelFormat.AV_PIX_FMT_PAL8);
-            while (secondPass.NextFrame(frame, cancellationToken))
+            while (secondPass.NextFrame(frame, pauseGate, cancellationToken))
             {
                 ThrowIfErr(ffmpeg.av_buffersrc_add_frame(encodeSrc, frame), "gifp_src2_push"); // consumes frame
                 EncodeMapped(encodeSink, pulled, writer);
@@ -403,9 +408,10 @@ internal static class LibavGifTranscoder
 
         /// <summary>
         /// Scales the next frame the timeline keeps into <paramref name="output"/> (a fresh buffer, with the GIF's pts)
-        /// and returns true, or returns false at the end of the clip. Checks for cancellation before every packet read.
+        /// and returns true, or returns false at the end of the clip. Checks for cancellation, and waits while
+        /// <paramref name="pauseGate"/> is reset, before every packet read.
         /// </summary>
-        public bool NextFrame(AVFrame* output, CancellationToken cancellationToken)
+        public bool NextFrame(AVFrame* output, ManualResetEventSlim? pauseGate, CancellationToken cancellationToken)
         {
             while (true)
             {
@@ -423,6 +429,7 @@ internal static class LibavGifTranscoder
                     }
 
                     cancellationToken.ThrowIfCancellationRequested();
+                    pauseGate?.Wait(cancellationToken);
                     SendNextPacket();
                     continue;
                 }

@@ -66,6 +66,8 @@
   steps, the edited video and then the GIF or WebM made from it, and only the first moved the bar or heard Cancel. The
   bar sat at 100% through the second, the longer one (59-88% of the time on two screen recordings), and a cancel there
   let it finish and marked the file done. The two steps now share the bar, and a cancel stops either of them.
+- **Pause holds a compress to GIF or WebM all the way through.** It held only the first step, the H.264 copy with the
+  edits applied; making the GIF or WebM from that copy, the longer step, ran on to the end. Both steps now wait.
 - **Compressed and trimmed videos stay in step with their sound on 29.97 fps and variable-frame-rate sources.** The
   export rounded the frame rate and counted frames, so a 29.97 fps video came out 0.1% fast (3.6 s an hour) and a
   variable-rate recording drifted. Every frame is now placed by its own time at the source's exact rate.
@@ -198,6 +200,10 @@
   twice in the comparison. The file now stays open while you work on it: a step forward takes a few milliseconds, the
   same frame none, a step back, a skip or a drop on the slider 0.02-0.1 s. It closes again after half a minute without a
   click.
+- **A compress to GIF or WebM of a clip left unedited takes up to a third less time.** Every GIF or WebM was made from a
+  copy of the clip encoded first as H.264 with the edits applied, edits or none. With nothing to apply, it now comes
+  from the file itself, which also spares it a generation of loss: on three screen recordings of 4 to 35 seconds, a GIF
+  took 18-37% less time and a WebM 14-26% less, and the GIFs came out up to half the size.
 - **Saving a pin with annotations leaves the pin alone while its dialog is open.** The save drew the annotations into a
   copy of the picture and put that copy in the pin for as long as the dialog was open, cancelled or not: the pin drew
   its annotations twice meanwhile, so a highlighter looked darker, a smart selection lost its points, and the copy (33

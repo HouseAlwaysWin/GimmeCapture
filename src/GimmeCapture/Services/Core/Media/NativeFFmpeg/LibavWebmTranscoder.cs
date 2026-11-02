@@ -64,7 +64,7 @@ internal static class LibavWebmTranscoder
     /// Transcodes the video of <paramref name="inputPath"/> to a video-only VP9 WebM at <paramref name="targetFps"/>.
     /// <paramref name="progress"/> gets 0..1 by source time, in whole-percent steps that never go back. Cancelling
     /// throws <see cref="OperationCanceledException"/>, and a transcode that does not finish deletes the WebM it
-    /// started.
+    /// started. While <paramref name="pauseGate"/> is reset, the transcode waits before its next packet.
     /// </summary>
     public static unsafe void TranscodeToWebm(
         string inputPath,
@@ -72,7 +72,8 @@ internal static class LibavWebmTranscoder
         int targetFps,
         VideoQuality quality,
         IProgress<double>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ManualResetEventSlim? pauseGate = null)
     {
         FFmpegRuntime.EnsureInitialized();
         cancellationToken.ThrowIfCancellationRequested();
@@ -207,6 +208,7 @@ internal static class LibavWebmTranscoder
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                pauseGate?.Wait(cancellationToken);
                 int rr = ffmpeg.av_read_frame(inFmt, inPkt);
                 if (rr == ffmpeg.AVERROR_EOF)
                 {
