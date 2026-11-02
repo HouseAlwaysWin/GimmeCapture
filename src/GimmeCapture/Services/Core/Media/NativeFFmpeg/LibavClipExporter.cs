@@ -354,12 +354,10 @@ internal static class LibavClipExporter
             {
                 LibavMuxer.MuxVideoAndAudio(videoPath, audioTemp, outputPath, container);
             }
-            else if (container == "mp4")
-            {
-                File.Copy(videoPath, outputPath, true);
-            }
             else
             {
+                // Remuxed into an MP4 too: the video is the compress chunks joined in Matroska, which was copied as it
+                // was, so an .mp4 with no sound came out a Matroska file.
                 LibavMuxer.RemuxVideo(videoPath, outputPath, container);
             }
 

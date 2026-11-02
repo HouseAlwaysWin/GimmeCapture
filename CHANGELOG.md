@@ -66,6 +66,10 @@
   steps, the edited video and then the GIF or WebM made from it, and only the first moved the bar or heard Cancel. The
   bar sat at 100% through the second, the longer one (59-88% of the time on two screen recordings), and a cancel there
   let it finish and marked the file done. The two steps now share the bar, and a cancel stops either of them.
+- **A compress to MP4 of a video with no sound makes an MP4.** A compress at a quality setting, the Compress tab's
+  default, of a video with no sound, or with its sound dropped, wrote a Matroska file under the .mp4 name unless the
+  video was cut into pieces, sped up, cropped or drawn on. Most players opened it anyway, but apps and sites that go by
+  what a file really is could refuse it. It is now a real MP4, with the same frames.
 - **Pause holds a compress to GIF or WebM all the way through.** It held only the first step, the H.264 copy with the
   edits applied; making the GIF or WebM from that copy, the longer step, ran on to the end. Both steps now wait.
 - **Compressed and trimmed videos stay in step with their sound on 29.97 fps and variable-frame-rate sources.** The

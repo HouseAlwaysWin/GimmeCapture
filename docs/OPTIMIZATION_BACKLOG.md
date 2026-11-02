@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 60 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 61 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -413,6 +413,13 @@ tool.
   video ends at 34.27 s, and the intermediate held the last frame to the end of the 34.6 s sound. Correction to the
   entry on its cancel above: the 41% for a 4.2 s clip's GIF counted the transcode's palette pass as the intermediate's
   (a GIF's file appears only at its second pass); the WebMs' shares were right.
+- Found and fixed on the way (reading Compress's "Segmented CRF path" item): **a silent CRF compress to MP4 wrote
+  Matroska**. The segmented path joins its chunks into `merged.mkv`, and `LibavClipExporter.TryMuxAudioForRanges`, with
+  no sound to add (none in the source, or dropped), copied that file to the output when the output was an MP4, so the
+  .mp4 was Matroska inside. It now remuxes into the output's container as it already did for the others.
+  `CompressPipelineSegmentedTests` reads the output's first bytes (an `ftyp` box, or the EBML magic) and the sound; the
+  two silent-MP4 cases fail against the old exporter, and a silent clip keeps all 60 of its frames either way. The bug
+  came with the resumable compress (`65539b5d`, in v0.67.0).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
