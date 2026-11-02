@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -66,6 +68,44 @@ public sealed class LibavWebmTranscoderTests : IDisposable
         Assert.InRange(webm.FrameSeconds[^1], (119 / 60.0) - (1 / 30.0), (119 / 60.0) + (1 / 30.0));
     }
 
+    [Fact]
+    public void Progress_RisesWithTheSourceTime_AndEndsAtOne()
+    {
+        string source = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "progress.mkv"), Width, Height, 90, 30);
+        var reported = new List<double>();
+
+        LibavWebmTranscoder.TranscodeToWebm(
+            source, Path.Combine(_dir, "progress.webm"), 30, VideoQuality.Low, new InlineProgress(reported.Add));
+
+        Assert.Equal(1.0, reported[^1]);
+        Assert.True(reported.Zip(reported.Skip(1)).All(pair => pair.First < pair.Second), "progress went back or repeated itself");
+        Assert.Contains(reported, value => value > 0.2 && value < 0.8);
+    }
+
+    [Fact]
+    public void Cancelling_StopsTheTranscode_AndLeavesNoWebmBehind()
+    {
+        // It ran to the end whatever the caller's token said, so a cancelled compress came out as done.
+        string source = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "cancel.mkv"), Width, Height, 90, 30, detailed: true);
+        string output = Path.Combine(_dir, "cancel.webm");
+        using var cancellation = new CancellationTokenSource();
+        bool startedWriting = false;
+        var progress = new InlineProgress(value =>
+        {
+            if (value >= 0.5 && !cancellation.IsCancellationRequested)
+            {
+                startedWriting = File.Exists(output);
+                cancellation.Cancel();
+            }
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() => LibavWebmTranscoder.TranscodeToWebm(
+            source, output, 30, VideoQuality.Low, progress, cancellation.Token));
+
+        Assert.True(startedWriting);
+        Assert.False(File.Exists(output));
+    }
+
     [Theory]
     [InlineData(33L, 0L, 1L)]         // 30 fps stamped in milliseconds: one tick each, none dropped
     [InlineData(1033L, 30L, 31L)]
@@ -95,5 +135,11 @@ public sealed class LibavWebmTranscoderTests : IDisposable
     public void Vp9TileColumns_KeepEveryTileAtLeast256PixelsWide(int width, int expectedLog2)
     {
         Assert.Equal(expectedLog2, LibavWebmTranscoder.Vp9TileColumnsLog2(width));
+    }
+
+    // Reports on the transcoding thread itself, unlike Progress<T>, so a test can act at an exact point of it.
+    private sealed class InlineProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
     }
 }

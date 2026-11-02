@@ -296,6 +296,18 @@ internal static class CompressPipeline
         }
     }
 
+    /// <summary>
+    /// The part of a GIF's progress the edited intermediate covers; the GIF transcode covers the rest. With the Compress
+    /// tab's defaults, on screen recordings of 4 and 31 seconds, the intermediate took 41% and 31% of the time; the
+    /// longer the clip, the smaller its part.
+    /// </summary>
+    internal const double GifIntermediateShare = 0.3;
+
+    /// <summary>
+    /// The same for a WebM, whose VP9 encode is slower: 24% and 12% of the time on the same recordings.
+    /// </summary>
+    internal const double WebmIntermediateShare = 0.15;
+
     private static async Task<bool> EncodeGifWebmAsync(
         string input, string outputPath, string outExt, CompressSettingsSnapshot s,
         LibavClipExporter.SourceRange[] ranges, int rotationDegrees, VideoEditCrop? crop,
@@ -329,9 +341,11 @@ internal static class CompressPipeline
                 AudioBitrateKbps = s.AudioBitrateKbps,
                 AudioChannels = s.AudioChannels
             };
+            // The intermediate reported the whole bar, so it sat at 100% through the transcode, the slower part.
+            double intermediateShare = isGif ? GifIntermediateShare : WebmIntermediateShare;
             bool built = await Task.Run(() => LibavClipExporter.TryExport(
                 input, ranges, intermediate, VideoQuality.Medium, crop: crop, cancellationToken: token,
-                options: interOptions, progress: progress, pauseGate: pauseGate,
+                options: interOptions, progress: new StageProgress(progress, 0, intermediateShare), pauseGate: pauseGate,
                 frameCompositeAfterTransform: burnInComposite), token);
             if (!built || !File.Exists(intermediate) || new FileInfo(intermediate).Length == 0)
             {
@@ -344,19 +358,23 @@ internal static class CompressPipeline
             //    only on success — so a mid-transcode failure never leaves a partial file at the user's location.
             //    MaxHeight/MaxFps are already baked into the intermediate, so let the GIF ladder only kick in when
             //    the user left resolution/fps at Original.
+            //    The transcode gets the token too: it only kept the transcode from starting, so a cancel during it
+            //    ran it to the end and the file came out as done.
             string finalTemp = Path.Combine(tempDir, "output" + outExt);
+            var transcodeProgress = new StageProgress(progress, intermediateShare, 1 - intermediateShare);
             bool ok;
             if (isGif)
             {
                 (int ladderFps, int ladderWidth) = LibavGifTranscoder.QualityLadder(quality);
                 int gifFps = s.MaxFps > 0 ? s.MaxFps : ladderFps;
                 int maxWidth = s.MaxHeight > 0 ? 0 : ladderWidth;
-                ok = await Task.Run(() => GifWebmVideoExporter.TranscodeToGif(intermediate, finalTemp, gifFps, maxWidth), token);
+                ok = await Task.Run(() => GifWebmVideoExporter.TranscodeToGif(
+                    intermediate, finalTemp, gifFps, maxWidth, transcodeProgress, token), token);
             }
             else
             {
                 ok = await Task.Run(() => GifWebmVideoExporter.TranscodeToWebm(
-                    intermediate, finalTemp, tempDir, quality, keepAudio: !s.DropAudio, ct: token), token);
+                    intermediate, finalTemp, tempDir, quality, keepAudio: !s.DropAudio, ct: token, transcodeProgress), token);
             }
 
             if (!ok || !File.Exists(finalTemp) || new FileInfo(finalTemp).Length == 0)
@@ -364,6 +382,7 @@ internal static class CompressPipeline
                 return false;
             }
 
+            token.ThrowIfCancellationRequested();
             await CopyToOutputAsync(finalTemp, outputPath);
             progress.Report(1.0);
             return true;
@@ -577,5 +596,12 @@ internal static class CompressPipeline
                 Services.Core.Rendering.RedactionRenderer.Render(sk, tracks, t);
             }
         };
+    }
+
+    // A stage's 0..1 as [start, start + share] of the whole, reported on the stage's own thread so that the stages
+    // reach the bar in order.
+    private sealed class StageProgress(IProgress<double> whole, double start, double share) : IProgress<double>
+    {
+        public void Report(double value) => whole.Report(Math.Min(1, start + (share * Math.Clamp(value, 0, 1))));
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Threading;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 
@@ -59,13 +60,22 @@ internal static class LibavWebmTranscoder
         }
     }
 
+    /// <summary>
+    /// Transcodes the video of <paramref name="inputPath"/> to a video-only VP9 WebM at <paramref name="targetFps"/>.
+    /// <paramref name="progress"/> gets 0..1 by source time, in whole-percent steps that never go back. Cancelling
+    /// throws <see cref="OperationCanceledException"/>, and a transcode that does not finish deletes the WebM it
+    /// started.
+    /// </summary>
     public static unsafe void TranscodeToWebm(
         string inputPath,
         string outputPath,
         int targetFps,
-        VideoQuality quality)
+        VideoQuality quality,
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         FFmpegRuntime.EnsureInitialized();
+        cancellationToken.ThrowIfCancellationRequested();
 
         AVFormatContext* inFmt = null;
         AVCodecContext* decCtx = null;
@@ -80,6 +90,8 @@ internal static class LibavWebmTranscoder
         int videoIn = -1;
         AVStream* outStream = null;
         long lastPts = -1; // the last pts handed to the encoder; none yet
+        bool outputOpened = false;
+        bool finished = false;
 
         try
         {
@@ -156,6 +168,7 @@ internal static class LibavWebmTranscoder
             if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
             {
                 ThrowIfErr(ffmpeg.avio_open(&outFmt->pb, outputPath, ffmpeg.AVIO_FLAG_WRITE), "webm_avio_open");
+                outputOpened = true;
             }
 
             ThrowIfErr(ffmpeg.avformat_write_header(outFmt, null), "webm_write_header");
@@ -189,9 +202,11 @@ internal static class LibavWebmTranscoder
             long startTs = inFmt->start_time != ffmpeg.AV_NOPTS_VALUE
                 ? ffmpeg.av_rescale_q(inFmt->start_time, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, inStream->time_base)
                 : 0;
+            var reporter = new SourceTimeProgress(progress, inStream->time_base, startTs, DurationSeconds(inFmt, inStream));
 
             while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 int rr = ffmpeg.av_read_frame(inFmt, inPkt);
                 if (rr == ffmpeg.AVERROR_EOF)
                 {
@@ -213,17 +228,22 @@ internal static class LibavWebmTranscoder
                 ffmpeg.av_packet_unref(inPkt);
 
                 ReceiveAndEncode(
-                    decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, inStream->time_base, startTs, ref lastPts);
+                    decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, inStream->time_base, startTs, ref lastPts,
+                    reporter);
             }
 
             ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "webm_flush_decoder");
             ReceiveAndEncode(
-                decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, inStream->time_base, startTs, ref lastPts);
+                decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, inStream->time_base, startTs, ref lastPts,
+                reporter);
 
+            cancellationToken.ThrowIfCancellationRequested();
             ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "webm_flush_encoder");
             WriteEncoded(encCtx, outFmt, outStream, outPkt);
 
             ThrowIfErr(ffmpeg.av_write_trailer(outFmt), "webm_write_trailer");
+            finished = true;
+            reporter.Finish();
         }
         finally
         {
@@ -247,7 +267,31 @@ internal static class LibavWebmTranscoder
             {
                 ffmpeg.av_dict_free(&encOpts);
             }
+
+            if (outputOpened && !finished)
+            {
+                try
+                {
+                    File.Delete(outputPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    AppLog.Warning("Webm.DeletePartialOutput", ex);
+                }
+            }
         }
+    }
+
+    // The clip's length in seconds, from the video stream or else the container; 0 when neither knows it.
+    private static unsafe double DurationSeconds(AVFormatContext* input, AVStream* stream)
+    {
+        double timeBase = ffmpeg.av_q2d(stream->time_base);
+        if (stream->duration > 0 && timeBase > 0)
+        {
+            return stream->duration * timeBase;
+        }
+
+        return input->duration > 0 ? input->duration / (double)ffmpeg.AV_TIME_BASE : 0;
     }
 
     /// <summary>
@@ -282,7 +326,8 @@ internal static class LibavWebmTranscoder
         AVPacket* outPkt,
         AVRational inTimeBase,
         long startTs,
-        ref long lastPts)
+        ref long lastPts,
+        SourceTimeProgress progress)
     {
         while (true)
         {
@@ -299,6 +344,7 @@ internal static class LibavWebmTranscoder
             long timestamp = decFrame->best_effort_timestamp != ffmpeg.AV_NOPTS_VALUE
                 ? decFrame->best_effort_timestamp
                 : decFrame->pts;
+            progress.Report(timestamp);
             long pts = OutputPts(timestamp, inTimeBase, encCtx->time_base, startTs, lastPts);
             if (pts <= lastPts)
             {
@@ -349,6 +395,37 @@ internal static class LibavWebmTranscoder
         if (err < 0)
         {
             throw FFmpegErrors.ToException(err, ctx);
+        }
+    }
+
+    // How far the transcode is, by the source time of the frames decoded, in whole-percent steps that never go back.
+    private sealed class SourceTimeProgress(IProgress<double>? sink, AVRational timeBase, long startTimestamp, double durationSeconds)
+    {
+        private readonly double _timeBaseSeconds = ffmpeg.av_q2d(timeBase);
+        private int _lastPercent = -1;
+
+        public void Report(long timestamp)
+        {
+            if (sink == null || durationSeconds <= 0 || timestamp == ffmpeg.AV_NOPTS_VALUE)
+            {
+                return;
+            }
+
+            ReportFraction(Math.Clamp((timestamp - startTimestamp) * _timeBaseSeconds / durationSeconds, 0, 1));
+        }
+
+        public void Finish() => ReportFraction(1.0);
+
+        private void ReportFraction(double value)
+        {
+            int percent = (int)(value * 100);
+            if (sink == null || percent <= _lastPercent)
+            {
+                return;
+            }
+
+            _lastPercent = percent;
+            sink.Report(value);
         }
     }
 }

@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 51 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 52 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -327,6 +327,20 @@ tool.
   `SnipWindowViewModelTests` hold the clipboard's PNG and the history's to the same bytes and the close to not wait;
   SNIP_COPY_PROBE=clipboard writes to the real clipboard and reads back the PNG and the bitmap, and was not run (it
   replaces what the clipboard holds). Save still encodes the user's file at full compression with the overlay up.
+- Done since batch 1: **a compress to GIF or WebM ignored a cancel during its transcode** (the progress and cancel half
+  of Compress's "GIF/WebM output" item). `EncodeGifWebmAsync` handed the intermediate the whole progress and the
+  transcode none, and the transcode only had the token on its `Task.Run`, so a cancel during it ran it to the end and
+  returned true. `CompressPipelineGifWebmTests` (opt-in COMPRESS_GIFWEBM_PROBE=<clip>, the laptop, the tab's defaults:
+  CRF 22, medium) on two screen recordings: the intermediate took 41% of a 4.2 s clip's GIF (3.5 of 8.6 s) and 31% of a
+  30.8 s one's (9.5 of 30.9), and 24% (3.1 of 13.1) and 12% (6.3 of 53.6) of their WebMs. Now the intermediate covers
+  `GifIntermediateShare` 0.3 or `WebmIntermediateShare` 0.15 of the bar and the transcode the rest, both through a
+  `StageProgress` that reports on the stage's thread, the transcode gets the token, and a cancel after it still fails the
+  file. `LibavWebmTranscoder.TranscodeToWebm` reports by source time and checks the token before every packet, as the
+  GIF transcoder does, and deletes the WebM it started when it does not finish; `GifWebmVideoExporter` gives the VP9
+  video 95% of its part and renames the video-only WebM instead of copying it. The tests run the real pipeline on tiny
+  clips and tell the transcode is under way by its file in the pipeline's temporary folder, and all four fail against
+  the old pipeline. Not done: the transcode still ignores Pause, the recording's and the pin's GIF and WebM still show no
+  progress during it, and an unedited source still gets the intermediate.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -533,6 +547,9 @@ These were covered by unit tests only; check them in the real app before a relea
   press Ctrl+C, then the same on a live one. The overlay should go about as soon as the key is pressed, and the toast
   show the thumbnail. Paste into Paint (it takes the bitmap) and into Chrome or Discord (they take the PNG): both
   should show the capture. The History tab should have the copy, and it should open, copy and pin from there as before.
+- **Compressing to GIF or WebM**: queue a recording of half a minute or more with GIF as the output and start it. The
+  bar should keep moving to the end instead of sitting at 100% for most of the time. Start it again and cancel past
+  the middle: the file should end as cancelled, not done, with no GIF in the output folder. Then the same with WebM.
 
 ## How to run a batch
 
@@ -600,12 +617,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   open, find_stream_info, new D3D11VA device, seek, decode), called from `VideoEditViewModel.cs:227,254,650,686` and
   `CompareViewModel.cs:428,442`. A cold open logged 279-293 ms; compare pays it twice; rotate, crop toggles and
   split/merge re-decode an unchanged frame. Fix: one long-lived decoder per view, and cache the last BGRA frame.
-- **GIF/WebM output: an extra encode, no progress, cancel ignored** (S-M). `CompressPipeline.cs:314-369`: an H.264
-  CRF 18 intermediate at the user's preset even with no edits; the transcode then gets no progress or token, so the bar
-  sits at 100% through the slowest stage and a cancel finishes as Done. `LibavGifTranscoder.TranscodeToGif` now takes
-  progress and a token (batch 1); wire them through `GifWebmVideoExporter.cs`, `CompressPipeline.cs`,
-  `RecordingService.Finalize.cs` (FinalizationProgress) and `FloatingVideoViewModel.Actions.cs`, and transcode the
-  source directly when nothing is edited.
+- **GIF/WebM output: an extra encode** (S-M). `CompressPipeline.EncodeGifWebmAsync`: an H.264 CRF 18 intermediate at
+  the user's preset even with no edits; transcode the source directly when nothing is edited. Compress's progress and
+  cancel are done (Status); still open there: Pause during the transcode, and progress for the recording's GIF and
+  WebM (`RecordingService.Finalize.cs`, FinalizationProgress) and the pin's (`FloatingVideoViewModel.Actions.cs`), both
+  of which the transcoders can now report.
 - **A target size at or above the source's size still encodes** (S). `CompressBatchRunner.cs:116-124`: stream-copy
   with `LibavMuxer.RemuxAllStreams` when unedited, otherwise cap at the source bitrate. Audio-only M4A from an AAC
   source can stream-copy too.

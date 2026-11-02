@@ -17,26 +17,39 @@ namespace GimmeCapture.Services.Core.Media;
 internal static class GifWebmVideoExporter
 {
     /// <summary>
-    /// GIF via the two-pass palette encoder. <paramref name="maxWidth"/> 0 keeps the source width;
-    /// <paramref name="gifFps"/> decimates to that rate. Returns true when a non-empty file is produced.
+    /// The part of <see cref="TranscodeToWebm"/>'s progress the VP9 video covers; decoding the audio, encoding it as
+    /// Opus and the mux take the rest.
     /// </summary>
-    public static bool TranscodeToGif(string sourcePath, string outputPath, int gifFps, int maxWidth)
+    internal const double WebmVideoShare = 0.95;
+
+    /// <summary>
+    /// GIF via the two-pass palette encoder. <paramref name="maxWidth"/> 0 keeps the source width;
+    /// <paramref name="gifFps"/> decimates to that rate. Returns true when a non-empty file is produced; cancelling
+    /// throws <see cref="OperationCanceledException"/>.
+    /// </summary>
+    public static bool TranscodeToGif(
+        string sourcePath, string outputPath, int gifFps, int maxWidth,
+        IProgress<double>? progress = null, CancellationToken ct = default)
     {
-        LibavGifTranscoder.TranscodeToGif(sourcePath, outputPath, gifFps, maxWidth);
+        LibavGifTranscoder.TranscodeToGif(sourcePath, outputPath, gifFps, maxWidth, progress: progress, cancellationToken: ct);
         return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
     }
 
     /// <summary>
     /// WebM: VP9 video at the source fps, then (when <paramref name="keepAudio"/>) decode the audio to PCM,
     /// write a WAV, and mux it as Opus — otherwise video-only. Uses <paramref name="tempDir"/> for the
-    /// intermediate video-only WebM and WAV. Returns true when a non-empty file is produced.
+    /// intermediate video-only WebM and WAV. Returns true when a non-empty file is produced; cancelling throws
+    /// <see cref="OperationCanceledException"/>.
     /// </summary>
     public static bool TranscodeToWebm(
-        string sourcePath, string outputPath, string tempDir, VideoQuality quality, bool keepAudio, CancellationToken ct)
+        string sourcePath, string outputPath, string tempDir, VideoQuality quality, bool keepAudio, CancellationToken ct,
+        IProgress<double>? progress = null)
     {
         int webmFps = Math.Clamp(LibavClipExporter.ProbeFps(sourcePath), 1, 60);
         string videoOnly = Path.Combine(tempDir, "video.webm");
-        LibavWebmTranscoder.TranscodeToWebm(sourcePath, videoOnly, webmFps, quality);
+        LibavWebmTranscoder.TranscodeToWebm(
+            sourcePath, videoOnly, webmFps, quality,
+            progress == null ? null : new InlineProgress(value => progress.Report(WebmVideoShare * value)), ct);
         if (!File.Exists(videoOnly) || new FileInfo(videoOnly).Length == 0)
         {
             return false;
@@ -55,9 +68,11 @@ internal static class GifWebmVideoExporter
                         writer.Write(pcm.PcmBytes, 0, pcm.PcmBytes.Length);
                     }
 
+                    ct.ThrowIfCancellationRequested();
                     LibavWebmTranscoder.MuxWebmWithOpus(videoOnly, wav, outputPath, quality);
                     if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
                     {
+                        progress?.Report(1.0);
                         return true;
                     }
                 }
@@ -69,7 +84,15 @@ internal static class GifWebmVideoExporter
             // OperationCanceledException propagates: a cancelled export must fail, not silently drop the audio.
         }
 
-        File.Copy(videoOnly, outputPath, true);
+        ct.ThrowIfCancellationRequested();
+        File.Move(videoOnly, outputPath, overwrite: true);
+        progress?.Report(1.0);
         return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+    }
+
+    // Reports on the transcoding thread itself, so the shares reach the caller's progress in order.
+    private sealed class InlineProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
     }
 }
