@@ -297,6 +297,13 @@
   first moment, so they are in memory by the time they are needed. On that disk, what the start then reads of them
   came from memory in 12 ms instead of 1.5 s. The log's `Startup.Timings` line says what was read ahead
   (`prefetch=`). The part before the app's own code runs is out of its reach: moving the app to an SSD helps there.
+- **The first Record overlay of a run no longer waits for FFmpeg.** The Record hotkey loaded FFmpeg's libraries,
+  about 150 MB, before the overlay could appear: 2.9 s from a hard disk at the first press after three idle hours,
+  with nothing on screen meanwhile. The overlay now opens at once, and FFmpeg loads once it is on screen, while you
+  choose what to record; the record button still checks it before it starts.
+- **A `UiStall` line in the log now counts the page faults during the freeze.** Thousands of them at a few percent
+  processor time mean the app was waiting for its own memory to come back from disk, as after a long idle spell,
+  rather than for something else.
 
 ### 💾 Storage
 

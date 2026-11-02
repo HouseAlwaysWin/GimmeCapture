@@ -13,10 +13,12 @@ namespace GimmeCapture.Tests.ViewModels;
 // alone. The overlay is now asked for first, and the save runs once the UI thread is idle again.
 public sealed class MainWindowViewModelCaptureSaveTests
 {
+    // Record too: its overlay waited for FFmpeg's libraries to load first, 2.9 s from a hard disk after an idle spell.
     [Theory]
     [InlineData(CaptureMode.Normal)]
     [InlineData(CaptureMode.Translate)]
     [InlineData(CaptureMode.ScrollingCapture)]
+    [InlineData(CaptureMode.Record)]
     public async Task TheOverlayIsAskedFor_BeforeTheSaveStarts(CaptureMode mode)
     {
         var events = new List<string>();

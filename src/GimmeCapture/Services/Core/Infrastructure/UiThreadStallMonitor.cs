@@ -133,12 +133,14 @@ internal static class UiThreadStallMonitor
         }
     }
 
-    // Twice a beat, so it stays cheap: one GetThreadTimes and a few counters the GC keeps anyway, and no allocation.
+    // Twice a beat, so it stays cheap: one GetThreadTimes, one GetProcessMemoryInfo and a few counters the GC keeps
+    // anyway, and no allocation.
     private static UiThreadSample TakeSample() => new(
         Stopwatch.GetTimestamp(),
         _uiThreadCpu?.Read(),
         GC.GetTotalPauseDuration(),
         GC.CollectionCount(0),
         GC.CollectionCount(1),
-        GC.CollectionCount(2));
+        GC.CollectionCount(2),
+        ProcessPageFaults.Read());
 }

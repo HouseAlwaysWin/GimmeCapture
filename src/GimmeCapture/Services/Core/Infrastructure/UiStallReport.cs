@@ -10,13 +10,15 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// <param name="Timestamp">A <see cref="Stopwatch.GetTimestamp"/> reading.</param>
 /// <param name="ThreadCpu">The UI thread's CPU time so far; null where it cannot be read.</param>
 /// <param name="GcPause">The process's time paused for garbage collection so far.</param>
+/// <param name="PageFaults">The process's page faults so far; null where they cannot be read.</param>
 internal readonly record struct UiThreadSample(
     long Timestamp,
     TimeSpan? ThreadCpu,
     TimeSpan GcPause,
     int Gen0Collections,
     int Gen1Collections,
-    int Gen2Collections);
+    int Gen2Collections,
+    uint? PageFaults = null);
 
 internal enum UiStallCause
 {
@@ -98,10 +100,17 @@ internal static class UiStallReport
             ? $"UI thread CPU {ran.TotalMilliseconds:F0}ms ({SharePercent(ran, window)}%)"
             : "UI thread CPU unknown";
 
+        // Thousands of faults at a few percent CPU: blocked on pages coming back from disk. The first Record overlay after
+        // three idle hours logged 1.9 s blocked at 11% CPU, and the line could not say on what.
+        string faults = posted.PageFaults is { } faultsBefore && now.PageFaults is { } faultsAfter
+            ? $", page faults +{faultsAfter - faultsBefore}"
+            : "";
+
         return $"{cause}: {cpuText}, GC paused {gcPause.TotalMilliseconds:F0}ms, collections "
             + $"gen0 +{now.Gen0Collections - posted.Gen0Collections} "
             + $"gen1 +{now.Gen1Collections - posted.Gen1Collections} "
-            + $"gen2 +{now.Gen2Collections - posted.Gen2Collections}";
+            + $"gen2 +{now.Gen2Collections - posted.Gen2Collections}"
+            + faults;
     }
 
     // CPU time is counted in scheduler ticks (15.6 ms on Windows), so over a short window it can come out above 100%.

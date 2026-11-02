@@ -131,8 +131,11 @@ public partial class SnipWindowViewModel
         if (value == SnipMode.Recording)
         {
             // What a run's first recording would load during its start (FFmpeg, the encoder) loads while the user picks
-            // what to record. Once a run; a no-op after that.
-            _recordingService?.WarmUpAsync().Forget("Recording.WarmUp");
+            // what to record, once the overlay is on screen: from a hard disk FFmpeg alone takes seconds, and the
+            // overlay's first show must not share the disk with it. Once a run; a no-op after that.
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _recordingService?.WarmUpAsync().Forget("Recording.WarmUp"),
+                Avalonia.Threading.DispatcherPriority.Background);
         }
 
         // Logic from old IsRecordingMode / IsTranslationMode setters

@@ -314,6 +314,15 @@ tool.
   Standby the item guessed. Left: fewer probes while no window is shown, at the cost of precision when a hotkey arrives
   in the tray. The probe also found that `Dispatcher.MainLoop(token)` sleeps through a token cancelled from another
   thread (10 min and 2 h 44 min, until a UAC prompt); the three probes' `PumpFor` cancel from the UI thread now.
+- Done since batch 1: **the first Record press of a run waited for FFmpeg**. The user's log, 2026-11-02 21:16, three
+  idle hours after the start: `SnipOpen.Timings mode=Record waitedForUiThread=2927 ... show=1428`, no `UiStall` in
+  those 2.9 s, then one of 1.9 s blocked at 11% CPU across `show`; the next press, 4 s later, took 44 ms in all.
+  `StartCapture` awaited `IsFFmpegAvailable` on the pool before asking for the overlay, and on a run's first Record
+  press that loads FFmpeg (~150 MB from the hard disk the app runs from), though the record button checks it again
+  anyway. The overlay no longer waits for it, and the Record-mode warm-up, which loads FFmpeg first, is posted at
+  Background priority so that it starts once the overlay is on screen (`MainWindowViewModelCaptureSaveTests` covers
+  Record now). Not explained: that overlay's `show=1428`. `UiStall` lines now end `page faults +N` (`ProcessPageFaults`)
+  to tell waiting on pages from waiting on anything else next time.
 - Done since batch 1: **a copy from the overlay encoded its PNG twice** (from Snip overlay, the copy half of "Frozen
   commits keep the overlay up"). History is on by default, and a copy encoded the picture at full compression on the
   clipboard's STA thread, decoded it through GDI+ for CF_BITMAP, then encoded it again into the history's file, all

@@ -79,6 +79,24 @@ public sealed class UiStallReportTests
     }
 
     [Fact]
+    public void Describe_CountsThePageFaultsDuringTheStall_WhenBothEndsHaveThem()
+    {
+        // The first Record overlay after three idle hours: 1.9 s blocked at 11% CPU, and the line could not say on what.
+        string line = UiStallReport.DescribeEnded(
+            TimeSpan.FromMilliseconds(1927),
+            Sample(atMs: 0, cpuMs: 0) with { PageFaults = 120_000 },
+            Sample(atMs: 1927, cpuMs: 219) with { PageFaults = 123_412 });
+
+        Assert.Contains("collections gen0 +0 gen1 +0 gen2 +0, page faults +3412)", line, StringComparison.Ordinal);
+
+        string unread = UiStallReport.DescribeEnded(
+            TimeSpan.FromMilliseconds(400),
+            Sample(atMs: 0, cpuMs: 0) with { PageFaults = 120_000 },
+            Sample(atMs: 400, cpuMs: 10));
+        Assert.DoesNotContain("page faults", unread, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Describe_CapsTheCpuShareAtAHundredPercent()
     {
         // CPU time advances in scheduler ticks, so over a short window it can read more than the wall clock.

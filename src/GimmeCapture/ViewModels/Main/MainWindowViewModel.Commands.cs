@@ -13,19 +13,11 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class MainWindowViewModel
 {
-    private async Task StartCapture(CaptureMode mode = CaptureMode.Normal)
+    private Task StartCapture(CaptureMode mode = CaptureMode.Normal)
     {
-        if (mode == CaptureMode.Record)
-        {
-            // On the pool: if nothing has loaded FFmpeg yet, this is where ~150 MB of native libraries get loaded.
-            if (!await Task.Run(FfmpegDownloader.IsFFmpegAvailable))
-            {
-                // FFmpeg toolkit is bundled with the app. If unavailable, this installation is incomplete.
-                SetStatus("FFmpegNotReady");
-                return;
-            }
-        }
-
+        // Record mode does not wait for FFmpeg here. Its ~150 MB of native libraries took 2.9 s from a hard disk at a
+        // run's first Record press after three idle hours, all before the overlay could show; the overlay's warm-up now
+        // loads them while the user picks what to record, and the record button checks them before it starts.
         RequestCaptureAction?.Invoke(mode);
         SetStatus("StatusSnip");
 
@@ -35,6 +27,7 @@ public partial class MainWindowViewModel
         // settings change queues a save of its own (QueueSettingsSave), and what this one adds is having the state of
         // this capture on disk straight away.
         PostWhenIdle(() => SaveSettingsAsync().Forget("Settings.SaveOnCapture"));
+        return Task.CompletedTask;
     }
 
     /// <summary>
