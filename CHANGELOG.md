@@ -192,6 +192,12 @@
 - **A recording saved as WebM whose sound cannot be added is saved in about half the time.** The video is encoded
   first and the sound added after it; when adding the sound failed, the save encoded the whole video again, the
   slowest part of it, only to get the file it already had. It now keeps that file.
+- **Stepping through a video in the Compress editor answers at once.** Every frame the paused editor or its quality
+  comparison showed, a step, a skip, a drop on the slider, or the same frame drawn again after a rotation or a crop,
+  opened the file afresh, read its streams and set up a decoder and a graphics device: 0.13-0.2 s a click on a laptop,
+  twice in the comparison. The file now stays open while you work on it: a step forward takes a few milliseconds, the
+  same frame none, a step back, a skip or a drop on the slider 0.02-0.1 s. It closes again after half a minute without a
+  click.
 - **Saving a pin with annotations leaves the pin alone while its dialog is open.** The save drew the annotations into a
   copy of the picture and put that copy in the pin for as long as the dialog was open, cancelled or not: the pin drew
   its annotations twice meanwhile, so a highlighter looked darker, a smart selection lost its points, and the copy (33

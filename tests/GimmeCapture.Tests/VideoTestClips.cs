@@ -54,7 +54,8 @@ internal static class VideoTestClips
     /// Encodes one frame per entry of <paramref name="pts"/> (in <paramref name="timeBase"/>) with libx264 into a file
     /// whose container follows the extension (.mkv, .mp4). Each frame lasts until the next one; the last lasts
     /// <paramref name="lastFrameDuration"/>. With <paramref name="detailed"/> the frames carry a moving, textured
-    /// picture that costs an encoder real work, for timing encodes; otherwise a flat grey per frame.
+    /// picture that costs an encoder real work, for timing encodes; otherwise a flat grey per frame. A
+    /// <paramref name="gopSize"/> puts a keyframe every that many frames; otherwise x264 places them (one every 250).
     /// </summary>
     public static unsafe string WriteTimestamped(
         string path,
@@ -64,7 +65,8 @@ internal static class VideoTestClips
         IReadOnlyList<long> pts,
         long lastFrameDuration,
         bool detailed = false,
-        AVRational? frameRate = null)
+        AVRational? frameRate = null,
+        int gopSize = 0)
     {
         FFmpegRuntime.EnsureInitialized();
 
@@ -91,6 +93,11 @@ internal static class VideoTestClips
 
             encoder->max_b_frames = 0;
             encoder->thread_count = 0;
+            if (gopSize > 0)
+            {
+                encoder->gop_size = gopSize;
+            }
+
             if ((output->oformat->flags & ffmpeg.AVFMT_GLOBALHEADER) != 0)
             {
                 encoder->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -161,10 +168,11 @@ internal static class VideoTestClips
 
     /// <summary>A constant-rate clip of <paramref name="frameCount"/> frames at <paramref name="fps"/>, as
     /// <see cref="WriteTimestamped"/> writes it.</summary>
-    public static string WriteConstantRate(string path, int width, int height, int frameCount, int fps, bool detailed = false) =>
+    public static string WriteConstantRate(
+        string path, int width, int height, int frameCount, int fps, bool detailed = false, int gopSize = 0) =>
         WriteTimestamped(
             path, width, height, new AVRational { num = 1, den = fps }, Enumerable.Range(0, frameCount).Select(i => (long)i).ToArray(),
-            lastFrameDuration: 1, detailed, new AVRational { num = fps, den = 1 });
+            lastFrameDuration: 1, detailed, new AVRational { num = fps, den = 1 }, gopSize);
 
     /// <summary>
     /// A constant-rate clip as <see cref="WriteConstantRate"/> writes it, with a 16-bit stereo 48 kHz tone as long as the

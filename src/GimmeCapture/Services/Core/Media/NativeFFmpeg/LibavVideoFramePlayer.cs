@@ -54,7 +54,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     // — we skip that frame. But a persistent failure (device-removed / TDR) would otherwise freeze on a stale
     // picture forever; past this many consecutive failures we tear the stream down so the caller surfaces it and
     // the user can disable hardware decode.
-    private const int MaxHwTransferFailures = 8;
+    internal const int MaxHwTransferFailures = 8;
 
     // Kept alive for the whole process: Marshal.GetFunctionPointerForDelegate hands libav a native thunk over
     // this instance, and libav invokes it from inside avcodec_open2/decode. If the delegate were collected the
@@ -114,7 +114,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     // Attempts to attach a D3D11VA hardware device to the decoder context. Returns the created device ref (which
     // the caller must free) on success and installs the get_format callback; returns null (and leaves decCtx on
     // the software path) when hw is disabled, the codec has no D3D11VA config, or device creation fails.
-    private static unsafe AVBufferRef* TryInitHardwareDecode(AVCodec* dec, AVCodecContext* decCtx, out string? reason)
+    internal static unsafe AVBufferRef* TryInitHardwareDecode(AVCodec* dec, AVCodecContext* decCtx, out string? reason)
     {
         reason = null;
         if (!HardwareDecodeEnabled)
@@ -562,31 +562,16 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         return Math.Clamp((int)Math.Round(fps), 1, 120);
     }
 
-    // Decodes a single frame at (or just before) the given timestamp as BGRA bytes scaled to width×height.
-    // Returns null if no frame is produced or it is cancelled. Used for paused frame-step / seek in compare.
+    /// <summary>
+    /// The first frame at or after <paramref name="seconds"/> as width × height BGRA bytes, from the file opened for it;
+    /// null if there is none or it is cancelled. A preview that shows frame after frame keeps a
+    /// <see cref="LibavStillFrameDecoder"/> instead, which opens the file once.
+    /// </summary>
     public static async Task<byte[]?> DecodeFrameAtAsync(
         string videoPath, double seconds, int width, int height, CancellationToken ct = default)
     {
-        byte[]? frame = null;
-        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        try
-        {
-            using var player = new LibavVideoFramePlayer();
-            await player.PlayFramesAsync(videoPath, width, height, Math.Max(0, seconds), 1.0, false, (bgra, _) =>
-            {
-                if (frame == null)
-                {
-                    frame = bgra.ToArray(); // first frame at/after the seek point
-                    stop.Cancel();
-                }
-            }, stop.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // expected — we cancel right after grabbing the first frame
-        }
-
-        return frame;
+        using var decoder = new LibavStillFrameDecoder(videoPath, width, height);
+        return await decoder.DecodeFrameAtAsync(seconds, ct).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 57 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 58 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -380,6 +380,21 @@ tool.
   files before and after on two recordings (2.82 and 2.95 MB for 3 MB targets, 6.2 and 3.2 s). Also struck as stale:
   "`GimmeCapture_*` folders in %TEMP% are never swept after a crash", since `TempWorkspaceCleaner` deletes every
   `GimmeCapture_*` folder older than 12 h at start-up.
+- Done since batch 1: **every editor or compare step reopened the file** (Compress and the editor).
+  `LibavStillFrameDecoder` keeps the file, the decoder and its D3D11VA device open between the paused frames the editor
+  and both sides of the compare show: a frame after the decoder's is reached by decoding on unless the file's index puts
+  a keyframe between (a seek would start there), the frame last given comes back for the same time without a decode, and
+  the file closes after 30 s without a request. `LibavVideoFramePlayer.DecodeFrameAtAsync` is now such a decoder opened
+  for one frame. `LibavStillFrameDecoderTests`' opt-in STILL_FRAME_PROBE=1 (STILL_FRAME_PROBE_FILE=<clip>,
+  STILL_FRAME_PROBE_SOFTWARE=1) times an editor's clicks both ways in turn. Medians on the laptop, for two of the user's
+  recordings (1450x900 and 2432x660, 30 fps) and a generated 1920x1080 60 fps clip with the recorder's 2 s keyframes,
+  opened each time against kept: a step forward 147-191 ms against 2-5, a step back 172-194 against 73-96 (it still
+  decodes from the keyframe), the same frame again 170-188 against 0, a 5 s skip 138-212 against 20-68, a slider drop
+  126-192 against 18-84, the first frame 209-316 against 124-180. With hardware decoding off (1450x900): a step forward
+  99 ms against 1.5, a step back 106 against 70. Timed one way after the other, the second ran slower than in turn (a
+  warmer processor), which first showed the kept decoder slower at software steps back. Open, the decoder holds 70-90 MB
+  of the process, on the CPU or the GPU. Not done: a step back still decodes from the keyframe; keeping the few frames
+  before the one shown would make repeated steps back instant.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -657,10 +672,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Compress and the editor
 
-- **Every editor or compare step reopens the file** (M). `LibavVideoFramePlayer.cs:567-582` (`DecodeFrameAtAsync`:
-  open, find_stream_info, new D3D11VA device, seek, decode), called from `VideoEditViewModel.cs:227,254,650,686` and
-  `CompareViewModel.cs:428,442`. A cold open logged 279-293 ms; compare pays it twice; rotate, crop toggles and
-  split/merge re-decode an unchanged frame. Fix: one long-lived decoder per view, and cache the last BGRA frame.
 - **GIF/WebM output: an extra encode** (S-M). `CompressPipeline.EncodeGifWebmAsync`: an H.264 CRF 18 intermediate at the
   user's preset even with no edits; transcode the source directly when nothing is edited. Compress's progress and cancel
   are done (Status); still open there: Pause during the transcode. The recording's and the pin's GIF and WebM show the
@@ -755,6 +766,13 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   an update found there waits for the main window, because `UpdateDialog.ShowDialog` cannot open centred on screen.
 - **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab, the
   Record-mode warm-up and a recording start probing together (`LibavRecordingEncoder`).
+- **A Direct3D 11 decode leaves 150-240 MB in the process after it ends** (M; found with the editor's decoder, measure
+  the app first). In a test host, private bytes went from 40 MB to 189-196 MB after a player's D3D11VA decode of a
+  1450x900 recording, three in a row, and from 67 to 303 MB after a 1920x1080 clip's; decoding on the CPU gave all but a
+  megabyte or two back. A video pin's playback and the editor's and the compare's frames decode this way by default
+  (`LibavVideoFramePlayer.TryInitHardwareDecode`), so a run that has shown a video keeps it. Probably the driver's, like
+  NVENC's (below): check the app's commit size in Task Manager before and after a video pin plays, then whether one
+  device kept for the run, or the CPU for the editor's 720 px frames, holds less.
 - **NVENC's driver keeps 200-260 MB once a recording has used it** (L: a child process is the only fix found). Release
   tests at 3968x1160, 120 frames, three encoders a process: 208-266 MB on frames in memory (CUDA), the same on CUDA
   with 4, 8 or 16 `surfaces`, 198-256 on Direct3D 11 frames with a device each, and one Direct3D 11 device kept across
@@ -818,8 +836,8 @@ inside the options window is how you reach it and what it can produce.
    gets injected services.
 6. Move the pin's heavy edits into the editor step by step; the pin keeps quick trim, loop and playback. Agree the
    split with the user.
-7. Fix "Every editor or compare step reopens the file" (Compress and the editor, above) first or alongside: about
-   0.3 s cold per click matters more once the editor is a main tool.
+7. ~~Fix "Every editor or compare step reopens the file"~~: done 2026-11-02 (Status). A step back still decodes from
+   the keyframe, 0.07-0.1 s.
 
 **Done when** a video opens in the editor from a pin, History, a finished recording and the tray and exports straight
 from there; the Compress queue flow still works; new strings are in all three locales; the edit session, its sinks and

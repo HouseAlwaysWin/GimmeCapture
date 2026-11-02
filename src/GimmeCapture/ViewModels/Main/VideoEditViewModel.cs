@@ -51,6 +51,9 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     private WriteableBitmap? _frameBitmap;
     private bool _disposed;
 
+    // The paused frames: steps, seeks and redraws after a rotation or crop, from one decoder that keeps the file open.
+    private readonly LibavStillFrameDecoder _stillFrames;
+
     internal VideoEditViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
         VideoEditResult initial, Action<VideoEditResult> onApply, Bitmap? initialPreview = null)
@@ -67,6 +70,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         double scale = Math.Min(1.0, 720.0 / Math.Max(1, _sourceWidth)); // cap decode width ~720px for responsiveness
         _decodeW = Math.Max(2, (int)(_sourceWidth * scale)); _decodeW -= _decodeW & 1;
         _decodeH = Math.Max(2, (int)(_sourceHeight * scale)); _decodeH -= _decodeH & 1;
+        _stillFrames = new LibavStillFrameDecoder(sourcePath, _decodeW, _decodeH);
 
         Title = Path.GetFileName(sourcePath);
 
@@ -683,7 +687,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         byte[]? frame;
         try
         {
-            frame = await LibavVideoFramePlayer.DecodeFrameAtAsync(_sourcePath, pos, _decodeW, _decodeH, ct);
+            frame = await _stillFrames.DecodeFrameAtAsync(pos, ct);
         }
         catch (Exception ex)
         {
@@ -771,6 +775,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         _stepCts?.Cancel();
         _playCts?.Dispose();
         _stepCts?.Dispose();
+        _stillFrames.Dispose();
         _audioPreview.Dispose();
         Draw.Dispose();
         Compare?.Dispose(); // stops the inline compare's playback + deletes its temp sample, if still open

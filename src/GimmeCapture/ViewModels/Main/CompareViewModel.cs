@@ -61,6 +61,11 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
     private readonly LatestFrameSlot _sourceFrames = new();
     private readonly LatestFrameSlot _sampleFrames = new();
 
+    // Each side's paused frames, from a decoder that keeps its file open: the source's while the compare is open, the
+    // sample's until the window it reads is replaced.
+    private readonly LibavStillFrameDecoder _sourceDecoder;
+    private LibavStillFrameDecoder? _sampleDecoder;
+
     internal CompareViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
         LibavExportOptions options, int rotation, double anchorSeconds = -1)
@@ -78,6 +83,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         double scale = Math.Min(1.0, 720.0 / Math.Max(1, sw)); // cap decode width ~720px for responsiveness
         _decodeW = Math.Max(2, (int)(sw * scale)); _decodeW -= _decodeW & 1;
         _decodeH = Math.Max(2, (int)(sh * scale)); _decodeH -= _decodeH & 1;
+        _sourceDecoder = new LibavStillFrameDecoder(sourcePath, _decodeW, _decodeH);
 
         PlayPauseCommand = ReactiveCommand.CreateFromTask(TogglePlayAsync);
         StepBackCommand = ReactiveCommand.CreateFromTask(() => StepAsync(-1));
@@ -425,7 +431,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
         try
         {
-            byte[]? src = await LibavVideoFramePlayer.DecodeFrameAtAsync(_sourcePath, pos, _decodeW, _decodeH, ct);
+            byte[]? src = await _sourceDecoder.DecodeFrameAtAsync(pos, ct);
             if (ct.IsCancellationRequested)
             {
                 return;
@@ -439,7 +445,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             }
 
             // Decode from the window EnsureWindowAsync returned (a matched path/offset pair), not re-read fields.
-            byte[]? smp = await LibavVideoFramePlayer.DecodeFrameAtAsync(win.Path, pos - win.Start, _decodeW, _decodeH, ct);
+            byte[]? smp = await SampleDecoderFor(win).DecodeFrameAtAsync(pos - win.Start, ct);
             if (ct.IsCancellationRequested)
             {
                 return;
@@ -448,6 +454,26 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         }
         catch (OperationCanceledException) { /* superseded by a newer seek/step */ }
         catch (Exception ex) { AppLog.Error("Compress.CompareShowFrame", ex); }
+    }
+
+    // UI thread. The sample's decoder for this window, made when the window changes. The one it replaces lets its file
+    // go, which EnsureWindowAsync could not delete while that decoder held it open.
+    private LibavStillFrameDecoder SampleDecoderFor(SampleWindow win)
+    {
+        if (_sampleDecoder is { } current && current.VideoPath == win.Path)
+        {
+            return current;
+        }
+
+        LibavStillFrameDecoder? replaced = _sampleDecoder;
+        _sampleDecoder = new LibavStillFrameDecoder(win.Path, _decodeW, _decodeH);
+        if (replaced != null)
+        {
+            replaced.Dispose();
+            TryDelete(replaced.VideoPath);
+        }
+
+        return _sampleDecoder;
     }
 
     // Seek path: reuse the current window if it already covers `pos` (so small seeks/steps don't re-encode);
@@ -582,6 +608,9 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         _playCts?.Cancel();
         _stepCts?.Cancel();
         Interlocked.Exchange(ref _sampleCts, null)?.Cancel();
+        // Before the sample folder goes: the sample's decoder holds a file in it open.
+        _sourceDecoder.Dispose();
+        _sampleDecoder?.Dispose();
         // Release the two decoded comparison frames (each an MB-sized Bitmap) — the window is closing.
         _sourceFrame?.Dispose();
         _sampleFrame?.Dispose();
