@@ -174,6 +174,15 @@
   on screen until both were done: 0.26-0.72 s for a whole 1920x1080 screen, seconds at 4K. One PNG with the faster
   settings now goes to both, in 0.03-0.09 s for the same screen, and the history's copy is written after the overlay
   has closed. Those history copies take 17-30% more disk space for it.
+- **Exporting a pinned video as WebM no longer works on the app's main thread, and leaves no working files behind.** The
+  export decoded the clip's whole sound into memory and wrote it out on that thread, 20-30 ms for half a minute of sound
+  and about 0.1 s the first time in a run, longer for a longer clip, and allocated up to four times the sound's size for
+  it (about 11 MB a minute), much of which stayed held afterwards. A cut clip's trimmed copy, and a failed export's
+  folder, stayed in the temp folder. All of it now runs in the background, the sound is written as it is decoded, in
+  0.1 MB, and only the exported file stays. The Compress tab writes a WebM's sound the same way.
+- **A recording saved as WebM whose sound cannot be added is saved in about half the time.** The video is encoded
+  first and the sound added after it; when adding the sound failed, the save encoded the whole video again, the
+  slowest part of it, only to get the file it already had. It now keeps that file.
 - **Saving a pin with annotations leaves the pin alone while its dialog is open.** The save drew the annotations into a
   copy of the picture and put that copy in the pin for as long as the dialog was open, cancelled or not: the pin drew
   its annotations twice meanwhile, so a highlighter looked darker, a smart selection lost its points, and the copy (33

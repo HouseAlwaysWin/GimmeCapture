@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 52 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 54 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -341,6 +341,21 @@ tool.
   clips and tell the transcode is under way by its file in the pipeline's temporary folder, and all four fail against
   the old pipeline. Not done: the transcode still ignores Pause, the recording's and the pin's GIF and WebM still show no
   progress during it, and an unedited source still gets the intermediate.
+- Done since batch 1: **a pinned video's WebM export ran its audio step on the UI thread** (Pins' "WebM export from a
+  video pin" item), and **a failed WebM audio mux encoded the recording's video again** (Recording). The pin decoded the
+  whole track into one array with `LibavPinAudioPcmDecoder.Decode` and wrote the WAV on the UI thread after its VP9
+  `Task.Run`, probed the fps there too, and left the cut's MP4 folder behind, and its own after a failure. It now goes
+  through `GifWebmVideoExporter` in one `Task.Run` (`FloatingVideoViewModel.TranscodeGifWebmAsync`), which deletes both
+  folders as due; the exporter writes the WAV as it decodes (`WriteAudioAsWav`, through `DecodeStreaming`) and deletes
+  the WAV and the video-only WebM after the mux, so a copy's export folder, kept for the clipboard, holds only the file.
+  GIFWEBM_AUDIO_PROBE=<clip> on four of the user's recordings (4-33 s of audio, 0.8-6.3 MB of WAV), three runs each in
+  one process: the in-memory step allocated 3.5-3.9 times the WAV on its first run (89-108 ms, with the process's first
+  decode) and about the WAV's size on later ones (21-31 ms: the array pool had kept its growing buffers); as it decodes,
+  0.1 MB and 22-40 ms. `RecordingService.FinalizeAsWebmAsync` now moves the video-only file when the mux fails instead
+  of encoding the video again; `RecordingWebmFinalizeTests` pin the file that comes out but cannot tell one encode from
+  two. Correction to the "GIF/WebM output" item: the recording's and the pin's GIF and WebM have no progress to show,
+  since every progress window's bar is indeterminate (`ProcessingOverlay.axaml`) and nothing reads
+  `RecordingService.FinalizationProgress`; a bar that fills changes its look, the user's call.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -550,6 +565,9 @@ These were covered by unit tests only; check them in the real app before a relea
 - **Compressing to GIF or WebM**: queue a recording of half a minute or more with GIF as the output and start it. The
   bar should keep moving to the end instead of sitting at 100% for most of the time. Start it again and cancel past
   the middle: the file should end as cancelled, not done, with no GIF in the output folder. Then the same with WebM.
+- **Exporting a pinned video as WebM**: pin a recording with sound, cut a piece out of it, then Save as WebM and Copy as
+  WebM. The pin should keep playing smoothly while it exports, both files should have the sound, and the temp folder
+  should keep no new `GimmeCapture_Export_*` folder after the save (the copy keeps one, holding just its WebM).
 
 ## How to run a batch
 
@@ -608,8 +626,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   copies and a CPU conversion, est. 20-50 ms per frame at 4K, so 4K30 likely drops frames unseen (gdigrab never counts
   drops). FFmpeg's `ddagrab` + `hwdownload,format=bgra` into the existing converter gives monitor choice, crop, a GPU
   cursor and HDR. Keep gdigrab for regions spanning monitors; re-check the overlay stays excluded.
-- **A failed WebM audio mux re-encodes the whole video** (S). `RecordingService.Finalize.cs:635`: move the video-only
-  file instead.
 
 ### Compress and the editor
 
@@ -617,11 +633,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   open, find_stream_info, new D3D11VA device, seek, decode), called from `VideoEditViewModel.cs:227,254,650,686` and
   `CompareViewModel.cs:428,442`. A cold open logged 279-293 ms; compare pays it twice; rotate, crop toggles and
   split/merge re-decode an unchanged frame. Fix: one long-lived decoder per view, and cache the last BGRA frame.
-- **GIF/WebM output: an extra encode** (S-M). `CompressPipeline.EncodeGifWebmAsync`: an H.264 CRF 18 intermediate at
-  the user's preset even with no edits; transcode the source directly when nothing is edited. Compress's progress and
-  cancel are done (Status); still open there: Pause during the transcode, and progress for the recording's GIF and
-  WebM (`RecordingService.Finalize.cs`, FinalizationProgress) and the pin's (`FloatingVideoViewModel.Actions.cs`), both
-  of which the transcoders can now report.
+- **GIF/WebM output: an extra encode** (S-M). `CompressPipeline.EncodeGifWebmAsync`: an H.264 CRF 18 intermediate at the
+  user's preset even with no edits; transcode the source directly when nothing is edited. Compress's progress and cancel
+  are done (Status); still open there: Pause during the transcode. The recording's and the pin's GIF and WebM show the
+  indeterminate bar every progress window has (the user's call: a bar that fills changes its look; the transcoders can
+  report).
 - **A target size at or above the source's size still encodes** (S). `CompressBatchRunner.cs:116-124`: stream-copy
   with `LibavMuxer.RemuxAllStreams` when unedited, otherwise cap at the source bitrate. Audio-only M4A from an AAC
   source can stream-copy too.
@@ -650,8 +666,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **A pin's undo history is capped at 30 steps, not bytes** (S, the user's call): up to ~1 GB at 4K while the pin is
   open (`AnnotationEditorState.cs:150`). A cap by bytes means fewer undo steps on large pictures. What a closed pin
   kept is done (Status).
-- **WebM export from a video pin decodes the whole audio track and writes the WAV on the UI thread**, and leaves its
-  trimmed intermediate folder behind (`FloatingVideoViewModel.Actions.cs`; found during batch 1).
 - **Lower**: video pins decode at full size and copy each frame twice (`LatestFrameHandoff.cs:40`, then
   `FloatingVideoViewModel.Media.cs:564`, 33 MB per frame at 4K) and keep decoding when covered;
   `ProcessingOverlay.axaml:87` keeps `IsIndeterminate="True"` (a 60 Hz animation after the first AI job? measure);

@@ -628,24 +628,32 @@ public partial class RecordingService
                 var muxStats = await Task.Run(() =>
                     LibavWebmTranscoder.MuxWebmWithOpus(videoOnlyPath, mergedAudio!, _outputFile, quality));
                 LogToFile($"[Finalize] WebM native mux: {_outputFile}, videoPkts={muxStats.VideoPackets}, audioPkts={muxStats.AudioPackets}");
+                TryDeleteQuiet(videoOnlyPath);
+                FinalizationProgress = 100;
+                return;
             }
             catch (Exception muxEx)
             {
+                // The video-only file is the recording's whole video: keep it, rather than encode the video again, the
+                // slowest step of the finalize, only to get the same file.
                 LogToFile($"[Finalize] WebM audio mux failed, video-only fallback: {muxEx}");
-                await Task.Run(() => LibavWebmTranscoder.TranscodeToWebm(mergedMkv, _outputFile, webmFps, quality));
-            }
-            finally
-            {
-                TryDeleteQuiet(videoOnlyPath);
             }
         }
         else
         {
             LogToFile("[Finalize] WebM: no merged audio; writing video-only file.");
-            await TryMoveWithRetryAsync(videoOnlyPath, _outputFile);
         }
 
+        await TryMoveWithRetryAsync(videoOnlyPath, _outputFile);
         FinalizationProgress = 100;
+    }
+
+    // The WebM step alone, for a test: the merged video and audio into outputFile, with tempDir for its own files.
+    internal Task FinalizeAsWebmForTestAsync(string mergedMkv, string? mergedAudio, string tempDir, string outputFile)
+    {
+        _tempDir = tempDir;
+        _outputFile = outputFile;
+        return FinalizeAsWebmAsync(mergedMkv, mergedAudio);
     }
 
     private static void TryDeleteQuiet(string path)

@@ -11,8 +11,8 @@ namespace GimmeCapture.Services.Core.Media;
 /// <summary>
 /// Transcodes an ALREADY-edited/processed video file (trim/crop/rotate/filters/downscale/fps/burn-in already
 /// baked in) into GIF or WebM. The GIF/WebM encoders take a whole file and apply no edits, so callers must
-/// pre-process via <see cref="LibavClipExporter"/> first. Mirrors the pin's ExportGifWebmInProcessAsync tail so
-/// the pin and the compress pipeline share one transcode code path.
+/// pre-process via <see cref="LibavClipExporter"/> first. A pinned video's GIF/WebM export and the compress pipeline
+/// both go through it.
 /// </summary>
 internal static class GifWebmVideoExporter
 {
@@ -36,9 +36,9 @@ internal static class GifWebmVideoExporter
     }
 
     /// <summary>
-    /// WebM: VP9 video at the source fps, then (when <paramref name="keepAudio"/>) decode the audio to PCM,
-    /// write a WAV, and mux it as Opus — otherwise video-only. Uses <paramref name="tempDir"/> for the
-    /// intermediate video-only WebM and WAV. Returns true when a non-empty file is produced; cancelling throws
+    /// WebM: VP9 video at the source fps, then (when <paramref name="keepAudio"/>) decode the audio into a WAV
+    /// (<see cref="WriteAudioAsWav"/>) and mux it as Opus — otherwise video-only. Uses <paramref name="tempDir"/> for
+    /// the intermediate video-only WebM and WAV. Returns true when a non-empty file is produced; cancelling throws
     /// <see cref="OperationCanceledException"/>.
     /// </summary>
     public static bool TranscodeToWebm(
@@ -57,21 +57,16 @@ internal static class GifWebmVideoExporter
 
         if (keepAudio)
         {
+            string wav = Path.Combine(tempDir, "audio.wav");
             try
             {
-                LibavPinAudioPcmDecoder.DecodeResult pcm = LibavPinAudioPcmDecoder.Decode(sourcePath, 0, ct);
-                if (pcm.PcmBytes.Length > 0)
+                if (WriteAudioAsWav(sourcePath, wav, ct))
                 {
-                    string wav = Path.Combine(tempDir, "audio.wav");
-                    using (var writer = new WaveFileWriter(wav, pcm.WaveFormat))
-                    {
-                        writer.Write(pcm.PcmBytes, 0, pcm.PcmBytes.Length);
-                    }
-
                     ct.ThrowIfCancellationRequested();
                     LibavWebmTranscoder.MuxWebmWithOpus(videoOnly, wav, outputPath, quality);
                     if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
                     {
+                        DeleteQuietly(videoOnly);
                         progress?.Report(1.0);
                         return true;
                     }
@@ -79,15 +74,63 @@ internal static class GifWebmVideoExporter
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                AppLog.Warning("Compress.WebmAudio", ex); // genuine audio-decode failure → fall back to video-only
+                AppLog.Warning("GifWebmExport.WebmAudio", ex); // genuine audio-decode failure → fall back to video-only
             }
             // OperationCanceledException propagates: a cancelled export must fail, not silently drop the audio.
+            finally
+            {
+                // A pin's copy leaves its export folder for the clipboard, so the steps' files must not stay beside it.
+                DeleteQuietly(wav);
+            }
         }
 
         ct.ThrowIfCancellationRequested();
         File.Move(videoOnly, outputPath, overwrite: true);
         progress?.Report(1.0);
         return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+    }
+
+    /// <summary>
+    /// Decodes <paramref name="sourcePath"/>'s audio into a 16-bit stereo WAV at <paramref name="wavPath"/>, a chunk at a
+    /// time, and returns whether any audio was written. The whole track was decoded into one array and then written out:
+    /// about 11 MB a minute, held twice over while the array grew and was copied.
+    /// </summary>
+    internal static bool WriteAudioAsWav(string sourcePath, string wavPath, CancellationToken ct)
+    {
+        long written = 0;
+        WaveFileWriter? writer = null;
+        try
+        {
+            LibavPinAudioPcmDecoder.DecodeStreaming(
+                sourcePath,
+                0,
+                onFormat: format => writer = new WaveFileWriter(wavPath, format),
+                onPcm: (buffer, count) =>
+                {
+                    writer!.Write(buffer, 0, count);
+                    written += count;
+                },
+                waitIfFull: null,
+                ct);
+        }
+        finally
+        {
+            writer?.Dispose();
+        }
+
+        return written > 0;
+    }
+
+    private static void DeleteQuietly(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Debug("GifWebmExport.Cleanup", ex); // the start-up sweep removes the folder
+        }
     }
 
     // Reports on the transcoding thread itself, so the shares reach the caller's progress in order.

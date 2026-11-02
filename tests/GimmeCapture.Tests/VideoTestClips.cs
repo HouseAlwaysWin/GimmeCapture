@@ -166,6 +166,38 @@ internal static class VideoTestClips
             path, width, height, new AVRational { num = 1, den = fps }, Enumerable.Range(0, frameCount).Select(i => (long)i).ToArray(),
             lastFrameDuration: 1, detailed, new AVRational { num = fps, den = 1 });
 
+    /// <summary>
+    /// A constant-rate clip as <see cref="WriteConstantRate"/> writes it, with a 16-bit stereo 48 kHz tone as long as the
+    /// video for its audio, kept as PCM in the Matroska file.
+    /// </summary>
+    public static string WriteWithTone(string path, int width, int height, int frameCount, int fps, bool detailed = false)
+    {
+        string video = WriteConstantRate(path + ".video.mkv", width, height, frameCount, fps, detailed);
+        string tone = WriteTone(path + ".tone.wav", (double)frameCount / fps);
+        LibavMuxer.MuxVideoAndAudioToMkv(video, tone, path);
+        File.Delete(video);
+        File.Delete(tone);
+        return path;
+    }
+
+    /// <summary>A 440 Hz tone of <paramref name="seconds"/> as a 16-bit stereo 48 kHz WAV.</summary>
+    public static string WriteTone(string path, double seconds)
+    {
+        const int sampleRate = 48_000;
+        using var writer = new NAudio.Wave.WaveFileWriter(path, new NAudio.Wave.WaveFormat(sampleRate, 16, 2));
+        int frames = (int)Math.Round(seconds * sampleRate);
+        var buffer = new byte[frames * 4];
+        for (int i = 0; i < frames; i++)
+        {
+            short sample = (short)(Math.Sin(2 * Math.PI * 440.0 * i / sampleRate) * 0.4 * short.MaxValue);
+            BitConverter.TryWriteBytes(buffer.AsSpan(i * 4), sample);
+            BitConverter.TryWriteBytes(buffer.AsSpan((i * 4) + 2), sample);
+        }
+
+        writer.Write(buffer, 0, buffer.Length);
+        return path;
+    }
+
     /// <summary>Reads every video packet's timing from <paramref name="path"/> without decoding.</summary>
     public static unsafe Timeline Read(string path)
     {

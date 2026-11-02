@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using ReactiveUI;
 using ReactiveUI.Reactive;
 using System.Reactive;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -459,75 +460,27 @@ public partial class FloatingVideoViewModel
     }
 
     /// <summary>
-    /// In-process GIF/WebM export: trims the kept runs to a temp mp4 (when a cut was made), then runs the
-    /// existing GIF/WebM transcoders on it (WebM re-muxes Opus audio when present). Returns a temp output
-    /// path, or null on failure. No ffmpeg.exe.
+    /// In-process GIF/WebM export: trims the kept runs to a temp mp4 (when a cut was made), then transcodes it
+    /// (<see cref="TranscodeGifWebmAsync"/>). Returns a temp output path, or null on failure. No ffmpeg.exe.
     /// </summary>
     private async Task<string?> ExportGifWebmInProcessAsync(string targetExt)
     {
-        bool isGif = targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase);
         VideoQuality quality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
-        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
 
         BeginExport();
         try
         {
             // The transcode source is a trimmed mp4 when the edit changes the output (cut or speed),
             // else the original recording.
-            string source;
+            string? trimmed = null;
             if (EditChangesOutput)
             {
-                var trimmed = await ExportTrimmedInProcessAsync(".mp4");
+                trimmed = await ExportTrimmedInProcessAsync(".mp4");
                 if (string.IsNullOrEmpty(trimmed) || !File.Exists(trimmed)) return null;
-                source = trimmed;
-            }
-            else
-            {
-                source = VideoPath;
             }
 
-            string outputPath = Path.Combine(tempDir, "output" + targetExt);
-
-            if (isGif)
-            {
-                (int gifFps, int maxWidth) = LibavGifTranscoder.QualityLadder(quality);
-                await Task.Run(() => LibavGifTranscoder.TranscodeToGif(source, outputPath, gifFps, maxWidth));
-                return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0 ? outputPath : null;
-            }
-
-            // WebM: VP9 video (CFR at the source fps so duration/speed are preserved), then Opus mux.
-            int webmFps = Math.Clamp(LibavClipExporter.ProbeFps(source), 1, 60);
-            string videoOnly = Path.Combine(tempDir, "video.webm");
-            await Task.Run(() => LibavWebmTranscoder.TranscodeToWebm(source, videoOnly, webmFps, quality));
-            if (!File.Exists(videoOnly) || new FileInfo(videoOnly).Length == 0) return null;
-
-            if (await EnsureSourceHasAudioAsync())
-            {
-                try
-                {
-                    var pcm = LibavPinAudioPcmDecoder.Decode(source, 0);
-                    if (pcm.PcmBytes.Length > 0)
-                    {
-                        string wav = Path.Combine(tempDir, "audio.wav");
-                        using (var writer = new NAudio.Wave.WaveFileWriter(wav, pcm.WaveFormat))
-                        {
-                            writer.Write(pcm.PcmBytes, 0, pcm.PcmBytes.Length);
-                        }
-
-                        await Task.Run(() => LibavWebmTranscoder.MuxWebmWithOpus(videoOnly, wav, outputPath, quality));
-                        if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0) return outputPath;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    AppLog.Warning("FloatingVideo.ExportWebmAudio", ex); // fall back to video-only
-                }
-            }
-
-            // A rename within this export's own folder, off the UI thread: it was a copy of the whole clip on it.
-            await Task.Run(() => File.Move(videoOnly, outputPath, overwrite: true));
-            return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0 ? outputPath : null;
+            bool keepAudio = !targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase) && await EnsureSourceHasAudioAsync();
+            return await TranscodeGifWebmAsync(trimmed ?? VideoPath, trimmed, targetExt, quality, keepAudio);
         }
         catch (Exception ex)
         {
@@ -539,6 +492,50 @@ public partial class FloatingVideoViewModel
             EndExport();
         }
     }
+
+    /// <summary>
+    /// Transcodes <paramref name="source"/> to a GIF or a WebM (with its audio when <paramref name="keepAudio"/>) in a
+    /// <c>GimmeCapture_Export_*</c> folder of its own, all of it on the pool, through the compress pipeline's
+    /// <see cref="GifWebmVideoExporter"/>. Returns the file, or null when none came out, leaving no folder behind; the
+    /// folder of <paramref name="intermediate"/>, a cut's MP4 made for this export, goes either way. The WebM's audio
+    /// was decoded into memory and written to its WAV on the UI thread, and a cut's MP4 stayed in the temp folder.
+    /// <paramref name="tempRoot"/> is where the folder goes, the temp folder unless a test names its own.
+    /// </summary>
+    internal static Task<string?> TranscodeGifWebmAsync(
+        string source, string? intermediate, string targetExt, VideoQuality quality, bool keepAudio,
+        string? tempRoot = null) => Task.Run(() =>
+    {
+        string tempDir = Path.Combine(tempRoot ?? Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+        string outputPath = Path.Combine(tempDir, "output" + targetExt);
+        bool ok = false;
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            if (targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase))
+            {
+                (int gifFps, int maxWidth) = LibavGifTranscoder.QualityLadder(quality);
+                ok = GifWebmVideoExporter.TranscodeToGif(source, outputPath, gifFps, maxWidth);
+            }
+            else
+            {
+                ok = GifWebmVideoExporter.TranscodeToWebm(source, outputPath, tempDir, quality, keepAudio, CancellationToken.None);
+            }
+
+            return ok ? outputPath : null;
+        }
+        finally
+        {
+            if (intermediate != null)
+            {
+                TryDeleteExportFolder(intermediate);
+            }
+
+            if (!ok)
+            {
+                TryDeleteExportFolder(outputPath);
+            }
+        }
+    });
 
     /// <summary>
     /// Produces a file of the whole pin clip — honoring trim/annotations/redaction — in the requested container/
