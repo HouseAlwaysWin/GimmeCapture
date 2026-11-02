@@ -2,6 +2,27 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.71.0 - 2026-11-03
+
+- **Hotkeys over administrator windows** — a new "Run as administrator" setting lets the hotkeys work while Task
+  Manager or another elevated window is in front; handing over to another copy at start no longer shows a start-up
+  error, and a launch to the tray shows its toasts, the capture countdown and the update offer.
+- **Far less memory** — OCR, background removal and smart selection no longer leave hundreds of MB to gigabytes
+  behind, the settings window gives its memory back five minutes after going to the tray, History keeps only the
+  thumbnails on screen, and a new "Use less memory (draw with the CPU)" setting trades processor time for memory.
+- **Quicker captures** — frozen screenshots, copying and pinning encode and hold the picture once; the first capture
+  after an idle spell no longer freezes the app; a capture hotkey no longer waits for a settings save, and a run's
+  first Record overlay no longer waits for FFmpeg; reading a capture's text takes about a quarter less time.
+- **Recording** — recorded sound starts with the picture and stays with it through pauses and quiet stretches, WebM
+  recordings keep their full length, and the first recording of a run starts about as quickly as the rest.
+- **Compress and export** — long GIF exports no longer fill memory, uncompressed PCM sound is kept, cancel and pause
+  work all the way through GIF and WebM, 29.97 fps and variable-frame-rate sources stay in step with their sound,
+  H.265 and WebM use every core, and the editor steps through frames at once.
+- **Idle and start-up** — the app wakes about a third as often while idle, a start from a hard disk reads its files
+  ahead instead of a few kilobytes at a time, and the log's start-up line says what a slow start waited on.
+- **Pins, mosaic and blur** — save works on every pinned image, mosaic and blur preview the frozen picture without
+  scrambled pixels, and resizing a pinned image keeps up with the mouse. The Windows download is about 10 MB smaller.
+
 ## v0.70.0 - 2026-10-29
 
 - **Faster all round** — the app opens about a third of a second sooner and its hotkeys work about half a second
