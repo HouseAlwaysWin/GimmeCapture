@@ -9,7 +9,7 @@
 
 ---
 
-## Unreleased
+## v0.71.0 - 2026-11-03
 
 ### 🛡️ Reliability
 
