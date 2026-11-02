@@ -42,6 +42,8 @@
     <Compile Remove="SnipCopyProbeTests.cs" />
     <!-- Counts thread wakeups while Avalonia's real Win32 loop sits idle. -->
     <Compile Remove="UiStallMonitorIdleProbeTests.cs" />
+    <!-- Maps DLLs as images and copies them with robocopy. -->
+    <Compile Remove="StartupPrefetchProbeTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

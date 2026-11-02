@@ -21,7 +21,9 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// A launch at sign-in took 67-77 s where others took 0.5-7 s, so on Windows the line also says what a start waited on:
 /// <c>systemCpu</c>, how busy the machine's processors were from Main on; <c>hardFaults</c>, the page faults that read
 /// from disk since the process started, of all its page faults; <c>disk</c>, hdd or ssd for the app's drive; and
-/// <c>priority</c> or <c>io</c>, only when the process runs at a lowered priority.
+/// <c>priority</c> or <c>io</c>, only when the process runs at a lowered priority. <c>prefetch</c> is what
+/// <see cref="StartupPrefetch"/> read ahead and how long it took. A fault on a file it has read still counts as a hard
+/// fault, though the cache serves it in microseconds, so with it the stage times tell more than <c>hardFaults</c>.
 /// </summary>
 internal static class StartupTrace
 {
@@ -114,10 +116,14 @@ internal static class StartupTrace
         {
             // The page faults come from a snapshot of every process on the machine, 5-7 ms: not on the thread that
             // marked the last stage, usually the UI thread.
-            _ = Task.Run(() => AppLog.Information("Startup.Timings", Format(complete) + FormatWaits(
-                StartupWaitCounters.ReadPageFaults(),
-                StartupWaitCounters.DriveKind(AppContext.BaseDirectory),
-                StartupWaitCounters.LoweredPriority())));
+            _ = Task.Run(() =>
+            {
+                AppLog.Information("Startup.Timings", Format(complete) + FormatWaits(
+                    StartupWaitCounters.ReadPageFaults(),
+                    StartupWaitCounters.DriveKind(AppContext.BaseDirectory),
+                    StartupWaitCounters.LoweredPriority()) + StartupPrefetch.Describe());
+                StartupPrefetch.Record();
+            });
         }
     }
 

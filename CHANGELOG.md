@@ -290,6 +290,13 @@
   the main thread to answer every 100 ms, posted the way a hotkey press is: about 35 wakeups a second in all, and about
   40% less processor time, which was never more than a millisecond a second. A freeze is still measured to within
   0.1 s, now by how long a hotkey press would have waited.
+- **Starting from a hard disk no longer reads the app a few kilobytes at a time.** Started at sign-in from a hard
+  disk, the app took 46 s before its hotkeys worked, with barely a second of processor time: it read its own files
+  in thousands of small pieces, in no order, while the other apps starting with Windows read the same disk. Each start
+  now writes down which of the app's files it used, and the next start reads those through in one pass each, from its
+  first moment, so they are in memory by the time they are needed. On that disk, what the start then reads of them
+  came from memory in 12 ms instead of 1.5 s. The log's `Startup.Timings` line says what was read ahead
+  (`prefetch=`). The part before the app's own code runs is out of its reach: moving the app to an SSD helps there.
 
 ### 💾 Storage
 

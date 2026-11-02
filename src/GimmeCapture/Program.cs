@@ -50,6 +50,9 @@ class Program
     public static void Main(string[] args)
     {
         StartupTrace.MainStarted();
+        // Reads the app's files ahead of the start, which waits on them from a hard disk: even the log's set-up took
+        // 8.8 s at one sign-in.
+        StartupPrefetch.Start();
         CommandLineArgs = args ?? [];
         AppLog.Initialize();
         StartupTrace.Mark("log");

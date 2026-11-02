@@ -777,22 +777,22 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   done: Status). Since the CJK fonts are read in place, that fallback costs no copy either.
 - **The raw-input sink duplicates the keyboard hook** (S). `WindowsGlobalHotkeyService.cs:488,537-577`: about four
   hotkey-thread wakeups per keystroke typed elsewhere. Register the sink only when the hook fails or stops counting.
-- **A launch at sign-in takes 67-77 s until the hotkeys work** (the user's pick on 2026-11-01; read the next one's log
-  before changing anything). The user's log has three, 2026-10-30 and -31, 0.70.0 launched to the tray by the Run key:
-  `beforeMain` 30.4-37.5 s and `avalonia` 34.3-41.7 s, against 0.06-0.22 s and 0.29-1.4 s at the other launches since
-  2026-10-30; from process start to working hotkeys the others took 0.5-2.1 s, and 5.6-7.2 s at the slowest. The first
-  `UiStall` after each sign-in, 2.4-2.5 s from `pendingUpdate` until the tray icon is up (`viewModel` alone 1.6-1.9 s,
-  0.08-0.17 s at other tray launches), ran at 9-10% UI-thread CPU: waiting, not working. The app runs from
-  `D:\GimmeCapture_win-x64` (332
-  files, 511 MB, ReadyToRun), and D: is a hard disk; C: is NVMe. `Startup.Timings` now has every stage as `wall/cpu`,
-  Main's own work as `log` and `guard`, `avalonia` split into `platform`, `reactiveUI`, `fonts`, `xaml` and
-  `afterSetup`, and on Windows `systemCpu`, `hardFaults`, `disk` and a lowered `priority`/`io` (`StartupWaitCounters`).
-  The installed copy logs them only once it runs a build that has them. Then: a long stage with many hard faults and a
-  low `systemCpu` waited on the disk (read less at start, or install on the SSD: the install folder names the settings'
-  instance, so a copy elsewhere starts with its own settings and AI modules); a high `systemCpu` means a busy machine;
-  few hard faults point at something else, such as the font cache service or the graphics driver. On a warm start
-  `xaml` holds what `avalonia=` (~375 ms) was blamed on: the whole ColorPicker theme for one `ColorSpectrum`
-  (`App.axaml:60-68`) and all three locale files parsed through `x:Static`.
+- **A launch at sign-in waits on the hard disk** (the user's pick on 2026-11-01; the app stays on D:, the user does not
+  want it taking space on C:). Three sign-ins on 0.70.0 (2026-10-30 and -31) took 67-77 s until the hotkeys worked,
+  other launches 0.5-7 s. The first sign-in on a build that says why (2026-11-02, 4f0d37fb, `launch=tray`):
+  `beforeMain=18210/172 log=8787/172 platform=9205/578 reactiveUI=2644/78 xaml=1700/78 viewModel=2904/141`, total
+  27.7 s at 1.2 s of CPU, the hotkeys about 46.5 s after the process started, `systemCpu=13% hardFaults=4188/35944
+  disk=hdd`, priority normal: waiting on the disk, not working. The app runs from `D:\GimmeCapture_win-x64` (330 files,
+  490 MB), a hard disk that Steam, Everything and Insta360's quick-look also start from at sign-in. The running app had
+  92 of those files mapped, all as images, 142 MB, 55 MB of it resident: about 13 KB a hard fault, one random read at a
+  time. `StartupPrefetch` now reads the files the last start mapped (`versions\<v>\startup-files.txt`, those loaded
+  before Main first) on a thread of its own from the top of Main, and the line ends `prefetch=<ms>/<MB>`.
+  `StartupPrefetchProbeTests` (opt-in) shows the effect on that disk: faults on cold copies served from the cache
+  after one sequential read. It cannot help `beforeMain`, which runs before any of the app's code; moving the install
+  to the SSD would. Next: the next sign-in's line. `hardFaults` stays high, as a fault on a file read through still
+  counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
+  was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files
+  parsed through `x:Static`.
 - **Tray sessions still miss** the failed-hotkey-registration dialog and the overlay's request to open the Modules tab;
   an update found there waits for the main window, because `UpdateDialog.ShowDialog` cannot open centred on screen.
 - **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab, the
