@@ -64,7 +64,7 @@ internal static class StartupPrefetch
 
         try
         {
-            var files = Order(Volatile.Read(ref _loadedBeforeMain), NativeModules(appDirectory), LoadedAssemblies(appDirectory));
+            var files = Order(Volatile.Read(ref _loadedBeforeMain), LoadedModules(appDirectory), LoadedAssemblies(appDirectory));
             string text = string.Join(Environment.NewLine, files) + Environment.NewLine;
             if (!File.Exists(listPath) || File.ReadAllText(listPath) != text)
             {
@@ -117,13 +117,17 @@ internal static class StartupPrefetch
             : " prefetch=none";
     }
 
-    /// <summary>The ones loaded before Main, then the native modules, then the other assemblies, each once.</summary>
+    /// <summary>
+    /// The ones loaded before Main, then the loader's modules, then any other assembly, each once. The loader lists the
+    /// runtime's assemblies beside the native DLLs, in the order they were loaded, so after the first few the list
+    /// follows the start: the log's Serilog, then Avalonia, Skia and the rest.
+    /// </summary>
     internal static List<string> Order(
-        IEnumerable<string> loadedBeforeMain, IEnumerable<string> nativeModules, IEnumerable<string> assemblies)
+        IEnumerable<string> loadedBeforeMain, IEnumerable<string> modules, IEnumerable<string> assemblies)
     {
         var order = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var group in new[] { loadedBeforeMain, nativeModules, assemblies })
+        foreach (var group in new[] { loadedBeforeMain, modules, assemblies })
         {
             foreach (string name in group)
             {
@@ -237,7 +241,7 @@ internal static class StartupPrefetch
         return names;
     }
 
-    private static List<string> NativeModules(string appDirectory)
+    private static List<string> LoadedModules(string appDirectory)
     {
         var names = new List<string>();
         using var process = Process.GetCurrentProcess();

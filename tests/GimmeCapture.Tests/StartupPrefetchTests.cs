@@ -14,7 +14,7 @@ public sealed class StartupPrefetchTests : IDisposable
     public void Dispose() => Directory.Delete(Path.GetDirectoryName(_app)!, recursive: true);
 
     [Fact]
-    public void Order_PutsWhatLoadedBeforeMainFirst_ThenNativeModules_ThenTheRest_EachOnce()
+    public void Order_PutsWhatLoadedBeforeMainFirst_ThenTheLoadersModules_ThenTheRest_EachOnce()
     {
         var order = StartupPrefetch.Order(
             ["GimmeCapture.dll", "System.Private.CoreLib.dll"],
