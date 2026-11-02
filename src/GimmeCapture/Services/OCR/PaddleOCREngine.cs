@@ -23,6 +23,8 @@ public class PaddleOCREngine : IOCREngine
     private const int DetMaxBoxes = 256;
     private const float RecognitionRetryConfidenceThreshold = 0.72f;
     private const float LowContrastThreshold = 64f;
+    private const float ConfidentAverage = 0.9f;
+    private const float ConfidentWeakest = 0.6f;
     private static readonly bool SaveOcrDebugImages = false;
 
     private readonly IAppSettingsService _settingsService;
@@ -137,13 +139,22 @@ public class PaddleOCREngine : IOCREngine
         textWidth = Math.Clamp(textWidth, 16, 1536);
         int paddedWidth = (textWidth + 31) / 32 * 32;
 
+        // Each further pass is tried only while the reading so far is not yet confident (IsConfidentReading).
         var bestResult = EvaluateRecognitionCandidate(use, cropped, textWidth, paddedWidth, targetHeight, invert: false, enhanceContrast: false);
+        if (IsConfidentReading(bestResult))
+        {
+            return (bestResult.text, bestResult.confidence);
+        }
 
         if (shouldInvert)
         {
             bestResult = SelectBetterRecognitionResult(
                 bestResult,
                 EvaluateRecognitionCandidate(use, cropped, textWidth, paddedWidth, targetHeight, invert: true, enhanceContrast: false));
+            if (IsConfidentReading(bestResult))
+            {
+                return (bestResult.text, bestResult.confidence);
+            }
         }
 
         if (shouldEnhance || bestResult.confidence < RecognitionRetryConfidenceThreshold)
@@ -152,7 +163,7 @@ public class PaddleOCREngine : IOCREngine
                 bestResult,
                 EvaluateRecognitionCandidate(use, cropped, textWidth, paddedWidth, targetHeight, invert: false, enhanceContrast: true));
 
-            if (shouldInvert)
+            if (shouldInvert && !IsConfidentReading(bestResult))
             {
                 bestResult = SelectBetterRecognitionResult(
                     bestResult,
@@ -160,8 +171,22 @@ public class PaddleOCREngine : IOCREngine
             }
         }
 
-        return bestResult;
+        return (bestResult.text, bestResult.confidence);
     }
+
+    /// <summary>
+    /// Whether a reading is kept without trying another pass: its characters average <see cref="ConfidentAverage"/>
+    /// and the least certain of them reaches <see cref="ConfidentWeakest"/>. A line ran a second pass whenever its box
+    /// was under 28 px tall, as most UI text is, and up to four on a dark background: 3.4 passes a line on 50 of the
+    /// user's captures (610 lines). Stopping at a confident reading ran 2.3, recognition took 26% less time, and one
+    /// character in 6626 came out differently. The average alone, at 0.9, ran 1.9 but changed 21, more of them for the
+    /// worse than the better: one misread character pulls the least certain one down long before the average (USB for
+    /// USD at an average of 0.91-0.93). <c>PaddleOcrRecognitionProbeTests</c> has the measurement.
+    /// </summary>
+    internal static bool IsConfidentReading((string text, float confidence, float weakest) reading) =>
+        !string.IsNullOrWhiteSpace(reading.text)
+        && reading.confidence >= ConfidentAverage
+        && reading.weakest >= ConfidentWeakest;
 
     // Single per-pixel luminance pass producing both the average (for the invert decision) and the
     // min/max spread (for the contrast decision). Folds the former AnalyzeLuminance + AnalyzeContrast;
@@ -231,7 +256,7 @@ public class PaddleOCREngine : IOCREngine
         return bitmap;
     }
 
-    private (string text, float confidence) EvaluateRecognitionCandidate(
+    private (string text, float confidence, float weakest) EvaluateRecognitionCandidate(
         OcrSessionUse use,
         SKBitmap cropped,
         int textWidth,
@@ -249,9 +274,9 @@ public class PaddleOCREngine : IOCREngine
         return RunRecognition(use, prepared);
     }
 
-    private (string text, float confidence) SelectBetterRecognitionResult(
-        (string text, float confidence) current,
-        (string text, float confidence) candidate)
+    private (string text, float confidence, float weakest) SelectBetterRecognitionResult(
+        (string text, float confidence, float weakest) current,
+        (string text, float confidence, float weakest) candidate)
     {
         if (string.IsNullOrWhiteSpace(current.text))
         {
@@ -263,7 +288,7 @@ public class PaddleOCREngine : IOCREngine
             : current;
     }
 
-    private double ScoreRecognitionResult((string text, float confidence) result)
+    private double ScoreRecognitionResult((string text, float confidence, float weakest) result)
     {
         if (string.IsNullOrWhiteSpace(result.text))
         {
@@ -366,10 +391,10 @@ public class PaddleOCREngine : IOCREngine
             Math.Min(bitmapHeight, box.Bottom + padY));
     }
 
-    private (string text, float confidence) RunRecognition(OcrSessionUse use, SKBitmap tensorBitmap)
+    private (string text, float confidence, float weakest) RunRecognition(OcrSessionUse use, SKBitmap tensorBitmap)
     {
         var recSession = use.Recognition;
-        if (recSession == null) return ("", 0f);
+        if (recSession == null) return ("", 0f, 0f);
 
         int h = tensorBitmap.Height;
         int w = tensorBitmap.Width;
@@ -657,7 +682,7 @@ public class PaddleOCREngine : IOCREngine
 
     private static float ToProbability(float value) => (value >= 0f && value <= 1f) ? value : 1f / (1f + MathF.Exp(-value));
 
-    private (string text, float confidence) DecodeCTCAuto(IReadOnlyList<string> dict, Tensor<float> tensor)
+    private (string text, float confidence, float weakest) DecodeCTCAuto(IReadOnlyList<string> dict, Tensor<float> tensor)
     {
         int d1 = tensor.Dimensions[1], d2 = tensor.Dimensions[2];
         var dictCount = dict.Count;
@@ -676,7 +701,7 @@ public class PaddleOCREngine : IOCREngine
         return nct.confidence > ntc.confidence ? nct : ntc;
     }
 
-    private (string text, float confidence) DecodeCTC(
+    internal static (string text, float confidence, float weakest) DecodeCTC(
         IReadOnlyList<string> dict,
         Tensor<float> tensor,
         int seqLen,
@@ -686,6 +711,7 @@ public class PaddleOCREngine : IOCREngine
         var sb = new StringBuilder();
         int prevIdx = -1;
         float totalConf = 0f;
+        float weakest = 1f;
         int count = 0;
 
         // Flat, row-major access when the runtime handed back a DenseTensor (it does), avoiding the
@@ -734,12 +760,14 @@ public class PaddleOCREngine : IOCREngine
             if (maxIdx > 0 && maxIdx != prevIdx && maxIdx < dict.Count)
             {
                 sb.Append(dict[maxIdx]);
-                totalConf += ToProbability(maxVal);
+                float probability = ToProbability(maxVal);
+                totalConf += probability;
+                weakest = Math.Min(weakest, probability);
                 count++;
             }
             prevIdx = maxIdx;
         }
-        return (sb.ToString(), count > 0 ? totalConf / count : 0f);
+        return (sb.ToString(), count > 0 ? totalConf / count : 0f, count > 0 ? weakest : 0f);
     }
 
     private void SaveDebugImage(SKBitmap bitmap)

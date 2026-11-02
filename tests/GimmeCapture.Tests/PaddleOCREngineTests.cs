@@ -132,4 +132,40 @@ public class PaddleOCREngineTests
             try { Directory.Delete(folder, recursive: true); } catch { /* best effort temp cleanup */ }
         }
     }
+
+    // A reading the extra passes cannot improve on stops there. The least certain character counts as well as the
+    // average: a single misread one (USB for USD) still averages 0.9 and more.
+    [Theory]
+    [InlineData("Reply", 0.95f, 0.80f, true)]
+    [InlineData("Reply", 0.90f, 0.60f, true)]
+    [InlineData("2799USB", 0.93f, 0.55f, false)] // one doubtful character
+    [InlineData("Reply", 0.89f, 0.85f, false)]   // doubtful as a whole
+    [InlineData(" ", 0.99f, 0.99f, false)]       // nothing read
+    public void IsConfidentReading_NeedsTheAverage_AndTheLeastCertainCharacter(
+        string text, float average, float weakest, bool expected)
+    {
+        Assert.Equal(expected, PaddleOCREngine.IsConfidentReading((text, average, weakest)));
+    }
+
+    [Fact]
+    public void DecodeCTC_GivesTheTextsMeanProbability_AndItsLeastCertainCharacter()
+    {
+        // Five steps over a blank and two characters: "a" twice (one character), a blank, then "b" at 0.5.
+        string[] dictionary = ["", "a", "b"];
+        var tensor = new Microsoft.ML.OnnxRuntime.Tensors.DenseTensor<float>(new[] { 1, 5, 3 });
+        float[][] steps = [[0.1f, 0.9f, 0f], [0.1f, 0.8f, 0.1f], [0.9f, 0.05f, 0.05f], [0.2f, 0.3f, 0.5f], [0.9f, 0f, 0.1f]];
+        for (int t = 0; t < steps.Length; t++)
+        {
+            for (int c = 0; c < 3; c++)
+            {
+                tensor[0, t, c] = steps[t][c];
+            }
+        }
+
+        var (text, confidence, weakest) = PaddleOCREngine.DecodeCTC(dictionary, tensor, seqLen: 5, classCount: 3, isNTC: true);
+
+        Assert.Equal("ab", text);
+        Assert.Equal(0.7f, confidence, 5);
+        Assert.Equal(0.5f, weakest, 5);
+    }
 }

@@ -106,6 +106,11 @@
   the Record tab whether AV1 and GIF recording are available ran at every start-up, a launch to the tray at login
   included. It now runs when the Record tab is first opened, or as an AV1 recording starts, and FFmpeg loads the first
   time a recording, a video pin or the Record tab needs it.
+- **Reading a capture's text takes about a quarter less time.** Each line was read again with its contrast stretched
+  whenever its box was small, as most screen text is, and up to four times on a dark background, and the best reading
+  kept, even when the first was already sure of every character. A line now stops at a reading that is sure throughout:
+  on 50 real captures (610 lines) that left out a third of the readings and changed one character in 6626. Quick OCR,
+  translation and the automatic choice of OCR language all read this way.
 - **A capture's text boxes come up sooner when OCR has been idle.** The capture overlay looked for text only once it
   was on screen, and OCR, which unloads after two minutes unused, then loaded both its models, though the overlay only
   finds text and never reads it, and ran its first detection slowly while the graphics card set itself up: 0.6-0.8 s

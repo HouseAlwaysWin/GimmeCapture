@@ -13,7 +13,7 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Not released yet: `## Unreleased` holds 54 entries. Cut a release with `release.ps1` after adding the
+- Not released yet: `## Unreleased` holds 55 entries. Cut a release with `release.ps1` after adding the
   `docs/catalog/releases.md` entry as its own commit (a hand-pushed tag fails `verify-release-metadata`).
 - The user's installed copy is 0.70.0 since 2026-10-29.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -356,6 +356,19 @@ tool.
   two. Correction to the "GIF/WebM output" item: the recording's and the pin's GIF and WebM have no progress to show,
   since every progress window's bar is indeterminate (`ProcessingOverlay.axaml`) and nothing reads
   `RecordingService.FinalizationProgress`; a bar that fills changes its look, the user's call.
+- Done since batch 1: **OCR read every small line twice, and up to four times on a dark background** (the gating half of
+  OCR's "Recognition runs up to four passes per box" item). `PaddleOcrRecognitionProbeTests` (opt-in
+  OCR_RECOGNITION_PROBE=<folder of PNGs>, AI_MODELS_DIR, OCR_RECOGNITION_OUT=<file>) writes each box's text and
+  confidence and the time recognition took; run on the 50 captures in the user's history (610 boxes, the installed
+  Traditional Chinese module, the laptop), with the policies switched in one process: the old passes ran 2048 times (3.4
+  a box) in 20.2-22.2 s. Gating the extra passes on the average character probability alone, at 0.9, ran 1142 and halved
+  the time, but 18 boxes (21 characters) read differently, more of them worse than better (USB for USD at 0.91-0.93);
+  0.95 ran 1416 and changed 6. The decode now also reports the least certain character (`DecodeCTC`), and
+  `IsConfidentReading` stops at an average of 0.9 with no character under 0.6, keeping the old order and conditions
+  otherwise: 1397 passes, 26% less time (16.3 against 22.1 s; 14.0 against 21.6 s in separate processes), and one box
+  changed, `Racing)` read as `Racing>`, which the capture does not settle. A weakest character of 0.5 changed 7 boxes,
+  0.4 changed 14. Reading a dark crop inverted first, as the item suggested, ran more passes, not fewer (1433 against
+  1142 at 0.9): the model reads light text on dark well. Batching boxes by width is still open.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -568,6 +581,8 @@ These were covered by unit tests only; check them in the real app before a relea
 - **Exporting a pinned video as WebM**: pin a recording with sound, cut a piece out of it, then Save as WebM and Copy as
   WebM. The pin should keep playing smoothly while it exports, both files should have the sound, and the temp folder
   should keep no new `GimmeCapture_Export_*` folder after the save (the copy keeps one, holding just its WebM).
+- **Reading text**: Quick OCR and translate a light window and a dark one (a dark-themed editor, say). The text should
+  come out as before, a little sooner.
 
 ## How to run a batch
 
@@ -581,11 +596,9 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### OCR, AI and translation
 
-- **Recognition runs up to four passes per box, one box per run** (S gating, M batching). `PaddleOCREngine.cs:111`:
-  `shouldEnhance = contrast < LowContrastThreshold || box.Height < 28` forces a second pass for most UI text whatever
-  the first pass's confidence; dark crops double it again. Callers loop one box at a time (`QuickOcrService.cs:66-74`,
-  `TranslationService.cs:153-160`) though the recognizer's batch dimension is dynamic. Fix: extra passes only below
-  about 0.9 confidence, inverted pass first on dark crops, batch boxes by width bucket.
+- **Recognition runs one box per run** (M batching). The passes are gated now (Status). Callers loop one box at a time
+  (`QuickOcrService.cs:66-74`, `TranslationService.cs:153-160`) though the recognizer's batch dimension is dynamic:
+  batch boxes by width bucket, padded to the bucket's width, and decode each row of the output.
 - **Every LLM request builds a new context and re-reads the whole prompt** (M). `LlamaSharpTranslationEngine` uses
   `StatelessExecutor`, which creates a context (KV cache for 2048 tokens) and prefills from zero per call. Fix: one
   long-lived context, the per-language-pair instruction prefix decoded once and forked per request
