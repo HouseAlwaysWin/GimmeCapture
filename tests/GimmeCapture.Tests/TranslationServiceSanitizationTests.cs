@@ -213,6 +213,22 @@ public sealed class TranslationServiceSanitizationTests
         Assert.EndsWith("<end_of_turn>\n<start_of_turn>model\n", prompt, StringComparison.Ordinal);
     }
 
+    // Asked for "Chinese (zh-TW)", as its own template names it, TranslateGemma answered in Simplified Chinese: a Chinese
+    // target is named by its script, everywhere the prompt names the target.
+    [Theory]
+    [InlineData(TranslationLanguage.TraditionalChinese, "Traditional Chinese", "zh-TW")]
+    [InlineData(TranslationLanguage.SimplifiedChinese, "Simplified Chinese", "zh-CN")]
+    public void BuildTranslateGemmaPrompt_NamesAChineseTargetByItsScript(
+        TranslationLanguage target, string name, string code)
+    {
+        string prompt = LlamaSharpTranslationEngine.BuildTranslateGemmaPrompt("Low battery.", OCRLanguage.English, target);
+
+        Assert.Contains($"English (en) to {name} ({code}) translator", prompt, StringComparison.Ordinal);
+        Assert.Contains($"adhering to {name} grammar", prompt, StringComparison.Ordinal);
+        Assert.Contains($"Produce only the {name} translation", prompt, StringComparison.Ordinal);
+        Assert.Contains($"text into {name}:", prompt, StringComparison.Ordinal);
+    }
+
     private const string Instructions = "Translate from Japanese to Traditional Chinese.";
 
     [Theory]

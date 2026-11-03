@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 7 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 8 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
@@ -535,6 +535,17 @@ tool.
   `LlamaSharpTranslationBenchmarkTests`, 16 sentences: median 1781 ms before, 869 after, total 27.5 s against 14.3. 15
   translations came out the same; the 16th turned at a near tie (无法上传 to 無法上傳), from the rounding of a prompt
   read in two parts instead of one.
+- Done since batch 1: **TranslateGemma answered a Traditional Chinese target in Simplified Chinese** (found with the
+  item above; the user translates to Traditional Chinese with this model). `LlamaSharpTranslationBenchmarkTests` failed
+  on it: 13 of 16 English and Japanese sentences came back Simplified (设置 for 設定). The prompt was the model's own: its
+  chat template names zh-TW, zh-Hant and zh-CN all "Chinese". On the 16 sentences, by Windows' Simplified-Traditional
+  mapping: "Chinese (zh-TW)" 3 Traditional, "Chinese (zh-Hant)" 1, "Traditional Chinese (zh-TW)" 16, in Taiwan's words
+  (應用程式, 儲存, 伺服器, 檔案, 網路), "Traditional Chinese (zh-Hant)" 16, "Traditional Chinese (Taiwan)" 16 but looser
+  ("電池快沒了"). The other way, "Chinese (zh-CN)" left 4 of 4 Traditional sources in Traditional; "Simplified Chinese
+  (zh-CN)" answered all 20 in Simplified (文件夹, 网络). `GetTranslateGemmaTargetName` now names a Chinese target by its
+  script; the source keeps the template's name, and the cache key's prompt version went to v9.
+  `TranslationServiceSanitizationTests.BuildTranslateGemmaPrompt_NamesAChineseTargetByItsScript` fails against the old
+  prompt; the benchmark passes, its median 866 ms.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -771,6 +782,10 @@ These were covered by unit tests only; check them in the real app before a relea
 - **Reading text**: Quick OCR and translate a light window and a dark one (a dark-themed editor, say). The text should
   come out as before, a little sooner. In Translate mode, the text search's boxes should land on the text as before,
   on each screen.
+- **Translating with the local model**: with Traditional Chinese as the target, translate an English window, then a
+  Japanese one, within two minutes. Both should come out in Traditional characters (檔案, 設定, not 文件, 设置); the
+  second press should take about half as long as the first used to, and its `Translation.Timings` line should say
+  `context=kept` with a `kept=` near 72.
 
 ## How to run a batch
 
@@ -790,12 +805,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   to 2e-5). Boxes cannot run side by side: `OcrRuntimeService.BeginSessionUse` takes one inference lock, and running
   them 2-6 at a time gained nothing anyway. ONNX Runtime's own threads are best at its default, one a physical core
   (6): 12 made detection 65% slower and recognition 7%, 4 made recognition 20% slower. The time is the model's.
-- **TranslateGemma answers a Traditional Chinese target in Simplified Chinese** (S-M, found 2026-11-03; the user's
-  call, as it changes what translations say). `LlamaSharpTranslationBenchmarkTests` fails on it: of 16 English and
-  Japanese sentences to zh-TW, 15 came back Simplified (设置, not 設定); a Traditional Chinese source stays Traditional.
-  The prompt is the model's own: its chat template names zh-TW "Chinese", as `GetTranslateGemmaLanguageName` does.
-  Either try other codes or names (zh-Hant, "Traditional Chinese") against the benchmark, or convert the output to
-  Traditional characters when that is the target. The context kept between requests is done (Status).
 - **Auto re-probes the language in every overlay** (S, the user's call). `OcrScriptDetector.cs:85-112`: keep the Auto
   verdict app-wide. Each probe swaps recognizers, which now costs ~135 ms each (the shared detector stays loaded). Only
   matters with several OCR languages installed, as the user has (Auto, with Simplified and Traditional Chinese). The

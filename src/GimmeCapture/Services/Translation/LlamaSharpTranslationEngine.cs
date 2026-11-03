@@ -19,7 +19,7 @@ namespace GimmeCapture.Services.Translation;
 
 public sealed class LlamaSharpTranslationEngine : ITranslationModelEngine
 {
-    private const string TranslationPromptCacheVersion = "prompt-v8";
+    private const string TranslationPromptCacheVersion = "prompt-v9";
     private const string TranslationEndMarker = "<<END_TRANSLATION>>";
 
     /// <summary>
@@ -512,7 +512,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationModelEngine
         string sourceCode = GetSourceLanguageCode(text, sourceLang);
         string targetCode = GetTargetLanguageCode(targetLang);
         string sourceName = GetTranslateGemmaLanguageName(sourceCode);
-        string targetName = GetTranslateGemmaLanguageName(targetCode);
+        string targetName = GetTranslateGemmaTargetName(targetCode);
 
         return
             "<start_of_turn>user\n" +
@@ -886,6 +886,20 @@ public sealed class LlamaSharpTranslationEngine : ITranslationModelEngine
         TranslationLanguage.Japanese => "ja",
         TranslationLanguage.Korean => "ko",
         _ => "zh-TW"
+    };
+
+    /// <summary>
+    /// The target named the way that has TranslateGemma write the script asked for. Its own chat template calls zh-TW
+    /// and zh-CN both "Chinese", as this did for both, and asked for Traditional Chinese the 4B model answered 13 of 16
+    /// English and Japanese sentences in Simplified; named "Traditional Chinese" it answered all 16 in Traditional, in
+    /// Taiwan's words (檔案, 儲存, 網路). Asked for Simplified Chinese as "Chinese", it left a Traditional source in
+    /// Traditional, 4 of 4; as "Simplified Chinese", none.
+    /// </summary>
+    private static string GetTranslateGemmaTargetName(string languageCode) => languageCode switch
+    {
+        "zh-TW" => "Traditional Chinese",
+        "zh-CN" => "Simplified Chinese",
+        _ => GetTranslateGemmaLanguageName(languageCode),
     };
 
     private static string GetTranslateGemmaLanguageName(string languageCode)

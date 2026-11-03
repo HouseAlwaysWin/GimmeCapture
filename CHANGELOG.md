@@ -13,6 +13,11 @@
 
 ### 🛡️ Reliability
 
+- **Translating into Traditional Chinese with the local model writes Traditional Chinese.** The model was asked for
+  "Chinese (zh-TW)", as its own instructions name it, and answered 13 of 16 English and Japanese test sentences in
+  Simplified Chinese (设置 for 設定). It is now asked for Traditional Chinese by name, and answered all 16 in
+  Traditional, in the words used in Taiwan (檔案, 儲存, 網路). Asked for Simplified Chinese the same way, it no longer
+  leaves Traditional Chinese text as it was.
 - **A long compress keeps its picture in step with its sound.** A compress at a quality setting, the Compress tab's
   default, encodes the video in 30-second pieces and joins them. Since v0.67.0 each piece after the first was joined two
   frames late, so the picture fell further behind the sound every 30 seconds: 0.17 s by the end of two minutes, 3 to 4 s
