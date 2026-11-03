@@ -117,6 +117,9 @@ public partial class RecordingService : ReactiveObject
     /// <summary>The <c>Recording.StartTimings</c> line of the last start or resume (see <see cref="RecordingStartTimings"/>).</summary>
     internal string? LastStartTimings { get; private set; }
 
+    /// <summary>The <c>Recording.FinalizeTimings</c> line of the last single-output stop: how long each step took.</summary>
+    internal string? LastFinalizeTimings { get; private set; }
+
     /// <summary>The <c>Recording.AudioGate</c> line of the last pause or stop (see <see cref="StopAudioAtVideoEndAsync"/>).</summary>
     internal string? LastAudioGate { get; private set; }
 

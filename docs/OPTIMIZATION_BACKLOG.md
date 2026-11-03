@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 4 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 5 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) has run builds of `main` since 2026-11-01, 1ea47893 last,
   copied in over the two files that change; the updater will offer it v0.71.0.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -478,6 +478,19 @@ tool.
   fail against the old code. JOIN_PROBE=1, four 30 s chunks at 1280x720 (97.3 MB) and two minutes of AAC, ABBA: two
   passes 0.20-0.21 s writing 196.5 MB, one pass 0.10 s writing 99.2 MB. The recording's own segment join stays as it
   was: the recorder encodes no B-frames (`max_b_frames = 0`).
+- Done since batch 1: **the stop's fixed wait, and a paused recording's video written twice** (two parts of Recording's
+  "Stop and finalize run in series"). `FinalizeRecordingAsync` and the separate-files finalize waited `Task.Delay(100)`
+  "for file handles to be released", left from the FFmpeg-process days: the stop disposes the video sessions, and the
+  audio capture (which joins its thread) and writers, before the finalize starts. A paused recording's segments were
+  joined into `merged.mkv`, then muxed with the AAC: MP4, MOV and MKV now join them with the sound in the mux
+  (`LibavMuxer.ConcatVideoSegmentsWithAudio`), a recording in one stretch is muxed as before, and GIF and WebM, which
+  transcode one file, still join first. Every single-output stop logs `Recording.FinalizeTimings` (the stages, as
+  `RecordingStartTimings` writes them: audio, aac, mux or remux, move). `RecordingFinalizeTests` run the finalize on
+  synthetic segments through `FinalizeForTestAsync`; the three paused ones fail against the old finalize, which wrote
+  merged.mkv. FINALIZE_PROBE=1, ten seconds at 1280x720: one stretch 241 and 361 ms against 364 and 456 before, three
+  414 and 404 against 579 and 535 (the two builds in runs one after the other, so beyond the 100 ms wait the gap is
+  loose). The AAC encode is most of what is left: aac=195-336 ms for those ten seconds of sound, so half a minute or
+  more for half an hour.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -693,6 +706,9 @@ These were covered by unit tests only; check them in the real app before a relea
 - **Exporting a pinned video as WebM**: pin a recording with sound, cut a piece out of it, then Save as WebM and Copy as
   WebM. The pin should keep playing smoothly while it exports, both files should have the sound, and the temp folder
   should keep no new `GimmeCapture_Export_*` folder after the save (the copy keeps one, holding just its WebM).
+- **A paused recording**: record half a minute with two pauses, as MP4 and again as MKV. Each file should play through
+  all three stretches with the sound in step at each join, and the log's `Recording.FinalizeTimings` line should say
+  `segments=3`.
 - **A long compress with sound**: compress a recording of several minutes with sound at the tab's defaults. The file
   should be done within a second or so of the bar reaching 100%, and play with its sound in step to the end: in its last
   minute, the sound of a click or a key should land on its frame, as in the recording (it fell 55-66 ms further behind
@@ -752,11 +768,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   single-threaded `sws_scale` to NV12 (`LibavRecordingEncoder.cs:301-303`, `LibavGdigrabMkvSession.cs:536-551`,
   `LibavWgcMkvSession.cs:259`); overlays add a BGRA copy; the webcam frame is copied full size every output frame
   (`WebcamCaptureSource.cs:157`). Est. 3-5 ms per frame at 1080p, 12-25 at 4K.
-- **Stop and finalize run in series** (S-M). `RecordingService.Finalize.cs:21,38-42,514`, `LiveSession.cs:555-567,593`:
-  a fixed `Task.Delay(100)`, then concat, WAV mix, AAC, mux and move in sequence; sources stop one after another; AAC is
-  encoded only after stop (433 ms for 16 s of audio, est. half a minute per 30-minute recording); after a pause the
-  video is rewritten twice. Drop the delay, stop everything then await together, encode AAC live or alongside the
-  concat, concat and mux in one pass into the destination folder.
+- **The stop's finalize encodes the AAC after it** (M). `RecordingService.Finalize.cs`: WAV merge, mix, AAC, mux and
+  move in sequence; `Recording.FinalizeTimings` now shows the AAC is most of it (aac=195-336 ms for ten seconds of sound,
+  half a minute or more for half an hour), and sources stop one after another (`LiveSession.cs` `StopCurrentSegmentAsync`).
+  Encode the AAC live, or each paused stretch's as it ends; mux into the destination folder rather than moving there.
+  The fixed wait and the paused recording's second video write are done (Status).
 - **The Linux audio still gates whole packets and ends each part short** (S; needs a Linux desktop to check).
   `LinuxPulseAudioRecorder` keeps or drops each packet on `RecordingAudioGate.IsOpen` and writes no silence at the
   end, so after a pause every later part plays early by the video's overrun (45-105 ms on Windows). Give it a `Feed`,

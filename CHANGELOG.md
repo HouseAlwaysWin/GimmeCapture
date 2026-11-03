@@ -20,6 +20,11 @@
 
 ### ⚡ Performance
 
+- **Stopping a recording saves it about 0.1 s sooner, and a paused one writes its video once less.** Every stop first
+  waited 100 ms for files that were closed already. A recording paused and resumed had its stretches joined into a file
+  of their own before the sound went in, the whole video written once more; they are now joined with the sound in one
+  go. Ten seconds at 1280x720 was saved in 0.24-0.36 s instead of 0.36-0.46 s recorded in one stretch, and in
+  0.40-0.41 s instead of 0.54-0.58 s in three.
 - **Compressing or exporting a long video no longer takes a gigabyte or more of memory for its sound.** An export
   decoded its sound into memory whole and copied it twice more before writing it out for the encoder: for a 30-minute
   recording, 1 to 2 GB taken and given back, with up to three copies of its 330 MB of sound held at once and about a

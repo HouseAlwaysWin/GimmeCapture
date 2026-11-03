@@ -7,7 +7,7 @@ namespace GimmeCapture.Services.Core.Media;
 
 /// <summary>
 /// Stage timings of one recording start, logged as <c>Recording.StartTimings</c> (and of the warm-up before a run's
-/// first one, <c>Recording.WarmUp</c>). A run's first recording took 0.2-2 s from opening the audio to its first frame
+/// first one, <c>Recording.WarmUp</c>, and of a stop's finalize, <c>Recording.FinalizeTimings</c>). A run's first recording took 0.2-2 s from opening the audio to its first frame
 /// and every later one 40-70 ms, and the log could not say which stage the difference was in. Each stage reports how
 /// long it took after the previous one; figures that are not stages of their own, such as the encoder's share of
 /// <c>video</c>, follow the total.

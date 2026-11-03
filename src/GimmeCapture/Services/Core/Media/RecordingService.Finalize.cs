@@ -13,12 +13,11 @@ namespace GimmeCapture.Services.Core.Media;
 
 public partial class RecordingService
 {
+    // No wait for the segments' files first: it waited 100 ms at every stop for handles that had closed already. The
+    // video sessions are disposed, and the audio's capture and writers, before the stop gets here.
     private async Task FinalizeRecordingAsync()
     {
         if (_segments.Count == 0 || string.IsNullOrEmpty(_outputFile)) return;
-
-        // Wait a moment for file handles to be released
-        await Task.Delay(100);
 
         var validSegments = GetValidVideoSegments();
 
@@ -30,16 +29,15 @@ public partial class RecordingService
             return;
         }
 
-        string mergedMkv = Path.Combine(_tempDir, "merged.mkv");
         bool finalized = false;
+        var timings = new RecordingStartTimings($"segments={validSegments.Count}");
 
         try
         {
-            mergedMkv = await MergeVideoSegmentsAsync(validSegments, mergedMkv);
-
             FinalizationProgress = 30;
             var mergedAudio = await BuildFinalAudioAsync();
-            await FinalizeByTargetFormatAsync(mergedMkv, mergedAudio, cropFilter: null);
+            timings.Mark("audio");
+            await FinalizeByTargetFormatAsync(validSegments, mergedAudio, "merged.mkv", timings);
             finalized = true;
         }
         catch (Exception ex)
@@ -48,6 +46,9 @@ public partial class RecordingService
         }
         finally
         {
+            LastFinalizeTimings = timings.Finish();
+            AppLog.Information("Recording.FinalizeTimings", LastFinalizeTimings);
+
             // The raw segments are the only copy of the recording until the final file exists. Deleting them after a
             // failed finalize - which this used to do unconditionally - turned a save error into a lost recording.
             if (finalized)
@@ -86,8 +87,6 @@ public partial class RecordingService
             return;
         }
 
-        await Task.Delay(100);
-
         string? mergedAudio = await BuildFinalAudioAsync();
         Exception? firstTrackFailure = null;
 
@@ -111,14 +110,12 @@ public partial class RecordingService
 
                 try
                 {
-                    string trackMerged = Path.Combine(_tempDir, $"track{i}_merged.mkv");
-                    trackMerged = await MergeVideoSegmentsAsync(validSegments, trackMerged);
-
                     // Retarget the single-output finalize path at this track's file (sequential, so safe).
                     _outputFile = track.OutputFile;
                     // Separate-window pins go through TryHandleSeparateOutputs (the .gif files directly), which
                     // never uses PinSourceFilePath — so don't build per-track sidecars that nothing consumes.
-                    await FinalizeByTargetFormatAsync(trackMerged, mergedAudio, cropFilter: null, allowPinSidecar: false);
+                    await FinalizeByTargetFormatAsync(
+                        validSegments, mergedAudio, $"track{i}_merged.mkv", timings: null, allowPinSidecar: false);
                     track.OutputFile = _outputFile; // EnsureOutputExtension may have changed the extension
                 }
                 catch (Exception ex)
@@ -361,31 +358,38 @@ public partial class RecordingService
         await File.WriteAllTextAsync(listPath, sb.ToString());
     }
 
-    private async Task FinalizeByTargetFormatAsync(string mergedMkv, string? mergedAudio, string? cropFilter, bool allowPinSidecar = true)
+    // A recording paused and resumed has a segment for each stretch. GIF and WebM are transcoded from one file, so the
+    // segments are joined into mergedName first; a container (MP4, MOV, MKV) joins them with the sound in its mux.
+    private async Task FinalizeByTargetFormatAsync(
+        IReadOnlyList<string> videoSegments, string? mergedAudio, string mergedName, RecordingStartTimings? timings,
+        bool allowPinSidecar = true)
     {
-        _ = cropFilter;
         PinSourceFilePath = null; // reset per finalize; only the gif branch (when pinning) sets a sidecar
-        if (_targetFormat == "gif")
+        if (_targetFormat is "gif" or "webm")
         {
-            EnsureOutputExtension("gif");
-            await FinalizeAsGifAsync(mergedMkv, cropFilter: null);
-            // GIF can't hold audio; keep an audio-bearing mp4 sidecar for the pin — but only when this recording
-            // will actually be pinned (single-output pin), so Save/Copy and separate-window mode don't pay for it.
-            if (allowPinSidecar && BuildPinAudioSidecar)
+            string mergedMkv = await MergeVideoSegmentsAsync(videoSegments, Path.Combine(_tempDir, mergedName));
+            timings?.Mark("join");
+            if (_targetFormat == "gif")
             {
-                await BuildGifAudioSidecarAsync(mergedMkv, mergedAudio);
-            }
-            return;
-        }
+                EnsureOutputExtension("gif");
+                await FinalizeAsGifAsync(mergedMkv, cropFilter: null);
+                timings?.Mark("gif");
+                // GIF can't hold audio; keep an audio-bearing mp4 sidecar for the pin — but only when this recording
+                // will actually be pinned (single-output pin), so Save/Copy and separate-window mode don't pay for it.
+                if (allowPinSidecar && BuildPinAudioSidecar)
+                {
+                    await BuildGifAudioSidecarAsync(mergedMkv, mergedAudio);
+                    timings?.Mark("sidecar");
+                }
 
-        if (_targetFormat == "webm")
-        {
+                return;
+            }
+
             EnsureOutputExtension("webm");
             await FinalizeAsWebmAsync(mergedMkv, mergedAudio);
+            timings?.Mark("webm");
             return;
         }
-
-        var sourceVideo = File.Exists(mergedMkv) ? mergedMkv : _segments[0];
 
         // Honor the user's requested container. Hardware-encoded streams occasionally fail to mux into
         // MP4/MOV, so for those encoders we fall back to MKV (always reliable) ONLY if the requested
@@ -393,27 +397,33 @@ public partial class RecordingService
         string requested = _targetFormat is ("mp4" or "mov") ? _targetFormat : "mkv";
         bool allowMkvFallback = requested != "mkv" && RequiresMatroskaFinalization(_lastSelectedVideoEncoderName);
 
-        if (await TryFinalizeAsContainerAsync(requested, sourceVideo, mergedAudio, throwOnFailure: !allowMkvFallback))
+        if (await TryFinalizeAsContainerAsync(requested, videoSegments, mergedAudio, throwOnFailure: !allowMkvFallback, timings))
         {
             FinalizationProgress = 100;
             return;
         }
 
         LogToFile($"[Finalize] '{requested}' finalize failed for encoder '{_lastSelectedVideoEncoderName}'; falling back to MKV.");
-        await TryFinalizeAsContainerAsync("mkv", sourceVideo, mergedAudio, throwOnFailure: true);
+        await TryFinalizeAsContainerAsync("mkv", videoSegments, mergedAudio, throwOnFailure: true, timings);
         FinalizationProgress = 100;
     }
 
-    // Finalizes the merged video (+ optional audio) into one container. Returns true on success. An audio
+    // Finalizes the video segments (+ optional audio) into one container. Returns true on success. An audio
     // mux failure degrades to a video-only output in the SAME container; only a video remux/move failure
     // marks the container unusable (so the caller can fall back to MKV). Throws instead of returning false
-    // when throwOnFailure is set.
-    private async Task<bool> TryFinalizeAsContainerAsync(string format, string sourceVideo, string? mergedAudio, bool throwOnFailure)
+    // when throwOnFailure is set. One segment is muxed as it always was. Several, a paused recording's, are joined with
+    // the sound in the same pass (LibavMuxer.ConcatVideoSegmentsWithAudio): joined into a merged.mkv first, the whole
+    // video was written once more for the mux to read back.
+    private async Task<bool> TryFinalizeAsContainerAsync(
+        string format, IReadOnlyList<string> videoSegments, string? mergedAudio, bool throwOnFailure,
+        RecordingStartTimings? timings)
     {
         EnsureOutputExtension(GetTargetExtension(format));
+        string muxer = GetMuxerFormatName(format);
         try
         {
             var targetAudio = await PrepareAudioForTargetContainerAsync(mergedAudio, format);
+            timings?.Mark("aac");
             if (!string.IsNullOrWhiteSpace(targetAudio) && File.Exists(targetAudio))
             {
                 try
@@ -421,10 +431,13 @@ public partial class RecordingService
                     var muxedPath = Path.Combine(_tempDir, $"muxed_with_audio.{GetTargetExtension(format)}");
                     // Off the caller's thread: Stop/Copy/Pin await this from UI commands, and a synchronous mux of a
                     // long recording froze the whole UI (and its progress window) for as long as the mux ran.
-                    var muxStats = await Task.Run(() =>
-                        LibavMuxer.MuxVideoAndAudio(sourceVideo, targetAudio, muxedPath, GetMuxerFormatName(format)));
-                    LogToFile($"[Finalize] Native mux ({format}) success: {muxedPath}, bytes={(File.Exists(muxedPath) ? new FileInfo(muxedPath).Length : 0)}, videoPackets={muxStats.VideoPackets}, audioPackets={muxStats.AudioPackets}");
+                    var muxStats = await Task.Run(() => videoSegments.Count == 1
+                        ? LibavMuxer.MuxVideoAndAudio(videoSegments[0], targetAudio, muxedPath, muxer)
+                        : LibavMuxer.ConcatVideoSegmentsWithAudio(videoSegments, targetAudio, muxedPath, muxer));
+                    timings?.Mark("mux");
+                    LogToFile($"[Finalize] Native mux ({format}) success: {muxedPath}, bytes={(File.Exists(muxedPath) ? new FileInfo(muxedPath).Length : 0)}, segments={videoSegments.Count}, videoPackets={muxStats.VideoPackets}, audioPackets={muxStats.AudioPackets}");
                     await TryMoveWithRetryAsync(muxedPath, _outputFile);
+                    timings?.Mark("move");
                     return true;
                 }
                 catch (Exception ex)
@@ -435,19 +448,22 @@ public partial class RecordingService
                 }
             }
 
-            if (string.Equals(format, "mkv", StringComparison.OrdinalIgnoreCase))
+            if (videoSegments.Count == 1 && string.Equals(format, "mkv", StringComparison.OrdinalIgnoreCase))
             {
-                await TryMoveWithRetryAsync(sourceVideo, _outputFile);
+                await TryMoveWithRetryAsync(videoSegments[0], _outputFile);
             }
             else
             {
                 string remuxedPath = Path.Combine(_tempDir, $"remuxed_video_only.{GetTargetExtension(format)}");
-                var remuxStats = await Task.Run(() =>
-                    LibavMuxer.RemuxVideo(sourceVideo, remuxedPath, GetMuxerFormatName(format)));
-                LogToFile($"[Finalize] Native video-only remux ({format}) success: {remuxedPath}, bytes={(File.Exists(remuxedPath) ? new FileInfo(remuxedPath).Length : 0)}, videoPackets={remuxStats.VideoPackets}");
+                var remuxStats = await Task.Run(() => videoSegments.Count == 1
+                    ? LibavMuxer.RemuxVideo(videoSegments[0], remuxedPath, muxer)
+                    : LibavMuxer.ConcatVideoSegmentsWithAudio(videoSegments, audioPath: null, remuxedPath, muxer));
+                timings?.Mark("remux");
+                LogToFile($"[Finalize] Native video-only remux ({format}) success: {remuxedPath}, bytes={(File.Exists(remuxedPath) ? new FileInfo(remuxedPath).Length : 0)}, segments={videoSegments.Count}, videoPackets={remuxStats.VideoPackets}");
                 await TryMoveWithRetryAsync(remuxedPath, _outputFile);
             }
 
+            timings?.Mark("move");
             return true;
         }
         catch (Exception ex)
@@ -646,6 +662,23 @@ public partial class RecordingService
 
         await TryMoveWithRetryAsync(videoOnlyPath, _outputFile);
         FinalizationProgress = 100;
+    }
+
+    // The whole finalize of a single-output recording, for a test: these segments of video and of system audio, as a
+    // recording would have left them in tempDir, into outputFile in targetFormat.
+    internal Task FinalizeForTestAsync(
+        IReadOnlyList<string> videoSegments, IReadOnlyList<string> audioSegments, string tempDir, string outputFile,
+        string targetFormat)
+    {
+        _segments.Clear();
+        _segments.AddRange(videoSegments);
+        _audioSegments.Clear();
+        _audioSegments.AddRange(audioSegments);
+        _micSegments.Clear();
+        _tempDir = tempDir;
+        _outputFile = outputFile;
+        _targetFormat = targetFormat;
+        return FinalizeRecordingAsync();
     }
 
     // The WebM step alone, for a test: the merged video and audio into outputFile, with tempDir for its own files.
