@@ -1,10 +1,12 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
+using Xunit.Abstractions;
 
 namespace GimmeCapture.Tests;
 
@@ -16,9 +18,11 @@ namespace GimmeCapture.Tests;
 public sealed class CompressPipelineSegmentedTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+    private readonly ITestOutputHelper _output;
 
-    public CompressPipelineSegmentedTests()
+    public CompressPipelineSegmentedTests(ITestOutputHelper output)
     {
+        _output = output;
         Directory.CreateDirectory(_dir);
     }
 
@@ -71,6 +75,73 @@ public sealed class CompressPipelineSegmentedTests : IDisposable
         VideoTestClips.Timeline timeline = VideoTestClips.Read(output);
         Assert.Equal(60, timeline.Frames);
         Assert.Equal(2.0, timeline.DurationSeconds, 2);
+    }
+
+    /// <summary>
+    /// How long a compress goes on once its chunks are done and the bar shows 100%: the chunks joined, the sound built
+    /// (alongside the chunks now, after them before), the two muxed; then how long the sound takes to build on its own,
+    /// which the finalize used to add. Opt-in: SEGMENTED_FINALIZE_PROBE=1, with SEGMENTED_FINALIZE_PROBE_FILE for a real
+    /// video, otherwise SEGMENTED_FINALIZE_PROBE_MINUTES (10 by default) of a clip with a tone, 64x48 unless
+    /// SEGMENTED_FINALIZE_PROBE_SIZE says (960x540, say, for chunks that take longer than the sound).
+    /// </summary>
+    [OptInFact("SEGMENTED_FINALIZE_PROBE=1")]
+    public async Task TheFinalizeAfterTheBarIsFull_Timed()
+    {
+        string clip;
+        double duration;
+        if (Environment.GetEnvironmentVariable("SEGMENTED_FINALIZE_PROBE_FILE") is { Length: > 0 } file)
+        {
+            clip = file;
+            duration = await CompressPipeline.ProbeInputDurationAsync(clip);
+        }
+        else
+        {
+            double minutes = double.TryParse(Environment.GetEnvironmentVariable("SEGMENTED_FINALIZE_PROBE_MINUTES"), out double m)
+                ? m
+                : 10;
+            string[] size = (Environment.GetEnvironmentVariable("SEGMENTED_FINALIZE_PROBE_SIZE") ?? "64x48").Split('x');
+            int width = int.Parse(size[0]);
+            int height = int.Parse(size[1]);
+            clip = VideoTestClips.WriteWithTone(
+                Path.Combine(_dir, "long.mkv"), width, height, (int)(minutes * 60 * 30), 30, detailed: width > 64);
+            duration = minutes * 60;
+        }
+
+        for (int run = 0; run < 2; run++)
+        {
+            // The chunks report in whole percents, so the last one ends just short of 1; the 1 itself comes at the end.
+            var watch = Stopwatch.StartNew();
+            double barFullAt = -1;
+            var bar = new InlineProgress(value =>
+            {
+                if (value < 1)
+                {
+                    barFullAt = watch.Elapsed.TotalSeconds;
+                }
+            });
+            string output = Path.Combine(_dir, $"out{run}.mp4");
+            Assert.True(await CompressPipeline.EncodeOneFileAsync(
+                clip, output, Settings() with { Preset = "medium", Crf = 23 }, 0, duration, bar, CancellationToken.None,
+                pauseGate: null));
+            double total = watch.Elapsed.TotalSeconds;
+            _output.WriteLine(
+                $"{Path.GetFileName(clip)} ({duration:F0} s): {total:F2} s in all, the bar full at {barFullAt:F2} s, " +
+                $"then {total - barFullAt:F2} s more");
+            File.Delete(output);
+        }
+
+        string soundDir = Directory.CreateDirectory(Path.Combine(_dir, "sound")).FullName;
+        var soundWatch = Stopwatch.StartNew();
+        LibavClipExporter.TryBuildAudio(
+            clip, [new LibavClipExporter.SourceRange(0, duration)], soundDir, VideoQuality.Medium, new LibavExportOptions(),
+            pauseGate: null, CancellationToken.None, out _);
+        _output.WriteLine($"the sound alone: {soundWatch.Elapsed.TotalSeconds:F2} s");
+    }
+
+    // Reports on the encoding thread itself, unlike Progress<T>.
+    private sealed class InlineProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
     }
 
     // What the file's first bytes say it is: an MP4 begins with an ftyp box, a Matroska file with the EBML magic.

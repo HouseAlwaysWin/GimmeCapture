@@ -524,7 +524,7 @@ internal static class CompressPipeline
             Preset = s.Preset,
             MaxHeight = s.MaxHeight,
             MaxFps = s.MaxFps,
-            DropAudio = true,             // video-only chunks; audio is built once at finalize
+            DropAudio = true,             // video-only chunks; the sound is built once, alongside them
             TwoPass = false,
             RotationDegrees = rotationDegrees,
             Denoise = s.Denoise,
@@ -533,42 +533,55 @@ internal static class CompressPipeline
             Grayscale = s.Grayscale
         };
 
-        for (int i = 0; i < chunkCount; i++)
-        {
-            token.ThrowIfCancellationRequested();
-            string chunkPath = CompressSegmentStore.ChunkPath(input, i);
-            if (completed.Contains(i) && File.Exists(chunkPath) && new FileInfo(chunkPath).Length > 0)
-            {
-                progress.Report((double)(i + 1) / chunkCount); // already done — advance the bar
-                continue;
-            }
-
-            double startSec = spanStart + i * CompressChunkSeconds;
-            double endSec = Math.Min(spanStart + (i + 1) * CompressChunkSeconds, spanEnd);
-            var ranges = new[] { new LibavClipExporter.SourceRange(startSec, endSec) };
-            int index = i;
-            var chunkProgress = new Progress<double>(p => progress.Report((index + Math.Clamp(p, 0, 1)) / chunkCount));
-
-            bool ok = await Task.Run(() => LibavClipExporter.TryExport(
-                input, ranges, chunkPath, VideoQuality.Medium,
-                cancellationToken: token, options: chunkOptions, progress: chunkProgress, pauseGate: pauseGate), token);
-            if (!ok || !File.Exists(chunkPath) || new FileInfo(chunkPath).Length == 0)
-            {
-                return false;
-            }
-
-            completed.Add(i);
-            state.CompletedChunks = completed.OrderBy(x => x).ToList();
-            CompressSegmentStore.Save(state);
-            resumeProgress?.Report((double)completed.Count / chunkCount); // advance the safe checkpoint
-        }
-
-        // Finalize: concat the video chunks (lossless), build audio once for the whole file, mux to output.
-        token.ThrowIfCancellationRequested();
+        // The sound is built alongside the chunks, into the folder they are joined in: built after them, it kept the bar
+        // at 100% through the decode and the AAC encode, about 0.9 s a minute of sound. It waits while paused, as they do.
         string finalizeDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(finalizeDir);
+        var soundOptions = new LibavExportOptions
+        {
+            Codec = s.Codec,
+            DropAudio = s.DropAudio,
+            AudioBitrateKbps = s.AudioBitrateKbps,
+            AudioChannels = s.AudioChannels
+        };
+        using var soundCancel = CancellationTokenSource.CreateLinkedTokenSource(token);
+        Task<string?> sound = LibavClipExporter.StartBuildingSound(
+            input, [new LibavClipExporter.SourceRange(spanStart, spanEnd)], finalizeDir, VideoQuality.Medium, soundOptions,
+            pauseGate, soundCancel.Token);
         try
         {
+            for (int i = 0; i < chunkCount; i++)
+            {
+                token.ThrowIfCancellationRequested();
+                string chunkPath = CompressSegmentStore.ChunkPath(input, i);
+                if (completed.Contains(i) && File.Exists(chunkPath) && new FileInfo(chunkPath).Length > 0)
+                {
+                    progress.Report((double)(i + 1) / chunkCount); // already done — advance the bar
+                    continue;
+                }
+
+                double startSec = spanStart + i * CompressChunkSeconds;
+                double endSec = Math.Min(spanStart + (i + 1) * CompressChunkSeconds, spanEnd);
+                var ranges = new[] { new LibavClipExporter.SourceRange(startSec, endSec) };
+                int index = i;
+                var chunkProgress = new Progress<double>(p => progress.Report((index + Math.Clamp(p, 0, 1)) / chunkCount));
+
+                bool ok = await Task.Run(() => LibavClipExporter.TryExport(
+                    input, ranges, chunkPath, VideoQuality.Medium,
+                    cancellationToken: token, options: chunkOptions, progress: chunkProgress, pauseGate: pauseGate), token);
+                if (!ok || !File.Exists(chunkPath) || new FileInfo(chunkPath).Length == 0)
+                {
+                    return false;
+                }
+
+                completed.Add(i);
+                state.CompletedChunks = completed.OrderBy(x => x).ToList();
+                CompressSegmentStore.Save(state);
+                resumeProgress?.Report((double)completed.Count / chunkCount); // advance the safe checkpoint
+            }
+
+            // Finalize: concat the video chunks (lossless), then mux them with the sound into the output.
+            token.ThrowIfCancellationRequested();
             var chunkPaths = Enumerable.Range(0, chunkCount)
                 .Select(i => CompressSegmentStore.ChunkPath(input, i)).ToList();
             if (chunkPaths.Any(p => !File.Exists(p) || new FileInfo(p).Length == 0))
@@ -587,16 +600,9 @@ internal static class CompressPipeline
                 return false;
             }
 
-            var audioRanges = new[] { new LibavClipExporter.SourceRange(spanStart, spanEnd) };
-            var muxOptions = new LibavExportOptions
-            {
-                Codec = s.Codec,
-                DropAudio = s.DropAudio,
-                AudioBitrateKbps = s.AudioBitrateKbps,
-                AudioChannels = s.AudioChannels
-            };
-            bool finalized = await Task.Run(() => LibavClipExporter.TryMuxAudioForRanges(
-                input, audioRanges, mergedVideo, outputPath, VideoQuality.Medium, muxOptions, token), token);
+            string? soundPath = await sound;
+            bool finalized = await Task.Run(
+                () => LibavClipExporter.TryMuxWithSound(mergedVideo, soundPath, outputPath), token);
             if (!finalized)
             {
                 return false;
@@ -608,6 +614,17 @@ internal static class CompressPipeline
         }
         finally
         {
+            // A chunk that failed, or a cancel, leaves the sound building: it lets go of its files before they go.
+            soundCancel.Cancel();
+            try
+            {
+                await sound;
+            }
+            catch (OperationCanceledException)
+            {
+                // stopped with the compress
+            }
+
             try { Directory.Delete(finalizeDir, true); }
             catch (Exception ex) { AppLog.Error("Compress.Cleanup", ex); }
         }

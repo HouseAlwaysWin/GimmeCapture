@@ -20,6 +20,12 @@
   and a GIF or WebM made through an edited copy all built their sound that way. It is now written as it is decoded,
   taking about 7 MB in all, and no slower. An audio-only export (WAV, MP3, M4A or OGG) held the whole track once and no
   longer does.
+- **A compress or export no longer sits at 100% while it builds the sound.** The sound was decoded and encoded only once
+  the video was done, with the bar full: about 0.9 s for each minute of sound, half a minute for a 30-minute recording.
+  It is now built while the video encodes, so a video that takes longer to encode than its sound, as most do, ends a
+  moment after its bar fills: 0.4 s for a two-minute 960x540 clip, whose sound took 1.9 to 2.8 s to build. Pause and
+  Cancel reach the sound too, and its working file goes as soon as it is encoded instead of staying until the end,
+  330 MB for half an hour.
 
 ---
 

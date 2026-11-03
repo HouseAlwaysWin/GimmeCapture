@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
@@ -232,12 +233,14 @@ internal static class LibavClipExporter
     /// the original behaviour, so existing callers are unaffected.
     /// </param>
     /// <param name="progress">
-    /// Optional progress sink reporting the video-encode fraction (0..1) by source time consumed. The audio
-    /// decode/encode + mux tail isn't tracked, so the bar may sit near 1.0 briefly at the end. Null = silent.
+    /// Optional progress sink reporting the video-encode fraction (0..1) by source time consumed. The sound is built
+    /// alongside the video and isn't tracked: a sound longer to build than the video, and the mux, keep the bar near
+    /// 1.0 at the end. Null = silent.
     /// </param>
     /// <param name="pauseGate">
-    /// Optional pause control: when reset (non-signaled), the video-encode loop blocks between frames until it
-    /// is set again (or cancellation fires). Null or always-set = no pausing. Must start signaled.
+    /// Optional pause control: when reset (non-signaled), the video-encode loop blocks between frames, and the sound's
+    /// build between packets and frames, until it is set again (or cancellation fires). Null or always-set = no
+    /// pausing. Must start signaled.
     /// </param>
     public static bool TryExport(
         string inputPath,
@@ -273,6 +276,11 @@ internal static class LibavClipExporter
         Directory.CreateDirectory(tempDir);
         string videoTemp = Path.Combine(tempDir, "video.mp4");
 
+        // The sound is built while the video encodes: built after it, it kept the bar at 100% through the decode and
+        // the AAC encode, about 0.9 s a minute of sound.
+        using var soundCancel = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task<string?> sound = StartBuildingSound(inputPath, ranges, tempDir, quality, opt, pauseGate, soundCancel.Token);
+
         try
         {
             // True two-pass (libx264 target-size only): pass 1 writes stats to a temp log and no video, pass 2 reads
@@ -295,11 +303,8 @@ internal static class LibavClipExporter
                     opt, progress, pauseGate, frameCompositeAfterTransform: frameCompositeAfterTransform);
             }
 
-            string? audioTemp = null;
-            bool hasAudio = !opt.DropAudio
-                && TryBuildAudio(inputPath, ranges, tempDir, quality, opt, cancellationToken, out audioTemp);
-
-            if (hasAudio && audioTemp != null)
+            string? audioTemp = sound.GetAwaiter().GetResult();
+            if (audioTemp != null)
             {
                 LibavMuxer.MuxVideoAndAudio(videoTemp, audioTemp, outputPath, container);
             }
@@ -316,56 +321,66 @@ internal static class LibavClipExporter
         }
         finally
         {
+            StopBuildingSound(soundCancel, sound);
             try { Directory.Delete(tempDir, true); } catch { /* best effort */ }
         }
     }
 
     /// <summary>
-    /// Adds audio — decoded from <paramref name="audioSource"/> over <paramref name="ranges"/> — onto an
-    /// already-encoded, video-only file and writes the final container. Used by segment-based resume, which
-    /// encodes/concatenates the video separately and builds audio once at the end. No video re-encode here.
-    /// Returns true when a non-empty output is produced.
+    /// Starts building the sound of <paramref name="ranges"/> into an AAC file in <paramref name="tempDir"/> on the
+    /// pool, for the caller to take once its video is encoded: the file's path, or null with no sound to add (dropped,
+    /// none in the source, or a failure, which is logged).
     /// </summary>
-    public static bool TryMuxAudioForRanges(
-        string audioSource,
-        IReadOnlyList<SourceRange> ranges,
-        string videoPath,
-        string outputPath,
-        VideoQuality quality,
-        LibavExportOptions options,
-        CancellationToken cancellationToken)
+    internal static Task<string?> StartBuildingSound(
+        string inputPath, IReadOnlyList<SourceRange> ranges, string tempDir, VideoQuality quality,
+        LibavExportOptions options, ManualResetEventSlim? pauseGate, CancellationToken ct) =>
+        options.DropAudio
+            ? Task.FromResult<string?>(null)
+            : Task.Run(() => TryBuildAudio(inputPath, ranges, tempDir, quality, options, pauseGate, ct, out string? path)
+                ? path
+                : null);
+
+    /// <summary>
+    /// Stops a build <see cref="StartBuildingSound"/> started, if it still runs, and waits for it to let go of its
+    /// files: the caller deletes the folder they are in next.
+    /// </summary>
+    internal static void StopBuildingSound(CancellationTokenSource soundCancel, Task<string?> sound)
+    {
+        soundCancel.Cancel();
+        try
+        {
+            sound.Wait();
+        }
+        catch (AggregateException)
+        {
+            // Cancelled with the export, or a failure the caller has already met when it took the result.
+        }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="videoPath"/> into <paramref name="outputPath"/>'s container with the sound <paramref
+    /// name="soundPath"/> built, or alone when there is none. No video re-encode: the segmented compress encodes and
+    /// joins its chunks itself, building the sound alongside them. Returns true when a non-empty output is produced.
+    /// </summary>
+    internal static bool TryMuxWithSound(string videoPath, string? soundPath, string outputPath)
     {
         FFmpegRuntime.EnsureInitialized();
 
         string ext = Path.GetExtension(outputPath);
         string container = ContainerForExtension(ext)
             ?? throw new NotSupportedException($"In-process clip export does not support '{ext}' yet.");
-
-        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_ClipAudio_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        try
+        if (soundPath != null)
         {
-            string? audioTemp = null;
-            bool hasAudio = !options.DropAudio
-                && TryBuildAudio(audioSource, ranges, tempDir, quality, options, cancellationToken, out audioTemp);
-
-            if (hasAudio && audioTemp != null)
-            {
-                LibavMuxer.MuxVideoAndAudio(videoPath, audioTemp, outputPath, container);
-            }
-            else
-            {
-                // Remuxed into an MP4 too: the video is the compress chunks joined in Matroska, which was copied as it
-                // was, so an .mp4 with no sound came out a Matroska file.
-                LibavMuxer.RemuxVideo(videoPath, outputPath, container);
-            }
-
-            return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+            LibavMuxer.MuxVideoAndAudio(videoPath, soundPath, outputPath, container);
         }
-        finally
+        else
         {
-            try { Directory.Delete(tempDir, true); } catch { /* best effort */ }
+            // Remuxed into an MP4 too: the video is the compress chunks joined in Matroska, which was copied as it
+            // was, so an .mp4 with no sound came out a Matroska file.
+            LibavMuxer.RemuxVideo(videoPath, outputPath, container);
         }
+
+        return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
     }
 
     // ── Video: decode the kept ranges and re-encode them into one continuous H.264/H.265 file ──
@@ -1248,13 +1263,15 @@ internal static class LibavClipExporter
         return Math.Clamp((int)Math.Round(fps), 1, 120);
     }
 
-    // ── Audio: each range's PCM (cut to the range's length) into one WAV as it decodes, then AAC ──
-    private static bool TryBuildAudio(
+    // ── Audio: each range's PCM (cut to the range's length) into one WAV as it decodes, then AAC into audio.m4a in
+    // tempDir, the WAV deleted once encoded. False with no sound (none in the source, or a failure, which is logged). ──
+    internal static bool TryBuildAudio(
         string inputPath,
         IReadOnlyList<SourceRange> ranges,
         string tempDir,
         VideoQuality quality,
         LibavExportOptions opt,
+        ManualResetEventSlim? pauseGate,
         CancellationToken ct,
         out string? audioTemp)
     {
@@ -1290,7 +1307,7 @@ internal static class LibavClipExporter
                     {
                         // Just this range: the decode stops at its end rather than running on to the end of the file,
                         // which a trim with many kept ranges used to pay for once per range.
-                        wav.AppendRange(inputPath, range.StartSeconds, range.Duration, ct);
+                        wav.AppendRange(inputPath, range.StartSeconds, range.Duration, ct, pauseGate);
                     }
                 }
 
@@ -1304,7 +1321,10 @@ internal static class LibavClipExporter
             }
 
             audioTemp = Path.Combine(tempDir, "audio.m4a");
-            LibavAacTranscoder.EncodeWavToM4a(wavTemp, audioTemp, quality, opt.AudioBitrateKbps, opt.AudioChannels);
+            LibavAacTranscoder.EncodeWavToM4a(
+                wavTemp, audioTemp, quality, opt.AudioBitrateKbps, opt.AudioChannels, ct, pauseGate);
+            // Built alongside the video, the WAV (330 MB for half an hour) would stay until the export is done.
+            File.Delete(wavTemp);
             bool ok = File.Exists(audioTemp) && new FileInfo(audioTemp).Length > 0;
             AppLog.Information($"LibavClipExporter.TryBuildAudio built={ok} pcmBytes={pcmBytes}");
             return ok;

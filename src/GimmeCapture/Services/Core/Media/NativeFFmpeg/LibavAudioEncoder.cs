@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 using NAudio.Wave;
@@ -43,7 +44,14 @@ internal static class LibavAudioEncoder
             };
 
     /// <param name="channels">1 mixes the input down to mono; 2 encodes stereo, folding more channels down.</param>
-    public static unsafe void EncodeWav(string wavPath, string outPath, Target target, long bitRate, int channels)
+    /// <summary>
+    /// Encodes the WAV at <paramref name="wavPath"/> into <paramref name="outPath"/>. Checks <paramref name="ct"/>, and
+    /// waits while <paramref name="pauseGate"/> is reset, before every frame: an export now builds its sound alongside
+    /// its video, where Pause and Cancel reach it.
+    /// </summary>
+    public static unsafe void EncodeWav(
+        string wavPath, string outPath, Target target, long bitRate, int channels,
+        CancellationToken ct = default, ManualResetEventSlim? pauseGate = null)
     {
         if (channels is not (1 or 2))
         {
@@ -131,6 +139,8 @@ internal static class LibavAudioEncoder
 
             while (true)
             {
+                ct.ThrowIfCancellationRequested();
+                pauseGate?.Wait(ct);
                 int floatsRead = ReadFully(provider, sampleBuffer);
                 if (floatsRead <= 0)
                 {

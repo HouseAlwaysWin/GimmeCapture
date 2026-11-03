@@ -31,16 +31,20 @@ internal sealed class DecodedWavFile : IDisposable
     /// <summary>
     /// Appends <paramref name="durationSeconds"/> of <paramref name="sourcePath"/>'s audio from <paramref
     /// name="startSeconds"/>, to the end of the track for <see cref="double.PositiveInfinity"/>. A file with no audio
-    /// stream throws, as <see cref="LibavPinAudioPcmDecoder.DecodeRange"/> does.
+    /// stream throws, as <see cref="LibavPinAudioPcmDecoder.DecodeRange"/> does. While <paramref name="pauseGate"/> is
+    /// reset, the decode waits before its next packet.
     /// </summary>
-    public void AppendRange(string sourcePath, double startSeconds, double durationSeconds, CancellationToken ct) =>
+    public void AppendRange(
+        string sourcePath, double startSeconds, double durationSeconds, CancellationToken ct,
+        ManualResetEventSlim? pauseGate = null) =>
         LibavPinAudioPcmDecoder.DecodeRangeStreaming(
             sourcePath,
             startSeconds,
             durationSeconds,
             onFormat: format => _writer ??= Create(format),
             onPcm: Write,
-            ct);
+            ct,
+            pauseGate == null ? null : () => pauseGate.Wait(ct));
 
     /// <summary>Appends PCM decoded already, in <paramref name="format"/>: a range the tempo filter retimed.</summary>
     public void Append(byte[] pcm, WaveFormat format)

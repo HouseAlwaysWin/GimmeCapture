@@ -87,7 +87,8 @@ internal static class LibavPinAudioPcmDecoder
     /// <summary>
     /// <see cref="DecodeRange"/> without holding the range: decodes on the caller's thread and hands each converted chunk
     /// to <paramref name="onPcm"/> (the buffer is reused — copy out synchronously), after <paramref name="onFormat"/> has
-    /// had the format. <see cref="DecodedWavFile"/> writes an export's audio this way.
+    /// had the format. <paramref name="beforePacket"/> runs before every packet is read (a pause can wait there).
+    /// <see cref="DecodedWavFile"/> writes an export's audio this way.
     /// </summary>
     internal static void DecodeRangeStreaming(
         string path,
@@ -95,10 +96,11 @@ internal static class LibavPinAudioPcmDecoder
         double durationSeconds,
         Action<WaveFormat> onFormat,
         Action<byte[], int> onPcm,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action? beforePacket = null)
     {
         using var sink = new StreamingPcmSink(onPcm);
-        DecodeCore(path, startSeconds, durationSeconds, onFormat, sink, waitIfFull: null, cancellationToken);
+        DecodeCore(path, startSeconds, durationSeconds, onFormat, sink, beforePacket, cancellationToken);
     }
 
     /// <summary>

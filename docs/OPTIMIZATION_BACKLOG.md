@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 1 entry (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 2 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) has run builds of `main` since 2026-11-01, 1ea47893 last,
   copied in over the two files that change; the updater will offer it v0.71.0.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -447,6 +447,19 @@ tool.
   against the old exporters. AUDIO_BUILD_PROBE=1 on 30 minutes of AAC (329.6 MiB of PCM), ABBA on the laptop: through
   memory 1.35 and 1.14 s, allocating 2018 MB and then 994 (the array pool had kept about 1 GB of the first run's
   buffers), against 1.15 and 1.07 s and 6.7 MB as it decodes.
+- Done since batch 1: **an export built its sound after its video, with the bar at 100%** (the "build audio alongside"
+  part of Compress's segmented-path item). `LibavClipExporter.TryExport` now starts `StartBuildingSound` before its
+  video encode and takes the AAC file after it, and the segmented compress starts one for its whole span before its
+  chunks and muxes it in at the end (`TryMuxWithSound`, which takes over `TryMuxAudioForRanges`). The sound's decode
+  waits on the pause gate before every packet and `LibavAudioEncoder.EncodeWav` before every frame, which also checks
+  the token now: the AAC encode could not be cancelled at all. `TryBuildAudio` deletes its WAV once encoded, which would
+  otherwise stay through the whole compress. `SoundAlongsideVideoTests` pause an export and a segmented compress at
+  their first report and find the sound's file in their folder, not growing; both fail with the sound started after the
+  video (run alone: other tests make folders of the same kind). The opt-in SEGMENTED_FINALIZE_PROBE=1
+  (SEGMENTED_FINALIZE_PROBE_MINUTES, _SIZE, _FILE) times what follows the chunks' last report: a two-minute 960x540 clip
+  with a tone, CRF 23 medium, 0.41-0.42 s, its sound taking 1.86-2.79 s on its own, which the old finalize added; ten
+  minutes at 64x48, whose chunks take 2 s, still 9.6-11.8 s, as its sound alone takes that long. Still open in that
+  item: the chunks reopen and probe the input each, and `merged.mkv` is written whole before the final mux.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -662,6 +675,11 @@ These were covered by unit tests only; check them in the real app before a relea
 - **Exporting a pinned video as WebM**: pin a recording with sound, cut a piece out of it, then Save as WebM and Copy as
   WebM. The pin should keep playing smoothly while it exports, both files should have the sound, and the temp folder
   should keep no new `GimmeCapture_Export_*` folder after the save (the copy keeps one, holding just its WebM).
+- **A long compress with sound**: compress a recording of several minutes with sound at the tab's defaults. The file
+  should be done within a second or so of the bar reaching 100%, and play with its sound in step. Pause it midway: Task
+  Manager should show the app's processor use drop to about nothing until Resume. Cancel another midway: no
+  `GimmeCapture_Compress_*` folder should stay in the temp folder. Then the same with a trimmed recording, which takes
+  the single-export path, and an audio-only M4A export of a long recording.
 - **Stepping in the Compress editor**: open a recording of a minute or so in the editor, step forward and back, skip 5 s
   both ways, drop the slider, rotate and turn crop on and off. Each should answer at once, a step back a little slower,
   and show the right frame. Open the quality comparison, step there too and close it: the log should have no
@@ -738,9 +756,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **A target size at or above the source's size still encodes** (S). `CompressBatchRunner.cs:116-124`: stream-copy
   with `LibavMuxer.RemuxAllStreams` when unedited, otherwise cap at the source bitrate. Audio-only M4A from an AAC
   source can stream-copy too.
-- **Segmented CRF path writes the video four times** (M). `CompressPipeline.cs:462-523`, `LibavClipExporter.cs:224-227`:
-  each 30 s chunk reopens and probes the input and copies its output; finalize concatenates, builds the audio after the
-  bar shows 100%, then remuxes. Write chunks in place, concatenate straight into the final mux, build audio alongside.
+- **Segmented CRF path writes the video three times** (M). `CompressPipeline.EncodeOneFileSegmentedAsync`: each 30 s chunk
+  reopens and probes the input and copies its output (`LibavClipExporter.TryExport` encodes into its own temp folder);
+  finalize concatenates into `merged.mkv`, then remuxes that with the sound. Write chunks in place, concatenate straight
+  into the final mux. The sound is built alongside now (Status).
 - **Rotation round-trips every frame through BGRA** (S-M). `LibavClipExporter.cs` (~338, 913-956): sws to BGRA, Skia
   rotate, sws back. Use transpose/hflip,vflip in the YUV graph or display-matrix rotation; render static annotations
   once.

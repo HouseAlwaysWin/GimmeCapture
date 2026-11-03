@@ -180,9 +180,13 @@ public class CompressIntegrationTests
         Assert.True(File.Exists(merged) && new FileInfo(merged).Length > 0, "concat produced no merged video");
 
         string outPath = Path.Combine(outDir, "segment_resume.mp4");
-        bool ok = await Task.Run(() => LibavClipExporter.TryMuxAudioForRanges(
-            source, new[] { new LibavClipExporter.SourceRange(0, duration) }, merged, outPath,
-            VideoQuality.Medium, new LibavExportOptions(), default));
+        bool ok = await Task.Run(() =>
+        {
+            LibavClipExporter.TryBuildAudio(
+                source, new[] { new LibavClipExporter.SourceRange(0, duration) }, segDir, VideoQuality.Medium,
+                new LibavExportOptions(), pauseGate: null, default, out string? sound);
+            return LibavClipExporter.TryMuxWithSound(merged, sound, outPath);
+        });
         Assert.True(ok && File.Exists(outPath) && new FileInfo(outPath).Length > 0, "segment finalize produced no output");
 
         double outDuration = await player.ProbeDurationSecondsAsync(outPath) ?? 0;

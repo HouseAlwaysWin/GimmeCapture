@@ -90,31 +90,28 @@ public sealed class DecodedWavFileTests : IDisposable
     }
 
     [Fact]
-    public void AnExportsSound_IsEachRangeInOrder_RetimedWhereSpedUp()
+    public void AnExportsSound_IsEachRangeInOrder_RetimedWhereSpedUp_AndLeavesNoWav()
     {
         string tone = VideoTestClips.WriteTone(Path.Combine(_dir, "tone.wav"), 3.0);
-        string video = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "video.mkv"), 64, 48, 60, 30);
-        string output = Path.Combine(_dir, "out.mkv");
+        string work = Directory.CreateDirectory(Path.Combine(_dir, "work")).FullName;
         LibavClipExporter.SourceRange[] ranges = [new(0, 1.0), new(1.0, 3.0, 2.0)];
 
-        Assert.True(LibavClipExporter.TryMuxAudioForRanges(
-            tone, ranges, video, output, VideoQuality.Medium, new LibavExportOptions(), CancellationToken.None));
+        Assert.True(BuildSound(tone, ranges, work, out string? built));
+        string sound = built!;
 
         // A second at its own speed, then two at twice it; AAC adds a few milliseconds of its own.
-        double seconds = LibavPinAudioPcmDecoder.Decode(output, 0).PcmBytes.Length / (double)BytesPerSecond;
+        double seconds = LibavPinAudioPcmDecoder.Decode(sound, 0).PcmBytes.Length / (double)BytesPerSecond;
         Assert.InRange(seconds, 1.98, 2.1);
+        Assert.Equal([sound], Directory.GetFiles(work));
     }
 
     [Fact]
     public void AnExportsSound_IsNotHeldWhole()
     {
         string tone = VideoTestClips.WriteTone(Path.Combine(_dir, "tone.wav"), 120);
-        string video = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "video.mkv"), 64, 48, 30, 30);
-        string output = Path.Combine(_dir, "out.mkv");
 
         long before = GC.GetAllocatedBytesForCurrentThread();
-        Assert.True(LibavClipExporter.TryMuxAudioForRanges(
-            tone, [new(0, 120)], video, output, VideoQuality.Medium, new LibavExportOptions(), CancellationToken.None));
+        Assert.True(BuildSound(tone, [new(0, 120)], _dir, out _));
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.True(allocated < 120L * BytesPerSecond / 10, $"{allocated:N0} bytes allocated for two minutes of sound");
@@ -209,6 +206,12 @@ public sealed class DecodedWavFileTests : IDisposable
         Assert.Equal(pcm.Length, reader.Read(pcm, 0, pcm.Length));
         return pcm;
     }
+
+    // An export's sound as the clip exporter builds it, on this thread.
+    private static bool BuildSound(string source, LibavClipExporter.SourceRange[] ranges, string tempDir, out string? sound) =>
+        LibavClipExporter.TryBuildAudio(
+            source, ranges, tempDir, VideoQuality.Medium, new LibavExportOptions(), pauseGate: null, CancellationToken.None,
+            out sound);
 
     // The audio-only export as the compress pipeline calls it, writing its steps into the test's folder.
     private bool ExtractAudio(string source, string output) =>
