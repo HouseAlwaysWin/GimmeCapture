@@ -25,6 +25,11 @@
 
 ### ⚡ Performance
 
+- **Compressing a rotated video takes a quarter of the time or less.** A video turned in the Compress editor had every
+  frame converted to a picture, turned, and converted back. On a 4K phone video that took 45 ms a frame, so turned, ten
+  seconds of one took 17 s to compress at 1080p instead of 3 to 8 s. The frames are now turned as they are decoded:
+  2.5 s at the default speed and 4 s at slow, and the result is a little closer to the original. A turned video with
+  something drawn on it is made as before.
 - **The capture overlay no longer stutters as its text scan comes in.** Each box the scan found was a control of its
   own, with its own bindings, layer and style, and putting a scan's hundred boxes and the windows on screen held the
   interface's thread for 35 to 49 ms, often just as a selection was being dragged. One control now draws them all, in

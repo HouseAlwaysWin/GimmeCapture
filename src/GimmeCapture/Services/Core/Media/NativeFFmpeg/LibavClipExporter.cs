@@ -434,11 +434,15 @@ internal static class LibavClipExporter
         AVStream* outStream = null;
         bool annotate = frameComposite != null || frameCompositeAfterTransform != null;
 
-        // Output rotation (0/90/180/270 clockwise), baked into the pixels via a SkiaSharp BGRA round-trip.
+        // Output rotation (0/90/180/270 clockwise). Without annotations it is a step of the filter graph, on the
+        // decoded pixels (RotationFilterNodes). Annotations are drawn before it and after it, so with them it stays in
+        // the BGRA round trip, with SkiaSharp. That round trip on its own took 45 ms a frame of a 4K phone video, which
+        // made a rotated compress of one 2.1-5 times as long as the same compress unrotated.
         int rotation = NormalizeRotation(opt.RotationDegrees);
         bool rotate = rotation != 0;
+        bool rotateInGraph = rotate && !annotate;
         SKBitmap? rotateDst = null; // managed rotation target (rotated dims), reused per frame
-        bool needBgra = annotate || rotate;
+        bool needBgra = annotate;
 
         // Progress is reported by source-time consumed across all kept ranges (0..1). Throttled to whole
         // percent changes so a long encode doesn't flood the IProgress sink / UI thread.
@@ -676,6 +680,11 @@ internal static class LibavClipExporter
             // format conversion we must not desync from). With no filter, srcPixFmt stays decCtx->pix_fmt and the
             // sws contexts are identical to before. The graph input is the post-crop frame (outW×outH).
             System.Collections.Generic.List<(string Name, string Args)> filterNodes = BuildVideoFilterChain(opt);
+            if (rotateInGraph)
+            {
+                filterNodes.AddRange(RotationFilterNodes(rotation));
+            }
+
             AVPixelFormat srcPixFmt = decCtx->pix_fmt;
             if (filterNodes.Count > 0)
             {
@@ -722,9 +731,12 @@ internal static class LibavClipExporter
             else
             {
                 // When cropping, each decoded frame is cropped (av_frame_apply_cropping) down to outW×outH
-                // before scaling, so the sws source dimensions are the crop size too.
+                // before scaling, so the sws source dimensions are the crop size too; a graph that rotates hands
+                // over the rotated frame, whose size its sink reports.
+                int swsSrcW = filterSink != null ? ffmpeg.av_buffersink_get_w(filterSink) : outW;
+                int swsSrcH = filterSink != null ? ffmpeg.av_buffersink_get_h(filterSink) : outH;
                 sws = ffmpeg.sws_getContext(
-                    outW, outH, srcPixFmt,
+                    swsSrcW, swsSrcH, srcPixFmt,
                     encCtx->width, encCtx->height, encCtx->pix_fmt,
                     (int)SwsFlags.SWS_BILINEAR, null, null, null);
                 if (sws == null)
@@ -888,6 +900,17 @@ internal static class LibavClipExporter
         }
         return nodes;
     }
+
+    // An output rotation (clockwise, as NormalizeRotation gives it) as filter graph steps: transpose for a quarter turn
+    // either way, a flip both ways for a half. Pure, so it is unit-testable.
+    internal static System.Collections.Generic.IReadOnlyList<(string Name, string Args)> RotationFilterNodes(int rotation) =>
+        NormalizeRotation(rotation) switch
+        {
+            90 => [("transpose", "dir=clock")],
+            180 => [("hflip", string.Empty), ("vflip", string.Empty)],
+            270 => [("transpose", "dir=cclock")],
+            _ => [],
+        };
 
     // Builds a video filter graph: buffer(in) → node → … → buffersink(out), configured for the post-crop source
     // (w×h, decoder pix_fmt). Follows LibavAtempoFilter's create-filter + link idiom. The caller frees the graph

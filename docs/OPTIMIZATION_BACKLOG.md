@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 9 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 10 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
@@ -560,6 +560,18 @@ tool.
   100 text boxes and 20 windows: the UI thread's part 35-49 ms before, 0.2-0.3 ms after; to the frame that shows them
   37-52 ms against 10-17, most of that now the headless frame itself. `CandidateBoxesLayerTests` pin the rounding,
   `SnipWindowViewModelTests.AScansBoxes_ReachTheOverlayInOneChange` the one change.
+- Done since batch 1: **rotation took every frame through BGRA** (Compress and the editor; most of the user's queue
+  are 4K phone videos turned 90/180/270). Measured on one of them (`V_20260110_175957_ES0.mp4`, 3840x2160 HEVC), ten
+  seconds to 1080p: veryfast 3.3-3.4 s unrotated against 16.7-16.9 rotated, slow 8.1-8.4 against 17.2-17.3, about
+  45 ms a frame for the decode-size BGRA conversion, the Skia turn and the conversion back. Without annotations the turn
+  is now the filter graph's last step, `transpose=dir=clock`/`cclock` or `hflip`,`vflip`
+  (`LibavClipExporter.RotationFilterNodes`), and the final scale reads its source size from the graph's sink. With
+  annotations, drawn before the turn and after it, the BGRA path stays. Rotated after: veryfast 2.5-3.0 s, slow
+  4.1 s (a rotated 1080 is portrait, 607 wide, so less to encode than the unrotated); the builds ran one after the
+  other, the unrotated times the same in both. `LibavClipExporterRotationTests`: a textured clip exported at 90, 180
+  and 270 is 1.4-1.5 levels off the source turned by hand and about 64 off the opposite turn; the old path gave the
+  same turn at 1.7-2.1 levels, through its two colour conversions. The opt-in `ARotatedExportOfARealVideo_Timed`
+  (ROTATE_PROBE_FILE) has the timing.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -782,6 +794,9 @@ These were covered by unit tests only; check them in the real app before a relea
   stop should save it within a second or so, with `sound=recorded` and a small `recordedSound` in its
   `Recording.FinalizeTimings`, and the sound in step to the end. The recording should not drop frames or stutter more
   than before, with the encoder beside it. Then one as GIF and one as WebM: saved as before, with no `sound=`.
+- **A rotated compress**: compress one of the 4K phone videos turned 90° in the editor, nothing drawn on it. It
+  should finish in about a quarter of the time it took before, turned the right way and looking as before. Then one
+  with something drawn on it, which takes as long as before, the drawing where it was drawn.
 - **A long compress with sound**: compress a recording of several minutes with sound at the tab's defaults. The file
   should be done within a second or so of the bar reaching 100%, and play with its sound in step to the end: in its last
   minute, the sound of a click or a key should land on its frame, as in the recording (it fell 55-66 ms further behind
@@ -874,9 +889,9 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **Each segmented chunk reopens and probes the input** (S, measure first). `CompressPipeline.EncodeOneFileSegmentedAsync`
   runs `LibavClipExporter.TryExport` for every 30 s chunk, which opens the input, finds its streams, seeks and decodes
   from the keyframe before the chunk again. The writes, the join and the sound are done (Status).
-- **Rotation round-trips every frame through BGRA** (S-M). `LibavClipExporter.cs` (~338, 913-956): sws to BGRA, Skia
-  rotate, sws back. Use transpose/hflip,vflip in the YUV graph or display-matrix rotation; render static annotations
-  once.
+- **Annotations take every frame through BGRA** (S-M). `LibavClipExporter.cs`: an export with something drawn on it
+  converts each frame to BGRA at decode size, draws, turns it there if it is turned, and converts back. Render static
+  annotations once and blend them in YUV, or draw at the output size. Rotation without annotations is done (Status).
 - **Small ones**: every CRF-slider tick saves `compress-session.json` on the UI thread
   (`MainWindowViewModel.VideoCompress.cs:552-559`; a small file, written without a flush, and a delayed save could lose
   the last change at exit: measure before changing it); preview frames are decoded on the GPU, downloaded at full size
