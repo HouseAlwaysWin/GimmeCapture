@@ -19,4 +19,11 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <!-- Named here, not left to the SDK, which adds it only where no .NET Framework targeting pack is installed: CI's
+       runner has one and this machine does not, so the locked restore found a lock file the runner's restore did not
+       match (NU1004). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
 </Project>
