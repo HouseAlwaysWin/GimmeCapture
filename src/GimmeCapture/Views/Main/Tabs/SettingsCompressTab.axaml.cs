@@ -125,7 +125,7 @@ public partial class SettingsCompressTab : UserControl
                     Avalonia.Media.Colors.Red, 2, false, false,
                     new GimmeCapture.Services.Core.Infrastructure.ClipboardService(),
                     vm.AIResourceService, vm.SAM2RuntimeService, vm.AppSettingsService,
-                    vm.AIPathService, vm.ResourceQueue, null, 0.0);
+                    vm.BackgroundRemoval, vm.ResourceQueue, null, 0.0);
                 var pinWin = new GimmeCapture.Views.Floating.FloatingImageWindow
                 {
                     DataContext = pinVm,

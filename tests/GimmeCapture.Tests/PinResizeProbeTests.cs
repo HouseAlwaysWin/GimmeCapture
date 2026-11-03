@@ -77,7 +77,7 @@ public sealed class PinResizeProbeTests : IDisposable
         using var image = CreateImage(1280, 720, cutOut);
         var vm = new FloatingImageViewModel(
             image, 1280, 720, Colors.Red, 2.0, false, false, new Mock<IClipboardService>().Object, ai,
-            new SAM2RuntimeService(paths), settings, paths, new ResourceQueueService());
+            new SAM2RuntimeService(paths), settings, Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService());
         var window = new FloatingImageWindow { DataContext = vm, Position = new PixelPoint(200, 150) };
         window.Show();
         PumpFor(TimeSpan.FromSeconds(1));

@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 12 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 14 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
@@ -602,6 +602,16 @@ tool.
   trigger was known: cloaking the window (DWMWA_CLOAK) until Avalonia's first frame, which hid it too. The GPU path
   creates windows with WS_EX_NOREDIRECTIONBITMAP and never flashed. The other windows that exclude themselves from
   capture (toasts, the countdown, translations, scrolling capture) do it in `Opened`, after showing.
+- Done since batch 1: **each pin built its own U2Net session** (Pins). A pin made a `BackgroundRemovalService` on its
+  first removal and disposed it on close, and the service disposed itself on a module removal (`IsDisposed`, for the
+  pin to build another). The app now has one (`MainWindowViewModelDependencies.BackgroundRemoval`, created with the first
+  overlay, no model until a removal, disposed by `AppBootstrapper` at exit), handed to every pin through
+  `SnipWindowServices`, pin-from-pin and the Compress editor's freeze-frame. A module removal unloads its session and
+  leaves it listening (`BackgroundRemovalServiceTests.AModuleRemoval_UnloadsTheModel_EachTime_AndLeavesTheService`, on
+  `TinyOnnxModel`; the old code fails it at the second removal). Measured with the installed model in a scratch opt-in
+  test (Release, each case in two fresh processes): two pins removing one after the other, 1920x1080 then 1600x900
+  scenes, the second took 887-901 ms with a service each and 396-402 ms shared, and the process held 368-369 MB over
+  its baseline against 189. Closing a pin no longer unloads the model at once: it goes 10 s after the last removal.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -945,8 +955,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   with its default 200 ms of buffer), and the video's slower open now roughly hides that: a video that restarted in
   10 ms would lead the sound at every loop. So a kept decoder needs the picture to follow the audio's clock, measured
   through the loopback (it plays sound). A paused pin's seeks (single-frame passes, no audio) would gain on their own.
-- **Each pin builds its own U2Net session** (S-M). `FloatingImageViewModel.AI.cs:684-687`: `new
-  BackgroundRemovalService` per pin; sessions take 661-962 ms. One shared service owned by `AppBootstrapper`.
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done

@@ -53,7 +53,7 @@ public sealed class RedactionDragProbeTests : IDisposable
             var picture = CreatePicture(3840, 2160);
             var vm = new FloatingImageViewModel(
                 picture, 1280, 720, Colors.Red, 2.0, false, false, new Mock<IClipboardService>().Object, ai,
-                new SAM2RuntimeService(paths), settings, paths, new ResourceQueueService());
+                new SAM2RuntimeService(paths), settings, Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService());
             var mosaic = new Annotation
             {
                 Type = AnnotationType.Mosaic,

@@ -57,7 +57,7 @@ public class FloatingImageViewModelTests
         var mockAiDownloader = new Mock<AIModelDownloader>();
         var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiDownloader.Object);
         var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object);
-        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object, new ResourceQueueService());
+        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService());
 
         // Act
         await vm.CopyCommand.Execute();
@@ -77,7 +77,7 @@ public class FloatingImageViewModelTests
         var mockAiDownloader = new Mock<AIModelDownloader>();
         var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiDownloader.Object);
         var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object);
-        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object, new ResourceQueueService());
+        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService());
         // A real SAM2Service, with a stand-in for the model.
         var sam2Service = StandInEncoderSam2Service.Create();
         using (var pinPixels = new SkiaSharp.SKBitmap(8, 8))
@@ -106,7 +106,7 @@ public class FloatingImageViewModelTests
         var mockAiDownloader = new Mock<AIModelDownloader>();
         var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiDownloader.Object);
         var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object);
-        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object, new ResourceQueueService());
+        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService());
         var sam2Service = new SAM2Service(sam2Runtime, mockSettings.Object);
 
         vm.SetSam2ServiceForTesting(sam2Service);
@@ -214,16 +214,62 @@ public class FloatingImageViewModelTests
         Directory.Delete(Path.GetDirectoryName(clipboard.CopiedFile)!, recursive: true);
     }
 
-    private static FloatingImageViewModel CreatePin(Bitmap picture, IClipboardService? clipboard = null)
+    // backgroundRemovalModel: a file that stands for the installed U2Net model.
+    private static FloatingImageViewModel CreatePin(
+        Bitmap picture, IClipboardService? clipboard = null, IBackgroundRemovalService? backgroundRemoval = null,
+        string? backgroundRemovalModel = null)
     {
         var mockSettings = new Mock<IAppSettingsService>();
         mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
         var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
+        if (backgroundRemovalModel != null)
+        {
+            mockAiPath.Setup(p => p.GetAICoreModelPath()).Returns(backgroundRemovalModel);
+        }
+
         var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, new Mock<AIModelDownloader>().Object);
         return new FloatingImageViewModel(
             picture, picture.PixelSize.Width, picture.PixelSize.Height, Avalonia.Media.Colors.Red, 2.0, false, false,
             clipboard ?? new MockClipboardService(), mockAi.Object, new SAM2RuntimeService(mockAiPath.Object), mockSettings.Object,
-            mockAiPath.Object, new ResourceQueueService());
+            backgroundRemoval ?? Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService());
+    }
+
+    [Fact]
+    public async Task Pins_RemoveBackgroundsThroughTheAppsOneService_WhichClosingAPinLeavesOpen()
+    {
+        // Every pin built a U2Net session of its own: a second pin's removal, while the first pin's session was still kept
+        // warm, took half a second longer and held 180 MB more. They share the app's one service now, which outlives them.
+        string directory = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            // The model file only has to exist for the pin to count background removal as installed.
+            string model = Path.Combine(directory, "u2net.onnx");
+            File.WriteAllBytes(model, Array.Empty<byte>());
+            var removal = new Mock<IBackgroundRemovalService>();
+            removal.Setup(r => r.RemoveBackgroundAsync(It.IsAny<SkiaSharp.SKBitmap>(), It.IsAny<Rect?>()))
+                .Returns((SkiaSharp.SKBitmap source, Rect? _) =>
+                {
+                    var removed = new SkiaSharp.SKBitmap(source.Width, source.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Unpremul);
+                    removed.Erase(SkiaSharp.SKColors.Transparent);
+                    return Task.FromResult(removed);
+                });
+            var first = CreatePin(AvaloniaRenderer.Create(8, 6, static (_, _) => 0xFFFFFFFFu), backgroundRemoval: removal.Object, backgroundRemovalModel: model);
+            var second = CreatePin(AvaloniaRenderer.Create(8, 6, static (_, _) => 0xFFFFFFFFu), backgroundRemoval: removal.Object, backgroundRemovalModel: model);
+
+            await first.RemoveBackgroundCommand.Execute();
+            first.Dispose();
+            await second.RemoveBackgroundCommand.Execute();
+
+            removal.Verify(r => r.RemoveBackgroundAsync(It.IsAny<SkiaSharp.SKBitmap>(), It.IsAny<Rect?>()), Times.Exactly(2));
+            Assert.Equal(0u, AvaloniaRenderer.ReadPixels(second.Image!)[0]);
+            second.Dispose();
+            removal.Verify(r => r.Dispose(), Times.Never);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]
@@ -238,7 +284,7 @@ public class FloatingImageViewModelTests
         var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, new Mock<AIModelDownloader>().Object);
         var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object);
         var original = AvaloniaRenderer.Create(8, 6, static (x, y) => 0xFF000000u | ((uint)(x * 30) << 16) | (uint)(y * 40));
-        var vm = new FloatingImageViewModel(original, 8, 6, Avalonia.Media.Colors.Red, 2.0, false, false, new MockClipboardService(), mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object, new ResourceQueueService());
+        var vm = new FloatingImageViewModel(original, 8, 6, Avalonia.Media.Colors.Red, 2.0, false, false, new MockClipboardService(), mockAi.Object, sam2Runtime, mockSettings.Object, Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService());
         await vm.RotateRightCommand.Execute();
         var rotated = vm.Image;
         Assert.NotSame(original, rotated);

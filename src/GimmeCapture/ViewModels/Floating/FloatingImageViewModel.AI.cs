@@ -677,17 +677,8 @@ public partial class FloatingImageViewModel
                 throw new Exception(copyError ?? "Failed to read the image pixels.");
             using var sourceBitmap = sourcePixels;
 
-            // 2. Process — reuse this pin's background-removal service (created once, kept warm ~10s between
-            // removals by its own idle scheduler) instead of new'ing/disposing a fresh U2Net session each time.
-            // Recreate if a global AI unload (module removal) disposed the shared instance, so the rebuilt
-            // session stays subscribed to future global-unload requests.
-            if (_backgroundRemoval == null || _backgroundRemoval.IsDisposed)
-            {
-                _backgroundRemoval = new BackgroundRemovalService(_aiResourceService, _pathService);
-            }
-            var aiService = _backgroundRemoval;
-
-            // SelectionRect is in logical pixels (UI space). 
+            // 2. Process, through the app's one background removal.
+            // SelectionRect is in logical pixels (UI space).
             // We need to scale it to physical image pixels for BackgroundRemovalService.
             Avalonia.Rect? scaledRect = null;
             if (IsSelectionActive)
@@ -704,7 +695,7 @@ public partial class FloatingImageViewModel
                     SelectionRect.Height * scaleY);
             }
 
-            using var processed = await aiService.RemoveBackgroundAsync(sourceBitmap, scaledRect);
+            using var processed = await _backgroundRemoval.RemoveBackgroundAsync(sourceBitmap, scaledRect);
 
             // 3. Hand the processed pixels to Avalonia, off the UI thread too.
             var (converted, detachedBitmap, convertError) = await Task.Run(() =>

@@ -43,9 +43,12 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         AIResourceService.RequestGlobalUnload += HandleGlobalUnload;
     }
 
+    // Raised before a module is removed. Only the session goes: every pin shares this service, which stays subscribed
+    // and loads the session again for the next removal.
     private void HandleGlobalUnload()
     {
-        Dispose();
+        _idleUnload.Cancel();
+        UnloadSession();
     }
 
     public async Task InitializeAsync()
@@ -894,7 +897,7 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         public long SumB;
     }
 
-    // Frees the ONNX session — the idle-unload callback and Dispose both use it. Skips if a removal is in
+    // Frees the ONNX session — the idle-unload callback, a global unload and Dispose use it. Skips if a removal is in
     // flight (the gate is held); the next idle retries. A later RemoveBackgroundAsync re-initializes lazily.
     private void UnloadSession()
     {
@@ -922,13 +925,11 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
         }
     }
 
-    /// <summary>True once disposed (e.g. by a global AI unload). A holder reusing an instance must recreate a
-    /// fresh one when this is set, or its rebuilt session would no longer be subscribed to global unload.</summary>
-    public bool IsDisposed { get; private set; }
+    internal bool IsModelLoaded => _session != null;
 
+    // At exit: the app's one service outlives every pin.
     public void Dispose()
     {
-        IsDisposed = true;
         AIResourceService.RequestGlobalUnload -= HandleGlobalUnload;
         _idleUnload.Cancel();
         UnloadSession();

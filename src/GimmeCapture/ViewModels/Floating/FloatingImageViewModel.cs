@@ -47,9 +47,9 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     
     // AI / SAM2 Properties & State
     private ISam2Service? _sam2Service;
-    // Reused across this pin's background removals (not new'd per op) so the ~hundreds-of-MB U2Net session is
-    // loaded once and its 10s idle keep-warm actually works. Disposed on pin close.
-    private IBackgroundRemovalService? _backgroundRemoval;
+    // The app's one background removal, shared by every pin, so its U2Net session (180 MB, kept 10 s after a removal)
+    // serves the next removal on any pin. Not this pin's to dispose.
+    private readonly IBackgroundRemovalService _backgroundRemoval;
     private readonly InteractiveRemovalSession _interactiveSession = new();
     public bool IsInteractiveSelectionMode => _interactiveSession.IsActive;
 
@@ -150,7 +150,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public IClipboardService ClipboardService => _clipboardService;
     public AIResourceService AIResourceService => _aiResourceService;
     public SAM2RuntimeService SAM2RuntimeService => _sam2RuntimeService;
-    public AIPathService AIPathService => _pathService;
+    public IBackgroundRemovalService BackgroundRemoval => _backgroundRemoval;
     public IAppSettingsService AppSettingsService => _appSettingsService;
     public IResourceQueueService ResourceQueue => _resourceQueue;
     /// <summary>Asks a yes/no question (title, message); true for yes.</summary>
@@ -160,7 +160,6 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     private readonly IClipboardService _clipboardService;
     private readonly AIResourceService _aiResourceService;
     private readonly SAM2RuntimeService _sam2RuntimeService;
-    private readonly AIPathService _pathService;
     private readonly IResourceQueueService _resourceQueue;
     private readonly IAppSettingsService _appSettingsService = null!;
     private string? _sam2LeaseId;
@@ -306,7 +305,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         return false;
     }
 
-    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, SAM2RuntimeService sam2RuntimeService, IAppSettingsService appSettingsService, AIPathService pathService, IResourceQueueService resourceQueue, string? pinnedText = null, double inferredFontSize = 12.0)
+    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, SAM2RuntimeService sam2RuntimeService, IAppSettingsService appSettingsService, IBackgroundRemovalService backgroundRemoval, IResourceQueueService resourceQueue, string? pinnedText = null, double inferredFontSize = 12.0)
     {
         Image = image;
         OriginalWidth = originalWidth;
@@ -323,7 +322,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         _clipboardService = clipboardService;
         _aiResourceService = aiResourceService;
         _sam2RuntimeService = sam2RuntimeService;
-        _pathService = pathService;
+        _backgroundRemoval = backgroundRemoval;
         _resourceQueue = resourceQueue;
         _appSettingsService = appSettingsService;
 
@@ -404,8 +403,6 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
         base.Dispose();
         ReleaseSam2Resources();
-        _backgroundRemoval?.Dispose();
-        _backgroundRemoval = null;
         // Frees the selection's mask, and moves the session on, so a click's mask still on its way is dropped.
         _interactiveSession.Cancel();
         _interactiveMask?.Dispose();

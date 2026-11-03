@@ -51,6 +51,7 @@ public class MainWindowViewModelHotkeyTests
             aiResourceOrchestrator,
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
+            new Lazy<IBackgroundRemovalService>(() => Mock.Of<IBackgroundRemovalService>()),
             aiPathService,
             new ResourceQueueService(),
             new GimmeCapture.Services.Platforms.Avalonia.TranslationResultLayerService());
@@ -157,6 +158,7 @@ public class MainWindowViewModelHotkeyTests
             aiResourceOrchestrator,
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
+            new Lazy<IBackgroundRemovalService>(() => Mock.Of<IBackgroundRemovalService>()),
             aiPathService,
             new ResourceQueueService(),
             new GimmeCapture.Services.Platforms.Avalonia.TranslationResultLayerService());

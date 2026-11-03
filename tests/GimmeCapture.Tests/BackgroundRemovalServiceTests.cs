@@ -6,6 +6,8 @@ using Xunit.Abstractions;
 
 namespace GimmeCapture.Tests;
 
+// With the tests that raise the app-wide AI unload, which reaches every runtime's sessions in the process.
+[Collection(AIGlobalUnloadCollection.Name)]
 public class BackgroundRemovalServiceTests
 {
     // The AI folder of an install with the AI Core module (u2net.onnx), for the opt-in measurement.
@@ -57,6 +59,37 @@ public class BackgroundRemovalServiceTests
 
             Assert.InRange(loaded, long.MinValue, 300 * Mb);
             Assert.InRange(unloaded, long.MinValue, 40 * Mb);
+        }
+        finally
+        {
+            try { Directory.Delete(baseDir, recursive: true); } catch { /* best effort temp cleanup */ }
+        }
+    }
+
+    [Fact]
+    public async Task AModuleRemoval_UnloadsTheModel_EachTime_AndLeavesTheService()
+    {
+        // Every pin shares the app's one service, and a module removal takes only its model. The service used to dispose
+        // itself on one, which left it deaf to the next, and the pin holding it built another.
+        string baseDir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var settings = new AppSettingsService(baseDir);
+            settings.Settings.AIResourcesDirectory = Path.Combine(baseDir, "AI");
+            var pathService = new AIPathService(settings);
+            var aiResources = new AIResourceService(settings, pathService, new AIModelDownloader());
+            TinyOnnxModel.WriteIdentity(pathService.GetAICoreModelPath());
+            using var service = new BackgroundRemovalService(aiResources, pathService);
+
+            for (int removal = 1; removal <= 2; removal++)
+            {
+                await service.InitializeAsync();
+                Assert.True(service.IsModelLoaded);
+
+                aiResources.Orchestrator.RequestGlobalUnload();
+
+                Assert.False(service.IsModelLoaded, $"module removal {removal} left the model loaded");
+            }
         }
         finally
         {

@@ -82,7 +82,7 @@ public sealed class SmartSelectionClickUiStallTests
             {
                 pin = new FloatingImageViewModel(
                     image, width, height, Colors.Red, 2.0, false, false, new Mock<IClipboardService>().Object, ai,
-                    new SAM2RuntimeService(paths.Object), settings.Object, paths.Object, new ResourceQueueService());
+                    new SAM2RuntimeService(paths.Object), settings.Object, Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService());
                 pin.SetSam2ServiceForTesting(sam2);
                 pin.CurrentTool = FloatingTool.PointRemoval;
                 return Task.CompletedTask;

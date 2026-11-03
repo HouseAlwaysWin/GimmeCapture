@@ -422,7 +422,7 @@ public class SnipWindowViewModelTests
         mainVm.OcrRuntimeService,
         mainVm.TranslationResultLayer,
         mainVm.SAM2RuntimeService,
-        mainVm.AIPathService,
+        mainVm.BackgroundRemoval,
         mainVm.ResourceQueue,
         () => mainVm.FfmpegDownloader);
 

@@ -506,6 +506,11 @@ public sealed class AppBootstrapper : IAsyncDisposable
             dependencies.SAM2RuntimeService.Value.Dispose();
         }
 
+        if (dependencies.BackgroundRemoval.IsValueCreated)
+        {
+            dependencies.BackgroundRemoval.Value.Dispose();
+        }
+
         if (dependencies.HotkeyService is IDisposable disposableHotkeyService)
         {
             disposableHotkeyService.Dispose();

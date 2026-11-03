@@ -651,7 +651,7 @@ public partial class SnipWindow : Window
             // rect is the original selection and `scrollableContentSize` (the full stitch) only sets the
             // fit-to-width scrolling content — the window still resizes freely like any other pin.
             bool scrolling = scrollableContentSize.HasValue;
-            var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, services.AIResources, services.Sam2Runtime, services.SettingsService, services.AIPaths, services.ResourceQueue, pinnedText, inferredFontSize);
+            var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, services.AIResources, services.Sam2Runtime, services.SettingsService, services.BackgroundRemoval, services.ResourceQueue, pinnedText, inferredFontSize);
             vm.WingScale = _viewModel.WingScale;
             if (scrolling)
             {

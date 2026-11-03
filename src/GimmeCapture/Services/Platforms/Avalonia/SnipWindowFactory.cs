@@ -146,7 +146,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
                 vm.OcrRuntimeService,
                 vm.TranslationResultLayer,
                 vm.SAM2RuntimeService,
-                vm.AIPathService,
+                vm.BackgroundRemoval,
                 vm.ResourceQueue,
                 () => vm.FfmpegDownloader),
             settings: vm);

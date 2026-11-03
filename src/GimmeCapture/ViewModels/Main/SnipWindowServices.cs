@@ -24,7 +24,7 @@ public sealed class SnipWindowServices
         OcrRuntimeService ocrRuntime,
         ITranslationResultLayerService translationResultLayer,
         SAM2RuntimeService sam2Runtime,
-        AIPathService aiPaths,
+        IBackgroundRemovalService backgroundRemoval,
         IResourceQueueService resourceQueue,
         Func<FFmpegDownloaderService> ffmpegDownloader)
     {
@@ -36,7 +36,7 @@ public sealed class SnipWindowServices
         OcrRuntime = ocrRuntime ?? throw new ArgumentNullException(nameof(ocrRuntime));
         TranslationResultLayer = translationResultLayer ?? throw new ArgumentNullException(nameof(translationResultLayer));
         Sam2Runtime = sam2Runtime ?? throw new ArgumentNullException(nameof(sam2Runtime));
-        AIPaths = aiPaths ?? throw new ArgumentNullException(nameof(aiPaths));
+        BackgroundRemoval = backgroundRemoval ?? throw new ArgumentNullException(nameof(backgroundRemoval));
         ResourceQueue = resourceQueue ?? throw new ArgumentNullException(nameof(resourceQueue));
         ArgumentNullException.ThrowIfNull(ffmpegDownloader);
         _ffmpegDownloader = new Lazy<FFmpegDownloaderService>(ffmpegDownloader);
@@ -62,7 +62,8 @@ public sealed class SnipWindowServices
     // What a pinned image needs, besides the AI resources and the settings service above.
     public SAM2RuntimeService Sam2Runtime { get; }
 
-    public AIPathService AIPaths { get; }
+    /// <summary>The app's one background removal, which every pin shares.</summary>
+    public IBackgroundRemovalService BackgroundRemoval { get; }
 
     public IResourceQueueService ResourceQueue { get; }
 

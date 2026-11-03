@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
@@ -41,6 +42,7 @@ public class MainWindowViewModelConstructionTests
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
         var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Orchestrator);
         var resourceQueue = new ResourceQueueService();
+        var backgroundRemoval = Mock.Of<IBackgroundRemovalService>();
 
         var dependencies = new MainWindowViewModelDependencies(
             settingsService,
@@ -61,6 +63,7 @@ public class MainWindowViewModelConstructionTests
             aiResourceOrchestrator,
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
+            new Lazy<IBackgroundRemovalService>(() => backgroundRemoval),
             aiPathService,
             resourceQueue,
             new GimmeCapture.Services.Platforms.Avalonia.TranslationResultLayerService());
@@ -73,6 +76,7 @@ public class MainWindowViewModelConstructionTests
         Assert.Same(updateService, viewModel.UpdateService);
         Assert.Same(aiPathService, viewModel.AIPathService);
         Assert.Same(aiResourceService, viewModel.AIResourceService);
+        Assert.Same(backgroundRemoval, viewModel.BackgroundRemoval);
         Assert.Same(sam2RuntimeService, viewModel.SAM2RuntimeService);
         Assert.Same(ocrRuntimeService, viewModel.OcrRuntimeService);
         Assert.Same(resourceQueue, viewModel.ResourceQueue);

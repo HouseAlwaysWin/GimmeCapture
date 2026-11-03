@@ -106,7 +106,7 @@ public sealed class PinCloseMemoryTests : IDisposable
             new PixelSize(PictureWidth, PictureHeight), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
         var vm = new FloatingImageViewModel(
             picture, PictureWidth / 2, PictureHeight / 2, Colors.Red, 2.0, false, false, new Mock<IClipboardService>().Object,
-            ai, sam2, settings, paths, new ResourceQueueService());
+            ai, sam2, settings, Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService());
         var window = new FloatingImageWindow { DataContext = vm, Position = new PixelPoint(100, 100) };
         window.Show();
         Pump(TimeSpan.FromMilliseconds(300));

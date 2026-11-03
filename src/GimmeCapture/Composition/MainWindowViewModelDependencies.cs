@@ -25,6 +25,8 @@ public sealed record MainWindowViewModelDependencies(
     Lazy<AIResourceOrchestrator> AIResourceOrchestrator,
     Lazy<SAM2RuntimeService> SAM2RuntimeService,
     Lazy<OcrRuntimeService> OcrRuntimeService,
+    // The app's one background removal, which every image pin shares.
+    Lazy<IBackgroundRemovalService> BackgroundRemoval,
     AIPathService AIPathService,
     IResourceQueueService ResourceQueue,
     ITranslationResultLayerService TranslationResultLayer,

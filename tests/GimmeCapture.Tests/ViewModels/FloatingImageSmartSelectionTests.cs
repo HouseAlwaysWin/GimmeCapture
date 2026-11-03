@@ -476,7 +476,7 @@ public sealed class FloatingImageSmartSelectionTests : IDisposable
         var image = Track(new HeldCopyBitmap(Width, Height, (_, _) => PinColour));
         var pin = Track(new FloatingImageViewModel(
             image, Width, Height, Colors.Red, 2.0, false, false, new Mock<IClipboardService>().Object, ai,
-            new SAM2RuntimeService(paths.Object), settings.Object, paths.Object, new ResourceQueueService()));
+            new SAM2RuntimeService(paths.Object), settings.Object, Mock.Of<IBackgroundRemovalService>(), new ResourceQueueService()));
         pin.SetSam2ServiceForTesting(sam2);
 
         if (holdPrepare)

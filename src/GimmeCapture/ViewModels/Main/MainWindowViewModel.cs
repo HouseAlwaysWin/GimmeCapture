@@ -282,6 +282,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
     private readonly Lazy<AIResourceOrchestrator> _aiResourceOrchestrator;
     private readonly Lazy<SAM2RuntimeService> _sam2RuntimeService;
     private readonly Lazy<OcrRuntimeService> _ocrRuntimeService;
+    private readonly Lazy<IBackgroundRemovalService> _backgroundRemoval;
     private IDisposable? _updateProcessingSubscription;
     private IDisposable? _aiProcessingSubscription;
 
@@ -307,6 +308,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
 
     public SAM2RuntimeService SAM2RuntimeService => _sam2RuntimeService.Value;
     public OcrRuntimeService OcrRuntimeService => _ocrRuntimeService.Value;
+    public IBackgroundRemovalService BackgroundRemoval => _backgroundRemoval.Value;
     public AIPathService AIPathService { get; }
     public IResourceQueueService ResourceQueue { get; }
 
@@ -396,6 +398,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
         Translation = new TranslationSettingsViewModel(() => AIResourceService, status => StatusText = status);
         _sam2RuntimeService = dependencies.SAM2RuntimeService;
         _ocrRuntimeService = dependencies.OcrRuntimeService;
+        _backgroundRemoval = dependencies.BackgroundRemoval;
         AIPathService = dependencies.AIPathService;
         ResourceQueue = dependencies.ResourceQueue;
         TranslationResultLayer = dependencies.TranslationResultLayer;

@@ -132,7 +132,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
             {
                 // Pin-from-pin (selecting a region inside a pin) is never a scrolling pin, so the content size is ignored.
                 var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder,
-                    vm.ClipboardService, vm.AIResourceService, vm.SAM2RuntimeService, vm.AppSettingsService, vm.AIPathService, vm.ResourceQueue, pinnedText, inferredFontSize);
+                    vm.ClipboardService, vm.AIResourceService, vm.SAM2RuntimeService, vm.AppSettingsService, vm.BackgroundRemoval, vm.ResourceQueue, pinnedText, inferredFontSize);
                 
                 newVm.WingScale = vm.WingScale;
                 

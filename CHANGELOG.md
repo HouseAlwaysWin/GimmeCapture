@@ -76,6 +76,11 @@
   runs on the .NET Framework that Windows keeps on its own drive: it reads those files through in one pass each and
   then starts the app, which finds them in memory. "Run on startup" switches to it the next time the app runs, and
   the log's `Startup.Timings` line says what it read and how long it took (`launcher=`).
+- **Removing the background on a second pin no longer loads the model again.** Each pin loaded the background-removal
+  model for itself and kept it 10 s after its last removal, so a second pin's removal in that time loaded a copy of its
+  own: 0.9 s instead of 0.4 for a 1600x900 picture, and 180 MB more held while both were kept, 370 MB in all. Every pin
+  now shares one, and the second pin's removal runs on the model the first one loaded. Closing a pin no longer unloads
+  it at once; it goes 10 s after the last removal, as it did with the pin open.
 
 ### 💾 Storage
 

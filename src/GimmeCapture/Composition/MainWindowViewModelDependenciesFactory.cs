@@ -63,6 +63,7 @@ public static class MainWindowViewModelDependenciesFactory
             sam2RuntimeService.Value.UnloadModels));
         var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Value.Orchestrator);
         var ocrRuntimeService = new Lazy<OcrRuntimeService>(() => new OcrRuntimeService(aiResourceService.Value));
+        var backgroundRemoval = new Lazy<IBackgroundRemovalService>(() => new BackgroundRemovalService(aiResourceService.Value, aiPathService));
         var translationResultLayer = new TranslationResultLayerService();
 
         return new MainWindowViewModelDependencies(
@@ -84,6 +85,7 @@ public static class MainWindowViewModelDependenciesFactory
             aiResourceOrchestrator,
             sam2RuntimeService,
             ocrRuntimeService,
+            backgroundRemoval,
             aiPathService,
             resourceQueue,
             translationResultLayer);
