@@ -16,9 +16,10 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 6 entries (2026-11-03).
-- The user's installed copy (`D:\GimmeCapture_win-x64`) has run builds of `main` since 2026-11-01, 1ea47893 last,
-  copied in over the two files that change; the updater will offer it v0.71.0.
+- Since v0.71.0, `## Unreleased` holds 7 entries (2026-11-03).
+- The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
+  before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
+  tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
   open of 135-260 ms instead of 80-100 ms on a run's first start, and `GraphicsCaptureSession.IsSupported()` 16 ms on
@@ -513,6 +514,27 @@ tool.
   0.15 s. FINALIZE_PROBE=1 (`AStopsFinalize_WithTheSoundEncodedWhileRecording_Timed`), system audio and a 320x240
   video, ABBA: two minutes 2.21 and 2.22 s at the stop (aac=2169-2176) against 85 and 61 ms, ten minutes 9.78 and
   9.66 s (aac=9537-9661) against 187 and 144 ms (recordedSound=40-46, mux about 100).
+- Done since batch 1: **every LLM request built a new context and read the whole prompt again** (OCR, AI and
+  translation). Measured first on the user's TranslateGemma 4B Q4_K_M, CPU, context 2048: load 2.1 s warm (now logged
+  as `Translation.ModelLoaded`), a context 42-57 ms to build and 20-35 to free, the prompt read at about 75 tokens/s,
+  generation 62-72 ms a token. The instructions are 72 of a short prompt's 85-94 tokens, so about 1 s of every
+  request went on reading them again. A translate press sends one merged text, so batching blocks into one prompt was
+  not needed. `LlamaKeptContextGenerator` keeps one context while the model is loaded and decodes only what follows
+  the tokens a prompt shares with what it holds (`LlamaPromptCache`; `MemorySequenceRemove` drops the rest, and the
+  cache is cleared whenever it does not hold exactly positions 0 to kept-1). The generation loop is StatelessExecutor's
+  as LLamaSharp 0.30 compiles it (read with ildasm): Tokenize with BOS and special tokens, the chunked DecodeAsync,
+  Sample at the batch's last token, end of generation, then the anti-prompts, a token's decode at the next position. A
+  request whose prompt and MaxTokens could fill the context, where StatelessExecutor would shift it, goes to
+  StatelessExecutor, with the kept context freed first. llama.cpp keeps a full-size cache for the sliding-window
+  layers, so no shared position has been dropped; the context holds its 272 MB of KV cache while the model is loaded,
+  where each request built and freed one. Each request logs `Translation.Timings` (prompt, kept, context, read,
+  generated, generate). `LlamaPromptCacheTests` cover what is kept. `LlamaKeptContextGeneratorTests` (opt-in, the same
+  GIMMECAPTURE_LLAMA_MODEL) find StatelessExecutor's text token for token from a fresh context, greedy and seeded, 8 of
+  8. The next prompt of a pair kept 72 tokens, read the other 13 in 229 ms against about 1030 for a whole prompt, and
+  took 1.06 s against 1.6-1.7. A prompt that could fill a 256-token context is handed back.
+  `LlamaSharpTranslationBenchmarkTests`, 16 sentences: median 1781 ms before, 869 after, total 27.5 s against 14.3. 15
+  translations came out the same; the 16th turned at a near tie (无法上传 to 無法上傳), from the rounding of a prompt
+  read in two parts instead of one.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -762,13 +784,18 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### OCR, AI and translation
 
-- **Recognition runs one box per run** (M batching). The passes are gated now (Status). Callers loop one box at a time
-  (`QuickOcrService.cs:66-74`, `TranslationService.cs:153-160`) though the recognizer's batch dimension is dynamic:
-  batch boxes by width bucket, padded to the bucket's width, and decode each row of the output.
-- **Every LLM request builds a new context and re-reads the whole prompt** (M). `LlamaSharpTranslationEngine` uses
-  `StatelessExecutor`, which creates a context (KV cache for 2048 tokens) and prefills from zero per call. Fix: one
-  long-lived context, the per-language-pair instruction prefix decoded once and forked per request
-  (BatchedExecutor/Conversation), blocks batched into one prompt. Measure first; no load-time log exists yet.
+- **Recognition runs one box per run** (measured 2026-11-03: not worth it on the CPU). The user's 52 history
+  captures, 645 boxes: 23 ms a box, about 2.3 passes of 9 ms of the model each. One run over up to four boxes of the
+  same width took 13% less and gave the same output; groups of 8-64 took as long or longer and changed outputs (by up
+  to 2e-5). Boxes cannot run side by side: `OcrRuntimeService.BeginSessionUse` takes one inference lock, and running
+  them 2-6 at a time gained nothing anyway. ONNX Runtime's own threads are best at its default, one a physical core
+  (6): 12 made detection 65% slower and recognition 7%, 4 made recognition 20% slower. The time is the model's.
+- **TranslateGemma answers a Traditional Chinese target in Simplified Chinese** (S-M, found 2026-11-03; the user's
+  call, as it changes what translations say). `LlamaSharpTranslationBenchmarkTests` fails on it: of 16 English and
+  Japanese sentences to zh-TW, 15 came back Simplified (设置, not 設定); a Traditional Chinese source stays Traditional.
+  The prompt is the model's own: its chat template names zh-TW "Chinese", as `GetTranslateGemmaLanguageName` does.
+  Either try other codes or names (zh-Hant, "Traditional Chinese") against the benchmark, or convert the output to
+  Traditional characters when that is the target. The context kept between requests is done (Status).
 - **Auto re-probes the language in every overlay** (S, the user's call). `OcrScriptDetector.cs:85-112`: keep the Auto
   verdict app-wide. Each probe swaps recognizers, which now costs ~135 ms each (the shared detector stays loaded). Only
   matters with several OCR languages installed, as the user has (Auto, with Simplified and Traditional Chinese). The
@@ -796,8 +823,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   (`WebcamCaptureSource.cs:157`). Est. 3-5 ms per frame at 1080p, 12-25 at 4K.
 - **The stop moves its file, and stops sources one after another** (S-M). `RecordingService.Finalize.cs` muxes into
   the session folder and moves the file to the output folder, a whole copy when that is on another drive; sources stop
-  in series (`LiveSession.cs` `StopCurrentSegmentAsync`). Mux into the destination folder rather than moving there. The
-  fixed wait, the paused recording's second video write and the AAC encode are done (Status).
+  in series (`LiveSession.cs` `StopCurrentSegmentAsync`). Mux into the destination folder rather than moving there. Only
+  a fixed save folder on another drive pays for the copy: with AutoSave off, as the user has it, the file goes to the
+  app's own Temp folder, beside the session, and the move is a rename. The fixed wait, the paused recording's second
+  video write and the AAC encode are done (Status).
 - **The Linux audio still gates whole packets and ends each part short** (S; needs a Linux desktop to check).
   `LinuxPulseAudioRecorder` keeps or drops each packet on `RecordingAudioGate.IsOpen` and writes no silence at the
   end, so after a pause every later part plays early by the video's overrun (45-105 ms on Windows). Give it a `Feed`,
@@ -833,6 +862,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   `FloatingVideoViewModel.Media.cs:279-313,371-373` (`loopPlayback = false`, a new `PlayFramesAsync` per pass),
   `LibavVideoFramePlayer.cs:670-718`; `UpdateAudioStateFromPlayback` reopens Media Foundation and WASAPI too. Keep one
   decoder per pin, do loops and seeks as requests to it, seek the audio on loop; 1-2 decode threads under D3D11VA.
+  Measured 2026-11-03, a pass to its first frame on the user's recordings: 68-123 ms with D3D11VA (the first in a
+  process 1.7 s), 13-44 on the CPU. The audio restarts on its own worker (a new MediaFoundationReader and a WasapiOut
+  with its default 200 ms of buffer), and the video's slower open now roughly hides that: a video that restarted in
+  10 ms would lead the sound at every loop. So a kept decoder needs the picture to follow the audio's clock, measured
+  through the loopback (it plays sound). A paused pin's seeks (single-frame passes, no audio) would gain on their own.
 - **Each pin builds its own U2Net session** (S-M). `FloatingImageViewModel.AI.cs:684-687`: `new
   BackgroundRemovalService` per pin; sessions take 661-962 ms. One shared service owned by `AppBootstrapper`.
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each

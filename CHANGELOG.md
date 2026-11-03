@@ -20,6 +20,11 @@
 
 ### ⚡ Performance
 
+- **Translating with the local model takes about half as long.** Each translation made the model read its
+  instructions again before the text, about a second of the 1.3 to 2.4 s a sentence took on the processor, and set up
+  the model's working memory afresh. While the model stays loaded it now keeps both from one translation to the next,
+  and reads only what changed: sixteen sentences took 0.4 to 1.6 s each instead of 1.3 to 2.4 s, 14.3 s in all instead
+  of 27.5 s. The first translation after the model loads reads the instructions as before.
 - **Stopping a recording no longer waits for its sound to be encoded.** The sound was encoded after the stop, about
   20 ms for every second of it: 2.2 s after two minutes, 9.7 s after ten, half a minute or more after half an hour. It
   is now encoded while the recording goes, on a thread that gives way to the capture and needs about one core in forty,

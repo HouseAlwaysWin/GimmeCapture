@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -40,6 +41,8 @@ public sealed class LlamaSharpTranslationEngine : ITranslationModelEngine
     private LLamaWeights? _weights;
     private ModelParams? _modelParams;
     private StatelessExecutor? _executor;
+    // Generates every request that fits on a context kept while the model is loaded; _executor takes the rest.
+    private LlamaKeptContextGenerator? _generator;
     private string? _loadedModelPath;
     // The loaded model's own chat template, read from its GGUF metadata when it loads. Kept as a string so building a
     // prompt never touches the native model, which the idle unloader can free outside the inference lock.
@@ -190,9 +193,18 @@ public sealed class LlamaSharpTranslationEngine : ITranslationModelEngine
                 return string.Empty;
             }
 
-            await foreach (var token in executor.InferAsync(prompt, inference, ct))
+            if (_generator is { } generator
+                && await generator.TryGenerateAsync(prompt, inference, ct) is { } generated)
             {
-                sb.Append(token);
+                sb.Append(generated);
+                AppLog.Information("Translation.Timings", generator.LastTimings ?? string.Empty);
+            }
+            else
+            {
+                await foreach (var token in executor.InferAsync(prompt, inference, ct))
+                {
+                    sb.Append(token);
+                }
             }
         }
         finally
@@ -281,13 +293,17 @@ public sealed class LlamaSharpTranslationEngine : ITranslationModelEngine
 
         try
         {
+            var load = Stopwatch.StartNew();
             _weights = await LLamaWeights.LoadFromFileAsync(parameters, ct);
+            AppLog.Information(
+                "Translation.ModelLoaded", $"{System.IO.Path.GetFileName(modelPath)} in {load.ElapsedMilliseconds} ms");
             _chatTemplate = _weights.Metadata.TryGetValue("tokenizer.chat_template", out string? template)
                 && !string.IsNullOrWhiteSpace(template)
                     ? template
                     : null;
             _modelParams = parameters;
             _executor = new StatelessExecutor(_weights, parameters);
+            _generator = new LlamaKeptContextGenerator(_weights, parameters);
             _loadedModelPath = modelPath;
         }
         catch (Exception ex) when (ex is TypeInitializationException or RuntimeError)
@@ -300,6 +316,9 @@ public sealed class LlamaSharpTranslationEngine : ITranslationModelEngine
 
     private void DisposeModel()
     {
+        // The kept context goes before the weights it was built from.
+        _generator?.Dispose();
+        _generator = null;
         (_executor as IDisposable)?.Dispose();
         _executor = null;
         _modelParams = null;
