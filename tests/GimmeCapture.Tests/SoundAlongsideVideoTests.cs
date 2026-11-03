@@ -17,10 +17,10 @@ namespace GimmeCapture.Tests;
 /// the whole span's sound builds. Each test pauses the encode at its first report and finds the sound's file already
 /// in the export's temporary folder, and not growing: the sound has started, and waits with the video. Before, no
 /// sound file existed until the video was done. Real libav on tiny clips with a two-minute tone (<see
-/// cref="VideoTestClips"/>), whose sound takes a second or two to build. They run on their own: another test's export
-/// would make folders of the same kind meanwhile.
+/// cref="VideoTestClips"/>), whose sound takes a second or two to build. They run on their own (<see
+/// cref="ExportTempFolders"/>): another test's export would make folders of the same kind meanwhile.
 /// </summary>
-[Collection(nameof(SoundAlongsideVideoTests))]
+[Collection(ExportTempFolders.Name)]
 public sealed class SoundAlongsideVideoTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
@@ -175,7 +175,12 @@ public sealed class SoundAlongsideVideoTests : IDisposable
     }
 }
 
-[CollectionDefinition(nameof(SoundAlongsideVideoTests), DisableParallelization = true)]
-public sealed class SoundAlongsideVideoTestsCollection
+/// <summary>
+/// Tests that look for the files an export makes in the temporary folder, by kind of folder or by name: they run on their
+/// own, after the others, as another test's export would make the same kinds meanwhile.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ExportTempFolders
 {
+    public const string Name = "Export temporary folders";
 }

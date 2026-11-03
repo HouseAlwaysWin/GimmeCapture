@@ -11,6 +11,13 @@
 
 ## Unreleased
 
+### 🛡️ Reliability
+
+- **A long compress keeps its picture in step with its sound.** A compress at a quality setting, the Compress tab's
+  default, encodes the video in 30-second pieces and joins them. Since v0.67.0 each piece after the first was joined two
+  frames late, so the picture fell further behind the sound every 30 seconds: 0.17 s by the end of two minutes, 3 to 4 s
+  by the end of half an hour. The pieces now join end to end.
+
 ### ⚡ Performance
 
 - **Compressing or exporting a long video no longer takes a gigabyte or more of memory for its sound.** An export
@@ -26,6 +33,13 @@
   moment after its bar fills: 0.4 s for a two-minute 960x540 clip, whose sound took 1.9 to 2.8 s to build. Pause and
   Cancel reach the sound too, and its working file goes as soon as it is encoded instead of staying until the end,
   330 MB for half an hour.
+
+### 💾 Storage
+
+- **A compress at a quality setting writes its video twice fewer times.** Each 30-second piece was encoded into the
+  temporary folder and copied to where the pieces are kept, and the pieces were joined into one more file before the
+  output was written from it. They are now encoded where they are kept and joined, with the sound, straight into the
+  output: at the end of two minutes of 720p, 99 MB written instead of 197, in half the time.
 
 ---
 

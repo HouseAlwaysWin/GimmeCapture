@@ -15,7 +15,9 @@ internal static class LibavMuxer
     /// Concatenates multiple recorded video segments (produced back-to-back in the same
     /// session, e.g. after pause/resume) into a single output by copying packets without
     /// re-encoding. All segments must share the same codec/resolution, which holds because
-    /// they originate from the same recording configuration.
+    /// they originate from the same recording configuration. Each segment is re-based on its first packet's decode
+    /// time, which is when it shows for the recorder's segments, encoded with no B-frames; segments with B-frames leave a
+    /// gap at every join here, and go through <see cref="ConcatVideoSegmentsWithAudio"/>.
     /// </summary>
     public static unsafe MuxStats ConcatVideoSegments(
         IReadOnlyList<string> segmentPaths,
@@ -158,6 +160,273 @@ internal static class LibavMuxer
                 ffmpeg.avformat_free_context(outFmt);
             }
         }
+    }
+
+    /// <summary>
+    /// The segments' video joined as <see cref="ConcatVideoSegments"/> joins it and, with <paramref name="audioPath"/>,
+    /// muxed with that audio as <see cref="MuxVideoAndAudio"/> muxes it, in one pass straight into <paramref
+    /// name="outputPath"/>. Joining into a file of its own first wrote the whole video once more, only for the mux to
+    /// read it back; and that file, Matroska, kept each frame's time to the millisecond on the way.
+    /// </summary>
+    public static unsafe MuxStats ConcatVideoSegmentsWithAudio(
+        IReadOnlyList<string> segmentPaths, string? audioPath, string outputPath, string containerFormat)
+    {
+        if (segmentPaths == null || segmentPaths.Count == 0)
+        {
+            throw new ArgumentException("No segments to concatenate.", nameof(segmentPaths));
+        }
+
+        FFmpegRuntime.EnsureInitialized();
+
+        AVFormatContext* outFmt = null;
+        AVFormatContext* audioFmt = null;
+        AVPacket* videoPkt = null;
+        AVPacket* audioPkt = null;
+        using var video = new SegmentedVideoSource(segmentPaths);
+
+        try
+        {
+            ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, containerFormat, outputPath), "alloc_output(join)");
+            if (outFmt == null) throw new InvalidOperationException("Failed to create output format context.");
+
+            if (!video.OpenNext())
+            {
+                throw new InvalidOperationException("No video stream found in any segment.");
+            }
+
+            AVStream* outVideo = ffmpeg.avformat_new_stream(outFmt, null);
+            if (outVideo == null) throw new OutOfMemoryException("new_stream(join_video)");
+            ThrowIfErr(ffmpeg.avcodec_parameters_copy(outVideo->codecpar, video.Stream->codecpar), "copy_video_codecpar(join)");
+            outVideo->codecpar->codec_tag = 0;
+            outVideo->time_base = video.Stream->time_base;
+            outVideo->disposition |= ffmpeg.AV_DISPOSITION_DEFAULT;
+
+            int audioIn = -1;
+            AVStream* inAudio = null;
+            AVStream* outAudio = null;
+            if (audioPath != null)
+            {
+                ThrowIfErr(ffmpeg.avformat_open_input(&audioFmt, audioPath, null, null), "open_input(join_audio)");
+                ThrowIfErr(ffmpeg.avformat_find_stream_info(audioFmt, null), "find_stream_info(join_audio)");
+                audioIn = ffmpeg.av_find_best_stream(audioFmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);
+                if (audioIn < 0) throw new InvalidOperationException("No audio stream in input.");
+
+                inAudio = audioFmt->streams[audioIn];
+                outAudio = ffmpeg.avformat_new_stream(outFmt, null);
+                if (outAudio == null) throw new OutOfMemoryException("new_stream(join_audio)");
+                ThrowIfErr(ffmpeg.avcodec_parameters_copy(outAudio->codecpar, inAudio->codecpar), "copy_audio_codecpar(join)");
+                outAudio->codecpar->codec_tag = 0;
+                outAudio->time_base = inAudio->time_base;
+                outAudio->disposition |= ffmpeg.AV_DISPOSITION_DEFAULT;
+            }
+
+            if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
+            {
+                ThrowIfErr(ffmpeg.avio_open(&outFmt->pb, outputPath, ffmpeg.AVIO_FLAG_WRITE), "avio_open(join)");
+            }
+
+            ThrowIfErr(ffmpeg.avformat_write_header(outFmt, null), "write_header(join)");
+
+            videoPkt = ffmpeg.av_packet_alloc();
+            audioPkt = ffmpeg.av_packet_alloc();
+            if (videoPkt == null || audioPkt == null) throw new OutOfMemoryException("av_packet_alloc(join)");
+
+            // Interleaved by time, as MuxInterleaved does: the video's times are the joined ones, from 0; the audio's its
+            // own, re-based to 0 as it is written.
+            bool hasVideo = video.Read(videoPkt, outVideo);
+            bool hasAudio = audioFmt != null && ReadNextStreamPacket(audioFmt, audioIn, audioPkt);
+            long firstAudioPts = hasAudio ? GetPacketPrimaryTimestamp(audioPkt) : ffmpeg.AV_NOPTS_VALUE;
+            int videoPackets = 0;
+            int audioPackets = 0;
+            while (hasVideo || hasAudio)
+            {
+                bool takeVideo = !hasAudio
+                    || (hasVideo && PacketTsInUs(videoPkt, outVideo->time_base) <= PacketTsInUs(audioPkt, inAudio->time_base));
+                if (takeVideo)
+                {
+                    ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, videoPkt), "write_frame(join_video)");
+                    videoPackets++;
+                    ffmpeg.av_packet_unref(videoPkt);
+                    hasVideo = video.Read(videoPkt, outVideo);
+                }
+                else
+                {
+                    NormalizePacketTimestamps(audioPkt, firstAudioPts);
+                    ffmpeg.av_packet_rescale_ts(audioPkt, inAudio->time_base, outAudio->time_base);
+                    audioPkt->stream_index = outAudio->index;
+                    ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, audioPkt), "write_frame(join_audio)");
+                    audioPackets++;
+                    ffmpeg.av_packet_unref(audioPkt);
+                    hasAudio = ReadNextStreamPacket(audioFmt, audioIn, audioPkt);
+                }
+            }
+
+            if (audioFmt != null && audioPackets <= 0)
+            {
+                throw new InvalidOperationException("Audio mux produced zero audio packets.");
+            }
+
+            ThrowIfErr(ffmpeg.av_write_trailer(outFmt), "write_trailer(join)");
+            return new MuxStats(videoPackets, audioPackets);
+        }
+        finally
+        {
+            if (videoPkt != null) ffmpeg.av_packet_free(&videoPkt);
+            if (audioPkt != null) ffmpeg.av_packet_free(&audioPkt);
+            if (audioFmt != null) ffmpeg.avformat_close_input(&audioFmt);
+            if (outFmt != null)
+            {
+                if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0 && outFmt->pb != null)
+                {
+                    ffmpeg.avio_closep(&outFmt->pb);
+                }
+
+                ffmpeg.avformat_free_context(outFmt);
+            }
+        }
+    }
+
+    // The video packets of segments read one after another, each segment's first frame shown at 0 and then placed where
+    // the one before it ended, in the output stream's time base. Segments with no video stream are skipped.
+    //
+    // A segment is re-based on when its first frame shows, not on its first packet's decode time as ConcatVideoSegments
+    // does: with B-frames that decode time is two frames earlier (an exported chunk's first packet: pts 0, dts -1056 in
+    // 1/16000), which put each segment two frames late, so every one after the first started two frames after the one
+    // before it ended. The segmented compress joined its chunks that way into Matroska, which keeps no decode times, and
+    // muxed that again, which took the first chunk's shift off but not the gaps: its picture ran long of its sound by two
+    // frames a chunk. The decode times before the first frame stay negative, as they come.
+    private sealed unsafe class SegmentedVideoSource : IDisposable
+    {
+        private readonly IReadOnlyList<string> _paths;
+        private int _nextPath;
+        private AVFormatContext* _input;
+        private int _stream = -1;
+        private long _offset;      // where the current segment starts, in the output time base
+        private long _firstTs;     // when the segment's first frame shows, which re-bases it to 0
+        private long _segMaxEnd;
+        private int _segPackets;
+        private bool _sawDuration;
+
+        public SegmentedVideoSource(IReadOnlyList<string> paths)
+        {
+            _paths = paths;
+        }
+
+        /// <summary>The current segment's video stream.</summary>
+        public AVStream* Stream => _input->streams[_stream];
+
+        /// <summary>Opens the next segment with a video stream, placed after the one before; false when none is left.</summary>
+        public bool OpenNext()
+        {
+            long nextOffset = NextOffset();
+            Close();
+            while (_nextPath < _paths.Count)
+            {
+                AVFormatContext* input = null;
+                ThrowIfErr(ffmpeg.avformat_open_input(&input, _paths[_nextPath++], null, null), "open_input(join)");
+                _input = input;
+                ThrowIfErr(ffmpeg.avformat_find_stream_info(_input, null), "find_stream_info(join)");
+                _stream = ffmpeg.av_find_best_stream(_input, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
+                if (_stream >= 0)
+                {
+                    _offset = nextOffset;
+                    _firstTs = Stream->start_time;
+                    _segMaxEnd = 0;
+                    _segPackets = 0;
+                    _sawDuration = false;
+                    return true;
+                }
+
+                Close();
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The next video packet into <paramref name="pkt"/>, re-based, offset and rescaled to <paramref name="outVideo"/>;
+        /// false after the last segment's last packet.
+        /// </summary>
+        public bool Read(AVPacket* pkt, AVStream* outVideo)
+        {
+            while (_input != null)
+            {
+                if (ReadNextStreamPacket(_input, _stream, pkt))
+                {
+                    if (_firstTs == ffmpeg.AV_NOPTS_VALUE)
+                    {
+                        _firstTs = pkt->pts != ffmpeg.AV_NOPTS_VALUE ? pkt->pts : GetPacketPrimaryTimestamp(pkt);
+                    }
+
+                    if (_firstTs != ffmpeg.AV_NOPTS_VALUE)
+                    {
+                        if (pkt->pts != ffmpeg.AV_NOPTS_VALUE) pkt->pts -= _firstTs;
+                        if (pkt->dts != ffmpeg.AV_NOPTS_VALUE) pkt->dts -= _firstTs;
+                    }
+
+                    ffmpeg.av_packet_rescale_ts(pkt, Stream->time_base, outVideo->time_base);
+                    if (pkt->pts != ffmpeg.AV_NOPTS_VALUE) pkt->pts += _offset;
+                    if (pkt->dts != ffmpeg.AV_NOPTS_VALUE) pkt->dts += _offset;
+                    pkt->stream_index = outVideo->index;
+
+                    long endRef = pkt->pts != ffmpeg.AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
+                    if (pkt->dts != ffmpeg.AV_NOPTS_VALUE && pkt->dts > endRef) endRef = pkt->dts;
+                    if (endRef != ffmpeg.AV_NOPTS_VALUE)
+                    {
+                        long end = endRef + (pkt->duration > 0 ? pkt->duration : 0);
+                        if (end > _segMaxEnd) _segMaxEnd = end;
+                    }
+
+                    if (pkt->duration > 0) _sawDuration = true;
+                    _segPackets++;
+                    return true;
+                }
+
+                if (!OpenNext())
+                {
+                    return false;
+                }
+            }
+
+            return false;
+        }
+
+        // Where the segment after the current one starts: its end. When packet durations are missing, the end is the last
+        // frame's time, so one estimated frame is added to keep the next segment's first frame clear of it.
+        private long NextOffset()
+        {
+            if (_input == null)
+            {
+                return _offset;
+            }
+
+            if (_segMaxEnd <= _offset)
+            {
+                return _offset + 1;
+            }
+
+            if (_sawDuration)
+            {
+                return _segMaxEnd;
+            }
+
+            long avgFrameDur = _segPackets > 1 ? (_segMaxEnd - _offset) / _segPackets : 1;
+            return _segMaxEnd + Math.Max(avgFrameDur, 1);
+        }
+
+        private void Close()
+        {
+            AVFormatContext* input = _input;
+            if (input != null)
+            {
+                ffmpeg.avformat_close_input(&input);
+            }
+
+            _input = null;
+            _stream = -1;
+        }
+
+        public void Dispose() => Close();
     }
 
     public static unsafe MuxStats RemuxVideo(string videoPath, string outputPath, string containerFormat)

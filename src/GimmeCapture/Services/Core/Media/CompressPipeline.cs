@@ -533,10 +533,10 @@ internal static class CompressPipeline
             Grayscale = s.Grayscale
         };
 
-        // The sound is built alongside the chunks, into the folder they are joined in: built after them, it kept the bar
-        // at 100% through the decode and the AAC encode, about 0.9 s a minute of sound. It waits while paused, as they do.
-        string finalizeDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(finalizeDir);
+        // The sound is built alongside the chunks, in a folder of its own: built after them, it kept the bar at 100%
+        // through the decode and the AAC encode, about 0.9 s a minute of sound. It waits while paused, as they do.
+        string soundDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(soundDir);
         var soundOptions = new LibavExportOptions
         {
             Codec = s.Codec,
@@ -546,7 +546,7 @@ internal static class CompressPipeline
         };
         using var soundCancel = CancellationTokenSource.CreateLinkedTokenSource(token);
         Task<string?> sound = LibavClipExporter.StartBuildingSound(
-            input, [new LibavClipExporter.SourceRange(spanStart, spanEnd)], finalizeDir, VideoQuality.Medium, soundOptions,
+            input, [new LibavClipExporter.SourceRange(spanStart, spanEnd)], soundDir, VideoQuality.Medium, soundOptions,
             pauseGate, soundCancel.Token);
         try
         {
@@ -580,7 +580,8 @@ internal static class CompressPipeline
                 resumeProgress?.Report((double)completed.Count / chunkCount); // advance the safe checkpoint
             }
 
-            // Finalize: concat the video chunks (lossless), then mux them with the sound into the output.
+            // Finalize: the video chunks (lossless) and the sound joined straight into the output, in one pass. They
+            // were first joined into a merged.mkv of their own, the whole video written once more and read back.
             token.ThrowIfCancellationRequested();
             var chunkPaths = Enumerable.Range(0, chunkCount)
                 .Select(i => CompressSegmentStore.ChunkPath(input, i)).ToList();
@@ -589,20 +590,9 @@ internal static class CompressPipeline
                 return false;
             }
 
-            string mergedVideo = Path.Combine(finalizeDir, "merged.mkv");
-            bool merged = await Task.Run(() =>
-            {
-                LibavMuxer.ConcatVideoSegments(chunkPaths, mergedVideo, "matroska");
-                return File.Exists(mergedVideo) && new FileInfo(mergedVideo).Length > 0;
-            }, token);
-            if (!merged)
-            {
-                return false;
-            }
-
             string? soundPath = await sound;
             bool finalized = await Task.Run(
-                () => LibavClipExporter.TryMuxWithSound(mergedVideo, soundPath, outputPath), token);
+                () => LibavClipExporter.TryJoinWithSound(chunkPaths, soundPath, outputPath), token);
             if (!finalized)
             {
                 return false;
@@ -625,7 +615,7 @@ internal static class CompressPipeline
                 // stopped with the compress
             }
 
-            try { Directory.Delete(finalizeDir, true); }
+            try { Directory.Delete(soundDir, true); }
             catch (Exception ex) { AppLog.Error("Compress.Cleanup", ex); }
         }
     }

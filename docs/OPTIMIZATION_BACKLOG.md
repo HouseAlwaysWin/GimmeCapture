@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 2 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 4 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) has run builds of `main` since 2026-11-01, 1ea47893 last,
   copied in over the two files that change; the updater will offer it v0.71.0.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -460,6 +460,24 @@ tool.
   with a tone, CRF 23 medium, 0.41-0.42 s, its sound taking 1.86-2.79 s on its own, which the old finalize added; ten
   minutes at 64x48, whose chunks take 2 s, still 9.6-11.8 s, as its sound alone takes that long. Still open in that
   item: the chunks reopen and probe the input each, and `merged.mkv` is written whole before the final mux.
+- Done since batch 1: **the segmented compress joined its chunks two frames apart, and wrote the video four times**
+  (Compress's segmented-path item, found while timing it). Every chunk came out of `LibavClipExporter.TryExport` with
+  B-frames (`max_b_frames = 3`), so its first packet decodes two frames before it shows (pts 0, dts -1056 in 1/16000),
+  and `LibavMuxer.ConcatVideoSegments` re-bases each segment on that decode time: every chunk after the first started
+  two frames after the one before it ended. The merged.mkv in between, which keeps no decode times, lost the first
+  chunk's shift when it was muxed again, but not the gaps: a two-minute compress came out with its picture 120.186 s
+  long against 120.021 s of sound, 55-66 ms more at every 30 s, 3-4 s over half an hour at 30 fps, since v0.67.0
+  (`65539b5d`). `ConcatVideoSegmentsWithAudio` joins the chunks with the sound straight into the output in one pass,
+  re-basing each on its stream's `start_time` and keeping the negative decode times before the first frame, as the
+  muxers take them (MP4 keeps them; Matroska writes only when frames show): in both, picture and sound start at 0, as
+  the old way's did. A soundless MP4 export is encoded straight into its file, deleted if the export does not finish,
+  instead of into the export's folder and copied: every chunk was. Tests: `LibavMuxerJoinTests` (the old and new joins
+  alike for segments without B-frames; exported chunks laid end to end, which the old join runs long of; no sound; a
+  segment without video skipped), `CompressPipelineSegmentedTests.ALongerCompress_KeepsThePictureAsLongAsItsSound`, and
+  `ExportTempFileTests` watching the temporary folder for `video.mp4` and `merged.mkv`; the three that watch or measure
+  fail against the old code. JOIN_PROBE=1, four 30 s chunks at 1280x720 (97.3 MB) and two minutes of AAC, ABBA: two
+  passes 0.20-0.21 s writing 196.5 MB, one pass 0.10 s writing 99.2 MB. The recording's own segment join stays as it
+  was: the recorder encodes no B-frames (`max_b_frames = 0`).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -676,10 +694,11 @@ These were covered by unit tests only; check them in the real app before a relea
   WebM. The pin should keep playing smoothly while it exports, both files should have the sound, and the temp folder
   should keep no new `GimmeCapture_Export_*` folder after the save (the copy keeps one, holding just its WebM).
 - **A long compress with sound**: compress a recording of several minutes with sound at the tab's defaults. The file
-  should be done within a second or so of the bar reaching 100%, and play with its sound in step. Pause it midway: Task
-  Manager should show the app's processor use drop to about nothing until Resume. Cancel another midway: no
-  `GimmeCapture_Compress_*` folder should stay in the temp folder. Then the same with a trimmed recording, which takes
-  the single-export path, and an audio-only M4A export of a long recording.
+  should be done within a second or so of the bar reaching 100%, and play with its sound in step to the end: in its last
+  minute, the sound of a click or a key should land on its frame, as in the recording (it fell 55-66 ms further behind
+  every 30 s before). Pause it midway: Task Manager should show the app's processor use drop to about nothing until
+  Resume. Cancel another midway: no `GimmeCapture_Compress_*` folder should stay in the temp folder. Then the same with
+  a trimmed recording, which takes the single-export path, and an audio-only M4A export of a long recording.
 - **Stepping in the Compress editor**: open a recording of a minute or so in the editor, step forward and back, skip 5 s
   both ways, drop the slider, rotate and turn crop on and off. Each should answer at once, a step back a little slower,
   and show the right frame. Open the quality comparison, step there too and close it: the log should have no
@@ -756,10 +775,9 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **A target size at or above the source's size still encodes** (S). `CompressBatchRunner.cs:116-124`: stream-copy
   with `LibavMuxer.RemuxAllStreams` when unedited, otherwise cap at the source bitrate. Audio-only M4A from an AAC
   source can stream-copy too.
-- **Segmented CRF path writes the video three times** (M). `CompressPipeline.EncodeOneFileSegmentedAsync`: each 30 s chunk
-  reopens and probes the input and copies its output (`LibavClipExporter.TryExport` encodes into its own temp folder);
-  finalize concatenates into `merged.mkv`, then remuxes that with the sound. Write chunks in place, concatenate straight
-  into the final mux. The sound is built alongside now (Status).
+- **Each segmented chunk reopens and probes the input** (S, measure first). `CompressPipeline.EncodeOneFileSegmentedAsync`
+  runs `LibavClipExporter.TryExport` for every 30 s chunk, which opens the input, finds its streams, seeks and decodes
+  from the keyframe before the chunk again. The writes, the join and the sound are done (Status).
 - **Rotation round-trips every frame through BGRA** (S-M). `LibavClipExporter.cs` (~338, 913-956): sws to BGRA, Skia
   rotate, sws back. Use transpose/hflip,vflip in the YUV graph or display-matrix rotation; render static annotations
   once.

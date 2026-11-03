@@ -274,7 +274,11 @@ internal static class LibavClipExporter
 
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_ClipExport_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
-        string videoTemp = Path.Combine(tempDir, "video.mp4");
+        // With no sound to add, an MP4 is encoded straight into its file, which is deleted if the export does not finish:
+        // encoded into the folder and copied there, it was written twice, as every chunk of a segmented compress was.
+        bool inPlace = opt.DropAudio && container == "mp4";
+        string videoTemp = inPlace ? outputPath : Path.Combine(tempDir, "video.mp4");
+        bool exported = false;
 
         // The sound is built while the video encodes: built after it, it kept the bar at 100% through the decode and
         // the AAC encode, about 0.9 s a minute of sound.
@@ -308,6 +312,10 @@ internal static class LibavClipExporter
             {
                 LibavMuxer.MuxVideoAndAudio(videoTemp, audioTemp, outputPath, container);
             }
+            else if (inPlace)
+            {
+                // already there
+            }
             else if (container == "mp4")
             {
                 File.Copy(videoTemp, outputPath, true);
@@ -317,11 +325,24 @@ internal static class LibavClipExporter
                 LibavMuxer.RemuxVideo(videoTemp, outputPath, container);
             }
 
-            return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+            exported = File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+            return exported;
         }
         finally
         {
             StopBuildingSound(soundCancel, sound);
+            if (inPlace && !exported)
+            {
+                try
+                {
+                    File.Delete(outputPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    AppLog.Debug("ClipExport.PartialOutput", ex);
+                }
+            }
+
             try { Directory.Delete(tempDir, true); } catch { /* best effort */ }
         }
     }
@@ -358,28 +379,19 @@ internal static class LibavClipExporter
     }
 
     /// <summary>
-    /// Writes <paramref name="videoPath"/> into <paramref name="outputPath"/>'s container with the sound <paramref
-    /// name="soundPath"/> built, or alone when there is none. No video re-encode: the segmented compress encodes and
-    /// joins its chunks itself, building the sound alongside them. Returns true when a non-empty output is produced.
+    /// Joins the video files <paramref name="segmentPaths"/>, encoded alike, into <paramref name="outputPath"/>'s container
+    /// with the sound <paramref name="soundPath"/> built, or alone when there is none, in one pass and with no video
+    /// re-encode (<see cref="LibavMuxer.ConcatVideoSegmentsWithAudio"/>): the segmented compress encodes its chunks
+    /// itself, building the sound alongside them. Returns true when a non-empty output is produced.
     /// </summary>
-    internal static bool TryMuxWithSound(string videoPath, string? soundPath, string outputPath)
+    internal static bool TryJoinWithSound(IReadOnlyList<string> segmentPaths, string? soundPath, string outputPath)
     {
         FFmpegRuntime.EnsureInitialized();
 
         string ext = Path.GetExtension(outputPath);
         string container = ContainerForExtension(ext)
             ?? throw new NotSupportedException($"In-process clip export does not support '{ext}' yet.");
-        if (soundPath != null)
-        {
-            LibavMuxer.MuxVideoAndAudio(videoPath, soundPath, outputPath, container);
-        }
-        else
-        {
-            // Remuxed into an MP4 too: the video is the compress chunks joined in Matroska, which was copied as it
-            // was, so an .mp4 with no sound came out a Matroska file.
-            LibavMuxer.RemuxVideo(videoPath, outputPath, container);
-        }
-
+        LibavMuxer.ConcatVideoSegmentsWithAudio(segmentPaths, soundPath, outputPath, container);
         return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
     }
 

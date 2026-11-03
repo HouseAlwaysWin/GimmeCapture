@@ -175,17 +175,13 @@ public class CompressIntegrationTests
             source, new[] { new LibavClipExporter.SourceRange(mid, duration) }, chunk1, VideoQuality.Medium, options: chunkOpt)),
             "chunk 1 failed");
 
-        string merged = Path.Combine(segDir, "merged.mkv");
-        await Task.Run(() => LibavMuxer.ConcatVideoSegments(new[] { chunk0, chunk1 }, merged, "matroska"));
-        Assert.True(File.Exists(merged) && new FileInfo(merged).Length > 0, "concat produced no merged video");
-
         string outPath = Path.Combine(outDir, "segment_resume.mp4");
         bool ok = await Task.Run(() =>
         {
             LibavClipExporter.TryBuildAudio(
                 source, new[] { new LibavClipExporter.SourceRange(0, duration) }, segDir, VideoQuality.Medium,
                 new LibavExportOptions(), pauseGate: null, default, out string? sound);
-            return LibavClipExporter.TryMuxWithSound(merged, sound, outPath);
+            return LibavClipExporter.TryJoinWithSound(new[] { chunk0, chunk1 }, sound, outPath);
         });
         Assert.True(ok && File.Exists(outPath) && new FileInfo(outPath).Length > 0, "segment finalize produced no output");
 

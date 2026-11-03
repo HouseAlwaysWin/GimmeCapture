@@ -77,6 +77,25 @@ public sealed class CompressPipelineSegmentedTests : IDisposable
         Assert.Equal(2.0, timeline.DurationSeconds, 2);
     }
 
+    // A compress of two minutes is four chunks with B-frames, joined at three places. The old join started each chunk
+    // two frames after the one before it ended, so the picture ran 0.2 s long of the sound by the end, and further for
+    // every 30 s more.
+    [Fact]
+    public async Task ALongerCompress_KeepsThePictureAsLongAsItsSound()
+    {
+        string clip = VideoTestClips.WriteWithTone(Path.Combine(_dir, "clip.mkv"), 64, 48, 3600, 30);
+        string output = Path.Combine(_dir, "out.mp4");
+
+        Assert.True(await CompressPipeline.EncodeOneFileAsync(
+            clip, output, Settings() with { Preset = "medium" }, 0, 120, new Progress<double>(), CancellationToken.None,
+            pauseGate: null));
+
+        double picture = VideoTestClips.Read(output).DurationSeconds;
+        double sound = LibavPinAudioPcmDecoder.Decode(output, 0).PcmBytes.Length / (48_000.0 * 4);
+        Assert.Equal(sound, picture, 0.05);
+        Assert.Equal(120, picture, 0.05);
+    }
+
     /// <summary>
     /// How long a compress goes on once its chunks are done and the bar shows 100%: the chunks joined, the sound built
     /// (alongside the chunks now, after them before), the two muxed; then how long the sound takes to build on its own,
