@@ -137,4 +137,24 @@
     </ItemGroup>
   </Target>
 
+  <!-- The names and the hand-off the sign-in launcher shares with the app. -->
+  <ItemGroup>
+    <Compile Include="..\GimmeCapture.Launcher\ReadAhead.cs" Link="Services\Core\Infrastructure\ReadAhead.cs" />
+  </ItemGroup>
+
+  <!-- The sign-in launcher (src/GimmeCapture.Launcher), built here and shipped beside the exe in the Windows publish,
+       so the zip, the installer and the updater all carry it. Restored with the solution, or on its own before a publish
+       of this project alone (release.yml). Only the exe: it runs without its .config. -->
+  <Target Name="PublishStartupLauncher" AfterTargets="ComputeResolvedFilesToPublishList" Condition="$(TargetFramework.Contains('-windows'))">
+    <MSBuild Projects="..\GimmeCapture.Launcher\GimmeCapture.Launcher.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained;PublishProfile;PublishDir;_IsPublishing">
+      <Output TaskParameter="TargetOutputs" ItemName="_StartupLauncherExe" />
+    </MSBuild>
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(_StartupLauncherExe)" RelativePath="%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
 </Project>

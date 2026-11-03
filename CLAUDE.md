@@ -79,6 +79,8 @@ src/GimmeCapture/
   Styles/                      # GimmeTheme.axaml (red/black BABYMETAL aesthetic)
   Assets/                      # fonts, icons, Localization/ JSON
   ffmpeg-lib/                  # native FFmpeg DLLs (populated by script, gitignored)
+src/GimmeCapture.Launcher/     # sign-in launcher (net48 WinExe): the Run key starts it; it reads ahead what .NET
+                               # loads before Main, then starts the app. The Windows publish ships it beside the exe
 tests/
   GimmeCapture.Tests/          # xUnit unit tests
   GimmeCapture.Benchmarks/     # BenchmarkDotNet
@@ -230,7 +232,8 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
 - Every settings tab except General is built the first time it is shown (`EnsureLazyTabContent` in
   `MainWindow.Tabs.cs`), and set-up only one tab needs belongs there too (`EnsureCompressInitializedAsync`).
   `Startup.Timings` in the log breaks a launch down by stage, each as `wall/cpu` ms; on Windows it adds what a slow
-  start waited on (`systemCpu`, `hardFaults`, `disk`) and what `StartupPrefetch` read ahead of it (`prefetch`).
+  start waited on (`systemCpu`, `hardFaults`, `disk`) and what `StartupPrefetch` read ahead of it (`prefetch`); a
+  start through the sign-in launcher adds its share (`launcher`), which comes before `beforeMain`.
 
 ### Accessibility
 - A screen reader names a button after its content, which for an icon is the icon's type name.

@@ -172,6 +172,8 @@ jobs:
     - name: Publish application (self-contained)
       run: |
         dotnet restore src/GimmeCapture/GimmeCapture.csproj --locked-mode --disable-parallel
+        # The sign-in launcher the publish builds and ships beside the exe (PublishStartupLauncher).
+        dotnet restore src/GimmeCapture.Launcher/GimmeCapture.Launcher.csproj --locked-mode --disable-parallel
 
         $version = "${{ github.ref_name }}".TrimStart('v')
         $coreVersion = $version.Split('-')[0]

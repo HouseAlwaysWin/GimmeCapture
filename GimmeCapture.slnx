@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/GimmeCapture/GimmeCapture.csproj" />
+    <Project Path="src/GimmeCapture.Launcher/GimmeCapture.Launcher.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj" />

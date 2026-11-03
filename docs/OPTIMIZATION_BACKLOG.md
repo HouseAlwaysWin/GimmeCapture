@@ -1003,8 +1003,15 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   time. `StartupPrefetch` now reads the files the last start mapped (`versions\<v>\startup-files.txt`, those loaded
   before Main first) on a thread of its own from the top of Main, and the line ends `prefetch=<ms>/<MB>`.
   `StartupPrefetchProbeTests` (opt-in) shows the effect on that disk: faults on cold copies served from the cache
-  after one sequential read. It cannot help `beforeMain`, which runs before any of the app's code; moving the install
-  to the SSD would. Next: the next sign-in's line. `hardFaults` stays high, as a fault on a file read through still
+  after one sequential read. The first sign-in with it (2026-11-03 20:00, v0.71.0): `log=5305 platform=2627
+  reactiveUI=1106 xaml=706 viewModel=958`, Main to the hotkeys 10.8 s instead of 28.3 at 1.2 s of CPU, with
+  `prefetch=running` (141 MB not read in 10.7 s, so contended is that disk at sign-in). But `beforeMain` took 27.1 s
+  (18.2 the time before): 71% of the 37.9 s, before any of the app's code. So the Run key now starts
+  `GimmeCapture.Launcher.exe` (`src/GimmeCapture.Launcher`, .NET Framework 4.8, which Windows keeps on C:): it reads
+  `ReadAhead.BeforeMain`, the host's and runtime's files (63 MB), through once each, then starts the exe with its
+  arguments; "Run on startup" claims this install's own old entry (same folder, same install) on the next run, and the
+  line ends `launcher=<ms>/<MB>`. Next: that sign-in's `launcher` + `beforeMain` + `hotkeysAt`. Moving the install to
+  the SSD would do the rest; the user declined. `hardFaults` stays high, as a fault on a file read through still
   counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
   was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files
   parsed through `x:Static`.

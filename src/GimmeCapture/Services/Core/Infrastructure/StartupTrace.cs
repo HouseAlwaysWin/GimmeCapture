@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Threading.Tasks;
+using GimmeCapture.Launcher;
 using GimmeCapture.Services.Interop;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
@@ -24,6 +25,8 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// <c>priority</c> or <c>io</c>, only when the process runs at a lowered priority. <c>prefetch</c> is what
 /// <see cref="StartupPrefetch"/> read ahead and how long it took. A fault on a file it has read still counts as a hard
 /// fault, though the cache serves it in microseconds, so with it the stage times tell more than <c>hardFaults</c>.
+/// <c>launcher</c>, for a start through the sign-in launcher (src/GimmeCapture.Launcher), is the time from its start to
+/// this process's and what it read ahead: a start then took <c>launcher</c> + <c>beforeMain</c> + <c>hotkeysAt</c>.
 /// </summary>
 internal static class StartupTrace
 {
@@ -41,6 +44,7 @@ internal static class StartupTrace
     private static long _hotkeysInitializedTimestamp;
     private static bool _expectFirstFrame = true;
     private static string _launch = "window";
+    private static string _launcher = "";
     private static bool _written;
 
     /// <summary>The end of a stage, and the process's CPU time by then.</summary>
@@ -67,12 +71,34 @@ internal static class StartupTrace
         {
             using var process = Process.GetCurrentProcess();
             _beforeMainMs = (DateTime.Now - process.StartTime).TotalMilliseconds;
+            ReadLauncherHandOff(process.StartTime.ToUniversalTime());
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
         {
             _beforeMainMs = null;
         }
     }
+
+    // The sign-in launcher's hand-off, read once and then cleared, so that neither the elevated copy nor the updater's
+    // script inherits it.
+    private static void ReadLauncherHandOff(DateTime processStartedUtc)
+    {
+        string? handOff = Environment.GetEnvironmentVariable(ReadAhead.HandOffVariable);
+        if (handOff == null)
+        {
+            return;
+        }
+
+        Environment.SetEnvironmentVariable(ReadAhead.HandOffVariable, null);
+        if (ReadAhead.TryParseHandOff(handOff, out DateTime launcherStartedUtc, out long bytesRead))
+        {
+            _launcher = FormatLauncher(processStartedUtc - launcherStartedUtc, bytesRead);
+        }
+    }
+
+    /// <summary>The sign-in launcher's part: from its start to the app's, and what it read meanwhile.</summary>
+    internal static string FormatLauncher(TimeSpan took, long bytesRead) =>
+        string.Create(CultureInfo.InvariantCulture, $" launcher={took.TotalMilliseconds:F0}ms/{bytesRead / (1024.0 * 1024.0):F0}MB");
 
     /// <summary>A launch to the tray has no main window, so the line is written once the settings are applied.</summary>
     internal static void LaunchedToTray()
@@ -121,7 +147,7 @@ internal static class StartupTrace
                 AppLog.Information("Startup.Timings", Format(complete) + FormatWaits(
                     StartupWaitCounters.ReadPageFaults(),
                     StartupWaitCounters.DriveKind(AppContext.BaseDirectory),
-                    StartupWaitCounters.LoweredPriority()) + StartupPrefetch.Describe());
+                    StartupWaitCounters.LoweredPriority()) + StartupPrefetch.Describe() + _launcher);
                 StartupPrefetch.Record();
             });
         }

@@ -52,6 +52,12 @@ public sealed class StartupTraceTests
     }
 
     [Fact]
+    public void FormatLauncher_SaysHowLongTheLauncherTookAndWhatItRead()
+    {
+        Assert.Equal(" launcher=4210ms/63MB", StartupTrace.FormatLauncher(TimeSpan.FromMilliseconds(4210), 63L << 20));
+    }
+
+    [Fact]
     public void FormatWaits_SaysWhatWasRead_AndAPriorityOnlyWhenLowered()
     {
         Assert.Equal(

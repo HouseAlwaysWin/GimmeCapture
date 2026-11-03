@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The sign-in launcher (see Program.cs). .NET Framework 4.8 on purpose: Windows 10 2004 and later carry it on their
+       own drive, so the launcher starts without the app's .NET reading anything from the app's folder. The app's
+       Windows publish builds it and ships the exe beside GimmeCapture.exe (PublishStartupLauncher). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>GimmeCapture.Launcher</AssemblyName>
+    <RootNamespace>GimmeCapture.Launcher</RootNamespace>
+    <!-- What Task Manager's Startup apps shows for the Run entry. -->
+    <AssemblyTitle>GimmeCapture</AssemblyTitle>
+    <Product>GimmeCapture</Product>
+    <ApplicationIcon>..\GimmeCapture\Assets\app.ico</ApplicationIcon>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

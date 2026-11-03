@@ -58,12 +58,23 @@ public class StartupService
                 return;
             }
 
-            RegisterRunValue($"\"{exePath}\" {RunArgumentForTrayStartup}");
+            RegisterRunValue($"\"{RunTarget(exePath)}\" {RunArgumentForTrayStartup}");
         }
         catch (Exception ex)
         {
             AppLog.Warning("StartupRegistration.Set", ex);
         }
+    }
+
+    /// <summary>
+    /// What the Run value starts: the sign-in launcher when it sits beside the exe, as in a published build, which reads
+    /// ahead what .NET's start reads and then starts the exe (src/GimmeCapture.Launcher); the exe itself otherwise.
+    /// </summary>
+    internal static string RunTarget(string exePath)
+    {
+        string? folder = System.IO.Path.GetDirectoryName(exePath);
+        string launcher = System.IO.Path.Combine(folder ?? "", GimmeCapture.Launcher.ReadAhead.LauncherFileName);
+        return folder != null && System.IO.File.Exists(launcher) ? launcher : exePath;
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -120,10 +131,10 @@ public class StartupService
     }
 
     /// <summary>
-    /// Whether a registration is this copy's to delete: it points at this executable, or at one that no longer
-    /// exists (a leftover from an install that has been moved or removed). The mirror of
-    /// <see cref="ShouldClaimRegistration"/>, so switching run-on-startup off cannot take out a different
-    /// install's auto-start.
+    /// Whether a registration is this copy's to delete: it points into this copy's folder, at its exe or its sign-in
+    /// launcher, or at an executable that no longer exists (a leftover from an install that has been moved or
+    /// removed). The mirror of <see cref="ShouldClaimRegistration"/>, so switching run-on-startup off cannot take out a
+    /// different install's auto-start.
     /// </summary>
     internal static bool OwnsRegistration(string? existingValue, string exePath)
     {
@@ -133,8 +144,28 @@ public class StartupService
             return true;
         }
 
-        return string.Equals(existingExe, exePath, StringComparison.OrdinalIgnoreCase)
-            || !System.IO.File.Exists(existingExe);
+        return InSameFolder(existingExe, exePath) || !System.IO.File.Exists(existingExe);
+    }
+
+    // One folder is one install: the folder names its instance (AppStoragePaths.GetInstallInstanceKey).
+    private static bool InSameFolder(string path, string? other)
+    {
+        if (string.IsNullOrEmpty(other))
+        {
+            return false;
+        }
+
+        try
+        {
+            return string.Equals(
+                System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)),
+                System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(other)),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or System.IO.PathTooLongException)
+        {
+            return false;
+        }
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -194,10 +225,11 @@ public class StartupService
     /// Whether this copy should take over the startup registration.
     ///
     /// Yes when there is nothing usable there: no entry at all, or one pointing at an executable that no longer
-    /// exists (the reinstall/update case the re-assert exists for). NO when a valid entry points at a DIFFERENT
-    /// install that is still on disk — otherwise whichever copy ran last wins, and a developer's bin\Debug build
-    /// silently becomes the thing Windows launches at login, until the next clean build deletes that path and
-    /// auto-start breaks with no visible cause.
+    /// exists (the reinstall/update case the re-assert exists for). Yes too for this install's own entry in another
+    /// shape, its exe from before the sign-in launcher shipped beside it: same folder, same install. NO when a valid
+    /// entry points at a DIFFERENT install that is still on disk — otherwise whichever copy ran last wins, and a
+    /// developer's bin\Debug build silently becomes the thing Windows launches at login, until the next clean build
+    /// deletes that path and auto-start breaks with no visible cause.
     ///
     /// Pure so the precedence rules are unit-testable without touching the registry.
     /// </summary>
@@ -207,7 +239,9 @@ public class StartupService
         if (string.Equals(existingValue, expectedValue, StringComparison.OrdinalIgnoreCase)) return false;
 
         var existingExe = ExtractExecutablePath(existingValue);
-        return string.IsNullOrEmpty(existingExe) || !System.IO.File.Exists(existingExe);
+        return string.IsNullOrEmpty(existingExe)
+            || !System.IO.File.Exists(existingExe)
+            || InSameFolder(existingExe, ExtractExecutablePath(expectedValue));
     }
 
     /// <summary>

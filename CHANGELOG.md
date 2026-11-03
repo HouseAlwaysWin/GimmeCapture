@@ -70,6 +70,12 @@
   moment after its bar fills: 0.4 s for a two-minute 960x540 clip, whose sound took 1.9 to 2.8 s to build. Pause and
   Cancel reach the sound too, and its working file goes as soon as it is encoded instead of staying until the end,
   330 MB for half an hour.
+- **Starting with Windows from a hard disk spends less time before the app even runs.** At sign-in, .NET took 18 to
+  37 s to load its own files from the hard disk the app was installed on, before any of the app's code ran, a few
+  kilobytes at a time while other programs read the same disk. Windows now starts a small launcher instead, which
+  runs on the .NET Framework that Windows keeps on its own drive: it reads those files through in one pass each and
+  then starts the app, which finds them in memory. "Run on startup" switches to it the next time the app runs, and
+  the log's `Startup.Timings` line says what it read and how long it took (`launcher=`).
 
 ### 💾 Storage
 

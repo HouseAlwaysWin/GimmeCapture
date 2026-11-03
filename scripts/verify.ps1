@@ -131,8 +131,9 @@ if (-not $SkipPublish) {
     )
     Invoke-DotNet @publishArgs
 
-    # The Windows release is a folder: the exe is only the launcher, and the app and FFmpeg sit beside it.
-    foreach ($expected in @("GimmeCapture.exe", "GimmeCapture.dll", "ffmpeg-lib")) {
+    # The Windows release is a folder: the exe is only .NET's host, and the app and FFmpeg sit beside it, with the
+    # launcher the Run key starts at sign-in (src/GimmeCapture.Launcher).
+    foreach ($expected in @("GimmeCapture.exe", "GimmeCapture.dll", "ffmpeg-lib", "GimmeCapture.Launcher.exe")) {
         if (-not (Test-Path -LiteralPath (Join-Path $publish $expected))) {
             throw "Publish smoke test did not produce $expected."
         }

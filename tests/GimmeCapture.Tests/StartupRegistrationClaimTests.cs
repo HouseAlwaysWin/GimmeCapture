@@ -86,11 +86,55 @@ public sealed class StartupRegistrationClaimTests : IDisposable
     public void TurningTheSettingOffSparesAnotherInstallsEntry()
     {
         // The mirror of the claim rule: deleting a DIFFERENT install's value would break that copy's auto-start,
-        // which is never this copy's business — so "off" here only ever removes our own entry.
-        string otherExe = Path.Combine(_dir, "OtherInstall.exe");
+        // which is never this copy's business — so "off" here only ever removes our own entry. Another install is
+        // another folder: the folder is what names an install.
+        string otherExe = Path.Combine(_dir, "Other", "GimmeCapture.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(otherExe)!);
         File.WriteAllText(otherExe, "exe");
 
         Assert.False(StartupService.OwnsRegistration(Value(otherExe), _realExe));
+    }
+
+    [Fact]
+    public void TheLauncherBesideTheExeIsWhatGetsRegistered()
+    {
+        Assert.Equal(_realExe, StartupService.RunTarget(_realExe));
+
+        string launcher = Path.Combine(_dir, "GimmeCapture.Launcher.exe");
+        File.WriteAllText(launcher, "exe");
+
+        Assert.Equal(launcher, StartupService.RunTarget(_realExe));
+    }
+
+    [Fact]
+    public void ThisInstallsOwnEntryFromBeforeTheLauncher_IsBroughtUpToDate()
+    {
+        // Registered as the exe until the launcher shipped beside it: same folder, same install, so it is claimed,
+        // and sign-in starts through the launcher from then on.
+        string launcher = Path.Combine(_dir, "GimmeCapture.Launcher.exe");
+        File.WriteAllText(launcher, "exe");
+
+        Assert.True(StartupService.ShouldClaimRegistration(Value(_realExe), Value(launcher)));
+    }
+
+    [Fact]
+    public void AnotherInstallsLauncherIsLeftAlone()
+    {
+        string otherLauncher = Path.Combine(_dir, "Other", "GimmeCapture.Launcher.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(otherLauncher)!);
+        File.WriteAllText(otherLauncher, "exe");
+
+        Assert.False(StartupService.ShouldClaimRegistration(Value(otherLauncher), Value(_realExe)));
+        Assert.False(StartupService.OwnsRegistration(Value(otherLauncher), _realExe));
+    }
+
+    [Fact]
+    public void TurningTheSettingOffTakesThisInstallsLauncherEntry()
+    {
+        string launcher = Path.Combine(_dir, "GimmeCapture.Launcher.exe");
+        File.WriteAllText(launcher, "exe");
+
+        Assert.True(StartupService.OwnsRegistration(Value(launcher), _realExe));
     }
 
     [Fact]
