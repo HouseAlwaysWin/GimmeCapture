@@ -207,8 +207,8 @@ public partial class SnipWindowViewModel
             {
                 // Translation results should not keep OCR search/debug overlays alive after completion.
                 ExitTranslationOcrSearch();
-                AIScanRects.Clear();
-                WindowRects.Clear();
+                AIScanRects = [];
+                WindowRects = [];
                 DismissWindowSnapHoverPreview(preserveTargetRect: false);
                 if (ShowOcrResult)
                 {

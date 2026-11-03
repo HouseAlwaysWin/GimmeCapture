@@ -120,68 +120,16 @@
                    Stretch="Fill"/>
 
             <!-- AI Scan Results Layer (Background Candidates) — 翻譯模式（含單選/多選）不顯示 -->
-            <ItemsControl ItemsSource="{Binding AIScanRects}" IsHitTestVisible="False"
-                          Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
-                          IsVisible="{Binding IsAiScanCandidateLayerVisible}">
-                <ItemsControl.Styles>
-                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
-                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
-                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
-                    </Style>
-                </ItemsControl.Styles>
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <Canvas />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <!-- Interactive Candidate Box -->
-                        <Border BorderBrush="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}" 
-                                BorderThickness="1"
-                                Background="Transparent"
-                                Opacity="0.4"
-                                Width="{Binding Width}"
-                                Height="{Binding Height}">
-                            <Border.Styles>
-                                <Style Selector="Border:pointerover">
-                                    <Setter Property="BorderBrush" Value="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"/>
-                                    <Setter Property="BorderThickness" Value="3"/>
-                                    <Setter Property="Background" Value="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"/>
-                                    <Setter Property="Opacity" Value="0.2"/>
-                                </Style>
-                            </Border.Styles>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <ctl:CandidateBoxesLayer Boxes="{Binding AIScanRects}" BoxColor="{Binding OcrHighlightColor}"
+                                     BoxThickness="1" BoxOpacity="0.4" IsHitTestVisible="False"
+                                     Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
+                                     IsVisible="{Binding IsAiScanCandidateLayerVisible}"/>
 
             <!-- Detection Preview Layer (Active Selection - Dashed) — 翻譯模式不顯示 -->
-            <ItemsControl ItemsSource="{Binding WindowRects}" IsHitTestVisible="False"
-                          Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
-                          IsVisible="{Binding IsWindowSnapCandidateLayerVisible}">
-                <ItemsControl.Styles>
-                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
-                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
-                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
-                    </Style>
-                </ItemsControl.Styles>
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <Canvas />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border BorderBrush="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"
-                                BorderThickness="1"
-                                Background="Transparent"
-                                Opacity="0.24"
-                                Width="{Binding Width}"
-                                Height="{Binding Height}"/>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <ctl:CandidateBoxesLayer Boxes="{Binding WindowRects}" BoxColor="{Binding OcrHighlightColor}"
+                                     BoxThickness="1" BoxOpacity="0.24" IsHitTestVisible="False"
+                                     Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
+                                     IsVisible="{Binding IsWindowSnapCandidateLayerVisible}"/>
 
             <Canvas IsHitTestVisible="False">
                 <Rectangle Stroke="{Binding OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"
@@ -425,39 +373,16 @@
                 </ctl:SnipToolbar>
             </Canvas>
 
-            <ItemsControl ItemsSource="{Binding TranslationOcrSearchRects}"
-                          ZIndex="450"
-                          Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
-                          x:CompileBindings="False"
-                          IsHitTestVisible="False">
-                <ItemsControl.IsVisible>
+            <ctl:CandidateBoxesLayer Boxes="{Binding TranslationOcrSearchRects}" BoxColor="{Binding OcrHighlightColor}"
+                                     BoxThickness="2" BoxOpacity="0.55" ZIndex="450" IsHitTestVisible="False"
+                                     Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}">
+                <ctl:CandidateBoxesLayer.IsVisible>
                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                         <Binding Path="IsTranslationOcrSearchActive"/>
                         <Binding Path="!IsCapturing"/>
                     </MultiBinding>
-                </ItemsControl.IsVisible>
-                <ItemsControl.Styles>
-                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
-                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
-                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
-                    </Style>
-                </ItemsControl.Styles>
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <Canvas />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="m:VisualRect">
-                        <Border BorderBrush="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"
-                                BorderThickness="2"
-                                Background="Transparent"
-                                Opacity="0.55"
-                                Width="{Binding Width}"
-                                Height="{Binding Height}"/>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                </ctl:CandidateBoxesLayer.IsVisible>
+            </ctl:CandidateBoxesLayer>
 
             <!-- Translation Selected Regions (UserSelections) -->
             <ItemsControl ItemsSource="{Binding UserSelections}" 

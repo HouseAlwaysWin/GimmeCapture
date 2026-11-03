@@ -291,6 +291,29 @@ public class SnipWindowViewModelTests
         }
     }
 
+    // The overlay draws a scan's boxes from one list (CandidateBoxesLayer): a hundred of them arrive as one change, where
+    // adding them one at a time to a collection had each bring a container and a Border of its own into the overlay.
+    [Fact]
+    public void AScansBoxes_ReachTheOverlayInOneChange()
+    {
+        var (vm, _) = OverlayScanningForText();
+        using (vm)
+        {
+            vm.Surface.UseHeadlessBackdropForTest();
+            vm.Surface.FreezeFromPreOverlayGrab(new SKBitmap(64, 48), grabScaling: 1.0);
+            var paragraphs = Enumerable.Range(0, 100).Select(i => new Rect(i, 2 * i, 30, 10)).ToArray();
+            int changes = 0;
+            vm.PropertyChanged += (_, e) => changes += e.PropertyName == nameof(vm.AIScanRects) ? 1 : 0;
+
+            vm.StoreOcrScanResult(
+                new(paragraphs, paragraphs.Select(r => new OcrCandidate(r, OcrCandidateKind.Paragraph, groupId: 0)).ToArray()),
+                FrozenStill(vm));
+
+            Assert.Equal(1, changes);
+            Assert.Equal(paragraphs, vm.AIScanRects);
+        }
+    }
+
     [Fact]
     public void ANewStill_OrTheLiveScreen_IsScannedAfresh()
     {
@@ -513,7 +536,7 @@ public class SnipWindowViewModelTests
         {
             vm.CurrentMode = SnipMode.Translation;
             await vm.EnterTranslationOcrSearchAsync();
-            vm.TranslationOcrSearchRects.Add(new VisualRect(new Rect(10, 20, 100, 30)));
+            vm.ShowTranslationOcrSearchRectsForTest([new Rect(10, 20, 100, 30)]);
 
             await vm.EnterTranslationOcrSearchAsync();
 

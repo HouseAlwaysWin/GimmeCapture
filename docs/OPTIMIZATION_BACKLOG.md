@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 8 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 9 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
@@ -546,6 +546,20 @@ tool.
   script; the source keeps the template's name, and the cache key's prompt version went to v9.
   `TranslationServiceSanitizationTests.BuildTranslateGemmaPrompt_NamesAChineseTargetByItsScript` fails against the old
   prompt; the benchmark passes, its median 866 ms.
+- Done since batch 1: **OCR candidate rectangles were built one item at a time** (the first half of the Snip overlay
+  item; the user keeps `ShowAIScanBox` on, the default). Each box of the scan's text, the windows to snap to and
+  Translate mode's search was an ItemsControl item: a content presenter, a Border, four bindings (the brush through
+  `ColorToBrushConverter`, a new brush each), an opacity layer, and for the text a pointer-over style that could not
+  match, the layer being out of hit testing; each box was added on its own. `CandidateBoxesLayer` draws a list of them
+  in one Render with one pen, where layout rounding put each Border (`LayoutHelper.RoundLayoutValue` for the corner,
+  `RoundLayoutSizeUp` for the size, `RoundLayoutThickness` for the stroke), and the view model replaces
+  `AIScanRects`, `WindowRects` and `TranslationOcrSearchRects` whole (`VisualRect` went). `CandidateBoxesLayerRenderTests`
+  (opt-in CANDIDATE_BOXES_PROBE=1, Avalonia's headless Skia renderer) render the old ItemsControl, rebuilt in code
+  as SnipWindow.axaml had it, and the new layer: on boxes at fractional positions, for all three layers' thickness and
+  opacity, at 100, 125, 150 and 200%, 0 levels apart, with 1134-8712 pixels stroked. Filling a 1920x1080 overlay with
+  100 text boxes and 20 windows: the UI thread's part 35-49 ms before, 0.2-0.3 ms after; to the frame that shows them
+  37-52 ms against 10-17, most of that now the headless frame itself. `CandidateBoxesLayerTests` pin the rounding,
+  `SnipWindowViewModelTests.AScansBoxes_ReachTheOverlayInOneChange` the one change.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -779,6 +793,9 @@ These were covered by unit tests only; check them in the real app before a relea
   and show the right frame. Open the quality comparison, step there too and close it: the log should have no
   `Compress.Compare` or `Compress.Edit` errors. Leave the editor alone for a minute, then step again: it should still
   work. Close the editor and rename the recording in Explorer: it should not be in use.
+- **The overlay's candidate boxes**: open the overlay over a window full of text, on each screen. The scan's boxes and
+  the windows' outlines should show as before, in the same colour, width and places, and a selection dragged while
+  they come in should not catch. In Translate mode, the text search's boxes too.
 - **Reading text**: Quick OCR and translate a light window and a dark one (a dark-themed editor, say). The text should
   come out as before, a little sooner. In Translate mode, the text search's boxes should land on the text as before,
   on each screen.
@@ -897,10 +914,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   before the pool picks it up (`AIScanSessionService` `Task.Run(..., ct)`); one cancelled while waiting for the
   inference lock behind another still runs. Since the Esc double start went and a frozen still is no longer re-scanned,
   overlapping scans need a live overlay and quick repeated presses. Check the token after taking the lock.
-- **OCR candidate rectangles are built one item at a time** (M). `Selection.AIScan.cs:633-647` adds 68-109 rects as
-  separate CollectionChanged events, each binding `$parent[Window].DataContext.OcrHighlightColor` through a converter
-  that allocates a brush, plus a pointer-over style that never matches (`SnipWindow.axaml:140-153`). One control that
-  draws all rects in Render with a shared pen; grab only the active monitor (`AIScanSessionService.cs:77-81`).
+- **The OCR scan grabs every monitor** (S). `AIScanSessionService.cs:77-81`: grab only the active monitor. The
+  boxes it finds are drawn by one control now (Status).
 - **Hover animation renders at 60 Hz while the overlay sits idle** (S). `Selection.AIScan.cs:26` (16 ms timer, no
   settled exit at :564-570), `HoverRectangleAnimationController.cs:63`; the dirty rect is often the whole screen. Stop
   once the move ends or tick at 30 Hz or less.

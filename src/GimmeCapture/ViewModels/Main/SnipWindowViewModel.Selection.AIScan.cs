@@ -67,9 +67,32 @@ public partial class SnipWindowViewModel
     public bool IsWindowSnapCandidateLayerVisible =>
         CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation;
 
-    public ObservableCollection<VisualRect> WindowRects { get; } = new();
-    public ObservableCollection<VisualRect> AIScanRects { get; } = new();
-    public ObservableCollection<VisualRect> TranslationOcrSearchRects { get; } = new();
+    // The candidate boxes the overlay outlines (CandidateBoxesLayer), each list replaced whole: one change for a scan's
+    // hundred boxes, where adding them one at a time to a collection had each bring its own container in.
+    private IReadOnlyList<Rect> _windowRects = [];
+    private IReadOnlyList<Rect> _aiScanRects = [];
+    private IReadOnlyList<Rect> _translationOcrSearchRects = [];
+
+    public IReadOnlyList<Rect> WindowRects
+    {
+        get => _windowRects;
+        private set => this.RaiseAndSetIfChanged(ref _windowRects, value);
+    }
+
+    public IReadOnlyList<Rect> AIScanRects
+    {
+        get => _aiScanRects;
+        private set => this.RaiseAndSetIfChanged(ref _aiScanRects, value);
+    }
+
+    public IReadOnlyList<Rect> TranslationOcrSearchRects
+    {
+        get => _translationOcrSearchRects;
+        private set => this.RaiseAndSetIfChanged(ref _translationOcrSearchRects, value);
+    }
+
+    // Test seam: Translate mode's search boxes as a search would have left them on screen.
+    internal void ShowTranslationOcrSearchRectsForTest(IReadOnlyList<Rect> rects) => TranslationOcrSearchRects = rects;
     private readonly IWindowDetectionService _detectionService;
 
     private Rect _animatedHoverRect;
@@ -114,7 +137,7 @@ public partial class SnipWindowViewModel
      /// </summary>
     private void ClearAiScanOverlayState()
     {
-        AIScanRects.Clear();
+        AIScanRects = [];
         _ocrRawRects = [];
         _ocrLineCandidates = [];
         _ocrParagraphCandidates = [];
@@ -125,7 +148,7 @@ public partial class SnipWindowViewModel
 
     private void ClearTranslationOcrSearchOverlay()
     {
-        TranslationOcrSearchRects.Clear();
+        TranslationOcrSearchRects = [];
         _currentHoverTranslationOcrCandidate = null;
         IsTranslationOcrSearchActive = false;
     }
@@ -137,22 +160,14 @@ public partial class SnipWindowViewModel
         _translationOcrLineCandidates = [];
         _translationOcrParagraphCandidates = [];
         _currentHoverTranslationOcrCandidate = null;
-        TranslationOcrSearchRects.Clear();
+        TranslationOcrSearchRects = [];
     }
 
     private void RefreshTranslationOcrSearchRects()
     {
-        TranslationOcrSearchRects.Clear();
-
-        if (!IsTranslationOcrSearchActive || CurrentMode != SnipMode.Translation)
-        {
-            return;
-        }
-
-        foreach (var candidate in _translationOcrLineCandidates)
-        {
-            TranslationOcrSearchRects.Add(new VisualRect(candidate.Bounds));
-        }
+        TranslationOcrSearchRects = !IsTranslationOcrSearchActive || CurrentMode != SnipMode.Translation
+            ? []
+            : _translationOcrLineCandidates.AsValueEnumerable().Select(candidate => candidate.Bounds).ToArray();
     }
 
     private bool IsTranslationOcrCacheCurrent()
@@ -471,11 +486,10 @@ public partial class SnipWindowViewModel
             .Select(candidate => ToLocalCandidate(candidate))
             .ToList();
 
-        WindowRects.Clear();
-        foreach (var rect in _windowCandidates.AsValueEnumerable().Where(candidate => candidate.Kind == WindowCandidateKind.TopLevel))
-        {
-            WindowRects.Add(new VisualRect(rect.Bounds));
-        }
+        WindowRects = _windowCandidates.AsValueEnumerable()
+            .Where(candidate => candidate.Kind == WindowCandidateKind.TopLevel)
+            .Select(candidate => candidate.Bounds)
+            .ToArray();
 
         DismissWindowSnapHoverPreview(preserveTargetRect: false);
     }
@@ -628,21 +642,11 @@ public partial class SnipWindowViewModel
 
     private void RefreshProjectedOcrRects()
     {
-        AIScanRects.Clear();
-
-        if (_settings?.ShowAIScanBox != true)
-        {
-            return;
-        }
-
-        IReadOnlyList<Rect> sourceRects = ShowOcrResult
-            ? _ocrRawRects
-            : _ocrParagraphCandidates.AsValueEnumerable().Select(candidate => candidate.Bounds).ToList();
-
-        foreach (var rect in sourceRects)
-        {
-            AIScanRects.Add(new VisualRect(rect));
-        }
+        AIScanRects = _settings?.ShowAIScanBox != true
+            ? []
+            : ShowOcrResult
+                ? _ocrRawRects.AsValueEnumerable().ToArray()
+                : _ocrParagraphCandidates.AsValueEnumerable().Select(candidate => candidate.Bounds).ToArray();
     }
 
     private sealed class HoverSelection

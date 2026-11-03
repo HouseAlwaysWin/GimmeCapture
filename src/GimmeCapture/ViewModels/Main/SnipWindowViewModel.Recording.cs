@@ -409,15 +409,8 @@ public partial class SnipWindowViewModel
     {
         AppLog.Information($"Recording.ClearVisuals v2 called: selBefore={SelectionRect} state={CurrentState} recState={RecState}");
 
-        if (WindowRects.Count > 0)
-        {
-            WindowRects.Clear();
-        }
-
-        if (AIScanRects.Count > 0)
-        {
-            AIScanRects.Clear();
-        }
+        WindowRects = [];
+        AIScanRects = [];
 
         // Empty the selection AND drop out of the Selected/Selecting state. The yellow selection border is a Grid
         // sized to SelectionRect and shown by StateToBoolConverter(CurrentState in {Selecting,Selected}); clearing

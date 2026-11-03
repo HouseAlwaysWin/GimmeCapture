@@ -25,6 +25,11 @@
 
 ### ⚡ Performance
 
+- **The capture overlay no longer stutters as its text scan comes in.** Each box the scan found was a control of its
+  own, with its own bindings, layer and style, and putting a scan's hundred boxes and the windows on screen held the
+  interface's thread for 35 to 49 ms, often just as a selection was being dragged. One control now draws them all, in
+  under a millisecond of that thread, and they look exactly as before. Translate mode's text search boxes are drawn the
+  same way.
 - **Translating with the local model takes about half as long.** Each translation made the model read its
   instructions again before the text, about a second of the 1.3 to 2.4 s a sentence took on the processor, and set up
   the model's working memory afresh. While the model stays loaded it now keeps both from one translation to the next,
