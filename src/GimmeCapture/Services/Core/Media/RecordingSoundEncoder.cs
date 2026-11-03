@@ -160,6 +160,9 @@ internal sealed class RecordingSoundEncoder : IDisposable
             {
                 Changed();
             }
+
+            // Below normal, it could wait seconds for the processor on a busy machine before it sees the cancel.
+            TrySetPriority(ThreadPriority.Normal);
         }
 
         // A waiting read sees the cancel at once, an encode before its next frame.
