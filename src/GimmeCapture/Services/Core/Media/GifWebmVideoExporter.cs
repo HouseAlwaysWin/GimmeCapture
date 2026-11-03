@@ -4,7 +4,6 @@ using System.Threading;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
-using NAudio.Wave;
 
 namespace GimmeCapture.Services.Core.Media;
 
@@ -98,28 +97,9 @@ internal static class GifWebmVideoExporter
     /// </summary>
     internal static bool WriteAudioAsWav(string sourcePath, string wavPath, CancellationToken ct)
     {
-        long written = 0;
-        WaveFileWriter? writer = null;
-        try
-        {
-            LibavPinAudioPcmDecoder.DecodeStreaming(
-                sourcePath,
-                0,
-                onFormat: format => writer = new WaveFileWriter(wavPath, format),
-                onPcm: (buffer, count) =>
-                {
-                    writer!.Write(buffer, 0, count);
-                    written += count;
-                },
-                waitIfFull: null,
-                ct);
-        }
-        finally
-        {
-            writer?.Dispose();
-        }
-
-        return written > 0;
+        using var wav = new DecodedWavFile(wavPath);
+        wav.AppendRange(sourcePath, 0, double.PositiveInfinity, ct);
+        return wav.BytesWritten > 0;
     }
 
     private static void DeleteQuietly(string path)

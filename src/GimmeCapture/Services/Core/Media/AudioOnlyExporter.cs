@@ -3,7 +3,6 @@ using System.IO;
 using System.Threading;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
-using NAudio.Wave;
 
 namespace GimmeCapture.Services.Core.Media;
 
@@ -26,33 +25,28 @@ internal static class AudioOnlyExporter
         string sourcePath, string outputPath, string tempDir, VideoQuality quality,
         int bitrateKbps, int channels, CancellationToken ct)
     {
-        LibavPinAudioPcmDecoder.DecodeResult pcm = LibavPinAudioPcmDecoder.Decode(sourcePath, 0, ct);
-        if (pcm.PcmBytes.Length == 0)
+        // A WAV is the decode itself; the compressed targets go via a temp WAV into the WAV→codec transcoders. Written as
+        // it decodes: the whole track was held in memory first, 345 MB for half an hour.
+        string ext = Path.GetExtension(outputPath).ToLowerInvariant();
+        string wav = ext == ".wav" ? outputPath : Path.Combine(tempDir, "extract.wav");
+        long pcmBytes;
+        using (var file = new DecodedWavFile(wav))
         {
+            file.AppendRange(sourcePath, 0, double.PositiveInfinity, ct);
+            pcmBytes = file.BytesWritten;
+        }
+
+        if (pcmBytes == 0)
+        {
+            File.Delete(wav); // a header with no sound, if the track decoded to nothing
             return false;
         }
 
         ct.ThrowIfCancellationRequested();
-
-        string ext = Path.GetExtension(outputPath).ToLowerInvariant();
         if (ext == ".wav")
         {
-            using (var writer = new WaveFileWriter(outputPath, pcm.WaveFormat))
-            {
-                writer.Write(pcm.PcmBytes, 0, pcm.PcmBytes.Length);
-            }
-
             return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
         }
-
-        // Compressed targets go via a temp WAV into the WAV→codec transcoders.
-        string wav = Path.Combine(tempDir, "extract.wav");
-        using (var writer = new WaveFileWriter(wav, pcm.WaveFormat))
-        {
-            writer.Write(pcm.PcmBytes, 0, pcm.PcmBytes.Length);
-        }
-
-        ct.ThrowIfCancellationRequested();
 
         switch (ext)
         {

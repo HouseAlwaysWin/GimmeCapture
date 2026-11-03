@@ -85,6 +85,23 @@ internal static class LibavPinAudioPcmDecoder
     }
 
     /// <summary>
+    /// <see cref="DecodeRange"/> without holding the range: decodes on the caller's thread and hands each converted chunk
+    /// to <paramref name="onPcm"/> (the buffer is reused — copy out synchronously), after <paramref name="onFormat"/> has
+    /// had the format. <see cref="DecodedWavFile"/> writes an export's audio this way.
+    /// </summary>
+    internal static void DecodeRangeStreaming(
+        string path,
+        double startSeconds,
+        double durationSeconds,
+        Action<WaveFormat> onFormat,
+        Action<byte[], int> onPcm,
+        CancellationToken cancellationToken)
+    {
+        using var sink = new StreamingPcmSink(onPcm);
+        DecodeCore(path, startSeconds, durationSeconds, onFormat, sink, waitIfFull: null, cancellationToken);
+    }
+
+    /// <summary>
     /// Streaming variant for preview playback: decodes on the caller's thread and pushes each converted
     /// S16-stereo chunk to <paramref name="onPcm"/> (the buffer is reused — copy out synchronously).
     /// <paramref name="onFormat"/> fires once with the output WaveFormat before any chunk; <paramref

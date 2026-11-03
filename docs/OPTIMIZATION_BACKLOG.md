@@ -16,6 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
+- Since v0.71.0, `## Unreleased` holds 1 entry (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) has run builds of `main` since 2026-11-01, 1ea47893 last,
   copied in over the two files that change; the updater will offer it v0.71.0.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -431,6 +432,21 @@ tool.
   `CompressPipelineSegmentedTests` reads the output's first bytes (an `ftyp` box, or the EBML magic) and the sound; the
   two silent-MP4 cases fail against the old exporter, and a silent clip keeps all 60 of its frames either way. The bug
   came with the resumable compress (`65539b5d`, in v0.67.0).
+- Done since batch 1: **an export held its whole sound, up to three copies at once** (found reading Compress's
+  segmented-path item). `LibavClipExporter.TryBuildAudio`, which every export with sound runs (a CRF compress's
+  finalize, trims, speed, crop, burn-in, two-pass, a pin's export, the GIF/WebM intermediate), decoded each range into
+  an array through a doubling buffer, wrote it into a `MemoryStream` and copied it out with `ToArray` before writing the
+  WAV; `AudioOnlyExporter` decoded the whole track the same way. Both now write through `DecodedWavFile`, which appends
+  PCM to the WAV as `LibavPinAudioPcmDecoder.DecodeRangeStreaming` hands it over (only a sped-up range, which the tempo
+  filter takes whole, is still decoded into memory), through a 1 MB file buffer: the decoder hands over 4 KB at a time,
+  and through the default 4 KB buffer each was a write of its own, which first made the streamed build 0.1-0.4 s slower
+  for half an hour. `LibavAudioEncoder` also built six error-context strings a frame, about 400 bytes, 1.1 MB a minute;
+  they are joined only on a failure now. `DecodedWavFileTests`: ranges come out as their in-memory decodes, retimed PCM
+  appends, two minutes of sound is written allocating under a tenth of its PCM, an export's two minutes too (135.6 MB
+  allocated before), and an audio-only WAV export is the track (11.5 MB allocated for 11.5 MB before); those two fail
+  against the old exporters. AUDIO_BUILD_PROBE=1 on 30 minutes of AAC (329.6 MiB of PCM), ABBA on the laptop: through
+  memory 1.35 and 1.14 s, allocating 2018 MB and then 994 (the array pool had kept about 1 GB of the first run's
+  buffers), against 1.15 and 1.07 s and 6.7 MB as it decodes.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

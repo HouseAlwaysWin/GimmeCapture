@@ -5,7 +5,6 @@ using System.Threading;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
-using NAudio.Wave;
 using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -1249,7 +1248,7 @@ internal static class LibavClipExporter
         return Math.Clamp((int)Math.Round(fps), 1, 120);
     }
 
-    // ── Audio: decode each range to PCM (truncated to range length), concat, encode AAC ──
+    // ── Audio: each range's PCM (cut to the range's length) into one WAV as it decodes, then AAC ──
     private static bool TryBuildAudio(
         string inputPath,
         IReadOnlyList<SourceRange> ranges,
@@ -1263,61 +1262,51 @@ internal static class LibavClipExporter
 
         try
         {
-            WaveFormat? format = null;
-            using var pcm = new MemoryStream();
-
-            foreach (SourceRange range in ranges)
-            {
-                ct.ThrowIfCancellationRequested();
-                // Just this range: the decode stops at its end rather than running on to the end of the file, which
-                // a trim with many kept ranges used to pay for once per range.
-                LibavPinAudioPcmDecoder.DecodeResult decoded =
-                    LibavPinAudioPcmDecoder.DecodeRange(inputPath, range.StartSeconds, range.Duration, ct);
-                if (decoded.PcmBytes.Length == 0)
-                {
-                    continue;
-                }
-
-                format ??= decoded.WaveFormat;
-                int bytesPerSecond = decoded.WaveFormat.SampleRate * decoded.WaveFormat.Channels * 2; // S16
-                long keep = (long)Math.Round(range.Duration * bytesPerSecond);
-                keep -= keep % (decoded.WaveFormat.Channels * 2); // align to a full sample frame
-                keep = Math.Clamp(keep, 0, decoded.PcmBytes.Length);
-
-                if (Math.Abs(range.EffectiveSpeed - 1.0) > 0.001)
-                {
-                    // Pitch-preserving retime so the audio matches this segment's video speed.
-                    byte[] slice = new byte[keep];
-                    Array.Copy(decoded.PcmBytes, slice, (int)keep);
-                    byte[] retimed = LibavAtempoFilter.Process(
-                        slice, decoded.WaveFormat.SampleRate, decoded.WaveFormat.Channels, range.EffectiveSpeed);
-                    AppLog.Information(
-                        $"LibavClipExporter.AudioRetime speed={range.EffectiveSpeed:0.###} in={slice.Length} out={retimed.Length}");
-                    pcm.Write(retimed, 0, retimed.Length);
-                }
-                else
-                {
-                    pcm.Write(decoded.PcmBytes, 0, (int)keep);
-                }
-            }
-
-            if (format == null || pcm.Length == 0)
-            {
-                AppLog.Information($"LibavClipExporter.TryBuildAudio no-audio (format={(format == null ? "null" : "set")} pcmBytes={pcm.Length})");
-                return false; // no audio stream, or nothing decoded
-            }
-
             string wavTemp = Path.Combine(tempDir, "audio.wav");
-            byte[] pcmBytes = pcm.ToArray();
-            using (var writer = new WaveFileWriter(wavTemp, format))
+            long pcmBytes;
+            using (var wav = new DecodedWavFile(wavTemp))
             {
-                writer.Write(pcmBytes, 0, pcmBytes.Length);
+                foreach (SourceRange range in ranges)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (Math.Abs(range.EffectiveSpeed - 1.0) > 0.001)
+                    {
+                        // Pitch-preserving retime so the audio matches this segment's video speed. The tempo filter
+                        // takes the range whole, so only a retimed range is decoded into memory.
+                        LibavPinAudioPcmDecoder.DecodeResult decoded =
+                            LibavPinAudioPcmDecoder.DecodeRange(inputPath, range.StartSeconds, range.Duration, ct);
+                        if (decoded.PcmBytes.Length == 0)
+                        {
+                            continue;
+                        }
+
+                        byte[] retimed = LibavAtempoFilter.Process(
+                            decoded.PcmBytes, decoded.WaveFormat.SampleRate, decoded.WaveFormat.Channels, range.EffectiveSpeed);
+                        AppLog.Information(
+                            $"LibavClipExporter.AudioRetime speed={range.EffectiveSpeed:0.###} in={decoded.PcmBytes.Length} out={retimed.Length}");
+                        wav.Append(retimed, decoded.WaveFormat);
+                    }
+                    else
+                    {
+                        // Just this range: the decode stops at its end rather than running on to the end of the file,
+                        // which a trim with many kept ranges used to pay for once per range.
+                        wav.AppendRange(inputPath, range.StartSeconds, range.Duration, ct);
+                    }
+                }
+
+                pcmBytes = wav.BytesWritten;
+            }
+
+            if (pcmBytes == 0)
+            {
+                AppLog.Information("LibavClipExporter.TryBuildAudio no-audio (pcmBytes=0)");
+                return false; // nothing decoded
             }
 
             audioTemp = Path.Combine(tempDir, "audio.m4a");
             LibavAacTranscoder.EncodeWavToM4a(wavTemp, audioTemp, quality, opt.AudioBitrateKbps, opt.AudioChannels);
             bool ok = File.Exists(audioTemp) && new FileInfo(audioTemp).Length > 0;
-            AppLog.Information($"LibavClipExporter.TryBuildAudio built={ok} pcmBytes={pcmBytes.Length}");
+            AppLog.Information($"LibavClipExporter.TryBuildAudio built={ok} pcmBytes={pcmBytes}");
             return ok;
         }
         catch (OperationCanceledException)

@@ -9,6 +9,20 @@
 
 ---
 
+## Unreleased
+
+### ⚡ Performance
+
+- **Compressing or exporting a long video no longer takes a gigabyte or more of memory for its sound.** An export
+  decoded its sound into memory whole and copied it twice more before writing it out for the encoder: for a 30-minute
+  recording, 1 to 2 GB taken and given back, with up to three copies of its 330 MB of sound held at once and about a
+  gigabyte kept for a while after. A compress at a quality setting, a trimmed or edited export, a pinned video's export
+  and a GIF or WebM made through an edited copy all built their sound that way. It is now written as it is decoded,
+  taking about 7 MB in all, and no slower. An audio-only export (WAV, MP3, M4A or OGG) held the whole track once and no
+  longer does.
+
+---
+
 ## v0.71.0 - 2026-11-03
 
 ### 🛡️ Reliability

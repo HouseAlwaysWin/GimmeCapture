@@ -154,7 +154,7 @@ internal static class LibavAudioEncoder
                     WriteSamplesToFrame(frame, encCtx->sample_fmt, sampleBuffer, frameSamples, channels, ctx);
                     frame->pts = ptsSamples;
                     ptsSamples += samplesReadPerChannel;
-                    ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, frame), $"{ctx}_send_frame");
+                    ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, frame), ctx, "_send_frame");
                     WriteEncodedPackets(encCtx, outFmt, outStream, outPkt, ctx);
                 }
                 finally
@@ -273,9 +273,9 @@ internal static class LibavAudioEncoder
             frame->nb_samples = sampleCount;
             frame->format = (int)encCtx->sample_fmt;
             frame->sample_rate = encCtx->sample_rate;
-            ThrowIfErr(ffmpeg.av_channel_layout_copy(&frame->ch_layout, layout), $"{ctx}_frame_layout");
-            ThrowIfErr(ffmpeg.av_frame_get_buffer(frame, 0), $"{ctx}_frame_buffer");
-            ThrowIfErr(ffmpeg.av_frame_make_writable(frame), $"{ctx}_frame_writable");
+            ThrowIfErr(ffmpeg.av_channel_layout_copy(&frame->ch_layout, layout), ctx, "_frame_layout");
+            ThrowIfErr(ffmpeg.av_frame_get_buffer(frame, 0), ctx, "_frame_buffer");
+            ThrowIfErr(ffmpeg.av_frame_make_writable(frame), ctx, "_frame_writable");
             return frame;
         }
         catch
@@ -361,10 +361,10 @@ internal static class LibavAudioEncoder
                 break;
             }
 
-            ThrowIfErr(gp, $"{ctx}_receive_packet");
+            ThrowIfErr(gp, ctx, "_receive_packet");
             ffmpeg.av_packet_rescale_ts(outPkt, encCtx->time_base, outStream->time_base);
             outPkt->stream_index = outStream->index;
-            ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, outPkt), $"{ctx}_write_frame");
+            ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, outPkt), ctx, "_write_frame");
             ffmpeg.av_packet_unref(outPkt);
         }
     }
@@ -374,6 +374,16 @@ internal static class LibavAudioEncoder
         if (err < 0)
         {
             throw FFmpegErrors.ToException(err, ctx);
+        }
+    }
+
+    // For the calls made for every frame: the context is joined only on a failure. Interpolated at each call, six of them
+    // came to about 400 bytes a frame, 1.1 MB for each minute of sound encoded.
+    private static void ThrowIfErr(int err, string ctx, string step)
+    {
+        if (err < 0)
+        {
+            throw FFmpegErrors.ToException(err, ctx + step);
         }
     }
 
