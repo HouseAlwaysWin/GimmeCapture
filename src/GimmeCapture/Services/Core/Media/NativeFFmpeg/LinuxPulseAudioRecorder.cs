@@ -84,7 +84,8 @@ internal sealed unsafe class LinuxPulseAudioRecorder : IDisposable
             _sampleRate = par->sample_rate > 0 ? par->sample_rate : 48000;
             _channels = par->ch_layout.nb_channels > 0 ? par->ch_layout.nb_channels : 2;
 
-            _wav = File.Create(_wavPath);
+            // Shared for reading, as NAudio's writer is on Windows: the recording's sound encoder reads it while it grows.
+            _wav = new FileStream(_wavPath, FileMode.Create, FileAccess.Write, FileShare.Read);
             WriteWavHeaderPlaceholder();
 
             _running = true;

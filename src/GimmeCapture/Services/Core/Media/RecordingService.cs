@@ -68,6 +68,9 @@ public partial class RecordingService : ReactiveObject
     private readonly List<string> _micSegments = new();
     private bool _isFinalizing;
     private double _finalizationProgress;
+    // Encodes the sound to AAC as the recording goes, so the stop does not (RecordingSoundEncoder). Null without sound, for
+    // GIF and WebM, and once the finalize took it.
+    private RecordingSoundEncoder? _soundEncoder;
     private string _tempDir = string.Empty;
     private IWaveIn? _audioCapture;
     private WaveFileWriter? _audioWriter;
@@ -350,6 +353,9 @@ public partial class RecordingService : ReactiveObject
         // Record segments in MKV format for pause/resume workflow.
         string segmentFile = Path.Combine(_tempDir, $"segment_{_segments.Count}.mkv");
         _segments.Add(segmentFile);
+        bool firstSegment = _segments.Count == 1;
+        string? systemWav = null;
+        string? micWav = null;
 
         // The audio endpoints open before the video, so they are already delivering when the first frame arrives
         // (opening the loopback alone takes ~60 ms), but nothing is written until that frame: whatever they hand over
@@ -367,6 +373,7 @@ public partial class RecordingService : ReactiveObject
             if (TryStartAudioCapture(audioSegment))
             {
                 _audioSegments.Add(audioSegment);
+                systemWav = audioSegment;
             }
             else
             {
@@ -384,6 +391,7 @@ public partial class RecordingService : ReactiveObject
             if (TryStartMicCapture(micSegment))
             {
                 _micSegments.Add(micSegment);
+                micWav = micSegment;
             }
             else
             {
@@ -395,12 +403,22 @@ public partial class RecordingService : ReactiveObject
             timings.Mark("mic");
         }
 
+        // A resume's WAVs go to the encoder before the video starts, so a failed start's stop ends them there too.
+        if (!firstSegment)
+        {
+            HandSegmentToSoundEncoder(systemWav, micWav);
+        }
+
         _lastEncoderOpenTime = null;
         var started = await StartFfmpegSegmentAsync(segmentFile, timings);
         if (started)
         {
             // The session's start-up gate has seen the first frame by now (or timed out and started anyway).
             _audioGate.Open(Stopwatch.GetTimestamp());
+            if (firstSegment)
+            {
+                StartSoundEncoder(systemWav, micWav);
+            }
         }
         else
         {
@@ -466,10 +484,95 @@ public partial class RecordingService : ReactiveObject
         }
         finally
         {
+            // The finalize takes the encoder; this stops one it did not.
+            StopSoundEncoder();
             IsFinalizing = false;
             FinalizationProgress = 100;
             State = RecordingState.Idle;
         }
+    }
+
+    private const string RecordedSoundFileName = "recorded_sound.m4a";
+
+    // GIF has no sound to mux, and WebM's is Opus, both made from the WAV; every other format muxes the AAC.
+    private bool StartsSoundEncoder() => _targetFormat is not ("gif" or "webm");
+
+    private long RecordingSoundBitRate =>
+        LibavAacTranscoder.BitRate(_settingsService?.Settings.VideoQuality ?? VideoQuality.Medium);
+
+    // With the recording's first segment: its WAVs start the encoder that turns the sound into AAC as it records.
+    // Without one, the stop encodes the sound as it always did.
+    private void StartSoundEncoder(string? systemSegment, string? micSegment)
+    {
+        StopSoundEncoder();
+        if (!StartsSoundEncoder() || (systemSegment == null && micSegment == null))
+        {
+            return;
+        }
+
+        try
+        {
+            _soundEncoder = RecordingSoundEncoder.Start(
+                Path.Combine(_tempDir, RecordedSoundFileName), systemSegment, micSegment, _micVolume, RecordingSoundBitRate);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Recording.SoundEncoderStart", ex);
+        }
+    }
+
+    // Stops an encoder the finalize did not take, deleting what it wrote.
+    private void StopSoundEncoder() => Interlocked.Exchange(ref _soundEncoder, null)?.Dispose();
+
+    // A resumed recording's WAVs. A track whose capture did not start again has no more segments.
+    private void HandSegmentToSoundEncoder(string? systemSegment, string? micSegment)
+    {
+        if (_soundEncoder is not { } encoder)
+        {
+            return;
+        }
+
+        if (systemSegment != null)
+        {
+            encoder.AddSegment(RecordedSoundTrack.System, systemSegment);
+        }
+        else
+        {
+            encoder.EndTrack(RecordedSoundTrack.System);
+        }
+
+        if (micSegment != null)
+        {
+            encoder.AddSegment(RecordedSoundTrack.Microphone, micSegment);
+        }
+        else
+        {
+            encoder.EndTrack(RecordedSoundTrack.Microphone);
+        }
+    }
+
+    // The sound encoder's side of a recording, for a test: a segment's WAVs as the captures start writing them, the
+    // recording's first starting the encoder, in tempDir for targetFormat; then the captures' stop, which closes them.
+    internal void SegmentSoundStartedForTest(
+        bool firstSegment, string tempDir, string targetFormat, double micVolume, string? systemSegment, string? micSegment)
+    {
+        _tempDir = tempDir;
+        _targetFormat = targetFormat;
+        _micVolume = micVolume;
+        if (firstSegment)
+        {
+            StartSoundEncoder(systemSegment, micSegment);
+        }
+        else
+        {
+            HandSegmentToSoundEncoder(systemSegment, micSegment);
+        }
+    }
+
+    internal void SegmentSoundStoppedForTest()
+    {
+        StopAudioCapture();
+        StopMicCapture();
     }
 
     // Inserts "_N" before the extension, e.g. clip.mp4 -> clip_2.mp4 (used as a per-window fallback name).

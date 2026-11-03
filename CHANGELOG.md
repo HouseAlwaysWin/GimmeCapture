@@ -20,6 +20,12 @@
 
 ### ⚡ Performance
 
+- **Stopping a recording no longer waits for its sound to be encoded.** The sound was encoded after the stop, about
+  20 ms for every second of it: 2.2 s after two minutes, 9.7 s after ten, half a minute or more after half an hour. It
+  is now encoded while the recording goes, on a thread that gives way to the capture and needs about one core in forty,
+  so the stop only finishes it: 0.06 to 0.09 s after two minutes of sound, 0.14 to 0.19 s after ten. A recording of
+  several windows into a file each encoded the sound again for every file, and does it once now. GIF and WebM
+  recordings, made from the recorded sound as it is, are saved as before.
 - **Stopping a recording saves it about 0.1 s sooner, and a paused one writes its video once less.** Every stop first
   waited 100 ms for files that were closed already. A recording paused and resumed had its stretches joined into a file
   of their own before the sound went in, the whole video written once more; they are now joined with the sound in one

@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 5 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 6 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) has run builds of `main` since 2026-11-01, 1ea47893 last,
   copied in over the two files that change; the updater will offer it v0.71.0.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
@@ -491,6 +491,28 @@ tool.
   414 and 404 against 579 and 535 (the two builds in runs one after the other, so beyond the 100 ms wait the gap is
   loose). The AAC encode is most of what is left: aac=195-336 ms for those ten seconds of sound, so half a minute or
   more for half an hour.
+- Done since batch 1: **the stop encoded the sound after it** (Recording's "The stop's finalize encodes the AAC after
+  it"). The encoder itself is 98% of that: for five minutes of sound, 7 s of which reading the WAV took 0.1 s, at 18-23
+  ms a second of sound. `RecordingSoundEncoder` now encodes it while the recording goes. It reads each segment's WAVs
+  as the captures write them (opened shared for writing; `LinuxPulseAudioRecorder` now shares its WAV for reading, as
+  NAudio's writer does), waits in its reads for the capture, and puts the sound together through the providers
+  `BuildFinalAudioAsync` uses: valid segments end to end (`RecordingService.HoldsSound`, the 100 ms rule both share),
+  the 48 kHz stereo mix with the microphone's gain, the 16-bit WAV round trip. It runs below normal priority, and at
+  normal once the stop waits on it. The first segment starts it, a resume hands it the next WAVs (`EndTrack` for a
+  capture that did not start again), and the captures' stop ends each segment. The finalize takes its AAC only when it
+  came from the segments the finalize would use, at its bitrate: `Recording.FinalizeTimings` then says `sound=recorded`,
+  with a `recordedSound` stage. A format change across a pause, surround system audio with a microphone, the quality
+  changed mid-recording or a failed encode have the sound built at the stop as before (`sound=rebuilt`); GIF and WebM
+  never start it. The stop's own AAC is now encoded once, where separate-files mode encoded it for every window and the
+  MKV fallback once more. `RecordingSoundEncoderTests`: the same decoded samples as the WAV encoded afterwards, the AAC
+  written before the stop, the 100 ms rule, a format change, a dispose. `RecordingFinalizeTests`: system audio,
+  system and microphone paused twice, the microphone with a gain paused once (MKV), and a microphone that did not
+  resume all give the stop path's samples and write no joined or mixed WAV or AAC of the stop's own (failing with the
+  encoder never started); a format change and a quality change are rebuilt. `RecordingServiceStartTests` records a
+  desktop corner with a stand-in loopback, paused once: `segments=2`, `sound=recorded`, sound and picture within
+  0.15 s. FINALIZE_PROBE=1 (`AStopsFinalize_WithTheSoundEncodedWhileRecording_Timed`), system audio and a 320x240
+  video, ABBA: two minutes 2.21 and 2.22 s at the stop (aac=2169-2176) against 85 and 61 ms, ten minutes 9.78 and
+  9.66 s (aac=9537-9661) against 187 and 144 ms (recordedSound=40-46, mux about 100).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -709,6 +731,10 @@ These were covered by unit tests only; check them in the real app before a relea
 - **A paused recording**: record half a minute with two pauses, as MP4 and again as MKV. Each file should play through
   all three stretches with the sound in step at each join, and the log's `Recording.FinalizeTimings` line should say
   `segments=3`.
+- **A long recording with sound**: record five minutes or more with system audio and the microphone, pausing once. The
+  stop should save it within a second or so, with `sound=recorded` and a small `recordedSound` in its
+  `Recording.FinalizeTimings`, and the sound in step to the end. The recording should not drop frames or stutter more
+  than before, with the encoder beside it. Then one as GIF and one as WebM: saved as before, with no `sound=`.
 - **A long compress with sound**: compress a recording of several minutes with sound at the tab's defaults. The file
   should be done within a second or so of the bar reaching 100%, and play with its sound in step to the end: in its last
   minute, the sound of a click or a key should land on its frame, as in the recording (it fell 55-66 ms further behind
@@ -768,11 +794,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   single-threaded `sws_scale` to NV12 (`LibavRecordingEncoder.cs:301-303`, `LibavGdigrabMkvSession.cs:536-551`,
   `LibavWgcMkvSession.cs:259`); overlays add a BGRA copy; the webcam frame is copied full size every output frame
   (`WebcamCaptureSource.cs:157`). Est. 3-5 ms per frame at 1080p, 12-25 at 4K.
-- **The stop's finalize encodes the AAC after it** (M). `RecordingService.Finalize.cs`: WAV merge, mix, AAC, mux and
-  move in sequence; `Recording.FinalizeTimings` now shows the AAC is most of it (aac=195-336 ms for ten seconds of sound,
-  half a minute or more for half an hour), and sources stop one after another (`LiveSession.cs` `StopCurrentSegmentAsync`).
-  Encode the AAC live, or each paused stretch's as it ends; mux into the destination folder rather than moving there.
-  The fixed wait and the paused recording's second video write are done (Status).
+- **The stop moves its file, and stops sources one after another** (S-M). `RecordingService.Finalize.cs` muxes into
+  the session folder and moves the file to the output folder, a whole copy when that is on another drive; sources stop
+  in series (`LiveSession.cs` `StopCurrentSegmentAsync`). Mux into the destination folder rather than moving there. The
+  fixed wait, the paused recording's second video write and the AAC encode are done (Status).
 - **The Linux audio still gates whole packets and ends each part short** (S; needs a Linux desktop to check).
   `LinuxPulseAudioRecorder` keeps or drops each packet on `RecordingAudioGate.IsOpen` and writes no silence at the
   end, so after a pause every later part plays early by the video's overrun (45-105 ms on Windows). Give it a `Feed`,

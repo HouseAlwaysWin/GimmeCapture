@@ -49,8 +49,20 @@ internal static class LibavAudioEncoder
     /// waits while <paramref name="pauseGate"/> is reset, before every frame: an export now builds its sound alongside
     /// its video, where Pause and Cancel reach it.
     /// </summary>
-    public static unsafe void EncodeWav(
+    public static void EncodeWav(
         string wavPath, string outPath, Target target, long bitRate, int channels,
+        CancellationToken ct = default, ManualResetEventSlim? pauseGate = null)
+    {
+        using var wavReader = new WaveFileReader(wavPath);
+        Encode(wavReader.ToSampleProvider(), outPath, target, bitRate, channels, ct, pauseGate);
+    }
+
+    /// <summary>
+    /// Encodes <paramref name="source"/> into <paramref name="outPath"/>, reading it to its end: a short read is taken
+    /// as the end, so a source still being written has to wait in its read rather than come back short.
+    /// </summary>
+    public static unsafe void Encode(
+        ISampleProvider source, string outPath, Target target, long bitRate, int channels,
         CancellationToken ct = default, ManualResetEventSlim? pauseGate = null)
     {
         if (channels is not (1 or 2))
@@ -61,8 +73,7 @@ internal static class LibavAudioEncoder
         FFmpegRuntime.EnsureInitialized();
 
         string ctx = target.ErrorPrefix;
-        using var wavReader = new WaveFileReader(wavPath);
-        ISampleProvider provider = CreateNormalizedSampleProvider(wavReader, channels);
+        ISampleProvider provider = CreateNormalizedSampleProvider(source, channels);
 
         AVFormatContext* outFmt = null;
         AVCodecContext* encCtx = null;
@@ -207,10 +218,8 @@ internal static class LibavAudioEncoder
         }
     }
 
-    private static ISampleProvider CreateNormalizedSampleProvider(WaveFileReader reader, int targetChannels)
+    private static ISampleProvider CreateNormalizedSampleProvider(ISampleProvider provider, int targetChannels)
     {
-        ISampleProvider provider = reader.ToSampleProvider();
-
         provider = targetChannels == 1
             ? ToMono(provider)
             : provider.WaveFormat.Channels switch

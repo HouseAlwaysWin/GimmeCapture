@@ -116,6 +116,7 @@ public partial class RecordingService
         if (!OperatingSystem.IsWindows())
         {
             StopLinuxPulse(ref _linuxSystemAudio);
+            _soundEncoder?.EndSegment(RecordedSoundTrack.System);
             return;
         }
 
@@ -131,6 +132,8 @@ public partial class RecordingService
         finally
         {
             DisposeAudioResources(videoLength);
+            // Its WAV is closed, so the encoder reads it to its end.
+            _soundEncoder?.EndSegment(RecordedSoundTrack.System);
         }
     }
 
@@ -202,6 +205,7 @@ public partial class RecordingService
         if (!OperatingSystem.IsWindows())
         {
             StopLinuxPulse(ref _linuxMic);
+            _soundEncoder?.EndSegment(RecordedSoundTrack.Microphone);
             return;
         }
 
@@ -232,6 +236,7 @@ public partial class RecordingService
             _micWriter = null;
             _micDevice = null;
             _micFeed = null;
+            _soundEncoder?.EndSegment(RecordedSoundTrack.Microphone);
         }
     }
 

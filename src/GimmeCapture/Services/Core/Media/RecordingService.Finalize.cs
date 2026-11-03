@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -24,7 +25,9 @@ public partial class RecordingService
         if (validSegments.Count == 0)
         {
             AppLog.Debug("RecordingService.Finalize", "No valid segments to finalize!");
-            // No video was written, so there is no recording to recover from the session folder either.
+            // No video was written, so there is no recording to recover from the session folder either. The sound
+            // encoder lets go of the WAVs in it first.
+            StopSoundEncoder();
             CleanupTempDirectory();
             return;
         }
@@ -35,9 +38,8 @@ public partial class RecordingService
         try
         {
             FinalizationProgress = 30;
-            var mergedAudio = await BuildFinalAudioAsync();
-            timings.Mark("audio");
-            await FinalizeByTargetFormatAsync(validSegments, mergedAudio, "merged.mkv", timings);
+            var sound = await BuildFinalSoundAsync(timings);
+            await FinalizeByTargetFormatAsync(validSegments, sound, "merged.mkv", timings);
             finalized = true;
         }
         catch (Exception ex)
@@ -87,7 +89,7 @@ public partial class RecordingService
             return;
         }
 
-        string? mergedAudio = await BuildFinalAudioAsync();
+        var sound = await BuildFinalSoundAsync(timings: null);
         Exception? firstTrackFailure = null;
 
         try
@@ -115,7 +117,7 @@ public partial class RecordingService
                     // Separate-window pins go through TryHandleSeparateOutputs (the .gif files directly), which
                     // never uses PinSourceFilePath — so don't build per-track sidecars that nothing consumes.
                     await FinalizeByTargetFormatAsync(
-                        validSegments, mergedAudio, $"track{i}_merged.mkv", timings: null, allowPinSidecar: false);
+                        validSegments, sound, $"track{i}_merged.mkv", timings: null, allowPinSidecar: false);
                     track.OutputFile = _outputFile; // EnsureOutputExtension may have changed the extension
                 }
                 catch (Exception ex)
@@ -170,7 +172,7 @@ public partial class RecordingService
         if (system == null)
         {
             // Mic only: apply gain if the user changed it, otherwise pass through.
-            if (Math.Abs(_micVolume - 1.0) < 0.001)
+            if (KeepsMicrophoneAsRecorded(_micVolume))
             {
                 return mic;
             }
@@ -205,15 +207,13 @@ public partial class RecordingService
     // on NAudio's post-EOF silence behavior — see DeterministicMixSampleProvider.
     private string MixWavFiles(string systemPath, string micPath, double micVolume)
     {
-        const int rate = 48000;
-        const int channels = 2;
         string mixedPath = Path.Combine(_tempDir, "mixed_audio.wav");
 
         using var systemReader = new AudioFileReader(systemPath);
         using var micReader = new AudioFileReader(micPath);
 
-        ISampleProvider systemProvider = NormalizeSampleProvider(systemReader, rate, channels);
-        ISampleProvider micProvider = NormalizeSampleProvider(micReader, rate, channels);
+        ISampleProvider systemProvider = NormalizeSampleProvider(systemReader, MixRate, MixChannels);
+        ISampleProvider micProvider = NormalizeSampleProvider(micReader, MixRate, MixChannels);
 
         var mixer = new DeterministicMixSampleProvider(systemProvider, micProvider, (float)micVolume);
         WaveFileWriter.CreateWaveFile16(mixedPath, mixer);
@@ -229,7 +229,16 @@ public partial class RecordingService
         return outPath;
     }
 
-    private static ISampleProvider NormalizeSampleProvider(ISampleProvider source, int targetRate, int targetChannels)
+    /// <summary>The format system audio and the microphone are mixed in.</summary>
+    internal const int MixRate = 48000;
+
+    /// <inheritdoc cref="MixRate"/>
+    internal const int MixChannels = 2;
+
+    /// <summary>Whether the microphone's gain leaves its sound as recorded, so a recording of it alone is not rewritten.</summary>
+    internal static bool KeepsMicrophoneAsRecorded(double micVolume) => Math.Abs(micVolume - 1.0) < 0.001;
+
+    internal static ISampleProvider NormalizeSampleProvider(ISampleProvider source, int targetRate, int targetChannels)
     {
         ISampleProvider provider = source;
 
@@ -338,7 +347,7 @@ public partial class RecordingService
         try
         {
             using var reader = new WaveFileReader(path);
-            return reader.Length > 0 && reader.TotalTime > TimeSpan.FromMilliseconds(100);
+            return HoldsSound(reader.Length, reader.WaveFormat);
         }
         catch (Exception ex)
         {
@@ -346,6 +355,14 @@ public partial class RecordingService
             return false;
         }
     }
+
+    /// <summary>
+    /// Whether a segment's WAV, <paramref name="dataBytes"/> of sound in <paramref name="format"/>, holds enough to count:
+    /// more than 100 ms. A segment with less is left out of the recording's sound.
+    /// </summary>
+    internal static bool HoldsSound(long dataBytes, WaveFormat format) =>
+        dataBytes > 0
+        && TimeSpan.FromSeconds((double)dataBytes / format.AverageBytesPerSecond) > TimeSpan.FromMilliseconds(100);
 
     private static async Task WriteConcatListFileAsync(string listPath, IEnumerable<string> items)
     {
@@ -358,10 +375,98 @@ public partial class RecordingService
         await File.WriteAllTextAsync(listPath, sb.ToString());
     }
 
+    // The sound a finalize muxes in: the AAC the recording encoded as it went, or the merged WAV, whose AAC is encoded the
+    // first time a container asks for it and kept for the next. The MKV a hardware-encoded MP4 falls back to, and every
+    // window's file in separate-files mode, used to encode it again.
+    private sealed class FinalSound(string? wav, string? aac)
+    {
+        public string? Wav { get; } = wav;
+
+        public string? Aac { get; set; } = aac;
+
+        public bool AacTried { get; set; } = aac != null;
+    }
+
+    private async Task<FinalSound> BuildFinalSoundAsync(RecordingStartTimings? timings)
+    {
+        if (await TakeRecordedSoundAsync(timings) is { } recorded)
+        {
+            return new FinalSound(wav: null, recorded);
+        }
+
+        var wav = await BuildFinalAudioAsync();
+        timings?.Mark("audio");
+        return new FinalSound(wav, aac: null);
+    }
+
+    private async Task<string?> AacOfAsync(FinalSound sound)
+    {
+        if (!sound.AacTried)
+        {
+            sound.AacTried = true;
+            sound.Aac = await PrepareAudioForTargetContainerAsync(sound.Wav);
+        }
+
+        return sound.Aac;
+    }
+
+    // The AAC the recording encoded as it went (RecordingSoundEncoder), when it is the one this finalize would encode:
+    // from the same segments, at the same bitrate. Otherwise null, and the finalize builds the sound from the segments.
+    private async Task<string?> TakeRecordedSoundAsync(RecordingStartTimings? timings)
+    {
+        using var encoder = Interlocked.Exchange(ref _soundEncoder, null);
+        if (encoder == null)
+        {
+            return null;
+        }
+
+        var result = await encoder.FinishAsync();
+        timings?.Mark("recordedSound");
+        string? unused = WhyRecordedSoundIsNotUsed(result);
+        timings?.Note("sound", unused == null ? "recorded" : "rebuilt");
+        if (unused == null)
+        {
+            return result.Path;
+        }
+
+        LogToFile($"[Finalize] The sound encoded while recording is not used ({unused}); building it from the segments.");
+        if (result.Path != null)
+        {
+            TryDeleteQuiet(result.Path);
+        }
+
+        return null;
+    }
+
+    private string? WhyRecordedSoundIsNotUsed(RecordingSoundEncoder.Result result)
+    {
+        if (result.Path == null)
+        {
+            return result.Failure ?? "not finished";
+        }
+
+        if (!StartsSoundEncoder())
+        {
+            return $"{_targetFormat} is made from the WAV";
+        }
+
+        if (!result.SystemSegments.AsValueEnumerable().SequenceEqual(GetValidAudioSegments()))
+        {
+            return "other system-audio segments";
+        }
+
+        if (!result.MicrophoneSegments.AsValueEnumerable().SequenceEqual(GetValidMicSegments()))
+        {
+            return "other microphone segments";
+        }
+
+        return result.BitRate == RecordingSoundBitRate ? null : "the quality changed";
+    }
+
     // A recording paused and resumed has a segment for each stretch. GIF and WebM are transcoded from one file, so the
     // segments are joined into mergedName first; a container (MP4, MOV, MKV) joins them with the sound in its mux.
     private async Task FinalizeByTargetFormatAsync(
-        IReadOnlyList<string> videoSegments, string? mergedAudio, string mergedName, RecordingStartTimings? timings,
+        IReadOnlyList<string> videoSegments, FinalSound sound, string mergedName, RecordingStartTimings? timings,
         bool allowPinSidecar = true)
     {
         PinSourceFilePath = null; // reset per finalize; only the gif branch (when pinning) sets a sidecar
@@ -378,7 +483,7 @@ public partial class RecordingService
                 // will actually be pinned (single-output pin), so Save/Copy and separate-window mode don't pay for it.
                 if (allowPinSidecar && BuildPinAudioSidecar)
                 {
-                    await BuildGifAudioSidecarAsync(mergedMkv, mergedAudio);
+                    await BuildGifAudioSidecarAsync(mergedMkv, sound);
                     timings?.Mark("sidecar");
                 }
 
@@ -386,7 +491,7 @@ public partial class RecordingService
             }
 
             EnsureOutputExtension("webm");
-            await FinalizeAsWebmAsync(mergedMkv, mergedAudio);
+            await FinalizeAsWebmAsync(mergedMkv, sound.Wav);
             timings?.Mark("webm");
             return;
         }
@@ -397,14 +502,14 @@ public partial class RecordingService
         string requested = _targetFormat is ("mp4" or "mov") ? _targetFormat : "mkv";
         bool allowMkvFallback = requested != "mkv" && RequiresMatroskaFinalization(_lastSelectedVideoEncoderName);
 
-        if (await TryFinalizeAsContainerAsync(requested, videoSegments, mergedAudio, throwOnFailure: !allowMkvFallback, timings))
+        if (await TryFinalizeAsContainerAsync(requested, videoSegments, sound, throwOnFailure: !allowMkvFallback, timings))
         {
             FinalizationProgress = 100;
             return;
         }
 
         LogToFile($"[Finalize] '{requested}' finalize failed for encoder '{_lastSelectedVideoEncoderName}'; falling back to MKV.");
-        await TryFinalizeAsContainerAsync("mkv", videoSegments, mergedAudio, throwOnFailure: true, timings);
+        await TryFinalizeAsContainerAsync("mkv", videoSegments, sound, throwOnFailure: true, timings);
         FinalizationProgress = 100;
     }
 
@@ -415,14 +520,14 @@ public partial class RecordingService
     // the sound in the same pass (LibavMuxer.ConcatVideoSegmentsWithAudio): joined into a merged.mkv first, the whole
     // video was written once more for the mux to read back.
     private async Task<bool> TryFinalizeAsContainerAsync(
-        string format, IReadOnlyList<string> videoSegments, string? mergedAudio, bool throwOnFailure,
+        string format, IReadOnlyList<string> videoSegments, FinalSound sound, bool throwOnFailure,
         RecordingStartTimings? timings)
     {
         EnsureOutputExtension(GetTargetExtension(format));
         string muxer = GetMuxerFormatName(format);
         try
         {
-            var targetAudio = await PrepareAudioForTargetContainerAsync(mergedAudio, format);
+            var targetAudio = await AacOfAsync(sound);
             timings?.Mark("aac");
             if (!string.IsNullOrWhiteSpace(targetAudio) && File.Exists(targetAudio))
             {
@@ -513,9 +618,8 @@ public partial class RecordingService
             _ => "matroska"
         };
 
-    private async Task<string?> PrepareAudioForTargetContainerAsync(string? mergedAudio, string effectiveFormat)
+    private async Task<string?> PrepareAudioForTargetContainerAsync(string? mergedAudio)
     {
-        _ = effectiveFormat;
         if (string.IsNullOrWhiteSpace(mergedAudio) || !File.Exists(mergedAudio))
         {
             return null;
@@ -589,9 +693,9 @@ public partial class RecordingService
     // and non-GIF re-exports keep it. Best-effort: on any failure (or no captured audio) PinSourceFilePath
     // stays null and the pin falls back to the silent .gif. Written to the persistent pin temp dir (NOT the
     // per-session dir that CleanupTempDirectory deletes) so it outlives finalize.
-    private async Task BuildGifAudioSidecarAsync(string mergedMkv, string? mergedAudio)
+    private async Task BuildGifAudioSidecarAsync(string mergedMkv, FinalSound sound)
     {
-        if (string.IsNullOrWhiteSpace(mergedAudio) || !File.Exists(mergedAudio) || !File.Exists(mergedMkv))
+        if (!File.Exists(mergedMkv))
         {
             return;
         }
@@ -599,7 +703,7 @@ public partial class RecordingService
         string? sidecar = null;
         try
         {
-            string? aac = await PrepareAudioForTargetContainerAsync(mergedAudio, "mp4");
+            string? aac = await AacOfAsync(sound);
             if (string.IsNullOrWhiteSpace(aac) || !File.Exists(aac))
             {
                 return;
@@ -664,17 +768,19 @@ public partial class RecordingService
         FinalizationProgress = 100;
     }
 
-    // The whole finalize of a single-output recording, for a test: these segments of video and of system audio, as a
-    // recording would have left them in tempDir, into outputFile in targetFormat.
+    // The whole finalize of a single-output recording, for a test: these segments of video, of system audio and of the
+    // microphone, as a recording would have left them in tempDir, into outputFile in targetFormat.
     internal Task FinalizeForTestAsync(
         IReadOnlyList<string> videoSegments, IReadOnlyList<string> audioSegments, string tempDir, string outputFile,
-        string targetFormat)
+        string targetFormat, IReadOnlyList<string>? micSegments = null, double micVolume = 1.0)
     {
         _segments.Clear();
         _segments.AddRange(videoSegments);
         _audioSegments.Clear();
         _audioSegments.AddRange(audioSegments);
         _micSegments.Clear();
+        _micSegments.AddRange(micSegments ?? []);
+        _micVolume = micVolume;
         _tempDir = tempDir;
         _outputFile = outputFile;
         _targetFormat = targetFormat;
