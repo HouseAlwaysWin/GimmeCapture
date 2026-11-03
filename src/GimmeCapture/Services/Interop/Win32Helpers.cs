@@ -31,6 +31,9 @@ public static class Win32Helpers
     [DllImport("user32.dll")]
     private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowDisplayAffinity(IntPtr hWnd, out uint pdwAffinity);
+
     private const uint WDA_NONE = 0x00000000;
     private const uint WDA_MONITOR = 0x00000001;
     private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
@@ -439,11 +442,23 @@ public static class Win32Helpers
     /// </summary>
     /// <param name="hwnd">Window handle</param>
     /// <param name="visible">True to be visible, False to be excluded from capture</param>
+    /// <remarks>
+    /// Leaves a window that already has that affinity alone. Setting it is not free: on a window Avalonia draws on the
+    /// processor, still hidden, Windows put the window on screen, white at the size it had then, until its first frame
+    /// after showing replaced it. The capture overlay asked to be visible to capture, which every window is to begin
+    /// with, as it was bound before showing, and opened behind a white 1440x740 rectangle for a frame or two, the first
+    /// one of a run for about 0.4 s.
+    /// </remarks>
     public static void SetWindowCaptureVisibility(IntPtr hwnd, bool visible)
     {
         if (hwnd == IntPtr.Zero || !OperatingSystem.IsWindows()) return;
-        
+
         uint affinity = visible ? WDA_NONE : WDA_EXCLUDEFROMCAPTURE;
+        if (GetWindowDisplayAffinity(hwnd, out uint current) && current == affinity)
+        {
+            return;
+        }
+
         SetWindowDisplayAffinity(hwnd, affinity);
     }
 

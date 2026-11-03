@@ -78,6 +78,15 @@
   output was written from it. They are now encoded where they are kept and joined, with the sound, straight into the
   output: at the end of two minutes of 720p, 99 MB written instead of 197, in half the time.
 
+### 🖼️ Interface
+
+- **With "Use less memory" on, a capture opens without a white flash.** As the capture overlay was set up, still
+  hidden, it told Windows that screen recordings may show it, which every window allows anyway. For a window drawn with
+  the processor, that put the overlay on screen as a white rectangle at the size it started with (1440x740 on a
+  1920x1080 screen) until its first picture replaced it: a frame or two each time, and about 0.4 s the first time
+  after the app starts. A setting that would not change is now left alone. Drawn on the graphics card, the
+  overlay never flashed.
+
 ---
 
 ## v0.71.0 - 2026-11-03

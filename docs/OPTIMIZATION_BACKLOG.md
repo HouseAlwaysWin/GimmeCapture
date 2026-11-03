@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 11 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 12 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
@@ -586,6 +586,22 @@ tool.
   every mode left a few hundred MB, the driver's (the item below). Also measured, and left: decoding an export on the
   GPU, the frames copied back, took 2.4 s for ten seconds of the 4K video against 1.5-2.0 on the CPU and held 440 MB
   more, so exports stay on the CPU.
+- Fixed since batch 1 (the user's report, 2026-11-03): **with software rendering the overlay opened behind a white
+  rectangle**, 1440x740 at the top left of a 1920x1080 screen, Windows' default size for a new window, which Avalonia
+  creates every window at before sizing it. Measured with a temporary App hook (not committed) opening the overlay
+  three to five times a run, the screen grabbed every 20-30 ms (BitBlt) and a WinEvent hook logging the overlay's
+  show/hide/move/cloak: the white appeared while the window was still hidden (no show event), from the moment it was
+  bound, and stayed until the first frame after showing; one grab on a warm open, 0.38 s on a run's first, which
+  spends that long binding. Bisected, with a 300 ms pause after binding to widen it: the trigger is
+  `ApplyRecordingScreenCaptureAffinity`, `SetWindowDisplayAffinity(WDA_NONE)` on the hidden overlay (rounds with the
+  call 13-23 white grabs while hidden, without it 0, ABAB). A new window already has WDA_NONE, so
+  `Win32Helpers.SetWindowCaptureVisibility` now leaves an unchanged affinity alone (`GetWindowDisplayAffinity`): five
+  opens, the first included, no white grab; the toolbar drawn 45-60 ms after showing (0.18 s on the first).
+  The same call on a plain hidden window, opaque or see-through, never showed it, so there is no committed repro:
+  `Win32HelpersCaptureVisibilityTests` pins that every real change is still made. Tried first and dropped once the
+  trigger was known: cloaking the window (DWMWA_CLOAK) until Avalonia's first frame, which hid it too. The GPU path
+  creates windows with WS_EX_NOREDIRECTIONBITMAP and never flashed. The other windows that exclude themselves from
+  capture (toasts, the countdown, translations, scrolling capture) do it in `Opened`, after showing.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -811,6 +827,10 @@ These were covered by unit tests only; check them in the real app before a relea
 - **A 4K video in the editor and in a pin**: open a 4K phone video in the Compress editor and scrub, step and jump
   about; Task Manager's commit size for the app (Details tab) should rise about 0.45 GB, not 1.2. Pin a 4K video and let
   it loop: it should play smoothly, its commit size staying about the same.
+- **Opening a capture with "Use less memory" on**: with the setting on and the app restarted, open the capture overlay a
+  few times, the first after the restart included. No white rectangle at the top left as it opens; the overlay and its
+  toolbar appear as quickly as before. Then a recording without annotations, which excludes the overlay from capture
+  once it starts: the recording should still leave the overlay's frame out of the video.
 - **A rotated compress**: compress one of the 4K phone videos turned 90° in the editor, nothing drawn on it. It
   should finish in about a quarter of the time it took before, turned the right way and looking as before. Then one
   with something drawn on it, which takes as long as before, the drawing where it was drawn.
