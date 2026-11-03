@@ -119,74 +119,89 @@ public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBack
     {
         ArgumentNullException.ThrowIfNull(source);
 
+        SKRectI? roi = SelectionPixels(source, selectionRect);
+        SKBitmap? cropped = null;
+        try
+        {
+            // A plain background is cut out by its colour, so only a picture without one loads the model. A plain
+            // picture's removal used to load it too: 0.5 s for a cut-out of 2 ms at 1920x1080, and 190 MB kept 10 s.
+            SKBitmap? processed = await Task.Run(() =>
+            {
+                if (roi is { } region)
+                {
+                    // Create cropped version
+                    cropped = new SKBitmap(region.Width, region.Height);
+                    source.ExtractSubset(cropped, region);
+                }
+
+                return RemovePlainBackground(cropped ?? source);
+            });
+            processed ??= await RemoveWithModelAsync(cropped ?? source);
+
+            // Whole-image removal: the processed bitmap already covers the source, so hand it straight back.
+            if (roi is not { } selection)
+            {
+                return processed;
+            }
+
+            using (processed)
+            {
+                return await Task.Run(() => ComposeSelection(source, processed, selection));
+            }
+        }
+        finally
+        {
+            cropped?.Dispose();
+        }
+    }
+
+    // The selection in source pixels, or null for the whole picture.
+    private static SKRectI? SelectionPixels(SKBitmap source, Avalonia.Rect? selectionRect)
+    {
+        if (selectionRect is not { Width: > 1, Height: > 1 } selection)
+        {
+            return null;
+        }
+
+        // Convert logical Rect to pixel Rect using rounding for better accuracy
+        int x = (int)Math.Round(Math.Max(0, selection.X));
+        int y = (int)Math.Round(Math.Max(0, selection.Y));
+        int w = (int)Math.Round(Math.Min(source.Width - x, selection.Width));
+        int h = (int)Math.Round(Math.Min(source.Height - y, selection.Height));
+        return new SKRectI(x, y, x + w, y + h);
+    }
+
+    // The picture with its background cut out by colour, or null when the background is not one plain colour.
+    private static SKBitmap? RemovePlainBackground(SKBitmap target)
+    {
+        // Try edge-based solid background detection first
+        if (IsSolidBackground(target, out SKColor bgColor))
+        {
+            AppLog.Debug("BackgroundRemovalService", $"Solid background detected via edges ({bgColor}). Using Manual Removal.");
+            return RemoveSolidBackground(target, bgColor);
+        }
+
+        // Try corner-based detection as fallback (better for cropped regions where logo touches edges)
+        if (TryGetCornerBackgroundColor(target, out bgColor))
+        {
+            AppLog.Debug("BackgroundRemovalService", $"Solid background detected via corners ({bgColor}). Using Manual Removal.");
+            return RemoveSolidBackground(target, bgColor);
+        }
+
+        AppLog.Debug("BackgroundRemovalService", "Complex background detected. Using AI Removal.");
+        return null;
+    }
+
+    // U2Net's removal of the background, the model loaded first if it is not.
+    private async Task<SKBitmap> RemoveWithModelAsync(SKBitmap target)
+    {
         // Hold the gate across init + inference so the idle-unload can't dispose the session mid-removal.
         await _sessionGate.WaitAsync();
         try
         {
-        if (!_isInitialized) await InitializeAsync();
-        if (_session == null) throw new InvalidOperationException("AI Session not initialized.");
-
-        return await Task.Run(() =>
-        {
-            SKBitmap? cropped = null;
-            SKBitmap targetBmp = source;
-            SKRectI? roi = null;
-
-            if (selectionRect.HasValue && selectionRect.Value.Width > 1 && selectionRect.Value.Height > 1)
-            {
-                // Convert logical Rect to pixel Rect using rounding for better accuracy
-                int x = (int)Math.Round(Math.Max(0, selectionRect.Value.X));
-                int y = (int)Math.Round(Math.Max(0, selectionRect.Value.Y));
-                int w = (int)Math.Round(Math.Min(source.Width - x, selectionRect.Value.Width));
-                int h = (int)Math.Round(Math.Min(source.Height - y, selectionRect.Value.Height));
-                roi = new SKRectI(x, y, x + w, y + h);
-
-                // Create cropped version
-                cropped = new SKBitmap(w, h);
-                source.ExtractSubset(cropped, roi.Value);
-                targetBmp = cropped;
-            }
-
-            try
-            {
-                SKBitmap processed;
-                SKColor bgColor;
-
-                // Try edge-based solid background detection first
-                if (IsSolidBackground(targetBmp, out bgColor))
-                {
-                    AppLog.Debug("BackgroundRemovalService", $"Solid background detected via edges ({bgColor}). Using Manual Removal.");
-                    processed = RemoveSolidBackground(targetBmp, bgColor);
-                }
-                // Try corner-based detection as fallback (better for cropped regions where logo touches edges)
-                else if (TryGetCornerBackgroundColor(targetBmp, out bgColor))
-                {
-                    AppLog.Debug("BackgroundRemovalService", $"Solid background detected via corners ({bgColor}). Using Manual Removal.");
-                    processed = RemoveSolidBackground(targetBmp, bgColor);
-                }
-                else
-                {
-                    AppLog.Debug("BackgroundRemovalService", "Complex background detected. Using AI Removal.");
-                    var session = _session;
-                    processed = RunAIInference(targetBmp, session!);
-                }
-
-                // Whole-image removal: the processed bitmap already covers the source, so hand it straight back.
-                if (roi is not { } region)
-                {
-                    return processed;
-                }
-
-                using (processed)
-                {
-                    return ComposeSelection(source, processed, region);
-                }
-            }
-            finally
-            {
-                cropped?.Dispose();
-            }
-        });
+            if (!_isInitialized) await InitializeAsync();
+            var session = _session ?? throw new InvalidOperationException("AI Session not initialized.");
+            return await Task.Run(() => RunAIInference(target, session));
         }
         finally
         {

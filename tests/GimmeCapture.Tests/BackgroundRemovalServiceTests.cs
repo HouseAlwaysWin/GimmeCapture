@@ -98,6 +98,55 @@ public class BackgroundRemovalServiceTests
     }
 
     [Fact]
+    public async Task OnlyAPictureWithoutAPlainBackground_LoadsTheModel()
+    {
+        // A plain background is cut out by its colour, and its removal loaded the model all the same: 0.5 s for a cut-out
+        // of 2 ms at 1920x1080, and 190 MB kept for 10 s.
+        string baseDir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var settings = new AppSettingsService(baseDir);
+            settings.Settings.AIResourcesDirectory = Path.Combine(baseDir, "AI");
+            var pathService = new AIPathService(settings);
+            var aiResources = new AIResourceService(settings, pathService, new AIModelDownloader());
+            // Fed by U2Net's input name, so it runs where the real model would.
+            TinyOnnxModel.WriteIdentity(pathService.GetAICoreModelPath(), input: "input.1");
+            using var service = new BackgroundRemovalService(aiResources, pathService);
+            // White, with a dark square from (80, 40) to (120, 80).
+            using var plain = TestBitmaps.Create(200, 120, SKColorType.Bgra8888, SKAlphaType.Unpremul,
+                static (x, y) => x is >= 80 and < 120 && y is >= 40 and < 80 ? 0xFF282828u : 0xFFFFFFFFu);
+
+            using (var removed = await service.RemoveBackgroundAsync(plain))
+            {
+                Assert.Equal((byte)0, removed.GetPixel(10, 10).Alpha);
+                Assert.Equal((byte)255, removed.GetPixel(100, 60).Alpha);
+            }
+
+            // Within a selection, the rest of the picture left as it was.
+            using (var removed = await service.RemoveBackgroundAsync(plain, new Avalonia.Rect(50, 20, 100, 80)))
+            {
+                Assert.Equal((byte)255, removed.GetPixel(10, 10).Alpha);
+                Assert.Equal((byte)0, removed.GetPixel(55, 25).Alpha);
+                Assert.Equal((byte)255, removed.GetPixel(100, 60).Alpha);
+            }
+
+            Assert.False(service.IsModelLoaded);
+
+            using var scene = TestBitmaps.Scene(200, 120);
+            using (var removed = await service.RemoveBackgroundAsync(scene))
+            {
+                Assert.Equal((200, 120), (removed.Width, removed.Height));
+            }
+
+            Assert.True(service.IsModelLoaded);
+        }
+        finally
+        {
+            try { Directory.Delete(baseDir, recursive: true); } catch { /* best effort temp cleanup */ }
+        }
+    }
+
+    [Fact]
     public void IsSolidBackground_DetectsUniformOpaqueEdges()
     {
         using var bitmap = new SKBitmap(64, 64, SKColorType.Bgra8888, SKAlphaType.Unpremul);

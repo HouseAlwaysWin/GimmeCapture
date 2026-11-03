@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 14 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 15 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
@@ -612,6 +612,16 @@ tool.
   test (Release, each case in two fresh processes): two pins removing one after the other, 1920x1080 then 1600x900
   scenes, the second took 887-901 ms with a service each and 396-402 ms shared, and the process held 368-369 MB over
   its baseline against 189. Closing a pin no longer unloads the model at once: it goes 10 s after the last removal.
+- Done since batch 1: **a plain background's removal loaded U2Net** (found while sharing it). `RemoveBackgroundAsync`
+  loaded the session before looking for a plain background, which `RemoveSolidBackground` cuts out by colour. It now
+  crops and tries that cut-out first, on the pool, and only a picture without a plain background takes the gate and
+  loads the model (`RemoveWithModelAsync`); only a model run restarts the idle unload. Measured with the installed model
+  in a scratch opt-in test (Release, two fresh processes each), a 1920x1080 white picture with a dark subject: 512-555
+  ms and 188-189 MB over the baseline with the model loaded, against 17-18 ms (2 ms the second time) and 0 MB.
+  `TheRealModel_KeepsLittleOfTheProcess_LoadedOrNot` after: 1000-1009 ms with the load, 397-425 warm, 191 MB loaded and
+  19 unloaded, as before. `BackgroundRemovalServiceTests.OnlyAPictureWithoutAPlainBackground_LoadsTheModel` runs both
+  paths on `TinyOnnxModel` (now with an input name, U2Net's `input.1`) and fails on the old code. The pin still asks for
+  the AI Core module before any removal (`EnsureAICoreResourcesAsync`), a plain one included.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

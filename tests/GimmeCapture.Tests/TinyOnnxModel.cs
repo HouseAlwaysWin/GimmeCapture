@@ -11,22 +11,23 @@ namespace GimmeCapture.Tests;
 /// </summary>
 internal static class TinyOnnxModel
 {
-    public static void WriteIdentity(string path)
+    // input: what the code under test feeds it by, a real model's input name (U2Net's is "input.1").
+    public static void WriteIdentity(string path, string input = "x")
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, Identity());
+        File.WriteAllBytes(path, Identity(input));
     }
 
-    public static byte[] Identity()
+    public static byte[] Identity(string input = "x")
     {
         byte[] shape = Join(Message(1, Text(2, "n")), Message(1, Text(2, "c")), Message(1, Text(2, "h")), Message(1, Text(2, "w")));
         byte[] tensorType = Join(Number(1, 1 /* FLOAT */), Message(2, shape));
         byte[] type = Message(1, tensorType);
-        byte[] node = Join(Text(1, "x"), Text(2, "y"), Text(4, "Identity"));
+        byte[] node = Join(Text(1, input), Text(2, "y"), Text(4, "Identity"));
         byte[] graph = Join(
             Message(1, node),
             Text(2, "identity"),
-            Message(11, Join(Text(1, "x"), Message(2, type))),
+            Message(11, Join(Text(1, input), Message(2, type))),
             Message(12, Join(Text(1, "y"), Message(2, type))));
         return Join(
             Number(1, 7),                   // ir_version

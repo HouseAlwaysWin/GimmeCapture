@@ -81,6 +81,10 @@
   own: 0.9 s instead of 0.4 for a 1600x900 picture, and 180 MB more held while both were kept, 370 MB in all. Every pin
   now shares one, and the second pin's removal runs on the model the first one loaded. Closing a pin no longer unloads
   it at once; it goes 10 s after the last removal, as it did with the pin open.
+- **Removing a plain background no longer loads the model.** A picture on one plain colour has its background cut out
+  by that colour, in 2 ms at 1920x1080, but its removal loaded the background-removal model all the same: half a second
+  first, and 190 MB held for the 10 s after. Only a picture without a plain background loads it now, so a plain one is
+  done in under 20 ms and takes no memory.
 
 ### 💾 Storage
 
