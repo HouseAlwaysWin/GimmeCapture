@@ -38,6 +38,18 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     /// </summary>
     public static volatile bool HardwareDecodeEnabled = true;
 
+    /// <summary>
+    /// The threads a video decoder gets: libavcodec's own count (0, one a core, frame and slice threads) on the CPU,
+    /// one under D3D11VA. FFmpeg sizes a hardware decoder's surface pool for its frame threads too, a surface more for
+    /// each, while the GPU does the decoding itself. On a 4K HEVC phone video the Compress editor's decoder held
+    /// 1.2-1.3 GB with them and 0.47 GB without, and found a far frame in half the time, 54 ms against 96-111; a step
+    /// forward took 19-20 ms instead of 10-14.
+    /// </summary>
+    internal static int DecodeThreads(bool hardware) => hardware && !FrameThreadsUnderHardwareForTest ? 1 : 0;
+
+    /// <summary>Test seam: the probe sets this to measure the frame threads a hardware decoder had before.</summary>
+    internal static volatile bool FrameThreadsUnderHardwareForTest;
+
     // AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX (libavcodec/codec.h) — stable ABI value; this FFmpeg.AutoGen
     // build does not surface it as a named constant. Bit set in AVCodecHWConfig.methods when a codec can be
     // driven purely by attaching an AVHWDeviceContext (the modern get_format path we use).
@@ -693,12 +705,12 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     hwDeviceCtx = TryInitHardwareDecode(dec, decCtx, out string? hwReason);
                     bool hardwareDecode = hwDeviceCtx != null;
 
-                    // Multi-core decode: single-threaded decode can't keep up with real-time playback of
+                    // Multi-core decode on the CPU: single-threaded decode can't keep up with real-time playback of
                     // large/high-res H.264/H.265 files. 0 = auto (one thread per logical core). FFmpeg ANDs
                     // thread_type against the codec's capabilities, so requesting both frame+slice is safe
-                    // (a codec that supports only one uses only that one). (Ignored under hw decode, which the
-                    // GPU parallelizes internally.)
-                    decCtx->thread_count = 0;
+                    // (a codec that supports only one uses only that one). Under hw decode one thread: the GPU
+                    // decodes, and frame threads only grew its surface pool (DecodeThreads).
+                    decCtx->thread_count = DecodeThreads(hardwareDecode);
                     decCtx->thread_type = ffmpeg.FF_THREAD_FRAME | ffmpeg.FF_THREAD_SLICE;
                     ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "open_decoder");
                     long codecMs = openStage.ElapsedMilliseconds; openStage.Restart();

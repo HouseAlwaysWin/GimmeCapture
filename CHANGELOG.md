@@ -25,6 +25,12 @@
 
 ### ⚡ Performance
 
+- **Editing or pinning a 4K video takes about 0.75 GB less memory.** The Compress editor's frames and a pinned video's
+  playback are decoded on the graphics card, and the decoder was also given a thread for every processor core. FFmpeg
+  sets aside a 4K picture on the card for each of those threads, though the card does the decoding itself: on a 4K
+  phone video the editor held about 1.25 GB while open, and a playing pin as much. On one thread they hold about
+  0.47 GB, the pin still plays at full speed, and the editor finds a far frame a little sooner, while a step of one
+  frame takes 5 to 10 ms longer.
 - **Compressing a rotated video takes a quarter of the time or less.** A video turned in the Compress editor had every
   frame converted to a picture, turned, and converted back. On a 4K phone video that took 45 ms a frame, so turned, ten
   seconds of one took 17 s to compress at 1080p instead of 3 to 8 s. The frames are now turned as they are decoded:

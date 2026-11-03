@@ -419,7 +419,7 @@ internal sealed class LibavStillFrameDecoder : IDisposable
 
         ThrowIfErr(ffmpeg.avcodec_parameters_to_context(_decoder, stream->codecpar), "still_par_to_ctx");
         _hwDevice = LibavVideoFramePlayer.TryInitHardwareDecode(codec, _decoder, out string? hwReason);
-        _decoder->thread_count = 0;
+        _decoder->thread_count = LibavVideoFramePlayer.DecodeThreads(_hwDevice != null);
         _decoder->thread_type = ffmpeg.FF_THREAD_FRAME | ffmpeg.FF_THREAD_SLICE;
         ThrowIfErr(ffmpeg.avcodec_open2(_decoder, codec, null), "still_open_decoder");
 

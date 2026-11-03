@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 10 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 11 entries (2026-11-03).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
@@ -572,6 +572,20 @@ tool.
   and 270 is 1.4-1.5 levels off the source turned by hand and about 64 off the opposite turn; the old path gave the
   same turn at 1.7-2.1 levels, through its two colour conversions. The opt-in `ARotatedExportOfARealVideo_Timed`
   (ROTATE_PROBE_FILE) has the timing.
+- Done since batch 1: **a D3D11VA decoder held a surface for every frame thread** (part of Idle, start-up and memory's
+  "A Direct3D 11 decode leaves..."). The editor's and compare's `LibavStillFrameDecoder` and a pin's
+  `LibavVideoFramePlayer.PlayFramesAsync` set `thread_count = 0` with frame threads also under D3D11VA, where the player's
+  comment took them to be ignored; FFmpeg sizes a hardware decoder's surface pool for its frame threads too. Both now
+  take `LibavVideoFramePlayer.DecodeThreads`: one thread with a device, libavcodec's count without. Measured with the
+  opt-in `HardwareDecodeThreadsTests.OneThreadUnderD3D11VA_Measured` (HW_DECODE_THREADS_PROBE_FILE), ABBA, process
+  private bytes, the editor's 720 px frames and ten seconds of a pin at 1280x720. On a 4K HEVC phone video: while
+  open, one thread 474-486 MB against 1216-1295 with frame threads and 400-640 on the CPU; a far seek 137-144 ms
+  against 180-183 (CPU 281-283), a step 21-25 ms against 14-15 (CPU 10), a step back 214-231 against 179-180 (CPU
+  319-326); the pin 30.1 frames a second in every mode, at most 458-467 MB against 1225-1276. On a 1450x900
+  recording: 61-112 MB more while open against 164-205, steps 6-8 ms against 4, the pin at full speed. After closing,
+  every mode left a few hundred MB, the driver's (the item below). Also measured, and left: decoding an export on the
+  GPU, the frames copied back, took 2.4 s for ten seconds of the 4K video against 1.5-2.0 on the CPU and held 440 MB
+  more, so exports stay on the CPU.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -794,6 +808,9 @@ These were covered by unit tests only; check them in the real app before a relea
   stop should save it within a second or so, with `sound=recorded` and a small `recordedSound` in its
   `Recording.FinalizeTimings`, and the sound in step to the end. The recording should not drop frames or stutter more
   than before, with the encoder beside it. Then one as GIF and one as WebM: saved as before, with no `sound=`.
+- **A 4K video in the editor and in a pin**: open a 4K phone video in the Compress editor and scrub, step and jump
+  about; Task Manager's commit size for the app (Details tab) should rise about 0.45 GB, not 1.2. Pin a 4K video and let
+  it loop: it should play smoothly, its commit size staying about the same.
 - **A rotated compress**: compress one of the 4K phone videos turned 90° in the editor, nothing drawn on it. It
   should finish in about a quarter of the time it took before, turned the right way and looking as before. Then one
   with something drawn on it, which takes as long as before, the drawing where it was drawn.
@@ -981,7 +998,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   megabyte or two back. A video pin's playback and the editor's and the compare's frames decode this way by default
   (`LibavVideoFramePlayer.TryInitHardwareDecode`), so a run that has shown a video keeps it. Probably the driver's, like
   NVENC's (below): check the app's commit size in Task Manager before and after a video pin plays, then whether one
-  device kept for the run, or the CPU for the editor's 720 px frames, holds less.
+  device kept for the run, or the CPU for the editor's 720 px frames, holds less. On a 4K phone video a decoder left
+  260-420 MB after it closed. What one held while open, a surface for every frame thread, is done (Status).
 - **NVENC's driver keeps 200-260 MB once a recording has used it** (L: a child process is the only fix found). Release
   tests at 3968x1160, 120 frames, three encoders a process: 208-266 MB on frames in memory (CUDA), the same on CUDA
   with 4, 8 or 16 `surfaces`, 198-256 on Direct3D 11 frames with a device each, and one Direct3D 11 device kept across
