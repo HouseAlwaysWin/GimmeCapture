@@ -648,6 +648,11 @@ tool.
   `ShowMainWindow`), whose showing offers the update as before. `IToastService.Show` took an optional click action;
   such a toast stays up 10 s instead of 2.6, with a hand cursor. `MainWindowViewModelUpdateOfferTests`: announced once,
   a newer tag again, none with the main window up or with no way to open it; the two announcing tests fail without it.
+- Checked 2026-11-04, nothing to change: **a closed capture overlay is let go of.** A temporary App hook opened and closed
+  the frozen Normal overlay eight times, as the user captures (with its open-time text scan), software rendering on,
+  keeping weak references: after each close every window and view model so far had been collected (0 of 8 alive), and
+  private bytes went from 37 MB before to 98 MB after the first capture and stayed at 99-109 MB, the managed heap at
+  9-20 MB. What the first capture adds is what any capture loads, the OCR model (kept 2 min) the largest part.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1086,7 +1091,12 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   NVENC's (below): check the app's commit size in Task Manager before and after a video pin plays, then whether one
   device kept for the run, or the CPU for the editor's 720 px frames, holds less. On a 4K phone video a decoder left
   260-420 MB after it closed. What one held while open, a surface for every frame thread, is done (Status).
-- **NVENC's driver keeps 200-260 MB once a recording has used it** (L: a child process is the only fix found). Release
+- **NVENC's driver keeps 200-260 MB once a recording has used it** (measured in the app 2026-11-04: it does not, left).
+  A temporary App hook recorded six seconds of a 975x554 region as the user records it (H.265, 30 fps, system audio),
+  software rendering on, in fresh processes, NVENC and the software encoder alternated: private bytes 40-41 MB before,
+  143-151 with the Record overlay open, 346 while recording on `hevc_nvenc` against 266-271 on `libx265` (ultrafast),
+  and 13 s after closing 163-164 against 153-154. NVENC took 16% of a core while recording, libx265 44%, so the user's
+  "prefer hardware" stays the better choice. What follows is the item as first written, from a test host. Release
   tests at 3968x1160, 120 frames, three encoders a process: 208-266 MB on frames in memory (CUDA), the same on CUDA
   with 4, 8 or 16 `surfaces`, 198-256 on Direct3D 11 frames with a device each, and one Direct3D 11 device kept across
   encoders grew to 456 MB. Only an encoder that encodes nothing gains from Direct3D 11 (the AV1 check, done). Direct3D
