@@ -113,8 +113,8 @@ public partial class FloatingVideoViewModel
     }
 
     // Fed by LibavVideoFramePlayer.PlayAsync on open; sets the slider's known length without a second file scan.
-    // PlayAsync re-opens on every seek/segment/loop pass, so short-circuit once the (invariant) duration is known
-    // to avoid re-posting to the UI thread on every pass.
+    // PlayAsync re-opens on every seek and segment (a cut timeline's loop passes too), so short-circuit once the
+    // (invariant) duration is known to avoid re-posting to the UI thread on every pass.
     private void ApplyProbedDuration(double seconds)
     {
         if (_isDisposed || seconds <= 0 || Math.Abs(TotalDuration.TotalSeconds - seconds) <= 0.01)
@@ -229,6 +229,39 @@ public partial class FloatingVideoViewModel
                 // panel still previews the edit. From the UI thread's copy: this runs on the pool, and
                 // EditSegments is the UI thread's to change.
                 VideoEditSegment[] kept = _keptForPlayback.Kept;
+
+                // A plain loop at 1× plays in one decode, its sound looping with it, until something changes it.
+                if (!playSingleFrame
+                    && !_seamlessUnavailable
+                    && SeamlessLoopFor(kept, IsLooping, _playbackSpeed) is { } seamless)
+                {
+                    double runStart = seamless.CanLoop ? seamless.ClampStart(nextStartSeconds) : nextStartSeconds;
+                    if (runStart != nextStartSeconds)
+                    {
+                        MovePlayhead(runStart, generation);
+                    }
+
+                    await PlaySeamlessLoopAsync(ct, generation, runStart, seamless).ConfigureAwait(false);
+                    if (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    // Back by itself: the file does not say how long it is, or cannot seek back. Pass by pass from here.
+                    _seamlessUnavailable = true;
+                    if (!IsLooping)
+                    {
+                        _isPlaybackActive = false;
+                        StopAudioPlayback();
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
+                        break;
+                    }
+
+                    nextStartSeconds = seamless.StartSeconds;
+                    MovePlayhead(nextStartSeconds, generation);
+                    continue;
+                }
+
                 bool multi = !playSingleFrame && kept.Length >= 1;
 
                 double startSeconds = nextStartSeconds;
@@ -275,7 +308,7 @@ public partial class FloatingVideoViewModel
                 double pieceSpeed = (multi && segIndex >= 0 && kept[segIndex].Speed > 0) ? kept[segIndex].Speed : 1.0;
                 double effectivePlaybackSpeed = _playbackSpeed * pieceSpeed;
 
-                // Keep looping control in this VM so audio/video restart together every cycle.
+                // A pass by pass loop: this VM restarts audio and video together at every pass.
                 bool loopPlayback = false;
 
                 try

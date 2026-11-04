@@ -35,6 +35,12 @@ internal sealed class KeptSegmentsHandoff
     /// <summary>Any thread: the kept pieces as of the last complete change.</summary>
     public VideoEditSegment[] Kept => Volatile.Read(ref _kept);
 
+    /// <summary>
+    /// UI thread: raised once a change to the pieces is complete and <see cref="Kept"/> holds it. A pin looping in one
+    /// decode does not start passes of its own to pick an edit up at, so it listens here.
+    /// </summary>
+    public event Action? Changed;
+
     /// <summary>UI thread: takes the kept pieces as they are now, for a playback that is starting, and returns them.</summary>
     public VideoEditSegment[] Refresh()
     {
@@ -56,6 +62,7 @@ internal sealed class KeptSegmentsHandoff
         {
             _refreshPosted = false;
             Refresh();
+            Changed?.Invoke();
         });
     }
 

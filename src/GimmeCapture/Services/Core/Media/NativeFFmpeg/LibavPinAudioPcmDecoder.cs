@@ -87,8 +87,10 @@ internal static class LibavPinAudioPcmDecoder
     /// <summary>
     /// <see cref="DecodeRange"/> without holding the range: decodes on the caller's thread and hands each converted chunk
     /// to <paramref name="onPcm"/> (the buffer is reused — copy out synchronously), after <paramref name="onFormat"/> has
-    /// had the format. <paramref name="beforePacket"/> runs before every packet is read (a pause can wait there).
-    /// <see cref="DecodedWavFile"/> writes an export's audio this way.
+    /// had the format. <paramref name="beforePacket"/> runs before every packet is read (a pause can wait there, and
+    /// the preview's backpressure). <see cref="DecodedWavFile"/> writes an export's audio this way, and
+    /// <see cref="AudioPreviewPlayer"/> plays a preview this way, one pass of a loop at a time, or open-ended
+    /// (<see cref="double.PositiveInfinity"/>) to the end of the file.
     /// </summary>
     internal static void DecodeRangeStreaming(
         string path,
@@ -101,25 +103,6 @@ internal static class LibavPinAudioPcmDecoder
     {
         using var sink = new StreamingPcmSink(onPcm);
         DecodeCore(path, startSeconds, durationSeconds, onFormat, sink, beforePacket, cancellationToken);
-    }
-
-    /// <summary>
-    /// Streaming variant for preview playback: decodes on the caller's thread and pushes each converted
-    /// S16-stereo chunk to <paramref name="onPcm"/> (the buffer is reused — copy out synchronously).
-    /// <paramref name="onFormat"/> fires once with the output WaveFormat before any chunk; <paramref
-    /// name="waitIfFull"/> applies consumer backpressure so memory stays bounded. Unlike <see cref="Decode"/>
-    /// it never buffers the whole file.
-    /// </summary>
-    internal static void DecodeStreaming(
-        string path,
-        double startSeconds,
-        Action<WaveFormat> onFormat,
-        Action<byte[], int> onPcm,
-        Action? waitIfFull,
-        CancellationToken cancellationToken)
-    {
-        using var sink = new StreamingPcmSink(onPcm);
-        DecodeCore(path, startSeconds, double.PositiveInfinity, onFormat, sink, waitIfFull, cancellationToken);
     }
 
     private static unsafe WaveFormat DecodeCore(

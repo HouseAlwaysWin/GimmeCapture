@@ -9,6 +9,22 @@
 
 ---
 
+## Unreleased
+
+### 🖼️ Interface
+
+- **A pinned recording loops without a stop, its sound in step with its picture.** At every loop the pin opened the
+  file, the decoder and the sound again: the picture stood still 70 to 120 ms, the sound broke off for 60 to 80 ms,
+  and it came back a different amount off the picture each time, from 110 ms early to 110 ms late on a test clip. The
+  pin now plays its loop in one go, jumping back to the start with nothing reopened, its sound looping alongside and
+  the picture keeping to the sound's own clock: on the same clip the sound loops without a gap, and stays between 25 ms
+  ahead of the picture and 48 ms behind it, pass after pass (the clip itself puts it 21 ms behind). The loop ends where
+  the picture does, as before. This covers a pin played at 1× as recorded or trimmed to one stretch; a timeline with
+  cuts between pieces or pieces at other speeds plays a pass per piece, as before. Unmuting, and turning the loop off,
+  start the playback again from where it stands, as a seek does.
+
+---
+
 ## v0.72.0 - 2026-11-04
 
 ### 🛡️ Reliability

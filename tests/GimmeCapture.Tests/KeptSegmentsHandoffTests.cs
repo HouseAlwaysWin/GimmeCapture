@@ -98,4 +98,22 @@ public class KeptSegmentsHandoffTests
         Assert.Equal(new[] { Piece(0, 3), Piece(3, 6) }, playing);
         Assert.Equal(new[] { Piece(0, 3) }, handoff.Kept);
     }
+
+    [Fact]
+    public void AChange_IsAnnouncedOnceItIsComplete_WithTheNewPiecesInPlace()
+    {
+        // A pin looping in one decode has no pass end to pick an edit up at: it listens for this instead.
+        var segments = new ObservableCollection<VideoEditSegment> { Piece(0, 6) };
+        var handoff = HandoffOf(segments);
+        var heard = new List<VideoEditSegment[]>();
+        handoff.Changed += () => heard.Add(handoff.Kept);
+
+        segments.Clear();
+        segments.Add(Piece(0, 3));
+        segments.Add(Piece(3, 6, kept: false));
+        Assert.Empty(heard);
+        RunPosted();
+
+        Assert.Equal(new[] { Piece(0, 3) }, Assert.Single(heard));
+    }
 }

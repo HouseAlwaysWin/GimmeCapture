@@ -23,7 +23,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     /// </summary>
     public delegate void BgraFrameHandler(ReadOnlySpan<byte> bgra, double seconds);
 
-    // PlayFramesAsync runs again for every seek, segment, loop pass, thumbnail and frame step, and each run logged its
+    // PlayFramesAsync runs again for every seek, segment, thumbnail and frame step, and each run logged its
     // decode path, and every slow open, at Information. Now the decode path is logged when it changes for a codec, and
     // a file that is slow to open once; the repeats go to Debug.
     private static readonly ConcurrentDictionary<AVCodecID, string> LastDecodePathByCodec = new();
@@ -61,6 +61,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     // cap on consecutive drops guarantees the picture (and the UI time readout) keeps advancing.
     private const double LateFrameThresholdSeconds = 0.10;
     private const int MaxConsecutiveDrops = 4;
+
+    // How often a loop that holds its first frame for its sound to start looks whether it has.
+    private const double SoundStartPollSeconds = 0.005;
 
     // A single GPU→system frame download (av_hwframe_transfer_data) can fail transiently (e.g. staging exhaustion)
     // — we skip that frame. But a persistent failure (device-removed / TDR) would otherwise freeze on a stale
@@ -625,6 +628,14 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     /// Decodes <paramref name="videoPath"/> from <paramref name="startSeconds"/>, scaled to outputWidth × outputHeight
     /// BGRA, and hands each frame to <paramref name="onFrame"/> on the decode thread at its presentation time. The
     /// frame is the scaler's own output, not a copy: a caller that keeps it copies what it needs during the call.
+    /// <para>With a <paramref name="loopRange"/> it plays that stretch over and over in this one decode, until
+    /// cancelled: at the loop's end it seeks back to its start, with the file, the decoder and its GPU device kept, and
+    /// the time runs on across the jump (<see cref="LoopPassTimeline"/>). The loop ends where the picture does at the
+    /// latest (a NaN end: right there), so a recording whose sound runs on a little does not hold its last frame
+    /// through the rest; <paramref name="onLoopKnown"/> hears the loop as it plays before any frame, for the sound to
+    /// loop alike. Frames are then shown by <paramref name="soundClock"/> while it plays, at 1×
+    /// (<see cref="PlaybackMediaClock"/>), and by a stopwatch otherwise. A file that does not say how long its picture
+    /// is, or cannot seek back, cannot be looped that way: it plays to its end once, and the call returns.</para>
     /// </summary>
     public async Task PlayFramesAsync(
         string videoPath,
@@ -635,7 +646,10 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         bool loop,
         BgraFrameHandler onFrame,
         CancellationToken ct,
-        Action<double>? onDurationKnown = null)
+        Action<double>? onDurationKnown = null,
+        PlaybackLoop? loopRange = null,
+        Func<SoundClockReading>? soundClock = null,
+        Action<PlaybackLoop>? onLoopKnown = null)
     {
         await Task.Run(() =>
         {
@@ -680,16 +694,28 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     // Surface the duration we just read so callers (e.g. the Pin window) can skip a separate probe
                     // open — halving the scan-to-first-frame cost on large files. Mirrors ProbeDurationSecondsAsync:
                     // prefer container duration, fall back to the video stream's.
-                    if (onDurationKnown != null)
+                    double dur = fmt->duration > 0
+                        ? fmt->duration / (double)ffmpeg.AV_TIME_BASE
+                        : (st->duration > 0 ? st->duration * ffmpeg.av_q2d(st->time_base) : 0);
+                    if (dur > 0)
                     {
-                        double dur = fmt->duration > 0
-                            ? fmt->duration / (double)ffmpeg.AV_TIME_BASE
-                            : (st->duration > 0 ? st->duration * ffmpeg.av_q2d(st->time_base) : 0);
-                        if (dur > 0)
+                        onDurationKnown?.Invoke(dur);
+                    }
+
+                    // The loop as it plays, ended where the picture ends at the latest, and where it begins. The caller
+                    // hears it before any frame, to loop its sound the same way.
+                    LoopPassTimeline? timeline = null;
+                    if (loopRange is { } requestedLoop)
+                    {
+                        PlaybackLoop resolved = ResolveLoop(requestedLoop, PictureEndSeconds(st, dur));
+                        if (resolved.CanLoop)
                         {
-                            onDurationKnown(dur);
+                            startSeconds = resolved.ClampStart(startSeconds);
+                            timeline = new LoopPassTimeline(resolved, startSeconds);
+                            onLoopKnown?.Invoke(resolved);
                         }
                     }
+
                     AVCodecParameters* par = st->codecpar;
                     AVCodec* dec = ffmpeg.avcodec_find_decoder(par->codec_id);
                     if (dec == null)
@@ -777,11 +803,16 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     byte[]? packedFrame = null; // only if the scaler's rows ever come padded
                     bool decoderDraining = false;
                     bool shouldResetLoop = false;
+                    bool passOver = false;
                     double startedAtSeconds = -1;
                     int consecutiveDrops = 0;
                     int hwTransferFailures = 0;
                     var playbackClock = Stopwatch.StartNew();
                     var frameWaiter = FrameDeadlineWaiter.Create(ct);
+
+                    // A loop's frames are shown by the sound's clock, or a stopwatch; its first frame at once.
+                    PlaybackMediaClock? mediaClock = timeline != null ? new PlaybackMediaClock(speed) : null;
+                    Func<SoundClockReading>? readSound = Math.Abs(speed - 1.0) < 0.001 ? soundClock : null;
 
                     try
                     {
@@ -828,7 +859,8 @@ internal sealed class LibavVideoFramePlayer : IDisposable
 
                                 if (gr == ffmpeg.AVERROR_EOF)
                                 {
-                                    shouldResetLoop = loop;
+                                    shouldResetLoop = loop && timeline == null;
+                                    passOver = timeline != null;
                                     break;
                                 }
 
@@ -837,33 +869,74 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                 long ts = decFrame->best_effort_timestamp;
                                 double seconds = ts >= 0 ? ts * ffmpeg.av_q2d(st->time_base) : 0;
 
-                                if (seconds + 0.0005 < startSeconds)
+                                if (timeline != null && mediaClock != null)
                                 {
-                                    continue;
+                                    if (timeline.IsBeforePassStart(seconds))
+                                    {
+                                        continue;
+                                    }
+
+                                    if (timeline.EndsPass(seconds))
+                                    {
+                                        passOver = true;
+                                        break;
+                                    }
+
+                                    double due = timeline.PlaybackSeconds(seconds);
+                                    if (startedAtSeconds < 0)
+                                    {
+                                        startedAtSeconds = seconds;
+                                        playbackClock.Restart();
+                                        mediaClock.Begin(0, due, readSound?.Invoke() ?? SoundClockReading.Unavailable);
+                                    }
+                                    else
+                                    {
+                                        double now = mediaClock.Now(
+                                            playbackClock.Elapsed.TotalSeconds, readSound?.Invoke() ?? SoundClockReading.Unavailable);
+                                        if (IsLateFrame(now, due, consecutiveDrops))
+                                        {
+                                            consecutiveDrops++;
+                                            continue;
+                                        }
+
+                                        consecutiveDrops = 0;
+                                        DelayUntilPlaybackTime(frameWaiter, playbackClock, mediaClock, readSound, due, speed, ct);
+                                        if (ct.IsCancellationRequested)
+                                        {
+                                            break;
+                                        }
+                                    }
                                 }
-
-                                if (startedAtSeconds < 0)
+                                else
                                 {
-                                    startedAtSeconds = seconds;
-                                    playbackClock.Restart();
-                                }
+                                    if (seconds + 0.0005 < startSeconds)
+                                    {
+                                        continue;
+                                    }
 
-                                // Real-time catch-up: if we've already fallen behind this frame's scheduled slot,
-                                // skip displaying it (decode still ran, so reference frames stay intact) instead of
-                                // rendering late frames that pile onto the UI thread. Capped so the picture — and
-                                // the caller's time readout — keeps advancing.
-                                if (ShouldDropLateFrame(playbackClock.Elapsed.TotalSeconds, startedAtSeconds, seconds, speed, consecutiveDrops))
-                                {
-                                    consecutiveDrops++;
-                                    continue;
-                                }
+                                    if (startedAtSeconds < 0)
+                                    {
+                                        startedAtSeconds = seconds;
+                                        playbackClock.Restart();
+                                    }
 
-                                consecutiveDrops = 0;
+                                    // Real-time catch-up: if we've already fallen behind this frame's scheduled slot,
+                                    // skip displaying it (decode still ran, so reference frames stay intact) instead of
+                                    // rendering late frames that pile onto the UI thread. Capped so the picture — and
+                                    // the caller's time readout — keeps advancing.
+                                    if (ShouldDropLateFrame(playbackClock.Elapsed.TotalSeconds, startedAtSeconds, seconds, speed, consecutiveDrops))
+                                    {
+                                        consecutiveDrops++;
+                                        continue;
+                                    }
 
-                                DelayUntilFrame(frameWaiter, playbackClock, startedAtSeconds, seconds, speed, ct);
-                                if (ct.IsCancellationRequested)
-                                {
-                                    break;
+                                    consecutiveDrops = 0;
+
+                                    DelayUntilFrame(frameWaiter, playbackClock, startedAtSeconds, seconds, speed, ct);
+                                    if (ct.IsCancellationRequested)
+                                    {
+                                        break;
+                                    }
                                 }
 
                                 // Under hw decode the frame lives on a GPU surface (AV_PIX_FMT_D3D11); download it
@@ -939,6 +1012,30 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                 onFrame(bgra, seconds);
                             }
 
+                            // The loop's pass is over: back to its start, nothing reopened, the time running on. A file
+                            // that cannot seek there ends the call instead, and its caller plays it pass by pass.
+                            if (passOver && timeline != null && !ct.IsCancellationRequested)
+                            {
+                                passOver = false;
+                                timeline.NextPass();
+                                decoderDraining = false;
+                                consecutiveDrops = 0;
+                                hwTransferFailures = 0;
+                                int seekRc = ffmpeg.av_seek_frame(
+                                    fmt,
+                                    videoStream,
+                                    (long)Math.Max(0, timeline.PassStartSeconds / ffmpeg.av_q2d(st->time_base)),
+                                    ffmpeg.AVSEEK_FLAG_BACKWARD);
+                                if (seekRc < 0)
+                                {
+                                    AppLog.Debug("LibavVideoFramePlayer.Loop", $"cannot seek back to the loop's start (rc={seekRc})");
+                                    break;
+                                }
+
+                                ffmpeg.avcodec_flush_buffers(decCtx);
+                                continue;
+                            }
+
                             if (shouldResetLoop && !ct.IsCancellationRequested)
                             {
                                 decoderDraining = false;
@@ -987,6 +1084,66 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         int sr = ffmpeg.av_seek_frame(fmt, streamIndex, ts, ffmpeg.AVSEEK_FLAG_BACKWARD);
         ThrowIfErr(sr, "seek_frame");
         ffmpeg.avcodec_flush_buffers(decCtx);
+    }
+
+    // Where the picture ends, in the file's time: the end of its last frame as the video stream states it, else the
+    // file's length, else 0 when neither is known.
+    private static unsafe double PictureEndSeconds(AVStream* st, double fileSeconds)
+    {
+        if (st->duration > 0)
+        {
+            double timeBase = ffmpeg.av_q2d(st->time_base);
+            double start = st->start_time != ffmpeg.AV_NOPTS_VALUE ? st->start_time * timeBase : 0;
+            return start + (st->duration * timeBase);
+        }
+
+        return Math.Max(0, fileSeconds);
+    }
+
+    /// <summary>
+    /// The loop as it plays: the one asked for, ended where the picture ends at the latest. A NaN end is the picture's
+    /// end; with that unknown (0) as well, the loop cannot be laid out, and <see cref="PlaybackLoop.CanLoop"/> is false.
+    /// </summary>
+    internal static PlaybackLoop ResolveLoop(PlaybackLoop requested, double pictureEndSeconds)
+    {
+        double end = requested.EndSeconds;
+        if (pictureEndSeconds > 0)
+        {
+            end = double.IsNaN(end) ? pictureEndSeconds : Math.Min(end, pictureEndSeconds);
+        }
+
+        return requested with { EndSeconds = end };
+    }
+
+    // A loop's frame this far behind the clock is skipped to catch up, as ShouldDropLateFrame does without a loop.
+    internal static bool IsLateFrame(double nowSeconds, double dueSeconds, int consecutiveDrops) =>
+        consecutiveDrops < MaxConsecutiveDrops && nowSeconds - dueSeconds > LateFrameThresholdSeconds;
+
+    // Waits until the loop's clock reaches the frame, on the timer like DelayUntilFrame. While the clock stands still
+    // for the sound to start, it looks again every few milliseconds.
+    internal static void DelayUntilPlaybackTime(
+        FrameDeadlineWaiter waiter,
+        Stopwatch playbackClock,
+        PlaybackMediaClock mediaClock,
+        Func<SoundClockReading>? readSound,
+        double dueSeconds,
+        double speed,
+        CancellationToken ct)
+    {
+        double safeSpeed = Math.Max(0.1, speed);
+        while (!ct.IsCancellationRequested)
+        {
+            double now = mediaClock.Now(
+                playbackClock.Elapsed.TotalSeconds, readSound?.Invoke() ?? SoundClockReading.Unavailable);
+            double remainingSeconds = (dueSeconds - now) / safeSpeed;
+            if (remainingSeconds <= FrameDeadlineWaiter.ToleranceSeconds)
+            {
+                return;
+            }
+
+            waiter.Wait(TimeSpan.FromSeconds(
+                mediaClock.IsWaitingForSound ? Math.Min(remainingSeconds, SoundStartPollSeconds) : remainingSeconds));
+        }
     }
 
     // Waits on a timer and never spins; see FrameDeadlineWaiter for why.

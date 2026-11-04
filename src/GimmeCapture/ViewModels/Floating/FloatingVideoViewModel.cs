@@ -137,7 +137,16 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public bool IsLooping
     {
         get => _isLooping;
-        set => this.RaiseAndSetIfChanged(ref _isLooping, value);
+        set
+        {
+            if (_isLooping == value)
+            {
+                return;
+            }
+
+            this.RaiseAndSetIfChanged(ref _isLooping, value);
+            OnLoopingChangedInSeamlessLoop();
+        }
     }
 
     private TimeSpan _totalDuration = TimeSpan.Zero;
@@ -205,7 +214,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             if (_isMuted == value) return;
             this.RaiseAndSetIfChanged(ref _isMuted, value);
             this.RaisePropertyChanged(nameof(MuteTooltip));
-            UpdateAudioStateFromPlayback(PlayheadSeconds(), _keptForPlayback.Kept);
+            if (!OnMutedChangedInSeamlessLoop())
+            {
+                UpdateAudioStateFromPlayback(PlayheadSeconds(), _keptForPlayback.Kept);
+            }
         }
     }
 
@@ -482,6 +494,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         _uiFrameUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackUiFps ?? 30, 30);
         _uiTimeUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackTimelineFps ?? 15, 15);
         _keptForPlayback = new KeptSegmentsHandoff(EditSegments, action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
+        _keptForPlayback.Changed += OnKeptPiecesChanged;
 
         // Apply Default Toolbar Visibility
         ShowToolbar = !(_appSettingsService?.Settings.DefaultHideRecordToolbar ?? false);

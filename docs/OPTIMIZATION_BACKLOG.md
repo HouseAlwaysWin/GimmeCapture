@@ -17,7 +17,7 @@ tool.
   `docs/catalog/releases.md` entry went in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.0, `## Unreleased` holds no entries (2026-11-04).
+- Since v0.72.0, `## Unreleased` holds 1 entry (2026-11-04): a pinned recording's seamless loop.
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.72.0, but v0.68.1 drops an update its start-up check finds in a launch
@@ -656,6 +656,31 @@ tool.
   keeping weak references: after each close every window and view model so far had been collected (0 of 8 alive), and
   private bytes went from 37 MB before to 98 MB after the first capture and stayed at 99-109 MB, the managed heap at
   9-20 MB. What the first capture adds is what any capture loads, the OCR model (kept 2 min) the largest part.
+- Done since batch 1, the user's choice (2026-11-04): **a video pin reopened file, GPU device, decoder and sound at
+  every loop** (most of the Pins item). Measured first with a temporary App hook (not committed; the probe source is
+  `AvLoopProbe.cs` in the session's scratchpad): a 6 s 640x360 30 fps clip written for it, a white flash and a 60 ms
+  3 kHz beep together at every k+0.5 s, pinned at 920x527 with software rendering, the flashes read by BitBlt of the
+  pin's middle and the beeps from a WASAPI loopback (Goertzel), 26 s, fresh processes. Before: sound minus picture
+  -60..+109 and -113..+100 ms, a new offset every pass, drifting later; at the loop the sound broke off 63-83 ms and the
+  picture's interval read 990-1106 ms. Now one `PlayFramesAsync` plays the loop (`loopRange`): at the loop's end it
+  seeks back with the file, decoder and device kept, and `LoopPassTimeline` lays the passes end to end. The sound loops
+  in step without reopening (`AudioPreviewPlayer.Start(..., loop)`: `LoopingWaveProvider` over the Media Foundation
+  reader, or each pass decoded in turn on the FFmpeg path, padded with silence or cut at the loop's end), and the
+  picture keeps to the sound's clock (`ReadClock` per start ticket: WasapiOut/WaveOutEvent `IWavePosition`),
+  `PlaybackMediaClock` holding the first frame up to 1 s for the sound, running on from its last reported position up
+  to 50 ms, never back, and on a stopwatch while muted or stalled. Lesson from the first try: the loop ended at the
+  file's length, 6.038 s, as the clip's AAC track (283 frames, an edit list from 0) runs 38 ms past the picture, and the
+  picture held its last frame that long every pass; one of the user's recordings has 0.3 s of sound past its picture.
+  The loop now ends where the picture does (`PictureEndSeconds`: the video stream's start + duration), as the old
+  restart at EOF did, and the sound starts once the player has laid the loop out (`onLoopKnown`). The FFmpeg path also
+  starts its device only once 400 ms are buffered: started on an empty buffer, WasapiOut's first fill of 200 ms was
+  silence the device clock counted. After: the beeps 996-1004 ms apart across loops, sound minus picture -25..+48 and
+  -13..+48 ms (21 ms is the clip's own AAC delay). Muting keeps the picture
+  going; unmuting and turning the loop off start the playback again from the playhead (one 60-100 ms reopen), checked
+  with the probe. Only a 1× loop of the whole clip or one stretch (`SeamlessLoopFor`) plays this way; a timeline edit
+  that changes the loop restarts it (`KeptSegmentsHandoff.Changed`). Tests: `LibavVideoFramePlayerLoopTests` (y4m:
+  passes in one call, a stretch, frames never before a half-speed sound, which fails with the sound clock off),
+  `PlaybackMediaClockTests`, `LoopingWaveProviderTests`, `PlaybackLoopTests`, `FloatingVideoSeamlessLoopTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -893,6 +918,12 @@ These were covered by unit tests only; check them in the real app before a relea
   few times, the first after the restart included. No white rectangle at the top left as it opens; the overlay and its
   toolbar appear as quickly as before. Then a recording without annotations, which excludes the overlay from capture
   once it starts: the recording should still leave the overlay's frame out of the video.
+- **A pinned recording's loop**: pin a recording with sound (yours are 30 fps) and let it loop a few times. The
+  picture should not stop at the loop, the sound should not break off, and a click or a key should sound on its frame
+  in every pass. Mute and unmute while it plays (the sound
+  comes back in step after a short restart), turn the loop off (it stops at the end), trim it in the timeline (it loops
+  the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
+  should loop where the picture ends, without holding its last frame.
 - **A rotated compress**: compress one of the 4K phone videos turned 90° in the editor, nothing drawn on it. It
   should finish in about a quarter of the time it took before, turned the right way and looking as before. Then one
   with something drawn on it, which takes as long as before, the drawing where it was drawn.
@@ -1002,15 +1033,12 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Pins
 
-- **A video pin reopens file, GPU device, decoder and audio at every loop and seek** (M-L).
-  `FloatingVideoViewModel.Media.cs:279-313,371-373` (`loopPlayback = false`, a new `PlayFramesAsync` per pass),
-  `LibavVideoFramePlayer.cs:670-718`; `UpdateAudioStateFromPlayback` reopens Media Foundation and WASAPI too. Keep one
-  decoder per pin, do loops and seeks as requests to it, seek the audio on loop; 1-2 decode threads under D3D11VA.
-  Measured 2026-11-03, a pass to its first frame on the user's recordings: 68-123 ms with D3D11VA (the first in a
-  process 1.7 s), 13-44 on the CPU. The audio restarts on its own worker (a new MediaFoundationReader and a WasapiOut
-  with its default 200 ms of buffer), and the video's slower open now roughly hides that: a video that restarted in
-  10 ms would lead the sound at every loop. So a kept decoder needs the picture to follow the audio's clock, measured
-  through the loopback (it plays sound). A paused pin's seeks (single-frame passes, no audio) would gain on their own.
+- **A video pin still reopens at every seek, and a cut timeline at every piece** (M). The loop of a plain or trimmed
+  pin at 1× plays in one decode with its sound in step (Status); a seek, pause/resume, unmute or speed change still
+  starts a new `PlayFramesAsync` (68-123 ms to the first frame with D3D11VA on the user's recordings, measured
+  2026-11-03, 13-44 on the CPU), and so does every piece of a timeline with cuts or speeds, whose sound restarts per
+  piece. Seeking inside the kept decode would need the sound clock's ticket to change mid-run
+  (`PlaybackMediaClock` follows one); a paused pin's seeks (single-frame passes, no sound) would gain on their own.
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done
