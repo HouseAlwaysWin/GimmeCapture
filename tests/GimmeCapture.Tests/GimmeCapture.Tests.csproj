@@ -40,8 +40,10 @@
     <Compile Remove="FreezeGrabProbeTests.cs" />
     <!-- Grabs the real screen and decodes PNGs through GDI+, as the overlay's copy does. -->
     <Compile Remove="SnipCopyProbeTests.cs" />
-    <!-- Counts thread wakeups while Avalonia's real Win32 loop sits idle. -->
+    <!-- Count thread wakeups while Avalonia's real Win32 loop sits idle. -->
+    <Compile Remove="ThreadActivity.cs" />
     <Compile Remove="UiStallMonitorIdleProbeTests.cs" />
+    <Compile Remove="PinProcessingIdleProbeTests.cs" />
     <!-- Maps DLLs as images and copies them with robocopy. -->
     <Compile Remove="StartupPrefetchProbeTests.cs" />
   </ItemGroup>

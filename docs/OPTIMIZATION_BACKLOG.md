@@ -18,11 +18,11 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 1 entry (2026-11-04).
-- The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.71.0+bed41298 (2026-11-04): builds copied in by hand
-  since 2026-11-02, the sign-in launcher included, which its Run value starts. So it has none of v0.72.x's other work.
-  Before v0.72.0 an update the start-up check finds in a launch to the tray is dropped, so its first update comes from
-  the main window's "Check for updates" or the next copy by hand (v0.72.0 and later announce one with a toast).
+- Since v0.72.1, `## Unreleased` holds 2 entries (2026-11-04).
+- The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
+  since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
+  version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
+  toast (v0.72.0 and later).
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
   open of 135-260 ms instead of 80-100 ms on a run's first start, and `GraphicsCaptureSession.IsSupported()` 16 ms on
@@ -688,6 +688,22 @@ tool.
   fill at the UI's rate (1.5 at most, a tenth early allowed): 780 of 787 shown, a 60 or 120 fps clip thinned to 30.
   CPU with software rendering, the CPU-only probe alternated old/new in six fresh processes (15 s): 19.4/19.6/20.0% of
   a core at 15.9 fps against 22.0/22.9/22.5% at 29.8 fps. `FramePresentationPacerTests`.
+- Done since batch 1, the user's choice (2026-11-04): **a pin's processing bar kept the app rendering after it hid**
+  (Pins' "Lower"). Fluent's indeterminate `ProgressBar` animates through a style on its template parts, and Avalonia
+  12.1.4 only pauses a style's animation while its control is not effectively visible: the paused clock stays
+  subscribed to `MediaContext`'s, and while that has any subscriber `MediaContext` renders every 16 ms, changed or not
+  (decompiled `AnimationInstance.Subscribed`, `Clock`, `MediaContext.RenderCore`). The bar's template, and so its
+  animation, starts when `ProcessingOverlay` first shows, at a pin's first background removal, smart selection or
+  refinement, and from then until the pin closed the UI thread kept that pace. `PinProcessingIdleProbeTests` (opt-in,
+  the real Win32 platform, a 640x360 pin off screen, GPU rendering, 10 s windows after 30 s of start-up): the UI thread
+  woke 12.9 times a second at 2.35 M cycles/s with the pin as shown, and 332.0 at 18.2 M once its overlay had shown
+  for a second and hidden; the process 115 and 435 wakeups/s, 5.7 and 22.2 M cycles/s. The bar is now indeterminate
+  only while the overlay shows (`IsIndeterminate` bound to its `IsVisible`): after it, 9.1-11.9 wakeups and 1.9-2.3 M
+  cycles/s on the UI thread and 104-111 wakeups in the process, three runs, and the probe checks that the bar still
+  runs while it shows (371.8 wakeups/s then). The video editor's loading bar did the same after the first frame, for
+  as long as the editor stayed open; it follows `IsPreparing` now. `ProgressBarMarkupTests` fails a literal
+  `IsIndeterminate="True"` in any `.axaml`. The capture overlay's top loading bar probably does the same (Snip
+  overlay).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1054,10 +1070,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   open (`AnnotationEditorState.cs:150`). A cap by bytes means fewer undo steps on large pictures. What a closed pin
   kept is done (Status).
 - **Lower**: video pins decode at full size and copy each frame twice (`LatestFrameHandoff.cs:40`, then
-  `FloatingVideoViewModel.Media.cs:564`, 33 MB per frame at 4K) and keep decoding when covered;
-  `ProcessingOverlay.axaml:87` keeps `IsIndeterminate="True"` (a 60 Hz animation after the first AI job? measure);
-  the translation layer adds results one at a time, rebuilding its region per item (`FloatingTranslationWindow.axaml.cs:
-  109-117`).
+  `FloatingVideoViewModel.Media.cs:564`, 33 MB per frame at 4K) and keep decoding when covered; the translation layer
+  adds results one at a time, rebuilding its region per item (`FloatingTranslationWindow.axaml.cs:109-117`).
 
 ### Snip overlay
 
@@ -1079,6 +1093,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   when nothing scrolls (`ScrollingManual.cs:304-309`). Carry signatures in rented buffers, skip unchanged frames.
 - **Freezing mid-session after entering drawing mode live keeps the live snapshot** (S). Needs
   `SnipWindowViewModel.Capture.cs` (left from batch 1).
+- **The top loading bar's animation probably keeps the overlay rendering every 16 ms** (S, measure first).
+  `TopLoadingBar.axaml`'s infinite animation is a style on its `Rectangle` itself, applied as the overlay is built, so
+  by what the pins' processing bar showed (Status) it sits paused on the animation clock from the overlay's creation
+  until it closes, whether an AI scan or a translation showed it or not. Measure an open overlay's UI-thread wakeups as
+  `PinProcessingIdleProbeTests` does, then select the animation on the bar's visibility.
 - **Small ones**: `ToolbarMaxWidth` raised on every pointer move (`Selection.AIScan.cs:852`, `State.cs:812`); the key
   filter rebuilds a 28-field record on every view-model PropertyChanged (`SnipWindow.Win32.cs:148,227`).
 

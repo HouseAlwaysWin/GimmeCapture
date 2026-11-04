@@ -19,6 +19,11 @@
   hotkeys worked: its own read-ahead of them ran alongside the start, which read the same disk elsewhere. The launcher
   now reads those files as well before it starts the app, each in one pass, from the list the app writes down after
   each start: 73 files, 76 MB for an installed copy.
+- **A pin that has removed a background no longer keeps the app drawing.** The bar a pin shows while it removes a
+  background or makes a smart selection kept animating out of sight after it hid: Avalonia pauses a hidden control's
+  animation but keeps redrawing every 16 ms for it. From a pin's first such job until the pin was closed, the app's
+  interface thread woke about 330 times a second instead of 13, at about eight times its idle CPU. The bar now runs
+  only while it shows. The video editor's loading bar did the same for as long as the editor stayed open.
 
 ## v0.72.1 - 2026-11-04
 

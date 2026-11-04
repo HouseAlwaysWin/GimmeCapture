@@ -256,7 +256,8 @@
                      spinner so it isn't a blank freeze; cleared when the sharp first frame is ready. -->
                 <Border IsVisible="{Binding IsPreparing}" Background="#55000000" IsHitTestVisible="False">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"/>
+                        <!-- Indeterminate only while it shows (ProgressBarMarkupTests). -->
+                        <ProgressBar IsIndeterminate="{Binding IsPreparing}" Width="160" Height="4"/>
                         <TextBlock Text="{Binding [EditorLoadingVideo], Source={x:Static services:LocalizationService.Instance}}"
                                    Foreground="White" FontSize="13" HorizontalAlignment="Center"/>
                     </StackPanel>
