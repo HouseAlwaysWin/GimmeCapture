@@ -552,13 +552,13 @@ public partial class FloatingVideoViewModel
         });
     }
 
+    // Decode thread, or `force` from any: the pacer passes the frames the UI's frame rate has room for, all of them
+    // for a clip no faster than it. A frame already waiting for the UI thread is replaced by the newer one it shows.
     private void TryScheduleFrameUiRefresh(bool force = false)
     {
         if (_isDisposed) return;
 
-        var now = Environment.TickCount64;
-        var last = Interlocked.Read(ref _lastFrameUiPostTimestampMs);
-        if (!force && now - last < _uiFrameUpdateIntervalMs) return;
+        if (!force && !_framePacer.TryPass(Stopwatch.GetTimestamp())) return;
         if (Interlocked.CompareExchange(ref _isFrameUiPostPending, 1, 0) != 0) return;
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -570,7 +570,6 @@ public partial class FloatingVideoViewModel
                 if (ShowLatestFrame())
                 {
                     RequestRedraw?.Invoke();
-                    Interlocked.Exchange(ref _lastFrameUiPostTimestampMs, Environment.TickCount64);
                 }
             }
             catch (Exception ex) { AppLog.Warning("FloatingVideo.PostFrameToUi", ex); }

@@ -17,7 +17,7 @@ tool.
   `docs/catalog/releases.md` entry went in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.0, `## Unreleased` holds 1 entry (2026-11-04): a pinned recording's seamless loop.
+- Since v0.72.0, `## Unreleased` holds 2 entries (2026-11-04): a pinned recording's seamless loop, and its frame rate.
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.72.0, but v0.68.1 drops an update its start-up check finds in a launch
@@ -675,12 +675,19 @@ tool.
   restart at EOF did, and the sound starts once the player has laid the loop out (`onLoopKnown`). The FFmpeg path also
   starts its device only once 400 ms are buffered: started on an empty buffer, WasapiOut's first fill of 200 ms was
   silence the device clock counted. After: the beeps 996-1004 ms apart across loops, sound minus picture -25..+48 and
-  -13..+48 ms (21 ms is the clip's own AAC delay). Muting keeps the picture
+  -13..+48 ms, then 12..53 with the frame-rate fix below (21 ms is the clip's own AAC delay). Muting keeps the picture
   going; unmuting and turning the loop off start the playback again from the playhead (one 60-100 ms reopen), checked
   with the probe. Only a 1× loop of the whole clip or one stretch (`SeamlessLoopFor`) plays this way; a timeline edit
   that changes the loop restarts it (`KeptSegmentsHandoff.Changed`). Tests: `LibavVideoFramePlayerLoopTests` (y4m:
   passes in one call, a stretch, frames never before a half-speed sound, which fails with the sound clock off),
   `PlaybackMediaClockTests`, `LoopingWaveProviderTests`, `PlaybackLoopTests`, `FloatingVideoSeamlessLoopTests`.
+- Found measuring that (2026-11-04): **a pin showed about half the frames of a 30 fps recording.** The frame throttle
+  compared `Environment.TickCount64` (15-16 ms steps here) with when the UI last drew, against 33 ms at the default
+  PlaybackUiFps 30: two frames 33 ms apart mostly read 31. The user records at 30 fps with PlaybackUiFps 30, so every
+  pin of theirs showed about 16 fps: 194 of 367 frames in 12 s. `FramePresentationPacer` passes frames on shares that
+  fill at the UI's rate (1.5 at most, a tenth early allowed): 780 of 787 shown, a 60 or 120 fps clip thinned to 30.
+  CPU with software rendering, the CPU-only probe alternated old/new in six fresh processes (15 s): 19.4/19.6/20.0% of
+  a core at 15.9 fps against 22.0/22.9/22.5% at 29.8 fps. `FramePresentationPacerTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -920,7 +927,7 @@ These were covered by unit tests only; check them in the real app before a relea
   once it starts: the recording should still leave the overlay's frame out of the video.
 - **A pinned recording's loop**: pin a recording with sound (yours are 30 fps) and let it loop a few times. The
   picture should not stop at the loop, the sound should not break off, and a click or a key should sound on its frame
-  in every pass. Mute and unmute while it plays (the sound
+  in every pass. It should look smoother than before: every frame shows now. Mute and unmute while it plays (the sound
   comes back in step after a short restart), turn the loop off (it stops at the end), trim it in the timeline (it loops
   the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
   should loop where the picture ends, without holding its last frame.

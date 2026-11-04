@@ -18,7 +18,7 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel, IAsyncDisposable
 {
-    private readonly int _uiFrameUpdateIntervalMs;
+    private readonly FramePresentationPacer _framePacer;
     private readonly int _uiTimeUpdateIntervalMs;
     private readonly SemaphoreSlim _playSemaphore = new(1, 1);
     private readonly object _disposeLock = new();
@@ -33,7 +33,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private readonly PlayheadHandoff _decodedPlayhead = new();
     // The kept timeline pieces, on the way from the UI thread to the playback loop, which must not read EditSegments.
     private readonly KeptSegmentsHandoff _keptForPlayback;
-    private long _lastFrameUiPostTimestampMs;
     private long _lastTimeUiPostTimestampMs;
     private int _isFrameUiPostPending;
     private int _isTimeUiPostPending;
@@ -463,11 +462,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         return Math.Max(2, even);
     }
 
-    private static int FpsToIntervalMs(int fps, int defaultFps)
-    {
-        int safeFps = Math.Clamp(fps > 0 ? fps : defaultFps, 1, 120);
-        return Math.Max(1, 1000 / safeFps);
-    }
+    private static int FpsToIntervalMs(int fps, int defaultFps) => Math.Max(1, 1000 / SafeFps(fps, defaultFps));
+
+    private static int SafeFps(int fps, int defaultFps) => Math.Clamp(fps > 0 ? fps : defaultFps, 1, 120);
 
     /// <param name="unsavedRecording">The recording the user has not saved, when this pin plays one: the pin owns it
     /// from here on, and deletes it when it closes.</param>
@@ -491,7 +488,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         CurrentThickness = 4.0;
         _clipboardService = clipboardService;
         _appSettingsService = appSettingsService;
-        _uiFrameUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackUiFps ?? 30, 30);
+        _framePacer = new FramePresentationPacer(
+            TimeSpan.FromSeconds(1.0 / SafeFps(_appSettingsService?.Settings.PlaybackUiFps ?? 30, 30)));
         _uiTimeUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackTimelineFps ?? 15, 15);
         _keptForPlayback = new KeptSegmentsHandoff(EditSegments, action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
         _keptForPlayback.Changed += OnKeptPiecesChanged;
