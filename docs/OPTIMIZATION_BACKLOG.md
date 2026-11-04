@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 15 entries (2026-11-03).
+- Since v0.71.0, `## Unreleased` holds 16 entries (2026-11-04).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
@@ -622,6 +622,23 @@ tool.
   19 unloaded, as before. `BackgroundRemovalServiceTests.OnlyAPictureWithoutAPlainBackground_LoadsTheModel` runs both
   paths on `TinyOnnxModel` (now with an input name, U2Net's `input.1`) and fails on the old code. The pin still asks for
   the AI Core module before any removal (`EnsureAICoreResourcesAsync`), a plain one included.
+- Done since batch 1, the user's choice (2026-11-04): **the hover outline's dashes flowed at full rate on the CPU**
+  (the Snip overlay's "Hover animation renders at 60 Hz while the overlay sits idle"). The user draws with the CPU ("Use
+  less memory"). Measured with a temporary App hook (not committed) on the laptop at 125%, the overlay frozen, its
+  hover set through reflection, process CPU from `QueryProcessCycleTime` over 3 s (`TotalProcessorTime` moves in
+  15.6 ms steps and read 0-5% here): no outline 1.2-1.3% of a core, a 240x120 outline 20-21%, 1300x650 25-26%, the
+  whole screen 27-34%, and the frozen backdrop invalidated every 16 ms 29-38%. The UI thread took 1.1-1.8% throughout,
+  and the "16 ms" timer ticked about 43 times a second. A small outline costs nearly as much as the whole screen because
+  the CPU renderer presents every frame whole: `FramebufferManager.DrawAndUnlock` calls `DrawToWindow(hwnd, data, 0,
+  0, 0, 0, -1, -1)`, a `SetDIBitsToDevice` of all 1920x1080 pixels, about 4.5 ms a frame whatever changed. Ticking at
+  33 ms (about 21 a second) halved it (small 10-12%, whole screen 15%). Asked (the backlog had left the look to the
+  user), they chose both: under software rendering `HoverRectangleAnimationController.Economical` steps the dashes
+  every 33 ms and stops them once the pointer has rested a second (`PointerMoved`, from `UpdateWindowHover`, the
+  pointer handler's only call), the outline still shown; a move to a new target keeps 16 ms. `SnipWindowFactory`
+  passes `StartupRenderer.IsSoftware`; on the GPU nothing changes. After, the pointer resting: 1.2% (small) and 1.4%
+  (whole screen), the timer stopped; moving (woken every 100 ms): 12.7% and 16.9-17.7%. A second round was disturbed
+  by a real pointer over the overlay, its clean parts the same. `HoverRectangleAnimationControllerTests` pin the GPU's
+  unchanged rate and the economical steps, rest and wake.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -847,6 +864,10 @@ These were covered by unit tests only; check them in the real app before a relea
 - **A 4K video in the editor and in a pin**: open a 4K phone video in the Compress editor and scrub, step and jump
   about; Task Manager's commit size for the app (Details tab) should rise about 0.45 GB, not 1.2. Pin a 4K video and let
   it loop: it should play smoothly, its commit size staying about the same.
+- **The hover outline with "Use less memory" on**: with the setting on and the app restarted, open the overlay and
+  move over windows. The dashed outline should flow while the mouse moves (a little coarser than on the graphics card),
+  stand still about a second after it stops and flow again at the next move; moving to another window glides as
+  before. Task Manager should show the app at about 1% with the mouse at rest. With the setting off, nothing changes.
 - **Opening a capture with "Use less memory" on**: with the setting on and the app restarted, open the capture overlay a
   few times, the first after the restart included. No white rectangle at the top left as it opens; the overlay and its
   toolbar appear as quickly as before. Then a recording without annotations, which excludes the overlay from capture
@@ -986,9 +1007,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   overlapping scans need a live overlay and quick repeated presses. Check the token after taking the lock.
 - **The OCR scan grabs every monitor** (S). `AIScanSessionService.cs:77-81`: grab only the active monitor. The
   boxes it finds are drawn by one control now (Status).
-- **Hover animation renders at 60 Hz while the overlay sits idle** (S). `Selection.AIScan.cs:26` (16 ms timer, no
-  settled exit at :564-570), `HoverRectangleAnimationController.cs:63`; the dirty rect is often the whole screen. Stop
-  once the move ends or tick at 30 Hz or less.
 - **Frozen commits keep the overlay up while the pin window is built** (M). `Capture.cs:464`: hide the frozen overlay
   right after the crop. (Explains the 307 ms "blocked" stall before close.) The copy's second encode is done (Status);
   a Save still keeps a frozen overlay up through its full-compression encode, 0.35 s for a 1920x1080 screen, which the

@@ -113,6 +113,16 @@ public partial class SnipWindowViewModel
         private set => this.RaiseAndSetIfChanged(ref _hoverDashOffset, value);
     }
 
+    /// <summary>
+    /// Whether this run draws on the processor (software rendering), as <c>SnipWindowFactory</c> passes on: the hover
+    /// outline is then paced for it (<see cref="HoverRectangleAnimationController.Economical"/>).
+    /// </summary>
+    internal bool IsSoftwareRendered
+    {
+        get => _hoverAnimationController.Economical;
+        set => _hoverAnimationController.Economical = value;
+    }
+
     public bool IsHoverPreviewVisible =>
         CurrentMode != SnipMode.Translation
         && CurrentState == SnipState.Detecting
@@ -502,6 +512,9 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        // Paced for the processor, the outline's dashes flow only while the pointer moves.
+        _hoverAnimationController.PointerMoved();
+
         var windowCandidate = _detectionService.GetCandidateAtPoint(mousePos, _windowCandidates, _currentHoverCandidate);
         var ocrCandidate = OcrCandidateHitTester.SelectCandidate(mousePos, _ocrParagraphCandidates, _ocrLineCandidates, _currentHoverOcrCandidate);
         var selected = SelectBestHoverCandidate(windowCandidate, ocrCandidate);
@@ -553,6 +566,10 @@ public partial class SnipWindowViewModel
         {
             _hoverAnimationTimer.Stop();
         }
+        else
+        {
+            SetHoverTimerInterval();
+        }
     }
 
     private void EnsureWindowSnapHoverTimerRunning()
@@ -562,6 +579,7 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        SetHoverTimerInterval();
         if (!_hoverAnimationTimer.IsEnabled)
         {
             _lastHoverAnimationTickUtc = DateTime.UtcNow;
@@ -573,9 +591,19 @@ public partial class SnipWindowViewModel
         }
     }
 
+    // Set only when it changes, which is when an outline paced for the processor starts or finishes a move.
+    private void SetHoverTimerInterval()
+    {
+        TimeSpan interval = _hoverAnimationController.TickInterval;
+        if (_hoverAnimationTimer.Interval != interval)
+        {
+            _hoverAnimationTimer.Interval = interval;
+        }
+    }
+
     private bool ShouldKeepWindowSnapHoverTimerRunning()
     {
-        return _hoverAnimationController.IsVisible
+        return _hoverAnimationController.NeedsTicks
             && CurrentState == SnipState.Detecting
             && CurrentMode != SnipMode.Translation
             && !IsDrawingMode

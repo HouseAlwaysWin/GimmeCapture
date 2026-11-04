@@ -25,6 +25,13 @@
 
 ### ⚡ Performance
 
+- **With "Use less memory" on, an open capture overlay takes a fraction of the processor it took.** Drawn with the
+  processor, every frame of the overlay is copied whole to the screen however little changed, and the dashed outline
+  round the window under the pointer flowed at about 43 frames a second: a fifth to a third of a core for as long as the
+  overlay stayed open. Drawn that way, the dashes now step about 21 times a second while the pointer moves and stand
+  still a second after it stops, the outline still shown; a move to another window glides as before. The open overlay
+  takes about 1% of a core with the pointer at rest and 13 to 18% while it moves. Drawn on the graphics card, nothing
+  changes.
 - **Editing or pinning a 4K video takes about 0.75 GB less memory.** The Compress editor's frames and a pinned video's
   playback are decoded on the graphics card, and the decoder was also given a thread for every processor core. FFmpeg
   sets aside a 4K picture on the card for each of those threads, though the card does the decoding itself: on a 4K

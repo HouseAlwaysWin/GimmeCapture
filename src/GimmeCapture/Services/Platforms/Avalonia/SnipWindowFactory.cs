@@ -3,6 +3,7 @@ using Avalonia.Threading;
 using System;
 using System.Diagnostics;
 using System.Reactive.Linq;
+using GimmeCapture.Composition;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
@@ -152,6 +153,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
             settings: vm);
 
         snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode);
+        // Drawn on the processor, each frame of the overlay copies all of it to the screen, however little changed.
+        snipVm.IsSoftwareRendered = StartupRenderer.IsSoftware;
         if (mode == CaptureMode.Record)
         {
             snipVm.CurrentMode = SnipMode.Recording;
