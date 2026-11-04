@@ -2,6 +2,12 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.72.1 - 2026-11-04
+
+- **Pinned videos** — a pinned recording loops without stopping at the loop, its sound looping with it in step with
+  the picture instead of breaking off and coming back a different amount off it every time, and a 30 fps recording
+  plays in its pin at its full 30 frames a second instead of about half that.
+
 ## v0.72.0 - 2026-11-04
 
 - **Translation** — the local model translates in about half the time, as it keeps its instructions read between
