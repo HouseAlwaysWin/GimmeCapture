@@ -247,6 +247,7 @@
   "Cancel": "取消",
   "GitHubProject": "GitHub 專案頁面",
   "UpdateFound": "發現新版本: {0}。立即下載？",
+  "UpdateAvailableToast": "GimmeCapture {0} 已推出，點這裡更新。",
   "UpdateDownloading": "正在下載更新... {0}%",
   "UpdateReady": "更新已下載。立即重啟並安裝？",
   "UpdateCheckTitle": "檢查更新",

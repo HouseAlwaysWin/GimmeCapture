@@ -305,6 +305,7 @@ public sealed class AppBootstrapper : IAsyncDisposable
         // was confirmed, no error was shown and a delayed capture counted down with nothing on screen.
         viewModel.ShowToastAction = (message, severity) => _toastService.Value.Show(message, severity);
         viewModel.ShowPreviewToastAction = (message, severity, preview) => _toastService.Value.Show(message, severity, preview);
+        viewModel.ShowClickableToastAction = (message, severity, onClick) => _toastService.Value.Show(message, severity, onClick: onClick);
         var captureCountdown = new AvaloniaCaptureCountdownService(viewModel.CancelCaptureCountdown);
         viewModel.ShowCaptureCountdownAction = captureCountdown.ShowAsync;
         viewModel.CloseCaptureCountdownAction = captureCountdown.Close;

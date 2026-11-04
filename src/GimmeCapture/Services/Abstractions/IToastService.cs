@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Media.Imaging;
 using GimmeCapture.ViewModels.Main;
 
@@ -15,5 +16,6 @@ public interface IToastService
     /// WHICH image you are about to paste, which is the whole question after a copy — so the copy confirmation
     /// carries a preview of what actually landed on the clipboard. The toast takes ownership and disposes it.
     /// </param>
-    void Show(string message, MainWindowViewModel.ToastSeverity severity, Bitmap? preview = null);
+    /// <param name="onClick">Optional: what a click on the toast does; the toast then closes.</param>
+    void Show(string message, MainWindowViewModel.ToastSeverity severity, Bitmap? preview = null, Action? onClick = null);
 }

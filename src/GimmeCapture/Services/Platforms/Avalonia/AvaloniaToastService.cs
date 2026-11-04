@@ -23,7 +23,7 @@ public sealed class AvaloniaToastService : IToastService
     // better than the primary screen".
     private PixelPoint? _stackAnchor;
 
-    public void Show(string message, MainWindowViewModel.ToastSeverity severity, Bitmap? preview = null)
+    public void Show(string message, MainWindowViewModel.ToastSeverity severity, Bitmap? preview = null, Action? onClick = null)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -33,7 +33,7 @@ public sealed class AvaloniaToastService : IToastService
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
-            Dispatcher.UIThread.Post(() => Show(message, severity, preview));
+            Dispatcher.UIThread.Post(() => Show(message, severity, preview, onClick));
             return;
         }
 
@@ -51,7 +51,7 @@ public sealed class AvaloniaToastService : IToastService
             _toasts[0].Close();
         }
 
-        var toast = new ToastWindow(message, severity, preview);
+        var toast = new ToastWindow(message, severity, preview, onClick);
         toast.ReadyForLayout += (_, _) => Reflow();
         toast.Closed += (_, _) =>
         {

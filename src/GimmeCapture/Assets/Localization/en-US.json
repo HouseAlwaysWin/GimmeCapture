@@ -247,6 +247,7 @@
   "Cancel": "Cancel",
   "GitHubProject": "GitHub Project",
   "UpdateFound": "New version found: {0}. Download now?",
+  "UpdateAvailableToast": "GimmeCapture {0} is available. Click here to update.",
   "UpdateDownloading": "Downloading update... {0}%",
   "UpdateReady": "Update downloaded. Restart and install now?",
   "UpdateCheckTitle": "Update Check",

@@ -102,6 +102,10 @@
 
 ### 🖼️ Interface
 
+- **Started with Windows, the app now says when there is an update.** Started in the tray, as it is at sign-in, the
+  app found a new version and kept it for the main window, which a tray user may not open for days; before v0.71.0 it
+  dropped it altogether. A notification now says the new version is available, once a run, and clicking it opens the
+  main window, which asks about the download as before.
 - **With "Use less memory" on, a capture opens without a white flash.** As the capture overlay was set up, still
   hidden, it told Windows that screen recordings may show it, which every window allows anyway. For a window drawn with
   the processor, that put the overlay on screen as a white rectangle at the size it started with (1440x740 on a

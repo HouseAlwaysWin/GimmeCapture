@@ -199,15 +199,27 @@ public partial class MainWindowViewModel
     // update there and drop it, for the whole session.
     private ReleaseInfo? _pendingUpdate;
 
+    // The release a toast has announced this run, so a later check finding it again stays quiet.
+    private string? _announcedUpdateTag;
+
     /// <summary>
     /// Offers <paramref name="release"/>: asks to download it, unless that is done already, then asks to install it. On
-    /// the UI thread. With no main window on screen it waits for one instead (<see cref="OfferPendingUpdate"/>).
+    /// the UI thread. With no main window on screen it waits for one instead (<see cref="OfferPendingUpdate"/>), and a
+    /// toast says so once a run: a launch to the tray, the way the app starts with Windows, may not open the main window
+    /// for days, and an update held for it went unseen.
     /// </summary>
     internal async Task OfferUpdateAsync(ReleaseInfo release)
     {
         if (ShowUpdateDialogAction == null || _windowManager.GetMainWindow() is { IsVisible: false })
         {
             _pendingUpdate = release;
+            if (ShowMainWindowAction is { } openMainWindow && _announcedUpdateTag != release.TagName)
+            {
+                _announcedUpdateTag = release.TagName;
+                ShowClickableToastAction?.Invoke(
+                    string.Format(Localization["UpdateAvailableToast"], release.TagName), ToastSeverity.Info, openMainWindow);
+            }
+
             return;
         }
 

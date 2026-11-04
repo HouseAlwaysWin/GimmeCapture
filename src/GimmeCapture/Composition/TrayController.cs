@@ -41,6 +41,9 @@ public sealed class TrayController
             Dispatcher.UIThread.Post(ShowMainWindow));
         _bootstrapper.MainWindowReleased += OnMainWindowReleased;
 
+        // What a toast opens, an update found with no main window up among them.
+        _bootstrapper.CreateMainViewModel().ShowMainWindowAction = ShowMainWindow;
+
         try
         {
             var loc = LocalizationService.Instance;

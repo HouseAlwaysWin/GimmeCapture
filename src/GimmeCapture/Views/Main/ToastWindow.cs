@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -18,6 +19,9 @@ public sealed class ToastWindow : Window
 {
     private const int DismissMs = 2600;
 
+    /// <summary>How long a toast that does something when clicked stays up: long enough to read it and decide.</summary>
+    private const int ClickableDismissMs = 10000;
+
     /// <summary>Logical size of the square the preview thumbnail letterboxes into.</summary>
     private const int PreviewBox = 56;
 
@@ -30,7 +34,10 @@ public sealed class ToastWindow : Window
     /// Optional thumbnail rendered left of the message. Owned by this window and disposed on close — the caller
     /// creates one detached thumbnail per toast rather than handing over a bitmap it still uses.
     /// </param>
-    public ToastWindow(string message, MainWindowViewModel.ToastSeverity severity, Bitmap? preview = null)
+    /// <param name="onClick">
+    /// Optional: what a click on the toast does. It then closes, and stays up longer meanwhile.
+    /// </param>
+    public ToastWindow(string message, MainWindowViewModel.ToastSeverity severity, Bitmap? preview = null, Action? onClick = null)
     {
         CanResize = false;
         ShowInTaskbar = false;
@@ -109,12 +116,23 @@ public sealed class ToastWindow : Window
             Child = panel
         };
 
-        _dismissTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(DismissMs) };
+        _dismissTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(onClick != null ? ClickableDismissMs : DismissMs) };
         _dismissTimer.Tick += (_, _) =>
         {
             _dismissTimer.Stop();
             Close();
         };
+
+        if (onClick != null)
+        {
+            Cursor = new Cursor(StandardCursorType.Hand);
+            PointerPressed += (_, e) =>
+            {
+                e.Handled = true;
+                Close();
+                onClick();
+            };
+        }
 
         Opened += (_, _) =>
         {

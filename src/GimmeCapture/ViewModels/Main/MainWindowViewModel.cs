@@ -165,6 +165,12 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
     /// </summary>
     public Action<string, ToastSeverity, Bitmap>? ShowPreviewToastAction { get; set; }
 
+    /// <summary>Shows a floating toast that runs the action when clicked, and then closes.</summary>
+    public Action<string, ToastSeverity, Action>? ShowClickableToastAction { get; set; }
+
+    /// <summary>Opens the main window, building it first in a launch to the tray. Wired by the tray.</summary>
+    public Action? ShowMainWindowAction { get; set; }
+
     // Status keys that are routine/idle noise and should NOT pop a toast.
     private static readonly HashSet<string> _quietStatusKeys = new(StringComparer.Ordinal)
     {

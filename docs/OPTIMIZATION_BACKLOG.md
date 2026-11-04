@@ -16,7 +16,7 @@ tool.
 - Released as v0.71.0 on 2026-11-03, with `release.ps1` after its `docs/catalog/releases.md` entry went in as its own
   commit; `## Unreleased` starts over. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did,
   on 2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.71.0, `## Unreleased` holds 16 entries (2026-11-04).
+- Since v0.71.0, `## Unreleased` holds 17 entries (2026-11-04).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
   tries DirectML. The updater will offer it v0.71.0. None of the work since then has reached the user yet.
@@ -639,6 +639,15 @@ tool.
   (whole screen), the timer stopped; moving (woken every 100 ms): 12.7% and 16.9-17.7%. A second round was disturbed
   by a real pointer over the overlay, its clean parts the same. `HoverRectangleAnimationControllerTests` pin the GPU's
   unchanged rate and the economical steps, rest and wake.
+- Done since batch 1, the user's choice (2026-11-04): **an update found in a launch to the tray waited for the main
+  window** (part of "Tray sessions still miss"). The user starts in the tray at sign-in with automatic checks on, and
+  their installed copy was still v0.68.1, which dropped such an update for the session (v0.69 to v0.71.0 were never
+  offered); HEAD held it in `_pendingUpdate` until the main window showed, which a tray user may not do for days.
+  Asked, they chose a clickable toast: `OfferUpdateAsync` announces a held release once a run per tag
+  (`UpdateAvailableToast`), and a click opens the main window through `ShowMainWindowAction` (the tray's
+  `ShowMainWindow`), whose showing offers the update as before. `IToastService.Show` took an optional click action;
+  such a toast stays up 10 s instead of 2.6, with a hand cursor. `MainWindowViewModelUpdateOfferTests`: announced once,
+  a newer tag again, none with the main window up or with no way to open it; the two announcing tests fail without it.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -864,6 +873,10 @@ These were covered by unit tests only; check them in the real app before a relea
 - **A 4K video in the editor and in a pin**: open a 4K phone video in the Compress editor and scrub, step and jump
   about; Task Manager's commit size for the app (Details tab) should rise about 0.45 GB, not 1.2. Pin a 4K video and let
   it loop: it should play smoothly, its commit size staying about the same.
+- **The update toast in a launch to the tray**: with an older version installed, start it from the tray (as at sign-in)
+  with automatic update checks on. A toast "GimmeCapture vX is available. Click here to update." should show once, for
+  about 10 s, with a hand cursor; clicking it opens the main window, which asks about the download. Left alone it goes,
+  and opening the main window later still asks.
 - **The hover outline with "Use less memory" on**: with the setting on and the app restarted, open the overlay and
   move over windows. The dashed outline should flow while the mouse moves (a little coarser than on the graphics card),
   stand still about a second after it stops and flow again at the next move; moving to another window glides as
@@ -964,9 +977,13 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **A target size at or above the source's size still encodes** (S). `CompressBatchRunner.cs:116-124`: stream-copy
   with `LibavMuxer.RemuxAllStreams` when unedited, otherwise cap at the source bitrate. Audio-only M4A from an AAC
   source can stream-copy too.
-- **Each segmented chunk reopens and probes the input** (S, measure first). `CompressPipeline.EncodeOneFileSegmentedAsync`
-  runs `LibavClipExporter.TryExport` for every 30 s chunk, which opens the input, finds its streams, seeks and decodes
-  from the keyframe before the chunk again. The writes, the join and the sound are done (Status).
+- **Each segmented chunk reopens and probes the input** (estimated 2026-11-04: 1.5-3% at the user's settings, left).
+  `CompressPipeline.EncodeOneFileSegmentedAsync` runs `LibavClipExporter.TryExport` for every 30 s chunk, one after
+  another, which opens the input, finds its streams, seeks and decodes from the keyframe before the chunk again. On a
+  4K HEVC phone video a far seek decodes for about 280 ms on the CPU (the D3D11VA item's measurements), so with the open
+  about 0.35 s a chunk, against 12-25 s for a chunk at the user's presets ("slow", 1080p or 480p, four files at once).
+  One decode feeding every chunk would have to keep the resume from the first unfinished chunk. The writes, the join and
+  the sound are done (Status).
 - **Annotations take every frame through BGRA** (S-M). `LibavClipExporter.cs`: an export with something drawn on it
   converts each frame to BGRA at decode size, draws, turns it there if it is turned, and converts back. Render static
   annotations once and blend them in YUV, or draw at the output size. Rotation without annotations is done (Status).
@@ -1051,12 +1068,18 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
   was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files
   parsed through `x:Static`.
-- **Tray sessions still miss** the failed-hotkey-registration dialog and the overlay's request to open the Modules tab;
-  an update found there waits for the main window, because `UpdateDialog.ShowDialog` cannot open centred on screen.
+- **Tray sessions still miss** the failed-hotkey-registration dialog and the overlay's request to open the Modules tab.
+  An update found there is announced by a toast now (Status).
 - **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab, the
   Record-mode warm-up and a recording start probing together (`LibavRecordingEncoder`).
-- **A Direct3D 11 decode leaves 150-240 MB in the process after it ends** (M; found with the editor's decoder, measure
-  the app first). In a test host, private bytes went from 40 MB to 189-196 MB after a player's D3D11VA decode of a
+- **A Direct3D 11 decode leaves 150-240 MB in the process after it ends** (measured in the app 2026-11-04: it does
+  not, left). A temporary App hook opened a video pin of one of the user's recordings with software rendering on, as
+  they run, in fresh processes, GPU and CPU decoding alternated: on a 1134x624 H.264 one (6.2 s, looping), private bytes
+  40-41 MB before, 197 while playing on the GPU against 126-139 on the CPU, 110-112 three seconds after closing against
+  75-77, and 76-77 against 76-78 ten seconds later; on the 1450x900 HEVC one 195 against 190 playing and 87 against 82
+  after. The GPU's extra is given back a few seconds late; the rest is what any pin leaves (codecs, audio). Process CPU
+  while playing was the same either way, 20-21% of a core, most of it the CPU renderer presenting the pin's frames.
+  What follows is the item as first written, from a test host. In a test host, private bytes went from 40 MB to 189-196 MB after a player's D3D11VA decode of a
   1450x900 recording, three in a row, and from 67 to 303 MB after a 1920x1080 clip's; decoding on the CPU gave all but a
   megabyte or two back. A video pin's playback and the editor's and the compare's frames decode this way by default
   (`LibavVideoFramePlayer.TryInitHardwareDecode`), so a run that has shown a video keeps it. Probably the driver's, like
