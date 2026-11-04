@@ -2,6 +2,23 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.72.0 - 2026-11-04
+
+- **Translation** — the local model translates in about half the time, as it keeps its instructions read between
+  translations, and asked for Traditional Chinese it now writes Traditional Chinese instead of Simplified.
+- **Recording** — stopping no longer waits for the sound to be encoded, so a ten-minute recording is saved in a
+  fraction of a second instead of about ten; every stop is a little quicker, and a paused recording's video is
+  written once less.
+- **Compress and export** — a rotated video compresses in a quarter of the time or less; a long compress keeps its
+  picture in step with its sound and writes its video twice fewer times; a long export no longer takes a gigabyte or
+  more of memory for its sound, nor sits at 100% while it builds it.
+- **Videos and pins** — editing or pinning a 4K video takes about 0.75 GB less memory, and removing the background
+  on another pin, or on a plain background, no longer loads the model again.
+- **Capture overlay** — it no longer stutters as its text scan comes in, and with "Use less memory" on it opens
+  without a white flash and takes a fraction of the processor while it is open.
+- **Start-up and updates** — starting with Windows from a hard disk spends less time before the app even runs, and a
+  launch to the tray says when there is an update, with a notification that opens the update when clicked.
+
 ## v0.71.0 - 2026-11-03
 
 - **Hotkeys over administrator windows** — a new "Run as administrator" setting lets the hotkeys work while Task
