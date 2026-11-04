@@ -704,6 +704,19 @@ tool.
   as long as the editor stayed open; it follows `IsPreparing` now. `ProgressBarMarkupTests` fails a literal
   `IsIndeterminate="True"` in any `.axaml`. The capture overlay's top loading bar probably does the same (Snip
   overlay).
+- Checked 2026-11-04, nothing to change: **the main window's first open** (the user's pick). Window launches since
+  2026-11-02 log `mainWindow` 220-284 ms, `show` 233-284 (the tray and hotkeys included) and `firstFrame` 175-209:
+  about 0.65 s of the UI thread. `MainWindowOpenProbeTests` (opt-in, the real Win32 platform, off screen, this build
+  not ReadyToRun): the first open of a process 1283-1302 ms in three fresh processes (built 550-569, shown 396-400,
+  drawn 332-337), every later one 45-123 ms, a window released in the tray included, so only a process's first open
+  is slow. An EventPipe trace of the first: control templates built on first use (about 20%), type initializers
+  (10%), fonts loaded and shaped the first time (10%), the first frame (25%: the UI thread waiting in
+  `MediaContext.SyncCommit` while the render thread drew it, half of that the GPU's first flush) and the
+  drawn-decorations layer Avalonia 12 builds for any window whose client area is extended, as the main window's is for
+  its own resize edges, even with no part shown (9%). What the app could change, an empty `WindowDecorationsTheme`
+  (the edges' roles are hit-tested on the whole tree, not that layer), no inset `BoxShadow` on the colour swatches and
+  the 64 px window icon instead of the 256 px one, together changed nothing: 1306-1328 ms. Building the window ahead
+  while the tray idles would only move that work into the tray's memory and onto its UI thread.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
