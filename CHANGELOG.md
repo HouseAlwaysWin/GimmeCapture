@@ -9,7 +9,7 @@
 
 ---
 
-## Unreleased
+## v0.72.1 - 2026-11-04
 
 ### 🖼️ Interface
 
