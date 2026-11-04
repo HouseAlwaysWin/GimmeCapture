@@ -297,4 +297,51 @@ public class FloatingImageViewModelTests
         Assert.Equal(new PixelSize(6, 8), rotated!.PixelSize);
         Assert.False(sam2Runtime.HasActiveLeases);
     }
+
+    [Fact]
+    public async Task Undo_KeepsTheNewestStepsWhosePicturesFitTheBudget_AndLetsGoOfTheRest()
+    {
+        // Every rotation keeps the picture before it for undo: a 4K pin rotated 30 times held 984 MB until it closed.
+        var original = AvaloniaRenderer.Create(10, 6, static (x, y) => 0xFF000000u | ((uint)(x * 20) << 8) | (uint)(y * 40));
+        var vm = CreatePin(original);
+        vm.EditorState.HistoryBitmapBudget = 3 * 10 * 6 * 4;
+        var pictures = new List<Bitmap> { original };
+        for (int i = 0; i < 6; i++)
+        {
+            await vm.RotateRightCommand.Execute();
+            pictures.Add(vm.Image!);
+        }
+
+        // Three pictures fit: those before the last three rotations. The older ones went with their steps.
+        Assert.Equal(3, vm.EditorState.HistoryStack.Count);
+        foreach (var gone in pictures.Take(3))
+        {
+            Assert.Throws<ObjectDisposedException>(() => gone.PixelSize);
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            await vm.UndoCommand.Execute();
+        }
+
+        Assert.Same(pictures[3], vm.Image);
+        Assert.Equal(new PixelSize(6, 10), vm.Image!.PixelSize);
+        Assert.Empty(vm.EditorState.HistoryStack);
+        vm.Dispose();
+    }
+
+    [Fact]
+    public async Task Undo_AlwaysKeepsTheNewestStep_EvenOverTheBudget()
+    {
+        var vm = CreatePin(AvaloniaRenderer.Create(10, 6, static (_, _) => 0xFFFFFFFFu));
+        vm.EditorState.HistoryBitmapBudget = 1;
+        await vm.RotateRightCommand.Execute();
+        var once = vm.Image;
+        await vm.RotateRightCommand.Execute();
+
+        Assert.Single(vm.EditorState.HistoryStack);
+        await vm.UndoCommand.Execute();
+        Assert.Same(once, vm.Image);
+        vm.Dispose();
+    }
 }

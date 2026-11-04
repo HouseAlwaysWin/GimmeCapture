@@ -13,7 +13,14 @@ public interface IHistoryAction : IDisposable
     void Redo();
 }
 
-public class BitmapHistoryAction : IHistoryAction
+/// <summary>An undo step that keeps whole pictures, which the history's byte budget counts.</summary>
+public interface IKeepsBitmaps
+{
+    /// <summary>The pictures this step keeps for undo or redo, leaving out the one on screen.</summary>
+    IEnumerable<Bitmap> KeptBitmaps { get; }
+}
+
+public class BitmapHistoryAction : IHistoryAction, IKeepsBitmaps
 {
     private sealed class ReferenceEqualityComparer<T> : IEqualityComparer<T> where T : class
     {
@@ -53,6 +60,16 @@ public class BitmapHistoryAction : IHistoryAction
 
     public void Undo() => SetBitmapAction(OldBitmap);
     public void Redo() => SetBitmapAction(NewBitmap);
+
+    public IEnumerable<Bitmap> KeptBitmaps
+    {
+        get
+        {
+            var current = _getCurrentBitmap?.Invoke();
+            if (_trackOldBitmap && OldBitmap != null && !ReferenceEquals(OldBitmap, current)) yield return OldBitmap;
+            if (_trackNewBitmap && NewBitmap != null && !ReferenceEquals(NewBitmap, current)) yield return NewBitmap;
+        }
+    }
 
     public void Dispose()
     {
@@ -252,13 +269,25 @@ public class WindowTransformHistoryAction : IHistoryAction
 }
 
 
-public class CompositeHistoryAction : IHistoryAction
+public class CompositeHistoryAction : IHistoryAction, IKeepsBitmaps
 {
     private readonly List<IHistoryAction> _actions;
 
     public CompositeHistoryAction(IEnumerable<IHistoryAction> actions)
     {
         _actions = actions.AsValueEnumerable().ToList();
+    }
+
+    public IEnumerable<Bitmap> KeptBitmaps
+    {
+        get
+        {
+            foreach (var action in _actions)
+            {
+                if (action is not IKeepsBitmaps keeper) continue;
+                foreach (var bitmap in keeper.KeptBitmaps) yield return bitmap;
+            }
+        }
     }
 
     public void Undo()

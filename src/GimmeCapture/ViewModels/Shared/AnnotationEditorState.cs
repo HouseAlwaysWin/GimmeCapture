@@ -149,6 +149,14 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
     // actions are disposed; BitmapHistoryAction's ref-count + current-bitmap guard makes that safe.
     private const int MaxHistoryDepth = 30;
 
+    /// <summary>
+    /// What the pictures kept for undo may hold, the newest step always kept: a 4K pin rotated 30 times held 984 MB
+    /// until it closed. 256 MB keeps 8 steps of a 4K picture, 18 of 2560x1440 and the 30 of 1080p.
+    /// </summary>
+    internal const long DefaultHistoryBitmapBudget = 256L * 1024 * 1024;
+
+    internal long HistoryBitmapBudget { get; set; } = DefaultHistoryBitmapBudget;
+
     private readonly Stack<IHistoryAction> _historyStack = new();
     private readonly Stack<IHistoryAction> _redoHistoryStack = new();
     public Stack<IHistoryAction> HistoryStack => _historyStack;
@@ -607,29 +615,75 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
             redoAction.Dispose();
         }
         _redoHistoryStack.Clear();
-        TrimHistoryToDepthLimit();
+        TrimHistory();
         UpdateHistoryStatus();
     }
 
-    private void TrimHistoryToDepthLimit()
+    // To the newest MaxHistoryDepth steps, and of those to the newest whose pictures fit HistoryBitmapBudget. Undo goes
+    // back one step at a time, so only the oldest can go.
+    private void TrimHistory()
     {
-        if (_historyStack.Count <= MaxHistoryDepth)
+        // Stack<T> enumerates top-first, so the entries are newest first.
+        var entries = _historyStack.ToArray();
+        int keep = Math.Min(entries.Length, MaxHistoryDepth);
+        var counted = new HashSet<Bitmap>(ReferenceEqualityComparer.Instance);
+        long bytes = 0;
+        for (int i = 0; i < keep; i++)
+        {
+            bytes += KeptBitmapBytes(entries[i], counted);
+            if (i > 0 && bytes > HistoryBitmapBudget)
+            {
+                keep = i;
+                break;
+            }
+        }
+
+        if (keep == entries.Length)
         {
             return;
         }
 
-        // Stack<T> enumerates top-first, so the entries beyond MaxHistoryDepth are the oldest.
-        var entries = _historyStack.ToArray();
-        for (int i = MaxHistoryDepth; i < entries.Length; i++)
+        for (int i = keep; i < entries.Length; i++)
         {
             entries[i].Dispose();
         }
 
         _historyStack.Clear();
-        for (int i = MaxHistoryDepth - 1; i >= 0; i--)
+        for (int i = keep - 1; i >= 0; i--)
         {
             _historyStack.Push(entries[i]);
         }
+    }
+
+    // The bytes of the pictures a step keeps that no newer step does: one rotation keeps the picture before it, the
+    // picture after it being the next step's or the one on screen.
+    private static long KeptBitmapBytes(IHistoryAction action, HashSet<Bitmap> counted)
+    {
+        if (action is not IKeepsBitmaps keeper)
+        {
+            return 0;
+        }
+
+        long bytes = 0;
+        foreach (var bitmap in keeper.KeptBitmaps)
+        {
+            if (!counted.Add(bitmap))
+            {
+                continue;
+            }
+
+            try
+            {
+                PixelSize size = bitmap.PixelSize;
+                bytes += (long)size.Width * size.Height * 4;
+            }
+            catch (ObjectDisposedException)
+            {
+                // Gone already, so it holds nothing.
+            }
+        }
+
+        return bytes;
     }
 
     public void Undo()

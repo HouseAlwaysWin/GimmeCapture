@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 2 entries (2026-11-04).
+- Since v0.72.1, `## Unreleased` holds 3 entries (2026-11-04).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -717,6 +717,17 @@ tool.
   (the edges' roles are hit-tested on the whole tree, not that layer), no inset `BoxShadow` on the colour swatches and
   the 64 px window icon instead of the 256 px one, together changed nothing: 1306-1328 ms. Building the window ahead
   while the tray idles would only move that work into the tray's memory and onto its UI thread.
+- Done since batch 1, the user's choice (2026-11-04): **a pin's undo history was capped by steps, not bytes** (Pins).
+  Each crop, rotation, background removal or smart selection keeps the whole picture before it (`BitmapHistoryAction`,
+  neighbouring steps sharing theirs), for up to 30 steps: `PinUndoMemoryProbeTests` (opt-in, a 3840x2160 pin rotated
+  30 times, the test process's private bytes) read 33 MB a step and 984 MB after 30. Asked for a cap, the user chose
+  256 MB a pin: `AnnotationEditorState.TrimHistory` keeps, of the newest 30 steps, the newest whose pictures fit
+  `HistoryBitmapBudget` (`IKeepsBitmaps`: the pictures a step keeps, the one on screen left out, each counted at its
+  newest step), the newest step always. After: 8 steps and 256-260 MB from the 9th rotation on, undone as far back as
+  they reach; that is 18 steps of 2560x1440, all 30 of 1080p and 14 of the user's whole two-screen capture (3968x1160).
+  Steps that keep no picture count nothing. `FloatingImageViewModelTests` (a budget of three pictures: three steps
+  kept, the older pictures disposed, undone to the right one; the newest kept over the budget) and
+  `AnnotationEditorStateTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1079,9 +1090,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done
   (Status).
-- **A pin's undo history is capped at 30 steps, not bytes** (S, the user's call): up to ~1 GB at 4K while the pin is
-  open (`AnnotationEditorState.cs:150`). A cap by bytes means fewer undo steps on large pictures. What a closed pin
-  kept is done (Status).
 - **Lower**: video pins decode at full size and copy each frame twice (`LatestFrameHandoff.cs:40`, then
   `FloatingVideoViewModel.Media.cs:564`, 33 MB per frame at 4K) and keep decoding when covered; the translation layer
   adds results one at a time, rebuilding its region per item (`FloatingTranslationWindow.axaml.cs:109-117`).

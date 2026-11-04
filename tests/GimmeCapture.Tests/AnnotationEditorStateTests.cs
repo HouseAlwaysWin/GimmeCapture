@@ -621,6 +621,20 @@ public class AnnotationEditorStateTests
         Assert.All(state.HistoryStack, a => Assert.False(((DisposeTrackingAction)a).Disposed));
     }
 
+    [Fact]
+    public void PushUndoAction_CountsOnlyKeptPictures_AgainstTheByteBudget()
+    {
+        // A step that keeps no picture (a stroke, a shape, a move) costs nothing against the budget.
+        var state = new AnnotationEditorState { HistoryBitmapBudget = 1 };
+        for (int i = 0; i < 5; i++)
+        {
+            state.PushUndoAction(new DisposeTrackingAction());
+        }
+
+        Assert.Equal(5, state.HistoryStack.Count);
+        Assert.All(state.HistoryStack, a => Assert.False(((DisposeTrackingAction)a).Disposed));
+    }
+
     private sealed class DisposeTrackingAction : IHistoryAction
     {
         public bool Disposed { get; private set; }

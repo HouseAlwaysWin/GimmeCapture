@@ -24,6 +24,11 @@
   animation but keeps redrawing every 16 ms for it. From a pin's first such job until the pin was closed, the app's
   interface thread woke about 330 times a second instead of 13, at about eight times its idle CPU. The bar now runs
   only while it shows. The video editor's loading bar did the same for as long as the editor stayed open.
+- **A pin keeps at most 256 MB of pictures for undo.** Each crop, rotation, background removal or smart selection on a
+  pin kept the whole picture before it, for up to 30 steps: a 4K pin rotated 30 times held about 1 GB until it was
+  closed. Once the pictures kept pass 256 MB the oldest such steps now go, the newest always kept: 8 steps of a 4K
+  picture, 18 of 2560x1440, still all 30 of 1080p. Steps that keep no picture, such as strokes and shapes, are as
+  before.
 
 ## v0.72.1 - 2026-11-04
 
