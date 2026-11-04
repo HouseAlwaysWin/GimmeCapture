@@ -13,16 +13,17 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Released as v0.72.0 on 2026-11-04 (17 entries), as v0.71.0 was on 2026-11-03: `release.ps1` after the
-  `docs/catalog/releases.md` entry went in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
+- Released as v0.72.1 on 2026-11-04 (2 entries: a pinned recording's seamless loop and its frame rate), after v0.72.0
+  the same day (17 entries) and v0.71.0 on 2026-11-03: `release.ps1` after the `docs/catalog/releases.md` entry went
+  in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.0, `## Unreleased` holds 2 entries (2026-11-04): a pinned recording's seamless loop, and its frame rate.
+- Since v0.72.1, `## Unreleased` holds no entries (2026-11-04).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
   before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
-  tries DirectML. The updater will offer it v0.72.0, but v0.68.1 drops an update its start-up check finds in a launch
-  to the tray, so that first update comes from the main window's "Check for updates" (v0.72.0 announces one with a
-  toast). None of the work since then has reached the user yet.
+  tries DirectML. The updater will offer it v0.72.1, but v0.68.1 drops an update its start-up check finds in a launch
+  to the tray, so that first update comes from the main window's "Check for updates" (v0.72.0 and later announce one
+  with a toast). None of the work since then has reached the user yet.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
   open of 135-260 ms instead of 80-100 ms on a run's first start, and `GraphicsCaptureSession.IsSupported()` 16 ms on
