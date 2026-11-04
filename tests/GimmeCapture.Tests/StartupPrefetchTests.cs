@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using GimmeCapture.Launcher;
 
 namespace GimmeCapture.Tests;
 
@@ -27,23 +28,23 @@ public sealed class StartupPrefetchTests : IDisposable
     [Fact]
     public void RelativeToApp_KeepsOnlyFilesInsideTheAppsFolder()
     {
-        Assert.Equal("Avalonia.Base.dll", StartupPrefetch.RelativeToApp(_app, Path.Combine(_app, "Avalonia.Base.dll")));
-        Assert.Equal(Path.Combine("runtimes", "native", "x.dll"), StartupPrefetch.RelativeToApp(_app, Path.Combine(_app, "runtimes", "native", "x.dll")));
+        Assert.Equal("Avalonia.Base.dll", ReadAhead.RelativeToApp(_app, Path.Combine(_app, "Avalonia.Base.dll")));
+        Assert.Equal(Path.Combine("runtimes", "native", "x.dll"), ReadAhead.RelativeToApp(_app, Path.Combine(_app, "runtimes", "native", "x.dll")));
         // A trailing separator on the folder changes nothing.
-        Assert.Equal("a.dll", StartupPrefetch.RelativeToApp(_app + Path.DirectorySeparatorChar, Path.Combine(_app, "a.dll")));
+        Assert.Equal("a.dll", ReadAhead.RelativeToApp(_app + Path.DirectorySeparatorChar, Path.Combine(_app, "a.dll")));
 
-        Assert.Null(StartupPrefetch.RelativeToApp(_app, Path.Combine(Path.GetTempPath(), "elsewhere.dll")));
+        Assert.Null(ReadAhead.RelativeToApp(_app, Path.Combine(Path.GetTempPath(), "elsewhere.dll")));
         // A sibling whose name starts like the app's folder is not inside it.
-        Assert.Null(StartupPrefetch.RelativeToApp(_app, _app + "2" + Path.DirectorySeparatorChar + "x.dll"));
-        Assert.Null(StartupPrefetch.RelativeToApp(_app, _app));
-        Assert.Null(StartupPrefetch.RelativeToApp(_app, ""));
-        Assert.Null(StartupPrefetch.RelativeToApp(_app, null));
+        Assert.Null(ReadAhead.RelativeToApp(_app, _app + "2" + Path.DirectorySeparatorChar + "x.dll"));
+        Assert.Null(ReadAhead.RelativeToApp(_app, _app));
+        Assert.Null(ReadAhead.RelativeToApp(_app, ""));
+        Assert.Null(ReadAhead.RelativeToApp(_app, null));
     }
 
     [Fact]
     public void Resolve_SkipsBlankLines_RootedPaths_AndAnythingThatLeavesTheAppsFolder()
     {
-        var files = StartupPrefetch.Resolve(
+        var files = ReadAhead.Resolve(
             [
                 "Avalonia.Base.dll",
                 "   ",

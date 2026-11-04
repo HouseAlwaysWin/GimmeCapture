@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Threading;
+using GimmeCapture.Launcher;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -14,13 +15,12 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// already in the cache takes microseconds instead: faulting 40% of four start-up DLLs from cold copies on that disk took
 /// 2.5 s, and 22 ms after one sequential read of them in 1 s (<c>StartupPrefetchProbeTests</c>). So each start writes
 /// down which of the app's files it mapped, those loaded before Main first, and the next start reads them on a thread of
-/// its own from the top of Main. Windows only, where the app runs from a folder of files.
+/// its own from the top of Main. At sign-in the launcher reads them before it starts the app (<c>ReadAhead.FromList</c>):
+/// read from here, alongside the start's own faults, they were not done by the time the hotkeys worked. Windows only,
+/// where the app runs from a folder of files.
 /// </summary>
 internal static class StartupPrefetch
 {
-    /// <summary>Beside the version's config.json.</summary>
-    internal const string ListFileName = "startup-files.txt";
-
     private static string? _appDirectory;
     private static string? _listPath;
     private static IReadOnlyList<string> _loadedBeforeMain = Array.Empty<string>();
@@ -42,7 +42,7 @@ internal static class StartupPrefetch
         {
             string appDirectory = RuntimePathProvider.GetExecutableDirectory();
             _listPath = Path.Combine(
-                AppStoragePaths.GetVersionedDataDirectory(appDirectory, AppVersionInfo.CurrentVersion), ListFileName);
+                AppStoragePaths.GetVersionedDataDirectory(appDirectory, AppVersionInfo.CurrentVersion), ReadAhead.StartupListFileName);
             _appDirectory = appDirectory;
             _startedAt = Stopwatch.GetTimestamp();
             new Thread(Run) { IsBackground = true, Name = "Startup prefetch" }.Start();
@@ -141,43 +141,6 @@ internal static class StartupPrefetch
         return order;
     }
 
-    /// <summary>The list's entries as full paths inside <paramref name="appDirectory"/>; anything else is skipped.</summary>
-    internal static List<string> Resolve(IEnumerable<string> lines, string appDirectory)
-    {
-        var files = new List<string>();
-        foreach (string raw in lines)
-        {
-            string line = raw.Trim();
-            if (line.Length == 0 || Path.IsPathRooted(line))
-            {
-                continue;
-            }
-
-            string path = Path.GetFullPath(Path.Combine(appDirectory, line));
-            if (RelativeToApp(appDirectory, path) != null)
-            {
-                files.Add(path);
-            }
-        }
-
-        return files;
-    }
-
-    /// <summary><paramref name="path"/> relative to <paramref name="appDirectory"/>, or null when it is not inside it.</summary>
-    internal static string? RelativeToApp(string appDirectory, string? path)
-    {
-        if (string.IsNullOrEmpty(path))
-        {
-            return null;
-        }
-
-        string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(appDirectory)) + Path.DirectorySeparatorChar;
-        string full = Path.GetFullPath(path);
-        return full.Length > root.Length && full.StartsWith(root, StringComparison.OrdinalIgnoreCase)
-            ? full[root.Length..]
-            : null;
-    }
-
     /// <summary>Reads each file through once, in order; one that cannot be read is skipped. The bytes read.</summary>
     internal static long ReadThrough(IEnumerable<string> files)
     {
@@ -213,7 +176,7 @@ internal static class StartupPrefetch
             if (File.Exists(_listPath))
             {
                 Volatile.Write(ref _hadList, true);
-                Interlocked.Exchange(ref _bytesRead, ReadThrough(Resolve(File.ReadAllLines(_listPath!), _appDirectory!)));
+                Interlocked.Exchange(ref _bytesRead, ReadThrough(ReadAhead.Resolve(File.ReadAllLines(_listPath!), _appDirectory!)));
             }
         }
         catch (Exception)
@@ -232,7 +195,7 @@ internal static class StartupPrefetch
         var names = new List<string>();
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
-            if (!assembly.IsDynamic && RelativeToApp(appDirectory, assembly.Location) is { } name)
+            if (!assembly.IsDynamic && ReadAhead.RelativeToApp(appDirectory, assembly.Location) is { } name)
             {
                 names.Add(name);
             }
@@ -247,7 +210,7 @@ internal static class StartupPrefetch
         using var process = Process.GetCurrentProcess();
         foreach (ProcessModule module in process.Modules)
         {
-            if (RelativeToApp(appDirectory, module.FileName) is { } name)
+            if (ReadAhead.RelativeToApp(appDirectory, module.FileName) is { } name)
             {
                 names.Add(name);
             }

@@ -18,12 +18,11 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds no entries (2026-11-04).
-- The user's installed copy (`D:\GimmeCapture_win-x64`) ran v0.68.1 on 2026-11-03, whatever had been copied in
-  before: a single-file exe of 2026-09-16, whose part of the shared log saves to `versions\0.68.1` and whose OCR still
-  tries DirectML. The updater will offer it v0.72.1, but v0.68.1 drops an update its start-up check finds in a launch
-  to the tray, so that first update comes from the main window's "Check for updates" (v0.72.0 and later announce one
-  with a toast). None of the work since then has reached the user yet.
+- Since v0.72.1, `## Unreleased` holds 1 entry (2026-11-04).
+- The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.71.0+bed41298 (2026-11-04): builds copied in by hand
+  since 2026-11-02, the sign-in launcher included, which its Run value starts. So it has none of v0.72.x's other work.
+  Before v0.72.0 an update the start-up check finds in a launch to the tray is dropped, so its first update comes from
+  the main window's "Check for updates" or the next copy by hand (v0.72.0 and later announce one with a toast).
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
   open of 135-260 ms instead of 80-100 ms on a run's first start, and `GraphicsCaptureSession.IsSupported()` 16 ms on
@@ -1107,7 +1106,15 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   `GimmeCapture.Launcher.exe` (`src/GimmeCapture.Launcher`, .NET Framework 4.8, which Windows keeps on C:): it reads
   `ReadAhead.BeforeMain`, the host's and runtime's files (63 MB), through once each, then starts the exe with its
   arguments; "Run on startup" claims this install's own old entry (same folder, same install) on the next run, and the
-  line ends `launcher=<ms>/<MB>`. Next: that sign-in's `launcher` + `beforeMain` + `hotkeysAt`. Moving the install to
+  line ends `launcher=<ms>/<MB>`. The first sign-in through it (2026-11-04 18:43, 0.71.0+bed41298):
+  `launcher=2588ms/62MB beforeMain=5936/78 log=8239/234 platform=3161/1016 xaml=699/156 viewModel=2730/328`, the
+  hotkeys at 15.2 s, so 23.7 s from the launcher's start against 37.9: `beforeMain` 27.1 s to 5.9, but `systemCpu=85%`
+  (17% the time before) and `prefetch=running` again. After Main is now most of it, and at 17% (2026-11-03) it waited
+  9.5 of its 10.7 s on the disk, the app's own read of its list running alongside the start's faults. So the launcher
+  also reads that list before it starts the app (`ReadAhead.FromList`: 73 files, 76 MB after `BeforeMain`'s 62 for the
+  installed copy), finding it as `AppStoragePaths` does from the app assembly's product version (`ReadAheadTests` pins
+  the path to the app's and the installed copy's instance key). Next: the next sign-in's `launcher` (about 140 MB now)
+  + `beforeMain` + `hotkeysAt`, and whether `prefetch=` finished. Moving the install to
   the SSD would do the rest; the user declined. `hardFaults` stays high, as a fault on a file read through still
   counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
   was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files

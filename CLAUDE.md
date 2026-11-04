@@ -79,8 +79,9 @@ src/GimmeCapture/
   Styles/                      # GimmeTheme.axaml (red/black BABYMETAL aesthetic)
   Assets/                      # fonts, icons, Localization/ JSON
   ffmpeg-lib/                  # native FFmpeg DLLs (populated by script, gitignored)
-src/GimmeCapture.Launcher/     # sign-in launcher (net48 WinExe): the Run key starts it; it reads ahead what .NET
-                               # loads before Main, then starts the app. The Windows publish ships it beside the exe
+src/GimmeCapture.Launcher/     # sign-in launcher (net48 WinExe): the Run key starts it; it reads ahead what .NET loads
+                               # before Main and what the app's last start used, then starts the app. The Windows
+                               # publish ships it beside the exe
 tests/
   GimmeCapture.Tests/          # xUnit unit tests
   GimmeCapture.Benchmarks/     # BenchmarkDotNet

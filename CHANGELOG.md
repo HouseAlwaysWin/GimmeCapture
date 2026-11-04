@@ -9,6 +9,17 @@
 
 ---
 
+## Unreleased
+
+### ⚡ Performance
+
+- **Starting with Windows from a hard disk spends less time waiting on the disk.** The launcher that Windows starts
+  at sign-in in the app's place read .NET's own files ahead, which cut the wait before the app's code ran from 27 s to
+  6 s at the last sign-in. The app then still waited 10 to 15 s on the disk for the rest of its files before its
+  hotkeys worked: its own read-ahead of them ran alongside the start, which read the same disk elsewhere. The launcher
+  now reads those files as well before it starts the app, each in one pass, from the list the app writes down after
+  each start: 73 files, 76 MB for an installed copy.
+
 ## v0.72.1 - 2026-11-04
 
 ### 🖼️ Interface

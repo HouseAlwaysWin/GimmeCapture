@@ -55,6 +55,71 @@ public sealed class ReadAheadTests
         Assert.Contains("GimmeCapture.dll", ReadAhead.BeforeMain);
     }
 
+    [Theory]
+    [InlineData("0.71.0")]
+    [InlineData("v0.72.1")]
+    [InlineData(" 1.0.0 beta ")]
+    [InlineData("")]
+    public void TheStartupList_IsWhereTheAppWritesIt(string version)
+    {
+        // The launcher works the path out without the app's code; the app writes the list beside its version's settings.
+        string folder = Path.Combine(Path.GetTempPath(), "GimmeCapture_win-x64");
+        foreach (string spelling in new[] { folder, folder + Path.DirectorySeparatorChar, folder.ToUpperInvariant() })
+        {
+            Assert.Equal(
+                Path.Combine(AppStoragePaths.GetVersionedDataDirectory(spelling, version), ReadAhead.StartupListFileName),
+                ReadAhead.StartupListPath(AppStoragePaths.GetRootDirectory(), spelling, version));
+        }
+    }
+
+    [WindowsFact]
+    public void AnInstallsKey_StaysWhatItWas()
+    {
+        // The folder under instances\ that an install's settings and AI modules have been in since it was installed.
+        Assert.Equal("b0337ff88a000ffc", ReadAhead.InstallInstanceKey(@"D:\GimmeCapture_win-x64"));
+        Assert.Equal("b0337ff88a000ffc", AppStoragePaths.GetInstallInstanceKey(@"D:\GimmeCapture_win-x64"));
+    }
+
+    [Theory]
+    [InlineData("0.71.0+bed41298be799d19c42b408b29f3022d74610ece", "0.71.0")]
+    [InlineData("0.72.1", "0.72.1")]
+    [InlineData(" 0.72.1 +abc", "0.72.1")]
+    [InlineData("+abc", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void AppVersion_IsTheProductVersionUpToItsCommit(string? productVersion, string? expected)
+    {
+        Assert.Equal(expected, ReadAhead.AppVersion(productVersion));
+    }
+
+    [Fact]
+    public void FromList_ReadsTheListsOtherFiles_InItsOrder_EachOnce()
+    {
+        string app = Path.Combine(Path.GetTempPath(), "GimmeCapture-list", "App");
+        var lines = new[]
+        {
+            "System.Private.CoreLib.dll",
+            "GimmeCapture.dll",
+            "Serilog.dll",
+            "",
+            "Avalonia.Base.dll",
+            "serilog.dll",
+            Path.Combine("runtimes", "win-x64", "native", "libSkiaSharp.dll"),
+            Path.Combine("..", "Elsewhere.dll"),
+            Path.Combine(Path.GetTempPath(), "rooted.dll"),
+            "coreclr.dll",
+        };
+
+        Assert.Equal(
+            new[]
+            {
+                Path.Combine(app, "Serilog.dll"),
+                Path.Combine(app, "Avalonia.Base.dll"),
+                Path.Combine(app, "runtimes", "win-x64", "native", "libSkiaSharp.dll"),
+            },
+            ReadAhead.FromList(lines, app));
+    }
+
     [Fact]
     public void ReadThrough_ReadsAFileWhole_AndNothingOfOneThatIsMissing()
     {
