@@ -13,16 +13,16 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Released as v0.72.1 on 2026-11-04 (2 entries: a pinned recording's seamless loop and its frame rate), after v0.72.0
-  the same day (17 entries) and v0.71.0 on 2026-11-03: `release.ps1` after the `docs/catalog/releases.md` entry went
+- Released as v0.73.0 on 2026-11-05 (17 entries), after v0.72.1 on 2026-11-04 (2 entries: a pinned recording's
+  seamless loop and its frame rate), v0.72.0 the same day (17 entries) and v0.71.0 on 2026-11-03: `release.ps1` after
+  the `docs/catalog/releases.md` entry went
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 17 entries (2026-11-05).
-- The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
-  since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
-  version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
-  toast (v0.72.0 and later).
+- Since v0.73.0, `## Unreleased` holds 1 entry (2026-11-05).
+- The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.73.0 (2026-11-05), updated by its own updater from
+  0.72.1+d33e5172, a build copied in by hand like those since 2026-11-02, with the sign-in launcher its Run value
+  starts. The user turned on software rendering ("Use less memory") the same evening.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
   open of 135-260 ms instead of 80-100 ms on a run's first start, and `GraphicsCaptureSession.IsSupported()` 16 ms on
@@ -1328,10 +1328,22 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   hotkeys at 15.2 s, so 23.7 s from the launcher's start against 37.9: `beforeMain` 27.1 s to 5.9, but `systemCpu=85%`
   (17% the time before) and `prefetch=running` again. After Main is now most of it, and at 17% (2026-11-03) it waited
   9.5 of its 10.7 s on the disk, the app's own read of its list running alongside the start's faults. So the launcher
-  also reads that list before it starts the app (`ReadAhead.FromList`: 73 files, 76 MB after `BeforeMain`'s 62 for the
-  installed copy), finding it as `AppStoragePaths` does from the app assembly's product version (`ReadAheadTests` pins
-  the path to the app's and the installed copy's instance key). Next: the next sign-in's `launcher` (about 140 MB now)
-  + `beforeMain` + `hotkeysAt`, and whether `prefetch=` finished. Moving the install to
+  also reads that list before it starts the app (`ReadAhead.FromList`, now `Plan`: 73 files, 76 MB after `BeforeMain`'s
+  62 for the installed copy), finding it as `AppStoragePaths` does from the app assembly's product version
+  (`ReadAheadTests` pins the path to the app's and the installed copy's instance key). The sign-in after it (2026-11-05
+  20:08, still 0.72.1+d33e5172): `launcher=22594ms/141MB beforeMain=1402/94 log=518/109 platform=862/484
+  viewModel=282/94`, the hotkeys at 1.9 s, so 25.9 s from the launcher's start (23.7 the time before) at
+  `systemCpu=29%`. The start found everything in memory, but the launcher read the 141 MB at 6 MB/s from a disk the
+  rest of the sign-in read too: the wait only moved. A start uses much less than it maps: the installed app, its window
+  opened and a few captures taken, held 56 of the 152 MB its folder's files map, 6 of its own assembly's 39.8 (30 of
+  them the CJK fonts), 0.2 of WinForms' 13.1 and 1.8 of Skia's 11.1 (QueryWorkingSetEx over each module, after its idle
+  trims). So each start now writes, beside each file it mapped, the stretches of it the start used
+  (`ImagePagesInUse`: the module's pages in the working set, through the PE section table to offsets in the file,
+  joined where less than 256 KB apart; `name|offset+length,...`, a line without them still read whole), and the
+  launcher and the app's own read-ahead read only those (`ReadAhead.Plan`, `ReadStretches`). `StartupPrefetchProbeTests`
+  on that disk: faults after reading the stretches served from the cache, 18 ms against 1.3-1.9 s straight away and 12
+  ms after the whole files. Next: the list's size after a start of an installed build, then a sign-in's `launcher=`.
+  Moving the install to
   the SSD would do the rest; the user declined. `hardFaults` stays high, as a fault on a file read through still
   counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
   was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files

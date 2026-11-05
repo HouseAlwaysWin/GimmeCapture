@@ -61,16 +61,21 @@ public sealed class StartupPrefetchTests : IDisposable
     }
 
     [Fact]
-    public void ReadThrough_ReadsEveryFileWhole_AndSkipsOneThatIsMissing()
+    public void ReadAll_ReadsEachFilesStretches_OrAllOfIt_AndSkipsOneThatIsMissing()
     {
         string big = Path.Combine(_app, "big.dll");
         string small = Path.Combine(_app, "small.dll");
         File.WriteAllBytes(big, new byte[(3 << 20) + 5]);
         File.WriteAllBytes(small, new byte[10]);
 
-        long read = StartupPrefetch.ReadThrough([big, Path.Combine(_app, "gone.dll"), small]);
+        long read = StartupPrefetch.ReadAll(
+        [
+            new StartupFile(big, [new FileRange(4096, 8192), new FileRange(2 << 20, 1 << 20)]),
+            new StartupFile(Path.Combine(_app, "gone.dll"), null),
+            new StartupFile(small, null),
+        ]);
 
-        Assert.Equal((3 << 20) + 5 + 10, read);
+        Assert.Equal(8192 + (1 << 20) + 10, read);
     }
 
     [Fact]

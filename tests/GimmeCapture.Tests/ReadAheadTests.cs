@@ -93,31 +93,99 @@ public sealed class ReadAheadTests
     }
 
     [Fact]
-    public void FromList_ReadsTheListsOtherFiles_InItsOrder_EachOnce()
+    public void Plan_ReadsBeforeMainFirst_WithTheListsStretches_ThenTheListsOtherFiles_InItsOrder_EachOnce()
     {
         string app = Path.Combine(Path.GetTempPath(), "GimmeCapture-list", "App");
         var lines = new[]
         {
-            "System.Private.CoreLib.dll",
-            "GimmeCapture.dll",
+            "System.Private.CoreLib.dll|0+4096,65536+8192",
+            "GimmeCapture.dll|0+1048576",
             "Serilog.dll",
             "",
-            "Avalonia.Base.dll",
-            "serilog.dll",
+            "Avalonia.Base.dll|4096+4096",
+            "serilog.dll|0+4096",
             Path.Combine("runtimes", "win-x64", "native", "libSkiaSharp.dll"),
             Path.Combine("..", "Elsewhere.dll"),
             Path.Combine(Path.GetTempPath(), "rooted.dll"),
             "coreclr.dll",
         };
 
+        var plan = ReadAhead.Plan(lines, app);
+
+        // .NET's host and runtime first, in the order they load, then the rest of the list in its order.
         Assert.Equal(
-            new[]
-            {
-                Path.Combine(app, "Serilog.dll"),
-                Path.Combine(app, "Avalonia.Base.dll"),
-                Path.Combine(app, "runtimes", "win-x64", "native", "libSkiaSharp.dll"),
-            },
-            ReadAhead.FromList(lines, app));
+            ReadAhead.BeforeMain.Select(name => Path.Combine(app, name))
+                .Concat(
+                [
+                    Path.Combine(app, "Serilog.dll"),
+                    Path.Combine(app, "Avalonia.Base.dll"),
+                    Path.Combine(app, "runtimes", "win-x64", "native", "libSkiaSharp.dll"),
+                ]),
+            plan.Select(file => file.Path));
+        Assert.Equal([new FileRange(0, 4096), new FileRange(65536, 8192)], Stretches(plan, "System.Private.CoreLib.dll"));
+        Assert.Equal([new FileRange(0, 1 << 20)], Stretches(plan, "GimmeCapture.dll"));
+        // Listed without stretches, or not listed at all: all of it.
+        Assert.Null(Stretches(plan, "coreclr.dll"));
+        Assert.Null(Stretches(plan, "GimmeCapture.deps.json"));
+        // The first line for a file is the one read.
+        Assert.Null(Stretches(plan, "Serilog.dll"));
+        Assert.Equal([new FileRange(4096, 4096)], Stretches(plan, "Avalonia.Base.dll"));
+
+        IReadOnlyList<FileRange>? Stretches(List<StartupFile> files, string name) =>
+            files.Single(file => file.Path == Path.Combine(app, name)).Stretches;
+    }
+
+    [Fact]
+    public void ALinesStretches_RoundTrip()
+    {
+        var stretches = new[] { new FileRange(0, 4096), new FileRange(1_310_720, 262_144) };
+        string line = ReadAhead.FormatLine(Path.Combine("runtimes", "x.dll"), stretches);
+
+        Assert.Equal(Path.Combine("runtimes", "x.dll") + "|0+4096,1310720+262144", line);
+        Assert.Equal(Path.Combine("runtimes", "x.dll"), ReadAhead.ParseLine(line, out var parsed));
+        Assert.Equal(stretches, parsed);
+        Assert.Equal("a.dll", ReadAhead.FormatLine("a.dll", null));
+        Assert.Equal("a.dll", ReadAhead.FormatLine("a.dll", []));
+    }
+
+    [Theory]
+    [InlineData("a.dll")]
+    [InlineData("a.dll|")]
+    [InlineData("a.dll|0+4096,oops")]
+    [InlineData("a.dll|0+0")]
+    [InlineData("a.dll|-5+10")]
+    [InlineData("a.dll|10")]
+    public void ALineWithoutStretchesItCanRead_IsReadWhole(string line)
+    {
+        Assert.Equal("a.dll", ReadAhead.ParseLine(line, out var stretches));
+        Assert.Null(stretches);
+    }
+
+    [Fact]
+    public void ReadStretches_ReadsEachOnce_AndWhatAFileHas()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "GimmeCapture-readahead-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            string file = Path.Combine(folder, "Avalonia.Base.dll");
+            File.WriteAllBytes(file, new byte[(3 << 20) + 100]);
+            var buffer = new byte[1 << 20];
+
+            // The second runs past the end of the file, which has only 100 bytes of it.
+            Assert.Equal(
+                4096 + 100,
+                ReadAhead.ReadStretches(file, [new FileRange(8192, 4096), new FileRange(3 << 20, 4096)], buffer));
+            Assert.Equal(
+                (2 << 20) + 1,
+                ReadAhead.Read(new StartupFile(file, [new FileRange(0, (2 << 20) + 1)]), buffer));
+            Assert.Equal((3 << 20) + 100, ReadAhead.Read(new StartupFile(file, null), buffer));
+            Assert.Equal(0, ReadAhead.ReadStretches(Path.Combine(folder, "gone.dll"), [new FileRange(0, 4096)], buffer));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 
     [Fact]

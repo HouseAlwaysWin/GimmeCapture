@@ -9,6 +9,16 @@
 
 ---
 
+## Unreleased
+
+### ⚡ Performance
+
+- **Starting with Windows reads less of the app from a hard disk.** At the last sign-in the launcher read the app's
+  start-up files whole before starting it, 141 MB in 22.6 s from a disk the rest of the sign-in was reading too, and
+  the app then started in 3.3 s. A start uses much less of those files than they hold: the app's own file is 40 MB, 30
+  of them fonts a start to the tray never draws. Each start now writes down which parts of each file it used, and the
+  launcher, like the app's own read-ahead, reads only those.
+
 ## v0.73.0 - 2026-11-05
 
 ### ⚡ Performance
