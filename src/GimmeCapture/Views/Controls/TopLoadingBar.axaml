@@ -3,12 +3,32 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:ctl="using:GimmeCapture.Views.Controls"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="6"
              x:Class="GimmeCapture.Views.Controls.TopLoadingBar"
              x:DataType="vm:SnipWindowViewModel"
              Height="6"
              VerticalAlignment="Top"
              IsHitTestVisible="False">
+
+    <UserControl.Styles>
+        <!-- Animated only while the bar shows, which is while a scan or a translation runs. Hidden, Avalonia only pauses
+             a style's animation, which keeps it on the animation clock, and with anything on that clock it renders every
+             16 ms: the overlay's UI thread woke 580 times a second instead of 19 from the moment it was built
+             (TopLoadingBarIdleProbeTests, StyleAnimationMarkupTests). -->
+        <Style Selector="ctl|TopLoadingBar[IsVisible=True] Rectangle#Indicator">
+            <Style.Animations>
+                <Animation Duration="0:0:3" IterationCount="Infinite">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="TranslateTransform.X" Value="-3000"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="TranslateTransform.X" Value="4000"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+    </UserControl.Styles>
 
     <!-- Single cohesive bar with ambient glow -->
     <Panel Height="6" VerticalAlignment="Top">
@@ -36,20 +56,6 @@
                 <Rectangle.RenderTransform>
                     <TranslateTransform X="-3000"/>
                 </Rectangle.RenderTransform>
-                <Rectangle.Styles>
-                    <Style Selector="Rectangle">
-                        <Style.Animations>
-                            <Animation Duration="0:0:3" IterationCount="Infinite">
-                                <KeyFrame Cue="0%">
-                                    <Setter Property="TranslateTransform.X" Value="-3000"/>
-                                </KeyFrame>
-                                <KeyFrame Cue="100%">
-                                    <Setter Property="TranslateTransform.X" Value="4000"/>
-                                </KeyFrame>
-                            </Animation>
-                        </Style.Animations>
-                    </Style>
-                </Rectangle.Styles>
             </Rectangle>
         </Panel>
     </Panel>

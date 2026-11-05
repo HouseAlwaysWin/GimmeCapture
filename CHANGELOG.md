@@ -51,6 +51,10 @@
   a little closer to the screen. The file also says now which colour conversion it holds; without that, players such as
   a browser took the usual one for HD video and showed reds a little orange and greens darker. Other encoders are as
   before.
+- **The capture overlay no longer redraws 60 times a second while it waits.** The bar along its top, which shows while
+  a scan or a translation runs, kept its animation going hidden from the moment the overlay opened: the overlay's
+  interface thread woke about 580 times a second instead of 19, at ten times the processor, for as long as it was open.
+  It now animates only while it shows.
 
 ### 🖼️ Interface
 

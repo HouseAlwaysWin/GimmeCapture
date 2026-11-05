@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 7 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 8 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -811,6 +811,14 @@ tool.
   fails on the old code: yuv420p) and opt-in `NVENC_PROBE` `Gdigrab_OnNvenc_KeepsTheColours_AndSaysWhichTheyAre`
   (SteelBlue within 3 levels, BT.601 in the file; the old code left it unset). Left: AMF and QSV (not measured; the
   laptop's Radeon could test AMF), the overlays' BGRA round trip, the webcam's full-size copy (Recording).
+- Done since batch 1 (2026-11-05, "把能做的都做完"): **the overlay's top loading bar animated hidden**. Its infinite
+  animation was a style on its `Rectangle`, applied as the overlay is built. `TopLoadingBarIdleProbeTests` (opt-in, the
+  real Win32 platform, a 1536x864 window off screen, GPU rendering, 8 s windows after 30 s of start-up): the UI thread
+  woke 19.2 times a second at 4.4 M cycles/s without the bar, 582.4 at 43.3 M with it hidden since it was built and
+  597.4 at 42.4 M hidden after showing. The style now selects `ctl|TopLoadingBar[IsVisible=True] Rectangle#Indicator`:
+  18.9 at 4.0 M hidden, 17.6 at 3.9 M after showing, 943 while it shows (the probe checks it still runs).
+  `StyleAnimationMarkupTests` fails an infinite style animation whose selector does not say `[IsVisible=True]` (the old
+  bar's `Rectangle`); it is the only one in the app's own markup.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1054,6 +1062,8 @@ These were covered by unit tests only; check them in the real app before a relea
   comes back in step after a short restart), turn the loop off (it stops at the end), trim it in the timeline (it loops
   the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
   should loop where the picture ends, without holding its last frame.
+- **The overlay's loading bar**: open the capture overlay with the AI scan on: the red bar along the top should sweep
+  while the scan runs and go once it is done, and do the same during a translation.
 - **A recording on the NVIDIA card**: record a region with strong colours (a page with red and green on it) and play
   the file in its pin and in a browser or Windows' player: the colours should match the screen in both (a browser
   showed reds a little orange before). The app should take less of the processor while it records (Task Manager), and
@@ -1213,11 +1223,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   when nothing scrolls (`ScrollingManual.cs:304-309`). Carry signatures in rented buffers, skip unchanged frames.
 - **Freezing mid-session after entering drawing mode live keeps the live snapshot** (S). Needs
   `SnipWindowViewModel.Capture.cs` (left from batch 1).
-- **The top loading bar's animation probably keeps the overlay rendering every 16 ms** (S, measure first).
-  `TopLoadingBar.axaml`'s infinite animation is a style on its `Rectangle` itself, applied as the overlay is built, so
-  by what the pins' processing bar showed (Status) it sits paused on the animation clock from the overlay's creation
-  until it closes, whether an AI scan or a translation showed it or not. Measure an open overlay's UI-thread wakeups as
-  `PinProcessingIdleProbeTests` does, then select the animation on the bar's visibility.
 - **Small ones**: `ToolbarMaxWidth` raised on every pointer move (`Selection.AIScan.cs:852`, `State.cs:812`); the key
   filter rebuilds a 28-field record on every view-model PropertyChanged (`SnipWindow.Win32.cs:148,227`).
 

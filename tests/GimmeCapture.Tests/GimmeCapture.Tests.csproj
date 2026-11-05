@@ -44,6 +44,7 @@
     <Compile Remove="ThreadActivity.cs" />
     <Compile Remove="UiStallMonitorIdleProbeTests.cs" />
     <Compile Remove="PinProcessingIdleProbeTests.cs" />
+    <Compile Remove="TopLoadingBarIdleProbeTests.cs" />
     <!-- Opens the main window in a real Win32 window. -->
     <Compile Remove="MainWindowOpenProbeTests.cs" />
     <!-- Maps DLLs as images and copies them with robocopy. -->
