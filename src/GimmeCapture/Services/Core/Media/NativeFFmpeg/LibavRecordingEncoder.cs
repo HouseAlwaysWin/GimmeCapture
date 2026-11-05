@@ -21,10 +21,11 @@ internal static unsafe class LibavRecordingEncoder
     private static readonly string[] SoftwareH265Encoders = ["libx265", "libx264", "libopenh264", "mpeg4"];
     private static readonly string[] SoftwareH264Encoders = ["libx264", "libopenh264", "mpeg4"];
 
-    // 0 = not probed yet, 1 = usable, 2 = not usable. Only ever set from a probe that actually ran, in this run or an
-    // earlier one (RecallHardwareAv1), so a probe attempted before the native libraries were loaded does not poison the
-    // answer for the rest of the session.
-    private static int _hardwareAv1State;
+    // Only ever set from a probe that actually ran, in this run or an earlier one (RecallHardwareAv1), so a probe
+    // attempted before the native libraries were loaded does not poison the answer for the rest of the session. One
+    // probe at a time: the Record tab, the Record-mode warm-up and a recording's start could each open the GPU's AV1
+    // encoders at once.
+    private static readonly ProbedAnswer HardwareAv1 = new();
 
     /// <summary>
     /// Whether this machine can really encode AV1 in hardware.
@@ -41,42 +42,23 @@ internal static unsafe class LibavRecordingEncoder
     /// The answer <see cref="HasUsableHardwareAv1Encoder"/> has already reached, or null if it has not run yet.
     /// Never probes: running the probe means loading FFmpeg, so callers on the UI thread ask this instead.
     /// </summary>
-    public static bool? KnownHardwareAv1Usable => System.Threading.Volatile.Read(ref _hardwareAv1State) switch
-    {
-        1 => true,
-        2 => false,
-        _ => null
-    };
+    public static bool? KnownHardwareAv1Usable => HardwareAv1.Known;
 
-    public static bool HasUsableHardwareAv1Encoder()
-    {
-        int cached = System.Threading.Volatile.Read(ref _hardwareAv1State);
-        if (cached != 0)
+    public static bool HasUsableHardwareAv1Encoder() => HardwareAv1.Get(
+        () =>
         {
-            return cached == 1;
-        }
-
-        bool usable;
-        try
-        {
-            if (!FFmpegRuntime.TryInitialize(out _))
+            try
             {
-                // Cannot answer yet, and must not remember this as "no".
-                return false;
+                // Cannot answer before FFmpeg loads, and must not remember that as "no".
+                return FFmpegRuntime.TryInitialize(out _) ? ProbeHardwareAv1() : null;
             }
-
-            usable = ProbeHardwareAv1();
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warning("Recording.Av1Probe", ex);
-            return false;
-        }
-
-        System.Threading.Volatile.Write(ref _hardwareAv1State, usable ? 1 : 2);
-        AppLog.Information($"Recording.HardwareAv1Probe: {(usable ? "available" : "unavailable")}");
-        return usable;
-    }
+            catch (Exception ex)
+            {
+                AppLog.Warning("Recording.Av1Probe", ex);
+                return null;
+            }
+        },
+        usable => AppLog.Information($"Recording.HardwareAv1Probe: {(usable ? "available" : "unavailable")}"));
 
     /// <summary>
     /// Takes the answer a probe reached in an earlier run on this machine as it is now (<see cref="HardwareCapabilityCache"/>),
@@ -85,7 +67,7 @@ internal static unsafe class LibavRecordingEncoder
     /// </summary>
     internal static void RecallHardwareAv1(bool usable)
     {
-        if (System.Threading.Interlocked.CompareExchange(ref _hardwareAv1State, usable ? 1 : 2, 0) == 0)
+        if (HardwareAv1.Recall(usable))
         {
             AppLog.Information($"Recording.HardwareAv1Probe: {(usable ? "available" : "unavailable")} (remembered)");
         }

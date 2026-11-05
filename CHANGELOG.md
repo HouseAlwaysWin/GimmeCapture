@@ -102,6 +102,9 @@
   captured so far sampled both into new arrays, two to four times a picture, 115 KB each for a region 900 pixels
   tall, and the app's memory clean-up ran again and again while scrolling: 315 KB set aside a picture before, under
   64 KB now.
+- **The check for a graphics card that can record AV1 runs once at a time.** The Record tab, Record mode's warm-up
+  and a recording's start could each test the card's AV1 encoders at the same moment, the first time a run needed the
+  answer; the others now wait for the first's answer.
 
 ## v0.72.1 - 2026-11-04
 

@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 15 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 16 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -874,6 +874,11 @@ tool.
   without pixels gets cleared bytes, as a new array had). `ScrollStitcherTests.AligningAFrame_SetsAsideNoRowSignatures`
   (a 1500-row strip and a 900-row frame: 314,896 bytes an alignment on the old code, under 64 KB now). The user's logs
   show no scrolling capture, so its other cost stays: the producer grabs back to back while nothing scrolls (Snip).
+- Done since batch 1 (2026-11-05): **two AV1 probes at once**. `HasUsableHardwareAv1Encoder` read and wrote its state
+  without a guard, so the Record tab, the Record-mode warm-up and a recording's start could each open the GPU's AV1
+  encoders together on a run's first need (the capability cache answers every other run). `ProbedAnswer` runs one
+  probe at a time, the others waiting for its answer, keeps no answer a probe could not reach, and takes an earlier
+  run's (`Recall`). `ProbedAnswerTests` (a second caller during a probe gets its answer without probing).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1329,8 +1334,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
   was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files
   parsed through `x:Static`.
-- **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab, the
-  Record-mode warm-up and a recording start probing together (`LibavRecordingEncoder`).
 - **A Direct3D 11 decode leaves 150-240 MB in the process after it ends** (measured in the app 2026-11-04: it does
   not, left). A temporary App hook opened a video pin of one of the user's recordings with software rendering on, as
   they run, in fresh processes, GPU and CPU decoding alternated: on a 1134x624 H.264 one (6.2 s, looping), private bytes
