@@ -515,8 +515,10 @@ public partial class FloatingVideoViewModel
             Directory.CreateDirectory(tempDir);
             if (targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase))
             {
+                // Dithered as a GIF recording of the same quality is.
                 (int gifFps, int maxWidth) = LibavGifTranscoder.QualityLadder(quality);
-                ok = GifWebmVideoExporter.TranscodeToGif(source, outputPath, gifFps, maxWidth);
+                ok = GifWebmVideoExporter.TranscodeToGif(
+                    source, outputPath, gifFps, maxWidth, paletteuseArgs: LibavGifTranscoder.QualityDither(quality));
             }
             else
             {

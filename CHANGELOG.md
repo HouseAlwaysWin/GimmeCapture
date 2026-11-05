@@ -35,6 +35,13 @@
   the Medium quality, 10.7 s instead of 24 for a 34-second 1450x900 recording, 1.7 s instead of 3.2 for a 6-second
   1134x624 one. GIF exports from the Compress tab and GIF recordings are made the same way, and the Compress tab's bar
   for one now fills evenly.
+- **A pinned recording copied as a GIF is dithered as a GIF recording is, so at Medium and Low it comes out
+  smaller.** A GIF's 256 colours are dithered to look like more. The copy spread each pixel's error onto its
+  neighbours at every quality, the finest way and the largest file, where a GIF recording does that only at High, uses
+  an ordered pattern at Medium and none at Low. The copy now does as the recording does. At Medium, a 34-second
+  1450x900 recording's GIF is 3.5 MB instead of 6.5 and takes a third less time, two shorter ones' are about a fifth
+  smaller; at Low, 1.3 MB instead of 2.6. Zoomed in, the ordered pattern shows as a fine regular grain on smooth
+  gradients. At High nothing changes, nor for GIF exports from the Compress tab.
 
 ### 🖼️ Interface
 

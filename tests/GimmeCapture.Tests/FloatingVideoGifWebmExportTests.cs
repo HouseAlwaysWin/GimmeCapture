@@ -60,6 +60,27 @@ public sealed class FloatingVideoGifWebmExportTests : IDisposable
         Assert.True(File.Exists(recording));
     }
 
+    // The dithering a GIF recording of each quality gets (RecordingService.FinalizeAsGifAsync). The copy dithered with
+    // the finest at every quality, which at Medium made a 34-second recording's GIF nearly twice the size.
+    [Theory]
+    [InlineData(VideoQuality.High, "dither=sierra2_4a")]
+    [InlineData(VideoQuality.Medium, "dither=bayer:bayer_scale=3")]
+    [InlineData(VideoQuality.Low, "dither=none")]
+    public async Task AGifCopy_IsDitheredAsAGifRecordingOfItsQuality(VideoQuality quality, string recordingDither)
+    {
+        // Thousands of colours, so the dithering shows in every frame.
+        string recording = VideoTestClips.WriteColourY4m(Path.Combine(_root, "recording.y4m"), 320, 240, 60);
+        (int fps, int maxWidth) = LibavGifTranscoder.QualityLadder(quality);
+        string recorded = Path.Combine(_root, "recorded.gif");
+        LibavGifTranscoder.TranscodeToGif(recording, recorded, fps, maxWidth, recordingDither);
+
+        string? gif = await FloatingVideoViewModel.TranscodeGifWebmAsync(
+            recording, intermediate: null, ".gif", quality, keepAudio: false, _root);
+
+        Assert.NotNull(gif);
+        Assert.Equal(File.ReadAllBytes(recorded), File.ReadAllBytes(gif));
+    }
+
     [Fact]
     public async Task AFailedTranscode_LeavesNoFolderBehind()
     {

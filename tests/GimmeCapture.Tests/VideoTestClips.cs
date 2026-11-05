@@ -51,6 +51,44 @@ internal static class VideoTestClips
     }
 
     /// <summary>
+    /// Writes a raw 30 fps clip in thousands of colours that shift every frame, so a GIF's 256 are dithered everywhere.
+    /// </summary>
+    public static string WriteColourY4m(string path, int width, int height, int frameCount)
+    {
+        using FileStream file = File.Create(path);
+        file.Write(Encoding.ASCII.GetBytes($"YUV4MPEG2 W{width} H{height} F30:1 Ip A1:1 C420jpeg\n"));
+        var luma = new byte[width * height];
+        var chroma = new byte[(width / 2) * (height / 2)];
+        for (int i = 0; i < frameCount; i++)
+        {
+            file.Write(Encoding.ASCII.GetBytes("FRAME\n"));
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    luma[(y * width) + x] = (byte)((x * 3) + (y * 5) + (i * 7));
+                }
+            }
+
+            file.Write(luma);
+            for (int plane = 0; plane < 2; plane++)
+            {
+                for (int y = 0; y < height / 2; y++)
+                {
+                    for (int x = 0; x < width / 2; x++)
+                    {
+                        chroma[(y * (width / 2)) + x] = (byte)(plane == 0 ? (x * 2) + (i * 11) : (y * 3) + (i * 5));
+                    }
+                }
+
+                file.Write(chroma);
+            }
+        }
+
+        return path;
+    }
+
+    /// <summary>
     /// Encodes one frame per entry of <paramref name="pts"/> (in <paramref name="timeBase"/>) with libx264 into a file
     /// whose container follows the extension (.mkv, .mp4). Each frame lasts until the next one; the last lasts
     /// <paramref name="lastFrameDuration"/>. With <paramref name="detailed"/> the frames carry a moving, textured

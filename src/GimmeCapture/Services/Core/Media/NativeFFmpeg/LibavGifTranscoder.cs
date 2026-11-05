@@ -29,6 +29,23 @@ internal static class LibavGifTranscoder
         _ => (15, 720),
     };
 
+    /// <summary>Error diffusion, the finest dithering paletteuse has, and the slowest.</summary>
+    internal const string FinestDither = "dither=sierra2_4a";
+
+    /// <summary>
+    /// The dithering a GIF of this quality gets, as paletteuse's arguments: a GIF recording's and a pinned recording's
+    /// GIF copy's. Error diffusion looks best, but its fine noise compresses poorly and makes the largest files; ordered
+    /// (bayer) dithering compresses far better and leaves a regular grain on gradients; none is the smallest and bands
+    /// gradients. The copy was dithered with the finest at every quality: at Medium a 34-second 1450x900 recording's GIF
+    /// came out 6.5 MB in 8.4 s, where bayer makes it 3.5 MB in 5.6 s.
+    /// </summary>
+    public static string QualityDither(VideoQuality quality) => quality switch
+    {
+        VideoQuality.High => FinestDither,
+        VideoQuality.Low => "dither=none",
+        _ => "dither=bayer:bayer_scale=3",
+    };
+
     /// <summary>
     /// Transcodes to GIF. Tries the optimal-palette path (palettegen → paletteuse, two passes over the clip) for
     /// much better color, and falls back to the single-pass RGB8 path if the filters are unavailable or fail — so
@@ -42,7 +59,7 @@ internal static class LibavGifTranscoder
         string outputPath,
         int targetFps,
         int maxWidth,
-        string paletteuseArgs = "dither=sierra2_4a",
+        string paletteuseArgs = FinestDither,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default,
         ManualResetEventSlim? pauseGate = null,

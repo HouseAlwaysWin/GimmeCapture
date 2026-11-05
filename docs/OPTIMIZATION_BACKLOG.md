@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 5 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 6 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -770,6 +770,19 @@ tool.
   `LibavGifTranscoderTests.MappedOnSeveralThreads_TheGifIsTheSameByteForByte` (2 and 5 threads, a clip of thousands
   of colours so the dithering works everywhere). Left: both passes decode and scale on one thread (sws is the
   legacy single-threaded call); a short clip could keep pass 1's frames for pass 2.
+- Done since batch 1 (2026-11-05, the user's call "改成跟錄影一樣"): **a pin's GIF copy dithers as a GIF recording of
+  its quality does**. `LibavGifTranscoder.QualityDither` (High sierra2_4a, Medium bayer:bayer_scale=3, Low none) is
+  what `RecordingService.FinalizeAsGifAsync` chose inline; the copy passes it through `GifWebmVideoExporter.TranscodeToGif`'s
+  new `paletteuseArgs`, and the Compress tab's GIF keeps the finest (Pins). The user's quality is Medium. A throwaway
+  test (not committed), ABBA with the parallel mapping, on the user's recordings, read-only: at Medium the 34.6 s
+  1450x900 HEVC one 9.31/7.40 s and 6.49 MB against 5.73/5.42 s and 3.48 MB, the 6.2 s 1134x624 one 1.13/1.10 against
+  0.99/0.95 and 6.88 against 5.56 MB, the 4.9 s 432x766 one 1.42/1.53 against 0.96/0.97 and 7.99 against 6.38 MB; at
+  Low 3.56/3.48 against 3.08/3.00 and 2.61 against 1.33 MB, 0.53/0.50 against 0.45/0.45 and 2.51 against 1.92,
+  1.30/1.24 against 0.93/0.87 and 5.57 against 3.49. A frame of each, zoomed 4×: bayer's regular grain shows on flat
+  watercolour and dark gradients, invisible at 1×, and sierra's stray blue and green dots in a tree are gone.
+  `FloatingVideoGifWebmExportTests.AGifCopy_IsDitheredAsAGifRecordingOfItsQuality` (byte for byte against
+  `TranscodeToGif` with each quality's dither written out; Medium and Low fail on the old code), and the several-threads
+  byte-for-byte test runs bayer too.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1014,8 +1027,9 @@ These were covered by unit tests only; check them in the real app before a relea
   the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
   should loop where the picture ends, without holding its last frame.
 - **A pinned recording copied as a GIF**: copy one of your recordings as GIF from its pin, a short one and a long one.
-  It should take about half as long as before and look the same (the file is the same). A GIF export from the Compress
-  tab: its bar should fill evenly, about half way when the palette is done.
+  It should take half as long as before or less, and at Medium the file should be smaller (a 34-second one about
+  half): zoomed in, smooth areas show a fine regular grain where they showed noise, as a GIF recording at Medium does.
+  A GIF export from the Compress tab: its bar should fill evenly, about half way when the palette is done.
 - **A pinned recording, pixel for pixel**: at 125%, record a region with small text in it and pin it. The pin should
   look as sharp as the screen did (it was soft before), the red border hugging the picture's outside where the
   capture overlay drew it round the selection. Resize the pin: smoothed as before. Move it to a screen at another
@@ -1137,12 +1151,12 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   2026-11-03, 13-44 on the CPU), and so does every piece of a timeline with cuts or speeds, whose sound restarts per
   piece. Seeking inside the kept decode would need the sound clock's ticket to change mid-run
   (`PlaybackMediaClock` follows one); a paused pin's seeks (single-frame passes, no sound) would gain on their own.
-- **A pin's GIF copy dithers with sierra2_4a at every quality** (S, the user's call: look and size).
-  `FloatingVideoViewModel.TranscodeGifWebmAsync` passes no `paletteuseArgs`, so the default; a GIF recording
-  (`RecordingService.FinalizeAsGifAsync`) uses bayer:bayer_scale=3 at Medium and none at Low. Measured 2026-11-05 on the
-  user's 34 s 1450x900 recording at Medium, one thread: sierra2_4a 18.4 s and 6.5 MB, bayer:bayer_scale=5 8.7 s and
-  3.3 MB, none 7.8 s and 3.3 MB; `diff_mode=rectangle` (map only what changed) halved sierra's time on that clip and did
-  nothing for a scrolling 432x766 one, and would need the mapping back on one thread (it maps from the frame before).
+- **The Compress tab's GIF dithers with sierra2_4a at every tier** (S, the user's call: look and size). Its tier
+  comes from the CRF slider (`CompressPipeline.EncodeGifWebmAsync`) and it passes no `paletteuseArgs`, while a GIF
+  recording and a pin's copy use `LibavGifTranscoder.QualityDither` (bayer at Medium: 3.5 MB instead of 6.5 on the
+  user's 34 s recording, a fifth smaller on two short ones). The user's logs from 10-30 to 11-05 show no Compress export.
+  `diff_mode=rectangle` (map only what changed) halved sierra's single-thread time on that recording and did nothing for
+  a scrolling 432x766 one, and would need the mapping back on one thread (it maps from the frame before).
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done

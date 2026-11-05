@@ -674,15 +674,8 @@ public partial class RecordingService
         var (ladderFps, maxWidth) = LibavGifTranscoder.QualityLadder(quality);
         int gifFps = Math.Min(ladderFps, _fps);
 
-        // Trade color smoothness for file size via the dither: error-diffusion (sierra2_4a) looks best but
-        // its high-frequency noise compresses poorly (largest files); ordered bayer is far more compressible;
-        // none is smallest but bands gradients. Tie it to the quality preset.
-        string paletteuseArgs = quality switch
-        {
-            VideoQuality.High => "dither=sierra2_4a",
-            VideoQuality.Low => "dither=none",
-            _ => "dither=bayer:bayer_scale=3"
-        };
+        // The dither trades colour smoothness for file size, by the quality preset.
+        string paletteuseArgs = LibavGifTranscoder.QualityDither(quality);
         await Task.Run(() => LibavGifTranscoder.TranscodeToGif(mergedMkv, _outputFile, gifFps, maxWidth, paletteuseArgs));
 
         FinalizationProgress = 100;
