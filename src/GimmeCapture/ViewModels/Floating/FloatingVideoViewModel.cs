@@ -101,6 +101,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private readonly AudioPreviewPlayer _audioPreview = new();
     private bool _isMuted;
     private readonly LibavVideoFramePlayer _nativeFramePlayer = new();
+    // The frames a paused seek shows, from a decoder kept open between seeks; only the playback loop touches it.
+    private readonly KeptStillFrames _pausedFrames = new();
 
     private bool _isExporting;
     public bool IsExporting
@@ -573,6 +575,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
         _audioPreview.Dispose();
         _nativeFramePlayer.Dispose();
+        _pausedFrames.Dispose();
         if (playbackCompleted)
         {
             _playSemaphore.Dispose();

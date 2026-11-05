@@ -87,6 +87,9 @@ internal sealed class LibavStillFrameDecoder : IDisposable
     /// <summary>Whether the file is open now.</summary>
     internal unsafe bool IsOpen => _input != null;
 
+    /// <summary>The time of the frame given last: the first at or after the time asked for. Read between requests.</summary>
+    internal double LastFrameSeconds => _lastFrameSeconds;
+
     /// <summary>
     /// The frame at <paramref name="seconds"/> as width × height BGRA pixels with the rows packed, decoded on the pool;
     /// null when no frame is at or after that time, or when cancelled or disposed first. The same frame asked for again

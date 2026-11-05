@@ -225,6 +225,19 @@ public partial class FloatingVideoViewModel
                 _trimEndReached = false;
 
                 bool playSingleFrame = !_isPlaybackActive;
+                if (playSingleFrame && TotalDuration > TimeSpan.Zero)
+                {
+                    // A paused seek shows its one frame from a decoder kept between seeks. Until the duration is known,
+                    // the pass below still opens the file, which reports it.
+                    await ShowPausedFrameAsync(nextStartSeconds, generation, ct).ConfigureAwait(false);
+                    break;
+                }
+
+                if (!playSingleFrame)
+                {
+                    // Playing: the paused seeks' decoder lets go of the file and the 70-90 MB it holds.
+                    _pausedFrames.Release();
+                }
                 // Walk the KEPT pieces (one or many), skipping dropped ones. A single kept piece just
                 // plays its [start,end] range (= a trim). Independent of IsTimelineMode, so a collapsed
                 // panel still previews the edit. From the UI thread's copy: this runs on the pool, and
@@ -488,6 +501,24 @@ public partial class FloatingVideoViewModel
     }
 
     private void StopAudioPlayback() => _audioPreview.Stop();
+
+    // Playback loop: the frame a paused seek lands on, from the decoder kept between seeks (KeptStillFrames), which a
+    // seek a little further on decodes on from instead of opening the file again. Shown even inside the frame throttle.
+    private async Task ShowPausedFrameAsync(double seconds, int generation, CancellationToken ct)
+    {
+        StopAudioPlayback();
+        byte[]? frame = await _pausedFrames.DecodeFrameAtAsync(VideoPath, _width, _height, Math.Max(0, seconds), ct)
+            .ConfigureAwait(false);
+        if (frame == null || _isDisposed || ct.IsCancellationRequested
+            || generation != Volatile.Read(ref _playbackGeneration))
+        {
+            return;
+        }
+
+        UpdateBitmap(frame, generation, force: true);
+        _decodedPlayhead.Record(Math.Max(0, _pausedFrames.LastFrameSeconds), generation);
+        RequestCurrentTimeUiRefresh(force: true);
+    }
 
     // Where the decoder has got to. CurrentTime trails it by up to one time refresh while a clip plays, so a seek,
     // speed change or resume measured from CurrentTime would jump back a frame or two. While the seek bar is being

@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 10 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 11 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -833,6 +833,17 @@ tool.
   lock behind another ran anyway (154-190 ms on a 1920x1080 frame, above). `IOCREngine.DetectText(bitmap, ct)` (a
   default member, so the fakes keep theirs) and `PaddleOCREngine` checks the token once it holds the session, before
   any work. `PaddleOCREngineTests.ACancelledScan_DetectsNothing_OnceItHasTheSession`.
+- Done since batch 1 (2026-11-05): **a paused pin's seeks keep their decoder**. Each paused seek (the seek bar's
+  debounced seek, the 5-second buttons, the timeline) was a one-frame `PlayFramesAsync`: open, find streams, D3D11VA
+  device, seek, decode. A throwaway test, 12 random jumps and 12 steps of 0.1 s on the user's recordings, ABBA: 1450x900
+  HEVC 143.5/166.7 ms a jump and 158.8/156.6 a step, against 51.3/51.3 and 12.5/12.4 from a kept
+  `LibavStillFrameDecoder` (the compress editor's); 1134x624 136.1/135.2 and 133.9/132.7 against 21.9/22.4 and 9.7/9.9;
+  1920x1080 HEVC 169.0/165.6 and 194.5/193.1 against 56.1/55.3 and 18.7/19.2. `KeptStillFrames` keeps one for the
+  pin's file and size, the loop shows a paused seek's frame from it (the frame's own time on the playhead, as before)
+  and releases it when the pin plays (it holds 70-90 MB open; it also closes after 30 s unused); before the duration is
+  known a paused seek still takes the old pass, which reports it. `KeptStillFramesTests`. The seek bar still waits
+  300 ms after a drag stops before it seeks (`DebounceSeekAsync`), which a kept decoder no longer needs: showing frames
+  while dragging is the user's call (Pins).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1076,6 +1087,8 @@ These were covered by unit tests only; check them in the real app before a relea
   comes back in step after a short restart), turn the loop off (it stops at the end), trim it in the timeline (it loops
   the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
   should loop where the picture ends, without holding its last frame.
+- **A paused pinned recording's seeks**: pause a pinned recording, press the 5-second buttons both ways and drag the
+  seek bar: each frame should appear about at once (it took a moment before); play on, pause again and repeat.
 - **The overlay's loading bar**: open the capture overlay with the AI scan on: the red bar along the top should sweep
   while the scan runs and go once it is done, and do the same during a translation.
 - **A recording on the NVIDIA card**: record a region with strong colours (a page with red and green on it) and play
@@ -1207,7 +1220,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   starts a new `PlayFramesAsync` (68-123 ms to the first frame with D3D11VA on the user's recordings, measured
   2026-11-03, 13-44 on the CPU), and so does every piece of a timeline with cuts or speeds, whose sound restarts per
   piece. Seeking inside the kept decode would need the sound clock's ticket to change mid-run
-  (`PlaybackMediaClock` follows one); a paused pin's seeks (single-frame passes, no sound) would gain on their own.
+  (`PlaybackMediaClock` follows one). A paused pin's seeks keep a decoder now (Status).
+- **The seek bar waits 300 ms after a drag before it shows a frame** (S, the user's call: frames while dragging).
+  `FloatingVideoViewModel.DebounceSeekAsync` was there because each paused seek opened the file (130-195 ms); from the
+  kept decoder a step takes 10-20 ms, so a short debounce would show frames as the bar is dragged, at some CPU while
+  dragging.
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done

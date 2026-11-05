@@ -62,6 +62,11 @@
 - **Reopening the capture overlay at once shows its text boxes sooner.** Text scans run one at a time, and a scan
   cancelled while it waited behind another, as when the overlay is closed and opened again quickly, still ran once its
   turn came, about 0.16 s of a 1920x1080 screen, ahead of the new overlay's own. It now stops before it starts.
+- **A paused pinned recording shows the frame it is moved to three to ten times sooner.** Each move while paused, from
+  the seek bar, the 5-second buttons or the timeline, opened the file again, found its streams and set up the decoder:
+  130 to 195 ms on the user's recordings before the frame showed. The pin now keeps that decoder open between such
+  moves, 20 to 55 ms for a jump and 10 to 20 ms for a frame a little further on, and lets it go when it plays or after
+  30 seconds unused.
 
 ### 🖼️ Interface
 
