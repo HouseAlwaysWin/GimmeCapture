@@ -83,12 +83,13 @@ public partial class FloatingVideoViewModel
             IsMuted = !IsMuted;
         });
         
-        // Initialize bitmap
+        // A video frame is opaque. Said so, the renderer can copy the picture instead of blending every pixel: with
+        // the picture shown pixel for pixel (FloatingVideoWindow.UpdateVideoSampling), a plain copy.
         VideoBitmap = new WriteableBitmap(
             new PixelSize(_width, _height),
             new Vector(96, 96),
             PixelFormat.Bgra8888,
-            AlphaFormat.Premul);
+            AlphaFormat.Opaque);
 
         _bootMediaTask = BootMediaAsync();
     }

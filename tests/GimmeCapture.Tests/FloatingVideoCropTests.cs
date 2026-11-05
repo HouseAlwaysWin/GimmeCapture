@@ -31,6 +31,20 @@ public class FloatingVideoCropTests
     }
 
     [Fact]
+    public void SelectionToPixelCropRect_OnARecordingsPinAt125Percent_TakesTheRecordingsOwnPixels()
+    {
+        // A 1134x624 recording shown pixel for pixel at 907.2x499.2 DIPs: its right half is pixels 567 to 1134. The pin
+        // used to map the crop onto its size in DIPs instead (907x499), and cut out pixels 454 to 908.
+        var crop = FloatingVideoViewModel.SelectionToPixelCropRect(
+            new Rect(453.6, 0, 453.6, 499.2), displayWidth: 907.2, displayHeight: 499.2, originalWidth: 1134, originalHeight: 624);
+
+        Assert.Equal(567, crop.X);
+        Assert.Equal(0, crop.Y);
+        Assert.Equal(566, crop.Width); // even, and inside the frame
+        Assert.Equal(624, crop.Height);
+    }
+
+    [Fact]
     public void SelectionToPixelCropRect_RoundsWidthAndHeightDownToEven()
     {
         var crop = FloatingVideoViewModel.SelectionToPixelCropRect(

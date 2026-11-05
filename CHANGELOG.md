@@ -30,6 +30,18 @@
   picture, 18 of 2560x1440, still all 30 of 1080p. Steps that keep no picture, such as strokes and shapes, are as
   before.
 
+### 🖼️ Interface
+
+- **A pinned recording shows at its full resolution, pixel for pixel.** At 125% the pin of a recording was decoded at
+  its region's size in DIPs, 80% of its pixels (907x499 of a 1134x624 recording), stretched back up to the screen, and
+  shrunk 4 pixels more by the border round it, so the picture came out soft. It now decodes the recording at its own
+  pixels and puts each on one of the screen's, with the border drawn round the outside as the capture overlay draws it
+  round the selection, and copies the frames as they are instead of smoothing every one: drawn with the processor
+  ("Use less memory"), a playing pin of that recording takes 23% of a core instead of 27%, of a 1450x900 one 31 to 33%
+  instead of 37 to 38%. A pin resized, or on a screen at another scaling, is smoothed as before. At scalings other
+  than 100%, cropping such a pin also cut out a part of the frame other than the one selected (at 125%, 80% as far in
+  and as large): it now cuts out the part selected.
+
 ## v0.72.1 - 2026-11-04
 
 ### 🖼️ Interface

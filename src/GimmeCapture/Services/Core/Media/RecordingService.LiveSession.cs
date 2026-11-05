@@ -501,8 +501,9 @@ public partial class RecordingService
 
             int x = (int)(_region.X * _visualScaling) + _screenOffset.X;
             int y = (int)(_region.Y * _visualScaling) + _screenOffset.Y;
-            int w = ((int)(_region.Width * _visualScaling) / 2) * 2;
-            int h = ((int)(_region.Height * _visualScaling) / 2) * 2;
+            // The pin of this recording is sized the same way (RecordingFrameSize.Pin), to show it pixel for pixel.
+            int w = RecordingFrameSize.EvenPixels(_region.Width, _visualScaling);
+            int h = RecordingFrameSize.EvenPixels(_region.Height, _visualScaling);
 
             var codec = ResolveRecordingCodec();
 

@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 3 entries (2026-11-04).
+- Since v0.72.1, `## Unreleased` holds 4 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -728,6 +728,32 @@ tool.
   Steps that keep no picture count nothing. `FloatingImageViewModelTests` (a budget of three pictures: three steps
   kept, the older pictures disposed, undone to the right one; the newest kept over the budget) and
   `AnnotationEditorStateTests`.
+- Done since batch 1, the user's choice (2026-11-05): **a recording's pin was decoded at its region's DIPs and drawn
+  inside its border** (from measuring a playing pin's CPU with "Use less memory" on, the user's setting). A temporary
+  App hook pinned the user's own recordings (read-only from `D:\影片`) with software rendering and read every thread's
+  cycles (`NtQuerySystemInformation` and `QueryThreadCycleTime`, as `ThreadActivity` does) over 12 s after 10 s of
+  warm-up, alternating modes in fresh processes. A playing pin of the 1134x624 H.264 recording took 27.2-27.4% of a
+  core, 16.9-17.1% of it on Avalonia's render thread (a managed thread started in coreclr). Two causes, both seen in
+  the probe's layout readout: `SnipWindowViewModel.Recording` passed the region's size in DIPs as the decode size
+  (`pixelWidth = Math.Round(originalWidth)`), so at 125% the pin decoded 907x499 of a 1134x624 recording and stretched
+  it back up; and `MainBorder` insets its child by its thickness, so the picture was laid out at 1130x620 for its 1134
+  pixels. Every frame was smoothed on its way to the screen (Unspecified sampling costs what LowQuality does; an
+  opaque bitmap alone saved nothing; the glow nothing). Now `RecordingFrameSize.Pin` decodes the recording at the
+  recorder's own pixels (DIPs x scaling, rounded down to even, `EvenPixels` shared with `RecordingService.LiveSession`)
+  and shows them at pixels / scaling DIPs; the border goes round the outside (`Margin = SelectionBorderOuterMargin`,
+  as the capture overlay draws its selection border, and `WindowPadding` keeps room for it with the decoration
+  hidden); the bitmap is `AlphaFormat.Opaque`; and `FloatingVideoWindow.UpdateVideoSampling` sets
+  `BitmapInterpolationMode.None` while the picture lands pixel for pixel (`IsPixelForPixel`: layout x scaling within
+  half a pixel of the bitmap), the default otherwise. After: laid out at 1134.00x624.00 px for the 1134x624 bitmap,
+  22.9-23.4% of a core (render thread 12.1-12.4%) against 26.9% for the old sizing in the same build; the 1450x900
+  HEVC recording 31.4-32.9% against 36.6-37.7% (decoded at 1160x720 before). What is left on the render thread is
+  Avalonia's software compositor presenting the whole window every frame. `SnipWindowViewModelRecordingPinTests`
+  (the real pin path by reflection at 1.25, 1.0 and 1.5; 1.25 and 1.5 fail on the old code) and
+  `RecordingFrameSizeTests`. The same mix-up cropped the wrong part: `TryGetSelectionPixelRect` mapped the selection
+  onto `OriginalWidth` (DIPs) as the video's pixels, and the exporter applies the crop in the file's pixels, so at 125%
+  the right half of a 1134-pixel recording came out as pixels 454-908; it maps onto the decode size now, the file's own
+  (`FloatingVideoCropTests`), and a copied clip goes to History with its pixels too. Not looked at: an image pin with its border shown has the same layout (`FloatingImageWindow`
+  draws its picture inside `MainBorder` too); the user hides the snip pins' border, so theirs are drawn at their size.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -971,6 +997,12 @@ These were covered by unit tests only; check them in the real app before a relea
   comes back in step after a short restart), turn the loop off (it stops at the end), trim it in the timeline (it loops
   the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
   should loop where the picture ends, without holding its last frame.
+- **A pinned recording, pixel for pixel**: at 125%, record a region with small text in it and pin it. The pin should
+  look as sharp as the screen did (it was soft before), the red border hugging the picture's outside where the
+  capture overlay drew it round the selection. Resize the pin: smoothed as before. Move it to a screen at another
+  scaling: shown, smoothed. Then the same with the pin's decoration hidden and its border shown: the border still
+  shows on the left and right. Crop it: the part selected is the part cut out (at 125% it was not). Draw on it, mask
+  a part of it: each lands where it was drawn, and the export is as before.
 - **A rotated compress**: compress one of the 4K phone videos turned 90° in the editor, nothing drawn on it. It
   should finish in about a quarter of the time it took before, turned the right way and looking as before. Then one
   with something drawn on it, which takes as long as before, the drawing where it was drawn.

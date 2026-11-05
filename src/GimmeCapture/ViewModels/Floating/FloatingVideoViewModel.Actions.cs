@@ -170,10 +170,12 @@ public partial class FloatingVideoViewModel
     /// <summary>
     /// Maps the display-space <see cref="FloatingWindowViewModelBase.SelectionRect"/> to even,
     /// in-bounds pixel coordinates suitable for an ffmpeg <c>crop</c> filter / yuv420p output.
+    /// The video's pixels are the ones it decodes at, its file's own: OriginalWidth is its size in DIPs, and at 125% a
+    /// crop mapped onto that took a part of the frame 80% as far in and as large as the one selected.
     /// </summary>
     private bool TryGetSelectionPixelRect(out PixelRect crop)
     {
-        crop = SelectionToPixelCropRect(SelectionRect, DisplayWidth, DisplayHeight, OriginalWidth, OriginalHeight);
+        crop = SelectionToPixelCropRect(SelectionRect, DisplayWidth, DisplayHeight, _width, _height);
         return crop.Width >= 2 && crop.Height >= 2;
     }
 
@@ -310,7 +312,7 @@ public partial class FloatingVideoViewModel
                 // source file itself was copied unchanged.
                 if (AddClipToHistoryAsync != null && !string.Equals(produced, VideoPath, StringComparison.OrdinalIgnoreCase))
                 {
-                    await AddClipToHistoryAsync(produced, (int)OriginalWidth, (int)OriginalHeight);
+                    await AddClipToHistoryAsync(produced, _width, _height); // its pixels, not its size in DIPs
                 }
                 return;
             }

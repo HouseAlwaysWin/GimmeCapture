@@ -398,9 +398,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         get
         {
             // If decorations are hidden, the hidden-decoration style also drops the outer glow, so collapse the
-            // left/right band to nothing — this removes the thin glow strip that used to linger on each side.
+            // left/right band to the border, which runs round the outside of the picture (nothing with it hidden):
+            // this removes the thin glow strip that used to linger on each side.
             // If they are visible, we need enough space for the wings (WingWidth) + border + buffer.
-            double hPad = HidePinDecoration ? 0 : (WingWidth + SelectionThickness + 10);
+            double hPad = HidePinDecoration ? (HidePinBorder ? 0 : SelectionThickness) : (WingWidth + SelectionThickness + 10);
             double vPad = 28; // Increased from 25
 
             // Reserve a band above the content for the floating contextual sub-toolbar while it's open.

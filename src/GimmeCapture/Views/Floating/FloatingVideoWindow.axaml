@@ -64,14 +64,18 @@
         <Style Selector="controls|GlowDecorator.MainGlow">
             <Setter Property="Glow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
         </Style>
+        <!-- The border runs round the outside of the picture, as the capture overlay draws it round the selection, so
+             the picture keeps its own size: a recording's pixels land one on each of the screen's. -->
         <Style Selector="Border.MainBorder">
             <Setter Property="BorderThickness" Value="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}"/>
+            <Setter Property="Margin" Value="{Binding SelectionBorderOuterMargin}"/>
         </Style>
         <Style Selector="controls|GlowDecorator.MainGlow.hidden-border">
             <Setter Property="Glow" Value="0 0 0 0 Transparent"/>
         </Style>
         <Style Selector="Border.MainBorder.hidden-border">
             <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
         </Style>
         <!-- Hiding decoration also drops the outer glow (box-shadow); the border line itself stays

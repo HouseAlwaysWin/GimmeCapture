@@ -110,7 +110,11 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public bool HidePinBorder
     {
         get => _hidePinBorder;
-        set => this.RaiseAndSetIfChanged(ref _hidePinBorder, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _hidePinBorder, value);
+            this.RaisePropertyChanged(nameof(WindowPadding)); // a video pin makes room for the border it shows
+        }
     }
 
     // Opacity of the pinned content (image/video), for tracing / overlay use.

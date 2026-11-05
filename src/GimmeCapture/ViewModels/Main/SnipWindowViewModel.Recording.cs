@@ -614,10 +614,8 @@ public partial class SnipWindowViewModel
             }
 
             var bounds = SeparateOutputBoundsForIndex(i);
-            double ow = Math.Max(2.0, bounds.Width > 1 ? bounds.Width : 640.0);
-            double oh = Math.Max(2.0, bounds.Height > 1 ? bounds.Height : 360.0);
-            int pw = Math.Max(2, (int)Math.Round(ow));
-            int ph = Math.Max(2, (int)Math.Round(oh));
+            var (pw, ph, ow, oh) = RecordingFrameSize.Pin(
+                bounds.Width > 1 ? bounds.Width : 640.0, bounds.Height > 1 ? bounds.Height : 360.0, VisualScaling);
 
             if (pin && OpenPinnedVideoWindowAction != null)
             {
@@ -840,11 +838,11 @@ public partial class SnipWindowViewModel
                     ? _recordingService.PinSourceFilePath!
                     : recordingPath;
 
+                // Decoded at the recording's own pixels and shown pixel for pixel. It was decoded at the region's size
+                // in DIPs: at 125% a 1134x624 recording played at 907x499, stretched back up.
                 var baseRect = _recordingCaptureLogicalRect ?? SelectionRect;
-                var originalWidth = Math.Max(2.0, baseRect.Width > 1 ? baseRect.Width : 640.0);
-                var originalHeight = Math.Max(2.0, baseRect.Height > 1 ? baseRect.Height : 360.0);
-                int pixelWidth = Math.Max(2, (int)Math.Round(originalWidth));
-                int pixelHeight = Math.Max(2, (int)Math.Round(originalHeight));
+                var (pixelWidth, pixelHeight, originalWidth, originalHeight) = RecordingFrameSize.Pin(
+                    baseRect.Width > 1 ? baseRect.Width : 640.0, baseRect.Height > 1 ? baseRect.Height : 360.0, VisualScaling);
                 bool hideDecoration = _settings?.HideRecordPinDecoration ?? false;
                 bool hideBorder = _settings?.HideRecordPinBorder ?? false;
 
