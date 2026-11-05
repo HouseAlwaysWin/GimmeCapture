@@ -244,6 +244,8 @@ internal sealed class LibavWgcMkvSession : LibavRecordingSession
                                 throw new InvalidOperationException($"sws_getContext failed for BGRA {frame.Width}x{frame.Height} -> {encCtx->pix_fmt} {encCtx->width}x{encCtx->height}.");
                             }
 
+                            LibavColorMatrix.WriteAs(sws, encCtx->colorspace, encCtx->color_range);
+
                             lastSrcW = frame.Width;
                             lastSrcH = frame.Height;
                         }

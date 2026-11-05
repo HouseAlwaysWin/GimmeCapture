@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 12 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 14 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -851,6 +851,23 @@ tool.
   from `ConfigureSharedViewModel` before `InitializeHotkeys`, and `UnwireViewModel`): a clickable toast with the
   dialog's message that opens the main window, and the main window opened on the Modules tab. The hotkey names moved
   there from `MainWindow.ViewModelWiring.cs` for both. `WindowlessMainHandlersTests`.
+- Done since batch 1 (2026-11-05): **colours: every picture was read, and every recording written, as BT.601, unsaid**.
+  Checking AMF for the NVENC change (a probe encoding eight colour patches, scratchpad `AmfBgraProbe`, on the laptop's
+  Radeon 660M) found `hevc_amf` and `h264_amf` write BT.709 into the stream whatever `colorspace` says, NV12 or BGRA,
+  and convert BGRA with BT.709 (patches within three levels); so AMD recordings held the CPU's BT.601 and said BT.709.
+  `libx264` and `hevc_nvenc` write the `colorspace` they are given, BT.601 included; nothing gave them one. And every
+  YUV-to-RGB `sws_scale` (player, thumbnail, `LibavStillFrameDecoder`, `GifFrameSource`) took every picture for
+  limited BT.601, so BT.709 video, most HD video, showed red as 232,0,1. `LibavColorMatrix.ReadAs` sets those scalers
+  to the frame's matrix and range (the decoded frame's: a GPU download carries none; BT.709, BT.2020, full range; a
+  frame that says nothing stays BT.601) and `WriteAs` sets the recording converters (gdigrab, WGC, composite) to the
+  encoder's. `ConfigureEncoderContext` declares limited BT.601, AMF BT.709, and AMF is handed BGRA like NVENC (4:2:0,
+  if refused, is written as BT.709). `LibavClipExporter`'s BGRA round trip for drawn-on exports reads and writes BT.601
+  both ways, so its picture keeps its own; only what is drawn is off on a BT.709 source (left). `LibavColorMatrixTests`
+  (BT.709, BT.601 and unsaid clips through the still decoder, playback and a GIF; BT.709 fails on the old code with
+  232,0,1), `ARecording_SaysTheColoursTheConverterWrites`, `HevcAmf_IsConfiguredForBgra_AsTheBt709ItWrites`,
+  `Gdigrab_SaysWhichColoursItsFileHolds` (unset on the old code). The NVENC opt-in test and `AV_SYNC_PROBE` pass as
+  before (+24 to +27 ms). Not checked: QSV and MF, which may write their own matrix as AMF does (no Intel GPU here,
+  `hevc_mf` would not open).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1094,6 +1111,9 @@ These were covered by unit tests only; check them in the real app before a relea
   comes back in step after a short restart), turn the loop off (it stops at the end), trim it in the timeline (it loops
   the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
   should loop where the picture ends, without holding its last frame.
+- **Colours**: pin a video from a phone or one downloaded in HD, and compare it with another player: reds and greens
+  should look the same (they were darker and yellower in the app). Pin one of your own recordings: as before. Play a
+  new recording in a browser: its colours should match the screen (reds were a little orange there).
 - **A launch to the tray**: give the capture hotkey a combination another app holds (or start a second app that
   takes it first), sign out and in (or start the app with `--startup`): a toast should name the hotkey, and clicking
   it should open the main window. From the tray, open the overlay and use something that needs a model you have not
@@ -1180,10 +1200,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **WGC reads frames back at the window's update rate** (M). `WgcWindowCaptureSource.cs:169-177`: every FrameArrived
   with no readback in flight does CopyResource, Map, memcpy; the log shows `readBack=254 converted=187`, 26-37% wasted.
   Keep the newest frame and read it back only when due. `MinUpdateInterval` needs build 26100+ and a newer projection.
-- **Colour conversion for AMF and QSV runs on the CPU** (S-M; NVENC is done, Status). AMF takes BGRA too, but
-  frames go through single-threaded `sws_scale` to NV12 (`LibavGdigrabMkvSession.cs` `CapturedFrameConverter`,
-  `LibavWgcMkvSession.cs:259`): 10.8 M cycles a 1456x896 frame. Check AMF's colours first, as NVENC's were (BT.601,
-  the CPU's). Overlays add a BGRA copy; the webcam frame is copied full size every output frame
+- **Colour conversion for QSV and MF runs on the CPU** (S-M; NVENC and AMF are done, Status). Frames go through
+  single-threaded `sws_scale` to NV12 (`LibavGdigrabMkvSession.cs` `CapturedFrameConverter`, `LibavWgcMkvSession.cs`):
+  10.8 M cycles a 1456x896 frame. Check what each writes into the stream first, as AMF writes BT.709 whatever it is
+  told (needs an Intel GPU). Overlays add a BGRA copy; the webcam frame is copied full size every output frame
   (`WebcamCaptureSource.cs:157`).
 - **The stop moves its file, and stops sources one after another** (S-M). `RecordingService.Finalize.cs` muxes into
   the session folder and moves the file to the output folder, a whole copy when that is on another drive; sources stop

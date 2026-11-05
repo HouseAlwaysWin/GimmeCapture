@@ -537,6 +537,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     (int)SwsFlags.SWS_BILINEAR, null, null, null);
                 if (sws == null)
                     throw new InvalidOperationException("sws_getContext failed.");
+                LibavColorMatrix.ReadAs(sws, frame->colorspace, frame->color_range);
 
                 outFrame = ffmpeg.av_frame_alloc();
                 if (outFrame == null)
@@ -764,6 +765,8 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     // only known after the GPU→system download (NV12), not from decCtx->pix_fmt (D3D11).
                     int swsSrcWidth = 0, swsSrcHeight = 0;
                     AVPixelFormat swsSrcFormat = AVPixelFormat.AV_PIX_FMT_NONE;
+                    AVColorSpace swsSrcSpace = AVColorSpace.AVCOL_SPC_UNSPECIFIED;
+                    AVColorRange swsSrcRange = AVColorRange.AVCOL_RANGE_UNSPECIFIED;
 
                     outFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
                     outFrame->width = outputWidth;
@@ -966,8 +969,10 @@ internal sealed class LibavVideoFramePlayer : IDisposable
 
                                 // sws is built lazily and keyed on the true source format+size — only known here for
                                 // the hw path (post-download NV12), and rebuilt if a stream ever changes dimensions.
+                                // The colours are the decoded frame's: a download from the GPU carries none.
                                 if (sws == null || srcFrame->width != swsSrcWidth || srcFrame->height != swsSrcHeight ||
-                                    (AVPixelFormat)srcFrame->format != swsSrcFormat)
+                                    (AVPixelFormat)srcFrame->format != swsSrcFormat ||
+                                    decFrame->colorspace != swsSrcSpace || decFrame->color_range != swsSrcRange)
                                 {
                                     if (sws != null)
                                     {
@@ -977,12 +982,15 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                     swsSrcWidth = srcFrame->width;
                                     swsSrcHeight = srcFrame->height;
                                     swsSrcFormat = (AVPixelFormat)srcFrame->format;
+                                    swsSrcSpace = decFrame->colorspace;
+                                    swsSrcRange = decFrame->color_range;
                                     sws = ffmpeg.sws_getContext(
                                         swsSrcWidth, swsSrcHeight, swsSrcFormat,
                                         outputWidth, outputHeight, AVPixelFormat.AV_PIX_FMT_BGRA,
                                         (int)SwsFlags.SWS_BILINEAR, null, null, null);
                                     if (sws == null)
                                         throw new InvalidOperationException("sws_getContext failed.");
+                                    LibavColorMatrix.ReadAs(sws, swsSrcSpace, swsSrcRange);
                                 }
 
                                 ThrowIfErr(ffmpeg.av_frame_make_writable(outFrame), "out_frame_writable");

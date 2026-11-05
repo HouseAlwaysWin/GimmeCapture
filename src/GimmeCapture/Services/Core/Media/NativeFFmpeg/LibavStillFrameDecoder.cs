@@ -57,6 +57,8 @@ internal sealed class LibavStillFrameDecoder : IDisposable
     private int _scalerWidth;
     private int _scalerHeight;
     private AVPixelFormat _scalerFormat = AVPixelFormat.AV_PIX_FMT_NONE;
+    private AVColorSpace _scalerSpace;
+    private AVColorRange _scalerRange;
     private bool _draining;
 
     // The time of the last frame out of the decoder. Negative infinity just after the file opens, when the decoder stands
@@ -355,8 +357,10 @@ internal sealed class LibavStillFrameDecoder : IDisposable
             source = _downloaded;
         }
 
+        // The colours are the decoded frame's: a download from the GPU carries none.
         if (_scaler == null || source->width != _scalerWidth || source->height != _scalerHeight ||
-            (AVPixelFormat)source->format != _scalerFormat)
+            (AVPixelFormat)source->format != _scalerFormat ||
+            _decoded->colorspace != _scalerSpace || _decoded->color_range != _scalerRange)
         {
             if (_scaler != null)
             {
@@ -366,6 +370,8 @@ internal sealed class LibavStillFrameDecoder : IDisposable
             _scalerWidth = source->width;
             _scalerHeight = source->height;
             _scalerFormat = (AVPixelFormat)source->format;
+            _scalerSpace = _decoded->colorspace;
+            _scalerRange = _decoded->color_range;
             _scaler = ffmpeg.sws_getContext(
                 _scalerWidth, _scalerHeight, _scalerFormat,
                 _width, _height, AVPixelFormat.AV_PIX_FMT_BGRA,
@@ -374,6 +380,8 @@ internal sealed class LibavStillFrameDecoder : IDisposable
             {
                 throw new InvalidOperationException("sws_getContext failed.");
             }
+
+            LibavColorMatrix.ReadAs(_scaler, _scalerSpace, _scalerRange);
         }
 
         ThrowIfErr(ffmpeg.av_frame_make_writable(_scaled), "still_frame_writable");

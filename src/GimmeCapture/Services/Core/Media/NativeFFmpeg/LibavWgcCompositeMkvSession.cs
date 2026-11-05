@@ -181,6 +181,8 @@ internal sealed class LibavWgcCompositeMkvSession : LibavRecordingSession
                 throw new InvalidOperationException("sws_getContext failed for composite canvas.");
             }
 
+            LibavColorMatrix.WriteAs(sws, encCtx->colorspace, encCtx->color_range);
+
             // Prime: wait until at least one source has delivered a frame. Bail out fast if none ever do (the
             // dual-monitor failure mode) so the caller can fall back to gdigrab instead of hanging.
             var primeClock = Stopwatch.StartNew();

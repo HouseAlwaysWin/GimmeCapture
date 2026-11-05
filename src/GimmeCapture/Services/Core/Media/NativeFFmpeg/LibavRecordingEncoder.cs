@@ -299,8 +299,8 @@ internal static unsafe class LibavRecordingEncoder
                 foundRequestedEncoder = true;
             }
 
-            // NVENC is opened on the capture's BGRA first (ChooseEncoderPixelFormat), and again on the 4:2:0 it took
-            // before should its driver refuse BGRA, rather than the recording losing the GPU encoder.
+            // NVENC and AMF are opened on the capture's BGRA first (ChooseEncoderPixelFormat), and again on the 4:2:0
+            // they took before should a driver refuse BGRA, rather than the recording losing the GPU encoder.
             foreach (bool allowBgra in BgraAttempts(candidateName))
             {
                 AVCodecContext* candidateCtx = ffmpeg.avcodec_alloc_context3(candidate);
@@ -409,13 +409,12 @@ internal static unsafe class LibavRecordingEncoder
         encCtx->width = width;
         encCtx->height = height;
         encCtx->pix_fmt = ChooseEncoderPixelFormat(enc, encoderName, allowBgra);
-        if (encCtx->pix_fmt == AVPixelFormat.AV_PIX_FMT_BGRA)
-        {
-            // NVENC converts BGRA to limited-range BT.601 and writes that into the stream whatever it is told; the
-            // container is told the same.
-            encCtx->colorspace = AVColorSpace.AVCOL_SPC_BT470BG;
-            encCtx->color_range = AVColorRange.AVCOL_RANGE_MPEG;
-        }
+        // The colours the stream holds, which the converters write (LibavColorMatrix.WriteAs) and the file says:
+        // limited-range BT.601, what the CPU's conversion gave and what NVENC converts BGRA with, except on AMD's
+        // encoder, which says BT.709 whatever it is told and converts BGRA with it. Said by no one, they were left for
+        // players to guess, and BT.709 for a picture 720 lines or taller is what they guessed.
+        encCtx->colorspace = WritesBt709(encoderName) ? AVColorSpace.AVCOL_SPC_BT709 : AVColorSpace.AVCOL_SPC_BT470BG;
+        encCtx->color_range = AVColorRange.AVCOL_RANGE_MPEG;
         encCtx->time_base = new AVRational { num = 1, den = fps };
         encCtx->framerate = new AVRational { num = fps, den = 1 };
         encCtx->gop_size = fps * 2;
@@ -471,8 +470,10 @@ internal static unsafe class LibavRecordingEncoder
     /// converted on the CPU left unset, so players took BT.709 for a picture 720 lines or taller and shifted its colours.
     /// That conversion, on the recording thread, cost most of a recording's CPU: a 1450x900 region at 30 fps on
     /// hevc_nvenc took 1130-1260 M cycles a second, 700-890 handed BGRA; the whole 1920x1080 screen 1910-1920, dropping
-    /// 3-7 frames in 10 s, against 1290-1420 with none dropped (RTX 3050 Laptop, 2026-11-05). Other encoders get the
-    /// first 4:2:0 format they list, as before. Pure, so the choice can be asserted without libav.
+    /// 3-7 frames in 10 s, against 1290-1420 with none dropped (RTX 3050 Laptop, 2026-11-05). AMD's AMF takes BGRA too
+    /// and converts it with BT.709, which it says in the stream whatever it is told: on 4:2:0 converted by the CPU its
+    /// recordings held BT.601 and said BT.709. Other encoders get the first 4:2:0 format they list, as before. Pure, so
+    /// the choice can be asserted without libav.
     /// </summary>
     internal static AVPixelFormat ChooseEncoderPixelFormat(
         IReadOnlyList<AVPixelFormat> supported, string encoderName, bool allowBgra = true)
@@ -502,12 +503,18 @@ internal static unsafe class LibavRecordingEncoder
         return supported[0];
     }
 
-    private static bool TakesBgra(string encoderName) => encoderName.EndsWith("_nvenc", StringComparison.Ordinal);
+    // NVENC converts BGRA with BT.601, AMD's AMF with BT.709 (eight colour patches each, decoded within three levels of
+    // what was handed over, on an RTX 3050 Laptop and a Radeon 660M).
+    private static bool TakesBgra(string encoderName) =>
+        encoderName.EndsWith("_nvenc", StringComparison.Ordinal) || encoderName.EndsWith("_amf", StringComparison.Ordinal);
+
+    // AMF writes BT.709 into the stream whatever the context says, so its pictures are BT.709 too.
+    internal static bool WritesBt709(string encoderName) => encoderName.EndsWith("_amf", StringComparison.Ordinal);
 
     private static readonly bool[] BgraThen420 = [true, false];
     private static readonly bool[] Only420 = [false];
 
-    /// <summary>How a recording opens <paramref name="encoderName"/>: NVENC on BGRA, then on 4:2:0; any other once.</summary>
+    /// <summary>How a recording opens <paramref name="encoderName"/>: NVENC and AMF on BGRA, then on 4:2:0; any other once.</summary>
     internal static bool[] BgraAttempts(string encoderName) => TakesBgra(encoderName) ? BgraThen420 : Only420;
 
     private static bool IsHardwareOrMediaFoundationEncoder(string encoderName)

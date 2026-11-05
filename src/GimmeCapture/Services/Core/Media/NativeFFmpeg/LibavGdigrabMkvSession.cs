@@ -505,6 +505,8 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
     {
         private readonly AVCodecContext* _decoder;
         private readonly AVPixelFormat _targetFormat;
+        private readonly AVColorSpace _targetSpace;
+        private readonly AVColorRange _targetRange;
         private readonly int _targetWidth;
         private readonly int _targetHeight;
         private readonly Action<SKBitmap>? _overlays;
@@ -519,6 +521,8 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         {
             _decoder = decoder;
             _targetFormat = encoder->pix_fmt;
+            _targetSpace = encoder->colorspace;
+            _targetRange = encoder->color_range;
             _targetWidth = encoder->width;
             _targetHeight = encoder->height;
             _overlays = overlays;
@@ -575,6 +579,8 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
                     throw new InvalidOperationException("sws_getContext failed for BGRA composite path.");
                 }
 
+                LibavColorMatrix.WriteAs(_toTarget, _targetSpace, _targetRange);
+
                 _bgra = ffmpeg.av_frame_alloc();
                 _bgra->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
                 _bgra->width = srcW;
@@ -591,6 +597,8 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
                 {
                     throw new InvalidOperationException($"sws_getContext failed for src={srcFmt} {srcW}x{srcH} -> dst={_targetFormat} {_targetWidth}x{_targetHeight}");
                 }
+
+                LibavColorMatrix.WriteAs(_toTarget, _targetSpace, _targetRange);
             }
         }
 

@@ -79,6 +79,17 @@
   instead of 37 to 38%. A pin resized, or on a screen at another scaling, is smoothed as before. At scalings other
   than 100%, cropping such a pin also cut out a part of the frame other than the one selected (at 125%, 80% as far in
   and as large): it now cuts out the part selected.
+- **Videos show their own colours.** A video says which of two colour formulas its picture is stored with, and most
+  HD video, a phone's, a camera's or another recorder's, says the newer one. The app read every video with the older
+  one, so in a pin, the video editor, a GIF made from it and a thumbnail, reds came out darker (pure red as 232,0,1)
+  and greens yellower. Each video is now read as it says. A video that says nothing, as the app's own recordings did,
+  is read as before.
+- **Recordings say how their colours are stored, so other players show them right.** Without it, a browser or a
+  phone took a recording 720 lines or taller for the newer formula and showed its reds a little orange and its greens
+  darker; the app read it right. On AMD graphics it was the other way round: the card's encoder declares the newer
+  formula whatever it is told, while the picture handed to it held the older one. Recordings now say the formula they
+  hold, and on AMD graphics the card takes the screen's colours as they are and converts them with the formula it
+  declares, which also takes that conversion off the processor.
 
 ### 🛡️ Reliability
 

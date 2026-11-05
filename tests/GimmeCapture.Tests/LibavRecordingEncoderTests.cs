@@ -141,11 +141,15 @@ public class LibavRecordingEncoderTests
             AVPixelFormat.AV_PIX_FMT_YUV420P,
             LibavRecordingEncoder.ChooseEncoderPixelFormat([AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_NV12], "hevc_nvenc"));
 
-        // Only NVENC was measured converting BGRA as the CPU did: AMF lists BGRA too and keeps NV12.
+        // AMD's AMF takes BGRA as well, and converts it with the BT.709 it writes into the stream whatever it is told.
+        Assert.Equal(
+            AVPixelFormat.AV_PIX_FMT_BGRA,
+            LibavRecordingEncoder.ChooseEncoderPixelFormat(
+                [AVPixelFormat.AV_PIX_FMT_NV12, AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_BGRA], "hevc_amf"));
         Assert.Equal(
             AVPixelFormat.AV_PIX_FMT_NV12,
             LibavRecordingEncoder.ChooseEncoderPixelFormat(
-                [AVPixelFormat.AV_PIX_FMT_NV12, AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_BGRA], "hevc_amf"));
+                [AVPixelFormat.AV_PIX_FMT_NV12, AVPixelFormat.AV_PIX_FMT_BGRA], "hevc_qsv"));
         Assert.Equal(
             AVPixelFormat.AV_PIX_FMT_YUV420P,
             LibavRecordingEncoder.ChooseEncoderPixelFormat(
@@ -154,13 +158,64 @@ public class LibavRecordingEncoderTests
     }
 
     [Fact]
-    public void OnlyNvenc_IsOpenedOnBgraFirst_ThenOn420()
+    public void NvencAndAmf_AreOpenedOnBgraFirst_ThenOn420()
     {
         Assert.Equal(new[] { true, false }, LibavRecordingEncoder.BgraAttempts("hevc_nvenc"));
         Assert.Equal(new[] { true, false }, LibavRecordingEncoder.BgraAttempts("h264_nvenc"));
+        Assert.Equal(new[] { true, false }, LibavRecordingEncoder.BgraAttempts("hevc_amf"));
         Assert.Equal(new[] { false }, LibavRecordingEncoder.BgraAttempts("hevc_qsv"));
-        Assert.Equal(new[] { false }, LibavRecordingEncoder.BgraAttempts("hevc_amf"));
         Assert.Equal(new[] { false }, LibavRecordingEncoder.BgraAttempts("libx265"));
+    }
+
+    // A recording says which colours it holds: left unsaid, players took BT.709 for HD and shifted the CPU's BT.601.
+    [Theory]
+    [InlineData("libx264", AVColorSpace.AVCOL_SPC_BT470BG)]
+    [InlineData("libx265", AVColorSpace.AVCOL_SPC_BT470BG)]
+    [InlineData("mpeg4", AVColorSpace.AVCOL_SPC_BT470BG)]
+    public unsafe void ARecording_SaysTheColoursTheConverterWrites(string encoderName, AVColorSpace expected)
+    {
+        FFmpegRuntime.EnsureInitialized();
+        AVCodec* codec = ffmpeg.avcodec_find_encoder_by_name(encoderName);
+        Assert.True(codec != null, $"{encoderName} is not in the bundled FFmpeg");
+        AVCodecContext* encoder = ffmpeg.avcodec_alloc_context3(codec);
+        AVDictionary* options = null;
+        try
+        {
+            LibavRecordingEncoder.ConfigureEncoderContext(encoder, codec, encoderName, 640, 480, 30, 23, 0, &options);
+
+            Assert.Equal(expected, encoder->colorspace);
+            Assert.Equal(AVColorRange.AVCOL_RANGE_MPEG, encoder->color_range);
+        }
+        finally
+        {
+            Free(encoder, options);
+        }
+    }
+
+    // AMD's encoder writes BT.709 into the stream whatever it is told, so it is handed BGRA, which it converts with BT.709,
+    // and the context says so too. Its own 4:2:0, should it refuse BGRA, is written as BT.709 by the converters.
+    [WindowsFact]
+    public unsafe void HevcAmf_IsConfiguredForBgra_AsTheBt709ItWrites()
+    {
+        FFmpegRuntime.EnsureInitialized();
+        AVCodec* codec = ffmpeg.avcodec_find_encoder_by_name("hevc_amf");
+        Assert.True(codec != null, "hevc_amf is not in the bundled FFmpeg");
+        foreach (bool allowBgra in new[] { true, false })
+        {
+            AVCodecContext* encoder = ffmpeg.avcodec_alloc_context3(codec);
+            AVDictionary* options = null;
+            try
+            {
+                LibavRecordingEncoder.ConfigureEncoderContext(encoder, codec, "hevc_amf", 1450, 900, 30, 0, 0, &options, allowBgra);
+
+                Assert.Equal(allowBgra ? AVPixelFormat.AV_PIX_FMT_BGRA : AVPixelFormat.AV_PIX_FMT_NV12, encoder->pix_fmt);
+                Assert.Equal(AVColorSpace.AVCOL_SPC_BT709, encoder->colorspace);
+            }
+            finally
+            {
+                Free(encoder, options);
+            }
+        }
     }
 
     // The bundled hevc_nvenc itself, configured as a recording configures it: nothing is opened, so no GPU is needed.

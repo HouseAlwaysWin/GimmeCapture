@@ -658,6 +658,9 @@ internal static class LibavGifTranscoder
                     throw new InvalidOperationException("Failed to create sws context for GIF.");
                 }
 
+                // The stream's own colours, as its first frames say them (avformat_find_stream_info decoded them).
+                LibavColorMatrix.ReadAs(_scaler, _decoder->colorspace, _decoder->color_range);
+
                 _packet = ffmpeg.av_packet_alloc();
                 _decoded = ffmpeg.av_frame_alloc();
                 if (_packet == null || _decoded == null)

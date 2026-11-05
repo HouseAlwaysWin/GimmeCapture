@@ -58,6 +58,21 @@ public sealed class LibavRecordingSessionTests : IDisposable
         await AssertSegmentAsync(path, session.SelectedEncoderName, expectedSize: (320, 240));
     }
 
+    // The file says the BT.601 its pictures were converted with: unsaid, players took BT.709 for HD and shifted them.
+    [Fact]
+    public async Task Gdigrab_SaysWhichColoursItsFileHolds()
+    {
+        string path = Path.Combine(_dir, "tagged.mkv");
+        using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = false, UseWallClockPts = true };
+
+        await RecordAsync(
+            session.StartAsync(path, 0, 0, 320, 240, Fps, drawMouse: false, VideoCodec.H264),
+            session.StopAsync,
+            () => session.LastErrorMessage);
+
+        Assert.Equal(AVColorSpace.AVCOL_SPC_BT470BG, ReadColourSpace(path));
+    }
+
     // A start that fails at once must answer false. It used to rethrow the worker's error instead whenever the
     // startup gate saw the worker's faulted first-frame signal finish before the worker itself, about half the time
     // on CI. Each failure case repeats so that race would show.
