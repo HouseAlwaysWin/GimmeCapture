@@ -226,6 +226,40 @@ public class ScrollStitcherTests
         Assert.Equal(20, result.Height);
     }
 
+    // The row signatures are pooled. A 900-row frame's came to 115 KB, on the large object heap, made anew two to four
+    // times for every frame of a manual scroll (the frame's, the strip's, and both rotated before the axis is known).
+    [Fact]
+    public void AligningAFrame_SetsAsideNoRowSignatures()
+    {
+        using var strip = MakeUniqueFrame(64, 1500, sourceOffset: 0);
+        using var frame = MakeUniqueFrame(64, 900, sourceOffset: 600);
+        Assert.True(ScrollStitcher.AlignFrameToStrip(strip, frame).Found); // the pool's first rent allocates
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        var align = ScrollStitcher.AlignFrameToStrip(strip, frame);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.True(align.Found);
+        Assert.Equal(600, align.Offset);
+        // The frame's signatures alone were 115,200 bytes and the strip's 192,000.
+        Assert.True(allocated < 64 * 1024, $"aligning one frame set aside {allocated} bytes");
+    }
+
+    private static SKBitmap MakeUniqueFrame(int width, int height, int sourceOffset)
+    {
+        var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        for (int y = 0; y < height; y++)
+        {
+            var color = UniqueColorForRow(sourceOffset + y);
+            for (int x = 0; x < width; x++)
+            {
+                bmp.SetPixel(x, y, color);
+            }
+        }
+
+        return bmp;
+    }
+
     [Fact]
     public void AlignFrameToStrip_FrameFullyInside_ReturnsOffset()
     {

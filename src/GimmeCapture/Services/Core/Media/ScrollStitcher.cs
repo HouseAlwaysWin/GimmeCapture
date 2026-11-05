@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using SkiaSharp;
 
@@ -107,8 +108,22 @@ internal static class ScrollStitcher
         int effectiveMin = Math.Clamp(minOverlapRows, 1, height);
         double clampedRatio = Math.Clamp(maxRowMismatchRatio, 0.0, 1.0);
 
-        byte[] prevSig = ComputeRowSignatures(previous, ignoreRightColumns, out int sampleCount);
-        byte[] nextSig = ComputeRowSignatures(next, ignoreRightColumns, out _);
+        byte[] prevSig = RentRowSignatures(previous, ignoreRightColumns, out int sampleCount);
+        byte[] nextSig = RentRowSignatures(next, ignoreRightColumns, out _);
+        try
+        {
+            return FindVerticalShift(prevSig, nextSig, height, sampleCount, effectiveMin, clampedRatio);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(prevSig);
+            ArrayPool<byte>.Shared.Return(nextSig);
+        }
+    }
+
+    private static VerticalShift FindVerticalShift(
+        byte[] prevSig, byte[] nextSig, int height, int sampleCount, int effectiveMin, double clampedRatio)
+    {
         if (sampleCount == 0)
         {
             return new VerticalShift(0, false);
@@ -299,11 +314,18 @@ internal static class ScrollStitcher
             return new FrameAlignment(0, false);
         }
 
-        byte[] stripSig = ComputeRowSignatures(strip, ignoreRightColumns, out int stripSampleCount);
-        return AlignCore(
-            stripSig, 0, strip.Height, stripSampleCount, frame,
-            out bestScoreOut, out ambiguityGapOut, out sampleCountOut,
-            minOverlapRows, ignoreRightColumns, maxRowMismatchRatio, searchMargin);
+        byte[] stripSig = RentRowSignatures(strip, ignoreRightColumns, out int stripSampleCount);
+        try
+        {
+            return AlignCore(
+                stripSig, 0, strip.Height, stripSampleCount, frame,
+                out bestScoreOut, out ambiguityGapOut, out sampleCountOut,
+                minOverlapRows, ignoreRightColumns, maxRowMismatchRatio, searchMargin);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(stripSig);
+        }
     }
 
     /// <summary>
@@ -348,8 +370,36 @@ internal static class ScrollStitcher
         int effectiveMin = Math.Clamp(minOverlapRows, 1, Math.Min(frameH, stripHeight));
         double clampedRatio = Math.Clamp(maxRowMismatchRatio, 0.0, 1.0);
 
-        byte[] frameSig = ComputeRowSignatures(frame, ignoreRightColumns, out int sampleCount);
-        sampleCountOut = sampleCount;
+        byte[] frameSig = RentRowSignatures(frame, ignoreRightColumns, out int sampleCount);
+        try
+        {
+            sampleCountOut = sampleCount;
+            return AlignCore(
+                stripSig, stripFirstRowByteOffset, stripHeight, stripSampleCount, frameSig, frameH, sampleCount,
+                out bestScoreOut, out ambiguityGapOut, effectiveMin, clampedRatio, searchMargin);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(frameSig);
+        }
+    }
+
+    private static FrameAlignment AlignCore(
+        byte[] stripSig,
+        int stripFirstRowByteOffset,
+        int stripHeight,
+        int stripSampleCount,
+        byte[] frameSig,
+        int frameH,
+        int sampleCount,
+        out double bestScoreOut,
+        out double ambiguityGapOut,
+        int effectiveMin,
+        double clampedRatio,
+        int searchMargin)
+    {
+        bestScoreOut = double.MaxValue;
+        ambiguityGapOut = double.MaxValue;
         if (sampleCount == 0 || sampleCount != stripSampleCount)
         {
             return new FrameAlignment(0, false);
@@ -698,7 +748,7 @@ internal static class ScrollStitcher
     /// The evenly-spaced sample column x-positions across the usable width (excluding
     /// <paramref name="ignoreRightColumns"/>), shared by every row. Extracted so a strip's signatures
     /// can be extended incrementally (see <see cref="ManualScrollStrip"/>) with the exact same sampling
-    /// the whole-bitmap <see cref="ComputeRowSignatures"/> uses. Returns an empty array with
+    /// the whole-bitmap <see cref="RentRowSignatures"/> uses. Returns an empty array with
     /// <paramref name="sampleCount"/> = 0 when there is no usable width.
     /// </summary>
     internal static int[] BuildSampleColumns(int width, int ignoreRightColumns, out int sampleCount)
@@ -768,11 +818,22 @@ internal static class ScrollStitcher
     /// Returned as a flat byte array of length <c>height * sampleCount * 4</c>; row <c>r</c>
     /// occupies <c>[r * sampleCount * 4 .. +sampleCount * 4)</c>.
     /// </summary>
-    private static byte[] ComputeRowSignatures(SKBitmap bitmap, int ignoreRightColumns, out int sampleCount)
+    /// <remarks>
+    /// Pooled: the caller hands it back to <see cref="ArrayPool{T}.Shared"/>, and it may be longer than that. At 32 samples a
+    /// row a 900-row frame's came to 115 KB, on the large object heap, made anew two to four times for every frame of a
+    /// manual scroll (the frame's, the strip's, and both rotated while the scroll's axis is not yet known).
+    /// </remarks>
+    private static byte[] RentRowSignatures(SKBitmap bitmap, int ignoreRightColumns, out int sampleCount)
     {
         int height = bitmap.Height;
         int[] columns = BuildSampleColumns(bitmap.Width, ignoreRightColumns, out sampleCount);
-        var signatures = new byte[height * Math.Max(1, sampleCount) * 4];
+        int length = height * Math.Max(1, sampleCount) * 4;
+        byte[] signatures = ArrayPool<byte>.Shared.Rent(length);
+        if (sampleCount == 0 || bitmap.GetPixels() == IntPtr.Zero)
+        {
+            Array.Clear(signatures, 0, length); // what a new array held where nothing is sampled
+        }
+
         SampleRowsInto(bitmap, 0, height, columns, sampleCount, signatures, 0);
         return signatures;
     }

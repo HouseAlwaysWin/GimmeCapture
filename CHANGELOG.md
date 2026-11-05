@@ -98,6 +98,10 @@
   now says which, and opening it opens the main window to change it. The same went for the capture overlay's button
   that opens the Modules tab to get a missing model, which did nothing from the tray: it now opens the main window on
   that tab.
+- **A manual scrolling capture sets aside far less memory as it runs.** Matching each new picture against what was
+  captured so far sampled both into new arrays, two to four times a picture, 115 KB each for a region 900 pixels
+  tall, and the app's memory clean-up ran again and again while scrolling: 315 KB set aside a picture before, under
+  64 KB now.
 
 ## v0.72.1 - 2026-11-04
 

@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 14 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 15 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -868,6 +868,12 @@ tool.
   `Gdigrab_SaysWhichColoursItsFileHolds` (unset on the old code). The NVENC opt-in test and `AV_SYNC_PROBE` pass as
   before (+24 to +27 ms). Not checked: QSV and MF, which may write their own matrix as AMF does (no Intel GPU here,
   `hevc_mf` would not open).
+- Done since batch 1 (2026-11-05): **a manual scroll's row signatures are pooled**. `ScrollStitcher` sampled the frame
+  and the strip into new `byte[height * 32 * 4]` arrays for every alignment (115 KB for 900 rows, on the large object
+  heap), two to four a frame. They are rented from the shared pool and handed back (`RentRowSignatures`; a bitmap
+  without pixels gets cleared bytes, as a new array had). `ScrollStitcherTests.AligningAFrame_SetsAsideNoRowSignatures`
+  (a 1500-row strip and a 900-row frame: 314,896 bytes an alignment on the old code, under 64 KB now). The user's logs
+  show no scrolling capture, so its other cost stays: the producer grabs back to back while nothing scrolls (Snip).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1279,9 +1285,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **Record-mode audio meter** (S). `SnipWindowViewModel.cs:507`: a 120 ms timer in Record mode even when idle, MMDevice
   COM objects created on the UI thread at the first tick (`AudioLevelMonitorService.cs:54-59`), the mic metered when not
   recorded, at least six notifications per tick (`:749-772`). A long-lived meter off the UI thread posting changes only.
-- **Manual scrolling allocates per frame** (S). Row signatures built three times a frame into a new
-  `byte[height * samples * 4]` (`ScrollStitcher.cs:110-111,351,775`, LOH from ~665 rows); the producer keeps grabbing
-  when nothing scrolls (`ScrollingManual.cs:304-309`). Carry signatures in rented buffers, skip unchanged frames.
+- **A manual scroll keeps grabbing when nothing scrolls** (S). The producer grabs region frames back to back
+  (`ScrollingManual.cs` `ManualProducerLoopAsync`) and the consumer aligns every one; the signatures are pooled now
+  (Status). Skipping a frame identical to the last, or pacing the grabs while nothing moves, would idle it, at the risk
+  of a fast scroll's first frames; the user's logs show no scrolling capture.
 - **Freezing mid-session after entering drawing mode live keeps the live snapshot** (S). Needs
   `SnipWindowViewModel.Capture.cs` (left from batch 1).
 
