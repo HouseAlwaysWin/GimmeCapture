@@ -2,6 +2,27 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.73.0 - 2026-11-05
+
+- **Pinned recordings** — a recording's pin shows it at its full resolution, pixel for pixel, sharp at 125% too; a
+  paused pin shows the frame it is moved to three to ten times sooner, and its seek bar shows the picture as it is
+  dragged; copying one as a GIF takes about half as long and, at Medium and Low, makes a smaller file, dithered as a
+  GIF recording of that quality is.
+- **Colours** — videos stored with the newer colour formula, most HD video, show their own colours in pins, the
+  editor, GIFs and thumbnails instead of darker reds and yellower greens; recordings say how their colours are stored,
+  so a browser or a phone shows them right, and on AMD graphics they now hold what they say.
+- **Recording** — on an NVIDIA graphics card a recording takes about a third less of the processor, and a recording
+  of the whole screen no longer drops frames.
+- **Capture overlay** — it no longer redraws 60 times a second while it waits, its text scan no longer sets aside
+  11 MB each time, and reopening it at once shows its text boxes sooner.
+- **Pins** — a pin that has removed a background no longer keeps the app drawing, and a pin keeps at most 256 MB of
+  pictures for undo.
+- **Start-up and the tray** — starting with Windows from a hard disk waits less on the disk; started to the tray, the
+  app says when another app holds one of its hotkeys, and the overlay's button for a missing model opens the Modules
+  tab.
+- **Other** — the Compress tab's GIF exports are dithered by their quality as well, a manual scrolling capture sets
+  aside far less memory, and the check for a graphics card that records AV1 runs once at a time.
+
 ## v0.72.1 - 2026-11-04
 
 - **Pinned videos** — a pinned recording loops without stopping at the loop, its sound looping with it in step with
