@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 9 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 10 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -828,6 +828,11 @@ tool.
   Measured and left in the same round: a drag-select's pointer move costs the overlay's view model 15-19 us and 1.4 KB
   (five changes a move, with a subscriber reading the 28 hotkeys as the keyboard filter does), about 0.2% of a core at
   125 moves a second, so neither the filter's rebuild nor `ToolbarMaxWidth`'s notification is worth a change.
+- Done since batch 1 (2026-11-05): **a cancelled scan's queued detection**. `AIScanSessionService` ran `DetectText` in
+  `Task.Run(..., ct)`, which stops it only before the pool picks it up; one cancelled while it waited for the inference
+  lock behind another ran anyway (154-190 ms on a 1920x1080 frame, above). `IOCREngine.DetectText(bitmap, ct)` (a
+  default member, so the fakes keep theirs) and `PaddleOCREngine` checks the token once it holds the session, before
+  any work. `PaddleOCREngineTests.ACancelledScan_DetectsNothing_OnceItHasTheSession`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1213,10 +1218,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Snip overlay
 
-- **A cancelled OCR scan still runs a detection it has queued** (S, low value now). The token stops a detection only
-  before the pool picks it up (`AIScanSessionService` `Task.Run(..., ct)`); one cancelled while waiting for the
-  inference lock behind another still runs. Since the Esc double start went and a frozen still is no longer re-scanned,
-  overlapping scans need a live overlay and quick repeated presses. Check the token after taking the lock.
 - **The OCR scan grabs every monitor** (S). `AIScanSessionService.cs:77-81`: grab only the active monitor. The
   boxes it finds are drawn by one control now (Status).
 - **Frozen commits keep the overlay up while the pin window is built** (M). `Capture.cs:464`: hide the frozen overlay

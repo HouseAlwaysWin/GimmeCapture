@@ -46,6 +46,19 @@ public class PaddleOCREngineTests
     }
 
     [Fact]
+    public void ACancelledScan_DetectsNothing_OnceItHasTheSession()
+    {
+        // Inference runs one at a time, and a scan cancelled while it waited behind another ran its detection anyway:
+        // the token was checked only before the thread pool picked the work up.
+        using var bitmap = new SKBitmap(64, 48);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        Assert.Throws<System.OperationCanceledException>(() => _sut.DetectText(bitmap, cancelled.Token));
+        Assert.Empty(_sut.DetectText(bitmap, CancellationToken.None)); // no detector loaded: nothing found
+    }
+
+    [Fact]
     public async Task Dispose_ShouldReleaseRuntimeLease()
     {
         _mockAiResource.Setup(x => x.EnsureOCRAsync(It.IsAny<OCRLanguage>(), It.IsAny<CancellationToken>()))

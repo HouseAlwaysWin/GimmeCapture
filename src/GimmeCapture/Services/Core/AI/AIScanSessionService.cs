@@ -108,7 +108,7 @@ public sealed class AIScanSessionService : IAIScanSessionService
             await ocrEngine.EnsureDetectionLoadedAsync(request.SourceLanguage, ct);
             long loadMs = stopwatch.ElapsedMilliseconds;
             progress?.Report(AIScanStage.DetectingObjects);
-            var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap), ct);
+            var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap, ct), ct);
             // Diagnostic (release-visible): distinguishes "capture failed" (0x0 bitmap) from "OCR found nothing"
             // (0 boxes on a real capture — e.g. a DirectML inference-correctness issue on some Win10 setups) from
             // "OCR works". Pair with OcrRuntime.SessionCreated (GPU vs CPU) to pinpoint a Win10-vs-Win11 discrepancy.

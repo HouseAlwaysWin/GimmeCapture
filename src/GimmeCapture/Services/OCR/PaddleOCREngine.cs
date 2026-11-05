@@ -84,11 +84,15 @@ public class PaddleOCREngine : IOCREngine
         return ((targetWidth + 31) / 32 * 32, (targetHeight + 31) / 32 * 32);
     }
 
-    public List<SKRectI> DetectText(SKBitmap bitmap)
+    public List<SKRectI> DetectText(SKBitmap bitmap) => DetectText(bitmap, CancellationToken.None);
+
+    public List<SKRectI> DetectText(SKBitmap bitmap, CancellationToken ct)
     {
         // Held across the whole method, not just the Run: the tensor prep below takes tens of milliseconds, and a
         // language switch landing in that window used to dispose the session this call had already captured.
         using var use = _ocrRuntimeService.BeginSessionUse();
+        // A scan cancelled while it waited for another's inference stops here, before a detection of its own.
+        ct.ThrowIfCancellationRequested();
         var detSession = use.Detection;
         if (detSession == null) return new List<SKRectI>();
 

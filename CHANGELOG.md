@@ -59,6 +59,9 @@
   10.8 MB for a 1920x1080 screen, was made anew for every scan and thrown away after it, and a full clean-up of the
   app's memory followed about every second scan. It is now kept while the detector stays loaded: scans after the first
   set aside nothing, and the boxes found are the same.
+- **Reopening the capture overlay at once shows its text boxes sooner.** Text scans run one at a time, and a scan
+  cancelled while it waited behind another, as when the overlay is closed and opened again quickly, still ran once its
+  turn came, about 0.16 s of a 1920x1080 screen, ahead of the new overlay's own. It now stops before it starts.
 
 ### 🖼️ Interface
 
