@@ -43,6 +43,14 @@
   where its default of 22 is). At Medium, a 34-second 1450x900 recording's GIF is 3.5 MB instead of 6.5 and takes a
   third less time, two shorter ones' are about a fifth smaller; at Low, 1.3 MB instead of 2.6. Zoomed in, the ordered
   pattern shows as a fine regular grain on smooth gradients. At High nothing changes.
+- **Recording on an NVIDIA graphics card takes about a third less of the processor, and other players show its
+  colours right.** Every frame was converted from the screen's colours to the video's on the processor, the largest
+  part of a recording's work. The card's encoder (NVENC) now takes the screen's colours as they are and converts them
+  itself: a 1450x900 region at 30 frames a second takes about 30% less of the processor, and recording the whole
+  1920x1080 screen no longer drops frames (it dropped 3 to 7 in 10 seconds). The colours are the same and the picture is
+  a little closer to the screen. The file also says now which colour conversion it holds; without that, players such as
+  a browser took the usual one for HD video and showed reds a little orange and greens darker. Other encoders are as
+  before.
 
 ### 🖼️ Interface
 

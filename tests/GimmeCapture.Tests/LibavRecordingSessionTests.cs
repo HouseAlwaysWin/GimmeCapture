@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Threading;
 using System.Windows.Forms;
+using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
@@ -146,6 +147,51 @@ public sealed class LibavRecordingSessionTests : IDisposable
 
         Assert.True(string.IsNullOrEmpty(session.LastWarningMessage), session.LastWarningMessage); // none skipped
         await AssertSegmentAsync(path, session.SelectedEncoderName, expectedSize: null);
+    }
+
+    /// <summary>
+    /// A gdigrab recording on NVENC hands it the capture's BGRA: the colours come out as the CPU's conversion to 4:2:0
+    /// gave them (BT.601), and the file now says so. Opt-in: it needs an NVIDIA GPU with NVENC.
+    /// </summary>
+    [OptInFact("NVENC_PROBE=1")]
+    public async Task Gdigrab_OnNvenc_KeepsTheColours_AndSaysWhichTheyAre()
+    {
+        using var window = new TargetWindow(left: 200, width: 600, height: 400, Color.SteelBlue);
+        string path = Path.Combine(_dir, "nvenc.mkv");
+        using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = true, UseWallClockPts = true };
+
+        // Well inside the window, below its title bar.
+        await RecordAsync(
+            session.StartAsync(path, 300, 250, 320, 160, Fps, drawMouse: false, VideoCodec.H265),
+            session.StopAsync,
+            () => session.LastErrorMessage);
+
+        Assert.Equal("hevc_nvenc", session.SelectedEncoderName);
+        Assert.Equal(AVColorSpace.AVCOL_SPC_BT470BG, ReadColourSpace(path));
+        byte[]? bgra = await LibavVideoFramePlayer.DecodeFrameAtAsync(path, 0.5, 320, 160);
+        Assert.NotNull(bgra);
+        int centre = ((80 * 320) + 160) * 4;
+        Color steelBlue = Color.SteelBlue;
+        Assert.InRange(bgra[centre + 2], steelBlue.R - 3, steelBlue.R + 3);
+        Assert.InRange(bgra[centre + 1], steelBlue.G - 3, steelBlue.G + 3);
+        Assert.InRange(bgra[centre], steelBlue.B - 3, steelBlue.B + 3);
+    }
+
+    private static unsafe AVColorSpace ReadColourSpace(string path)
+    {
+        AVFormatContext* format = null;
+        Assert.True(ffmpeg.avformat_open_input(&format, path, null, null) >= 0);
+        try
+        {
+            Assert.True(ffmpeg.avformat_find_stream_info(format, null) >= 0);
+            int video = ffmpeg.av_find_best_stream(format, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
+            Assert.True(video >= 0);
+            return format->streams[video]->codecpar->color_space;
+        }
+        finally
+        {
+            ffmpeg.avformat_close_input(&format);
+        }
     }
 
     private static async Task RecordAsync(Task<bool> start, Func<Task> stop, Func<string?> lastError)

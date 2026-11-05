@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 6 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 7 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -794,6 +794,23 @@ tool.
   byte against `TranscodeToGif` with each quality's dither written out; 22 and 32 fail on the old code). Not taken:
   `diff_mode=rectangle` (map only what changed) halved sierra's single-thread time on that recording and did nothing for
   a scrolling 432x766 one, and would put the mapping back on one thread (it maps from the frame before).
+- Done since batch 1 (2026-11-05, "繼續下一步", chosen by the user's use: they record regions, H.265 on the RTX 3050
+  Laptop's hevc_nvenc, cursor on, no overlays): **NVENC is handed the capture's BGRA**. A throwaway test recorded a
+  1450x900 region at 30 fps with the user's settings through `LibavGdigrabMkvSession`: 1240-1300 M cycles a second,
+  nearly all of it the session's thread, and `sws_scale` BGRA to 4:2:0 alone was 10.8 M cycles a 1456x896 frame (NVENC's
+  encode call 2.0). `hevc_nvenc` lists BGRA; fed it, its GPU conversion gave the same BT.601 colours (eight patches,
+  YUV within one level; alpha 0, as GDI leaves it, the same) and wrote BT.601 into the stream, where the 4:2:0 converted
+  on the CPU left the matrix unset (players take BT.709 for 720 lines or more: red 255,24,0). RGB PSNR against the source
+  at the same bitrate, 45 frames of four of the user's recordings: 38.00 against 43.27 dB (a game UI), 42.35/42.88,
+  42.64/42.79, 30.41/30.67. `ChooseEncoderPixelFormat` hands NVENC BGRA (tagging the context BT.601, limited) and the
+  encoder ladder opens NVENC again on 4:2:0 if its driver refuses BGRA; the other encoders keep what they took (NVENC got
+  yuv420p, the first 4:2:0 it lists, not NV12). The AV1 probe stays on 4:2:0. ABBA, process cycles: 1450x900 1257, 1240,
+  1230, 1128 old against 894, 700, 893, 892 new, 305 frames either way; 1920x1080 1907/1920 dropping 3-7 frames in 10 s
+  against 1294/1415 with none dropped. `AV_SYNC_PROBE` through `RecordingService` (h264_nvenc, three 3 s mp4s): audio
+  minus video +24 to +36 ms. `LibavRecordingEncoderTests` (the choice, pure; the bundled `hevc_nvenc` configured, Windows;
+  fails on the old code: yuv420p) and opt-in `NVENC_PROBE` `Gdigrab_OnNvenc_KeepsTheColours_AndSaysWhichTheyAre`
+  (SteelBlue within 3 levels, BT.601 in the file; the old code left it unset). Left: AMF and QSV (not measured; the
+  laptop's Radeon could test AMF), the overlays' BGRA round trip, the webcam's full-size copy (Recording).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1037,6 +1054,10 @@ These were covered by unit tests only; check them in the real app before a relea
   comes back in step after a short restart), turn the loop off (it stops at the end), trim it in the timeline (it loops
   the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
   should loop where the picture ends, without holding its last frame.
+- **A recording on the NVIDIA card**: record a region with strong colours (a page with red and green on it) and play
+  the file in its pin and in a browser or Windows' player: the colours should match the screen in both (a browser
+  showed reds a little orange before). The app should take less of the processor while it records (Task Manager), and
+  a recording of the whole screen should play smoothly.
 - **A pinned recording copied as a GIF**: copy one of your recordings as GIF from its pin, a short one and a long one.
   It should take half as long as before or less, and at Medium the file should be smaller (a 34-second one about
   half): zoomed in, smooth areas show a fine regular grain where they showed noise, as a GIF recording at Medium does.
@@ -1112,10 +1133,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **WGC reads frames back at the window's update rate** (M). `WgcWindowCaptureSource.cs:169-177`: every FrameArrived
   with no readback in flight does CopyResource, Map, memcpy; the log shows `readBack=254 converted=187`, 26-37% wasted.
   Keep the newest frame and read it back only when due. `MinUpdateInterval` needs build 26100+ and a newer projection.
-- **Colour conversion for hardware encoders runs on the CPU** (S-M). NVENC and AMF take BGRA, but frames go through
-  single-threaded `sws_scale` to NV12 (`LibavRecordingEncoder.cs:301-303`, `LibavGdigrabMkvSession.cs:536-551`,
-  `LibavWgcMkvSession.cs:259`); overlays add a BGRA copy; the webcam frame is copied full size every output frame
-  (`WebcamCaptureSource.cs:157`). Est. 3-5 ms per frame at 1080p, 12-25 at 4K.
+- **Colour conversion for AMF and QSV runs on the CPU** (S-M; NVENC is done, Status). AMF takes BGRA too, but
+  frames go through single-threaded `sws_scale` to NV12 (`LibavGdigrabMkvSession.cs` `CapturedFrameConverter`,
+  `LibavWgcMkvSession.cs:259`): 10.8 M cycles a 1456x896 frame. Check AMF's colours first, as NVENC's were (BT.601,
+  the CPU's). Overlays add a BGRA copy; the webcam frame is copied full size every output frame
+  (`WebcamCaptureSource.cs:157`).
 - **The stop moves its file, and stops sources one after another** (S-M). `RecordingService.Finalize.cs` muxes into
   the session folder and moves the file to the output folder, a whole copy when that is on another drive; sources stop
   in series (`LiveSession.cs` `StopCurrentSegmentAsync`). Mux into the destination folder rather than moving there. Only

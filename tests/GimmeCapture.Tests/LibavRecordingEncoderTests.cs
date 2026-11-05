@@ -7,8 +7,9 @@ namespace GimmeCapture.Tests;
 /// <summary>
 /// The recording encoder asks its software fallbacks for every core. Through the API libavcodec gives an encoder one
 /// thread unless it is asked for more: libx264 defaults itself to auto and libx265 under zerolatency keeps one frame
-/// thread whatever it is told, but the last-ditch mpeg4 really did encode on a single thread. Uses the real encoders,
-/// so it needs the bundled FFmpeg, which every CI job provisions; runs everywhere.
+/// thread whatever it is told, but the last-ditch mpeg4 really did encode on a single thread. It also hands NVENC the
+/// capture's BGRA to convert on the GPU. Uses the real encoders, so it needs the bundled FFmpeg, which every CI job
+/// provisions; runs everywhere but where a test says otherwise.
 /// </summary>
 public class LibavRecordingEncoderTests
 {
@@ -112,6 +113,78 @@ public class LibavRecordingEncoderTests
 
         Assert.Equal("libx264", LibavRecordingEncoder.WarmUpEncoder(VideoCodec.H264, preferHardware: false));
         Assert.Equal("libx265", LibavRecordingEncoder.WarmUpEncoder(VideoCodec.H265, preferHardware: false));
+    }
+
+    // Every recording source hands over BGRA, which NVENC converts on the GPU to the colours the CPU's conversion gave.
+    // It was handed yuv420p, the first 4:2:0 it lists, converted on the recording thread: 1130-1260 M cycles a second of
+    // a 1450x900 recording at 30 fps against 700-890 (RTX 3050 Laptop). The other encoders keep what they took.
+    [Fact]
+    public void Nvenc_IsHandedTheCapturesBgra_OtherEncodersWhatTheyTookBefore()
+    {
+        // hevc_nvenc's list in the bundled FFmpeg, in its order (h264_nvenc and av1_nvenc list BGRA too).
+        AVPixelFormat[] nvenc =
+        [
+            AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_NV12, AVPixelFormat.AV_PIX_FMT_P010LE,
+            AVPixelFormat.AV_PIX_FMT_YUV444P, AVPixelFormat.AV_PIX_FMT_BGR0, AVPixelFormat.AV_PIX_FMT_BGRA,
+            AVPixelFormat.AV_PIX_FMT_RGB0, AVPixelFormat.AV_PIX_FMT_RGBA, AVPixelFormat.AV_PIX_FMT_CUDA,
+            AVPixelFormat.AV_PIX_FMT_D3D11,
+        ];
+
+        Assert.Equal(AVPixelFormat.AV_PIX_FMT_BGRA, LibavRecordingEncoder.ChooseEncoderPixelFormat(nvenc, "hevc_nvenc"));
+        Assert.Equal(AVPixelFormat.AV_PIX_FMT_BGRA, LibavRecordingEncoder.ChooseEncoderPixelFormat(nvenc, "h264_nvenc"));
+        Assert.Equal(AVPixelFormat.AV_PIX_FMT_BGRA, LibavRecordingEncoder.ChooseEncoderPixelFormat(nvenc, "av1_nvenc"));
+
+        // Opened again on 4:2:0 when its driver refuses BGRA, and on a build that does not list it: what it took before.
+        Assert.Equal(
+            AVPixelFormat.AV_PIX_FMT_YUV420P, LibavRecordingEncoder.ChooseEncoderPixelFormat(nvenc, "hevc_nvenc", allowBgra: false));
+        Assert.Equal(
+            AVPixelFormat.AV_PIX_FMT_YUV420P,
+            LibavRecordingEncoder.ChooseEncoderPixelFormat([AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_NV12], "hevc_nvenc"));
+
+        // Only NVENC was measured converting BGRA as the CPU did: AMF lists BGRA too and keeps NV12.
+        Assert.Equal(
+            AVPixelFormat.AV_PIX_FMT_NV12,
+            LibavRecordingEncoder.ChooseEncoderPixelFormat(
+                [AVPixelFormat.AV_PIX_FMT_NV12, AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_BGRA], "hevc_amf"));
+        Assert.Equal(
+            AVPixelFormat.AV_PIX_FMT_YUV420P,
+            LibavRecordingEncoder.ChooseEncoderPixelFormat(
+                [AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_YUVJ420P, AVPixelFormat.AV_PIX_FMT_NV12], "libx265"));
+        Assert.Equal(AVPixelFormat.AV_PIX_FMT_NV12, LibavRecordingEncoder.ChooseEncoderPixelFormat([], "hevc_qsv"));
+    }
+
+    [Fact]
+    public void OnlyNvenc_IsOpenedOnBgraFirst_ThenOn420()
+    {
+        Assert.Equal(new[] { true, false }, LibavRecordingEncoder.BgraAttempts("hevc_nvenc"));
+        Assert.Equal(new[] { true, false }, LibavRecordingEncoder.BgraAttempts("h264_nvenc"));
+        Assert.Equal(new[] { false }, LibavRecordingEncoder.BgraAttempts("hevc_qsv"));
+        Assert.Equal(new[] { false }, LibavRecordingEncoder.BgraAttempts("hevc_amf"));
+        Assert.Equal(new[] { false }, LibavRecordingEncoder.BgraAttempts("libx265"));
+    }
+
+    // The bundled hevc_nvenc itself, configured as a recording configures it: nothing is opened, so no GPU is needed.
+    // Windows only because only the Windows FFmpeg bundle is known to carry NVENC.
+    [WindowsFact]
+    public unsafe void HevcNvenc_IsConfiguredForBgra_WithTheColoursItWillWrite()
+    {
+        FFmpegRuntime.EnsureInitialized();
+        AVCodec* codec = ffmpeg.avcodec_find_encoder_by_name("hevc_nvenc");
+        Assert.True(codec != null, "hevc_nvenc is not in the bundled FFmpeg");
+        AVCodecContext* encoder = ffmpeg.avcodec_alloc_context3(codec);
+        AVDictionary* options = null;
+        try
+        {
+            LibavRecordingEncoder.ConfigureEncoderContext(encoder, codec, "hevc_nvenc", 1450, 900, 30, 0, 0, &options);
+
+            Assert.Equal(AVPixelFormat.AV_PIX_FMT_BGRA, encoder->pix_fmt);
+            Assert.Equal(AVColorSpace.AVCOL_SPC_BT470BG, encoder->colorspace);
+            Assert.Equal(AVColorRange.AVCOL_RANGE_MPEG, encoder->color_range);
+        }
+        finally
+        {
+            Free(encoder, options);
+        }
     }
 
     [Fact]

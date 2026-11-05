@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 
@@ -117,7 +119,9 @@ internal static unsafe class LibavRecordingEncoder
                 AVDictionary* opts = null;
                 try
                 {
-                    ConfigureEncoderContext(ctx, candidate, candidateName, ProbeWidth, ProbeHeight, ProbeFps, ProbeCrf, 0, &opts);
+                    // On 4:2:0, which a recording falls back to on NVENC as well, so BGRA cannot decide the answer.
+                    ConfigureEncoderContext(
+                        ctx, candidate, candidateName, ProbeWidth, ProbeHeight, ProbeFps, ProbeCrf, 0, &opts, allowBgra: false);
                     if (gpuFrames && !TryGiveGpuFrames(ctx))
                     {
                         continue;
@@ -295,50 +299,57 @@ internal static unsafe class LibavRecordingEncoder
                 foundRequestedEncoder = true;
             }
 
-            AVCodecContext* candidateCtx = ffmpeg.avcodec_alloc_context3(candidate);
-            if (candidateCtx == null)
+            // NVENC is opened on the capture's BGRA first (ChooseEncoderPixelFormat), and again on the 4:2:0 it took
+            // before should its driver refuse BGRA, rather than the recording losing the GPU encoder.
+            foreach (bool allowBgra in BgraAttempts(candidateName))
             {
-                LogNative($"Encoder candidate alloc failed: {candidateName}");
-                continue;
-            }
-
-            AVDictionary* candidateOpts = null;
-            try
-            {
-                ConfigureEncoderContext(candidateCtx, candidate, candidateName, width, height, fps, crf, bitrateOverride, &candidateOpts);
-                int openResult = ffmpeg.avcodec_open2(candidateCtx, candidate, &candidateOpts);
-                if (openResult >= 0)
+                AVCodecContext* candidateCtx = ffmpeg.avcodec_alloc_context3(candidate);
+                if (candidateCtx == null)
                 {
-                    AVCodecContext* openedCtx = candidateCtx;
-                    if (encOpts != null)
-                    {
-                        *encOpts = candidateOpts;
-                    }
-                    candidateCtx = null;
-                    candidateOpts = null;
-
-                    selectedEncoderName = candidateName;
-                    if (!ProducesRequestedCodec(codec, candidateName))
-                    {
-                        warningMessage = $"No {CodecLabel(codec)} encoder available. Falling back to '{candidateName}'.";
-                    }
-
-                    return openedCtx;
+                    LogNative($"Encoder candidate alloc failed: {candidateName}");
+                    break;
                 }
 
-                lastOpenError = $"{candidateName}: {FFmpegErrors.Describe(openResult)} ({openResult})";
-                LogNative($"Encoder candidate open failed: {lastOpenError}");
-            }
-            finally
-            {
-                if (candidateOpts != null)
+                AVDictionary* candidateOpts = null;
+                try
                 {
-                    ffmpeg.av_dict_free(&candidateOpts);
-                }
+                    ConfigureEncoderContext(
+                        candidateCtx, candidate, candidateName, width, height, fps, crf, bitrateOverride, &candidateOpts, allowBgra);
+                    int openResult = ffmpeg.avcodec_open2(candidateCtx, candidate, &candidateOpts);
+                    if (openResult >= 0)
+                    {
+                        AVCodecContext* openedCtx = candidateCtx;
+                        if (encOpts != null)
+                        {
+                            *encOpts = candidateOpts;
+                        }
+                        candidateCtx = null;
+                        candidateOpts = null;
 
-                if (candidateCtx != null)
+                        selectedEncoderName = candidateName;
+                        if (!ProducesRequestedCodec(codec, candidateName))
+                        {
+                            warningMessage = $"No {CodecLabel(codec)} encoder available. Falling back to '{candidateName}'.";
+                        }
+
+                        return openedCtx;
+                    }
+
+                    lastOpenError =
+                        $"{candidateName} ({ffmpeg.av_get_pix_fmt_name(candidateCtx->pix_fmt)}): {FFmpegErrors.Describe(openResult)} ({openResult})";
+                    LogNative($"Encoder candidate open failed: {lastOpenError}");
+                }
+                finally
                 {
-                    ffmpeg.avcodec_free_context(&candidateCtx);
+                    if (candidateOpts != null)
+                    {
+                        ffmpeg.av_dict_free(&candidateOpts);
+                    }
+
+                    if (candidateCtx != null)
+                    {
+                        ffmpeg.avcodec_free_context(&candidateCtx);
+                    }
                 }
             }
         }
@@ -391,12 +402,20 @@ internal static unsafe class LibavRecordingEncoder
         int fps,
         int crf,
         long bitrateOverride,
-        AVDictionary** encOpts)
+        AVDictionary** encOpts,
+        bool allowBgra = true)
     {
         encCtx->codec_id = enc->id;
         encCtx->width = width;
         encCtx->height = height;
-        encCtx->pix_fmt = ChooseEncoderPixelFormat(enc, encoderName);
+        encCtx->pix_fmt = ChooseEncoderPixelFormat(enc, encoderName, allowBgra);
+        if (encCtx->pix_fmt == AVPixelFormat.AV_PIX_FMT_BGRA)
+        {
+            // NVENC converts BGRA to limited-range BT.601 and writes that into the stream whatever it is told; the
+            // container is told the same.
+            encCtx->colorspace = AVColorSpace.AVCOL_SPC_BT470BG;
+            encCtx->color_range = AVColorRange.AVCOL_RANGE_MPEG;
+        }
         encCtx->time_base = new AVRational { num = 1, den = fps };
         encCtx->framerate = new AVRational { num = fps, den = 1 };
         encCtx->gop_size = fps * 2;
@@ -431,31 +450,65 @@ internal static unsafe class LibavRecordingEncoder
     }
 
     #pragma warning disable CS0618
-    private static AVPixelFormat ChooseEncoderPixelFormat(AVCodec* enc, string encoderName)
+    private static AVPixelFormat ChooseEncoderPixelFormat(AVCodec* enc, string encoderName, bool allowBgra)
     {
+        var supported = new List<AVPixelFormat>();
+        for (int i = 0; enc->pix_fmts != null && enc->pix_fmts[i] != AVPixelFormat.AV_PIX_FMT_NONE; i++)
+        {
+            supported.Add(enc->pix_fmts[i]);
+        }
+
+        return ChooseEncoderPixelFormat(supported, encoderName, allowBgra);
+    }
+    #pragma warning restore CS0618
+
+    /// <summary>
+    /// The pixel format a recording hands <paramref name="encoderName"/>, from the formats it lists (none when it lists
+    /// none). Every recording source hands over BGRA: gdigrab's bitmaps, WGC's textures, the composite's canvas. NVENC
+    /// takes BGRA as it is and converts it to 4:2:0 on the GPU, to the colours the CPU's conversion gave (BT.601: eight
+    /// colour patches decode within one level of each other) and closer to the screen (RGB PSNR 0.15-5.3 dB higher on
+    /// four of the user's recordings at the same bitrate), and it writes that matrix into the stream, which the 4:2:0
+    /// converted on the CPU left unset, so players took BT.709 for a picture 720 lines or taller and shifted its colours.
+    /// That conversion, on the recording thread, cost most of a recording's CPU: a 1450x900 region at 30 fps on
+    /// hevc_nvenc took 1130-1260 M cycles a second, 700-890 handed BGRA; the whole 1920x1080 screen 1910-1920, dropping
+    /// 3-7 frames in 10 s, against 1290-1420 with none dropped (RTX 3050 Laptop, 2026-11-05). Other encoders get the
+    /// first 4:2:0 format they list, as before. Pure, so the choice can be asserted without libav.
+    /// </summary>
+    internal static AVPixelFormat ChooseEncoderPixelFormat(
+        IReadOnlyList<AVPixelFormat> supported, string encoderName, bool allowBgra = true)
+    {
+        if (allowBgra && TakesBgra(encoderName) && supported.Contains(AVPixelFormat.AV_PIX_FMT_BGRA))
+        {
+            return AVPixelFormat.AV_PIX_FMT_BGRA;
+        }
+
         AVPixelFormat[] preferredFormats = IsHardwareOrMediaFoundationEncoder(encoderName)
             ? [AVPixelFormat.AV_PIX_FMT_NV12, AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_P010LE]
             : [AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_NV12];
 
-        if (enc->pix_fmts == null)
+        if (supported.Count == 0)
         {
             return preferredFormats[0];
         }
 
-        for (int i = 0; enc->pix_fmts[i] != AVPixelFormat.AV_PIX_FMT_NONE; i++)
+        foreach (AVPixelFormat format in supported)
         {
-            foreach (var preferredFormat in preferredFormats)
+            if (Array.IndexOf(preferredFormats, format) >= 0)
             {
-                if (enc->pix_fmts[i] == preferredFormat)
-                {
-                    return preferredFormat;
-                }
+                return format;
             }
         }
 
-        return enc->pix_fmts[0];
+        return supported[0];
     }
-    #pragma warning restore CS0618
+
+    private static bool TakesBgra(string encoderName) => encoderName.EndsWith("_nvenc", StringComparison.Ordinal);
+
+    private static readonly bool[] BgraThen420 = [true, false];
+    private static readonly bool[] Only420 = [false];
+
+    /// <summary>How a recording opens <paramref name="encoderName"/>: NVENC on BGRA, then on 4:2:0; any other once.</summary>
+    internal static bool[] BgraAttempts(string encoderName) => TakesBgra(encoderName) ? BgraThen420 : Only420;
 
     private static bool IsHardwareOrMediaFoundationEncoder(string encoderName)
     {
