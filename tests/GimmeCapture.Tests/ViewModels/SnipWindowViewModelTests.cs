@@ -467,26 +467,45 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
-    public void AudioMeterTimer_ShouldRunOnlyInRecordingMode()
+    public void AudioMeter_ShouldRunOnlyInRecordingMode()
     {
         var vm = new SnipWindowViewModel();
-        try
-        {
-            Assert.False(vm.IsAudioMeterTimerEnabledForTesting);
+        Assert.False(vm.IsAudioMeterRunningForTesting);
 
-            vm.CurrentMode = SnipMode.Recording;
-            Assert.True(vm.IsAudioMeterTimerEnabledForTesting);
+        vm.CurrentMode = SnipMode.Recording;
+        Assert.True(vm.IsAudioMeterRunningForTesting);
 
-            vm.CurrentMode = SnipMode.Translation;
-            Assert.False(vm.IsAudioMeterTimerEnabledForTesting);
+        vm.CurrentMode = SnipMode.Translation;
+        Assert.False(vm.IsAudioMeterRunningForTesting);
 
-            vm.CurrentMode = SnipMode.Screenshot;
-            Assert.False(vm.IsAudioMeterTimerEnabledForTesting);
-        }
-        finally
-        {
-            vm.Dispose();
-        }
+        vm.CurrentMode = SnipMode.Screenshot;
+        Assert.False(vm.IsAudioMeterRunningForTesting);
+
+        // Closing the overlay mid-recording stops it too.
+        vm.CurrentMode = SnipMode.Recording;
+        vm.Dispose();
+        Assert.False(vm.IsAudioMeterRunningForTesting);
+    }
+
+    [Fact]
+    public void AnAudioLevelThatDidNotChange_RaisesNothing()
+    {
+        // The meter's 120 ms beat raised all four of each level's properties every time, 47 changes a second in silence.
+        using var vm = new SnipWindowViewModel();
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.OutputAudioLevel = 0;
+        vm.InputAudioLevel = 0;
+        Assert.Empty(raised);
+
+        vm.OutputAudioLevel = 0.5;
+        Assert.Equal(
+            [nameof(vm.OutputAudioLevel), nameof(vm.OutputAudioDbText), nameof(vm.IsOutputAudioActive), nameof(vm.OutputAudioStateText)],
+            raised);
+        raised.Clear();
+        vm.OutputAudioLevel = 0.5;
+        Assert.Empty(raised);
     }
 
     [Theory]

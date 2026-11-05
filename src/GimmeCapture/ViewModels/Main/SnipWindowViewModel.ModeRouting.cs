@@ -126,7 +126,7 @@ public partial class SnipWindowViewModel
             ApplyDefaultToolbarVisibilityForMode(value);
         }
         RefreshSelectedSnapshotLock();
-        SyncAudioMeterTimerWithMode();
+        SyncAudioMeterWithMode();
 
         if (value == SnipMode.Recording)
         {

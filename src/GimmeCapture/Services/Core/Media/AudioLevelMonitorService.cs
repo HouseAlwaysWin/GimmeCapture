@@ -3,67 +3,67 @@ using NAudio.CoreAudioApi;
 
 namespace GimmeCapture.Services.Core.Media;
 
-public sealed class AudioLevelMonitorService : IDisposable
+/// <summary>
+/// Reads the default output's peak level and, when asked, a microphone's, through the devices' own meters. Its COM
+/// objects belong to the thread that first reads: <see cref="AudioLevelMeter"/> reads and disposes it on its own.
+/// </summary>
+public sealed class AudioLevelMonitorService : IAudioLevelReader
 {
     private MMDeviceEnumerator? _enumerator;
     private MMDevice? _renderDevice;
     private MMDevice? _captureDevice;
     private string? _micDeviceId;
 
-    public double OutputPeak { get; private set; }
-    public double InputPeak { get; private set; }
-
     /// <summary>
-    /// Specific capture endpoint to meter (the recording's selected mic). Empty/null = default input.
-    /// Changing it re-resolves the device on the next refresh so the input meter follows the chosen mic.
+    /// The output's peak, and the microphone's when <paramref name="microphone"/> is set: the endpoint named by
+    /// <paramref name="microphoneDeviceId"/> (the recording's selected mic), the default input when it is empty. A
+    /// microphone the recording does not take is not opened at all. False, with both 0, when the devices cannot be read.
     /// </summary>
-    public string? MicDeviceId
+    public bool TryRead(bool microphone, string? microphoneDeviceId, out double output, out double input)
     {
-        get => _micDeviceId;
-        set
+        output = 0;
+        input = 0;
+        // Core Audio is Windows': elsewhere every reading threw, and was caught, every 120 ms in Record mode.
+        if (!OperatingSystem.IsWindows())
         {
-            if (string.Equals(_micDeviceId, value, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            _micDeviceId = value;
-            _captureDevice?.Dispose();
-            _captureDevice = null;
+            return false;
         }
-    }
 
-    public bool TryRefresh()
-    {
         try
         {
-            EnsureDevices();
-            OutputPeak = _renderDevice?.AudioMeterInformation.MasterPeakValue ?? 0;
-            InputPeak = _captureDevice?.AudioMeterInformation.MasterPeakValue ?? 0;
+            _enumerator ??= new MMDeviceEnumerator();
+            _renderDevice ??= _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            output = _renderDevice.AudioMeterInformation.MasterPeakValue;
+            input = 0;
+            if (microphone)
+            {
+                if (!string.Equals(_micDeviceId, microphoneDeviceId, StringComparison.Ordinal))
+                {
+                    _micDeviceId = microphoneDeviceId;
+                    _captureDevice?.Dispose();
+                    _captureDevice = null;
+                }
+
+                _captureDevice ??= ResolveCaptureDevice();
+                input = _captureDevice.AudioMeterInformation.MasterPeakValue;
+            }
+
             return true;
         }
         catch
         {
-            OutputPeak = 0;
-            InputPeak = 0;
+            output = 0;
+            input = 0;
             ResetDevices();
             return false;
         }
     }
 
-    private void EnsureDevices()
-    {
-        _enumerator ??= new MMDeviceEnumerator();
-        _renderDevice ??= _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        _captureDevice ??= ResolveCaptureDevice();
-    }
-
     private MMDevice ResolveCaptureDevice()
     {
-        _enumerator ??= new MMDeviceEnumerator();
         if (!string.IsNullOrWhiteSpace(_micDeviceId))
         {
-            foreach (var d in _enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
+            foreach (var d in _enumerator!.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
             {
                 if (string.Equals(d.ID, _micDeviceId, StringComparison.Ordinal))
                 {
@@ -74,7 +74,7 @@ public sealed class AudioLevelMonitorService : IDisposable
             }
         }
 
-        return _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia);
+        return _enumerator!.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia);
     }
 
     private void ResetDevices()

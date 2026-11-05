@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 2 entries (2026-11-05).
+- Since v0.73.0, `## Unreleased` holds 3 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.73.0 (2026-11-05), updated by its own updater from
   0.72.1+d33e5172, a build copied in by hand like those since 2026-11-02, with the sign-in launcher its Run value
   starts. The user turned on software rendering ("Use less memory") the same evening.
@@ -897,6 +897,19 @@ tool.
   the first pin to 0.13 s as well but kept 26-28 MB (Skia's GPU cache and shaders), so it is not. Skipped while an
   overlay is open. Found on the way: a pin closed before its queued toolbar placement ran threw from `Screens`
   (`FloatingWindowBase.UpdateToolbarEdgePlacement`), which now returns once the window has no platform left.
+- Done since batch 1, the user's choice (2026-11-05): **the Record-mode audio meter** (Snip overlay).
+  `SnipWindowViewModel` read both levels on the UI thread from a 120 ms DispatcherTimer for as long as the overlay was
+  in Record mode, a recording included, raised all eight of their properties at every beat whether they had changed or
+  not, read the microphone though its meter shows only when the recording takes it, and made the audio devices' COM
+  objects on the UI thread at the first beat. `RecordMeterIdleProbeTests` (opt-in, the real Win32 platform, an
+  overlay's view model in each mode, 10 s windows after 30 s, silence): in Record mode the UI thread woke 63.1 times a
+  second at 5.2 M cycles/s and raised 47.4 property changes a second, and the first reading took 58 ms on an STA
+  thread (14 ms once the audio DLLs were cached). `AudioLevelMeter` now reads on a thread of its own
+  (`IAudioLevelReader`, its COM objects made and let go there), hands a level on only when it changed to the
+  hundredth, and reads the microphone only when the recording takes it; the view model posts what changed and raises a
+  level's properties only when it changed. After, in the same silence: the UI thread out of the busiest eight, no
+  property changes, the meter's thread 16.5-16.9 wakeups at 1.3-1.5 M cycles/s. Off Windows the reader no longer tries
+  Core Audio, which threw, and was caught, at every beat. `AudioLevelMeterTests`, `SnipWindowViewModelTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1301,9 +1314,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **A Save keeps a frozen overlay up through its encode** (S). The full-compression PNG, 0.35 s for a 1920x1080
   screen, which the user's own file should keep. A pin's (only a run's first was slow) and the copy's second encode
   are done (Status).
-- **Record-mode audio meter** (S). `SnipWindowViewModel.cs:507`: a 120 ms timer in Record mode even when idle, MMDevice
-  COM objects created on the UI thread at the first tick (`AudioLevelMonitorService.cs:54-59`), the mic metered when not
-  recorded, at least six notifications per tick (`:749-772`). A long-lived meter off the UI thread posting changes only.
 - **A manual scroll keeps grabbing when nothing scrolls** (S). The producer grabs region frames back to back
   (`ScrollingManual.cs` `ManualProducerLoopAsync`) and the consumer aligns every one; the signatures are pooled now
   (Status). Skipping a frame identical to the last, or pacing the grabs while nothing moves, would idle it, at the risk

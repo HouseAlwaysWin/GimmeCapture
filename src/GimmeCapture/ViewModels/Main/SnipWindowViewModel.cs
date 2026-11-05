@@ -155,9 +155,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly ICaptureVisibilityCoordinator _captureVisibilityCoordinator;
     private readonly SnipSelectionStateController _selectionStateController;
     private readonly CompositeDisposable _disposables = new();
-    private readonly AudioLevelMonitorService _audioLevelMonitor = new();
-    private readonly DispatcherTimer _audioMeterTimer;
-    internal bool IsAudioMeterTimerEnabledForTesting => _audioMeterTimer.IsEnabled;
+    private readonly AudioLevelMeter _audioMeter;
+    internal bool IsAudioMeterRunningForTesting => _audioMeter.IsRunning;
 
     private SnipMode _currentMode = SnipMode.Screenshot;
     public SnipMode CurrentMode
@@ -504,13 +503,15 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                     ShowTopLoadingBar = false;
                 }
             });
-        _audioMeterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+        // Read on the meter's own thread; the mic only when the recording takes it, as only then does it show.
+        _audioMeter = new AudioLevelMeter(
+            () => new AudioLevelSources(IsMicrophoneEnabled, _settings?.RecordingSettings.SelectedMicDeviceId),
+            (output, input) => Dispatcher.UIThread.Post(() => ShowAudioLevels(output, input)));
 
         ApplyInitialVisualSettings();
         InitializeRecordingBindingsIfNeeded();
 
-        _audioMeterTimer.Tick += (_, _) => RefreshAudioLevels();
-        SyncAudioMeterTimerWithMode();
+        SyncAudioMeterWithMode();
 
         InitializeActionCommands();
         InitializeToolbarCommands();
@@ -745,12 +746,18 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
     }
 
+    // What shows the level is raised only when it changes: the meter's 120 ms beat raised all four every time.
     private double _inputAudioLevel;
     public double InputAudioLevel
     {
         get => _inputAudioLevel;
         set
         {
+            if (_inputAudioLevel == value)
+            {
+                return;
+            }
+
             this.RaiseAndSetIfChanged(ref _inputAudioLevel, value);
             this.RaisePropertyChanged(nameof(InputAudioDbText));
             this.RaisePropertyChanged(nameof(IsInputAudioActive));
@@ -764,6 +771,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         get => _outputAudioLevel;
         set
         {
+            if (_outputAudioLevel == value)
+            {
+                return;
+            }
+
             this.RaiseAndSetIfChanged(ref _outputAudioLevel, value);
             this.RaisePropertyChanged(nameof(OutputAudioDbText));
             this.RaisePropertyChanged(nameof(IsOutputAudioActive));
@@ -812,53 +824,29 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         ? (Localization["RecordAudioActive"] ?? "Active")
         : (Localization["RecordAudioIdle"] ?? "Idle");
 
-    private void RefreshAudioLevels()
+    // A change the meter posted; one that arrives after it stopped is dropped.
+    private void ShowAudioLevels(double output, double input)
     {
-        if (CurrentMode != SnipMode.Recording)
+        if (!_audioMeter.IsRunning || CurrentMode != SnipMode.Recording)
         {
-            InputAudioLevel = 0.0;
-            OutputAudioLevel = 0.0;
             return;
         }
 
-        // Meter the mic the recording will actually use (not just the system default input).
-        _audioLevelMonitor.MicDeviceId = _settings?.RecordingSettings.SelectedMicDeviceId;
-        if (_audioLevelMonitor.TryRefresh())
-        {
-            InputAudioLevel = QuantizeAudioLevel(_audioLevelMonitor.InputPeak);
-            OutputAudioLevel = QuantizeAudioLevel(_audioLevelMonitor.OutputPeak);
-            return;
-        }
-
-        InputAudioLevel = 0.0;
-        OutputAudioLevel = 0.0;
+        InputAudioLevel = input;
+        OutputAudioLevel = output;
     }
 
-    private void SyncAudioMeterTimerWithMode()
+    private void SyncAudioMeterWithMode()
     {
         if (CurrentMode == SnipMode.Recording)
         {
-            if (!_audioMeterTimer.IsEnabled)
-            {
-                _audioMeterTimer.Start();
-            }
-
+            _audioMeter.Start();
             return;
         }
 
-        if (_audioMeterTimer.IsEnabled)
-        {
-            _audioMeterTimer.Stop();
-        }
-
+        _audioMeter.Stop();
         InputAudioLevel = 0.0;
         OutputAudioLevel = 0.0;
-    }
-
-    private static double QuantizeAudioLevel(double value)
-    {
-        // Quantize tiny jitter so we avoid high-frequency UI invalidations.
-        return Math.Round(Math.Clamp(value, 0, 1), 2);
     }
 
     private static double ToDecibel(double linearPeak)
@@ -979,8 +967,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _translationCts?.Cancel();
         _translationCts?.Dispose();
         Localization.PropertyChanged -= OnLocalizationPropertyChanged;
-        _audioMeterTimer.Stop();
-        _audioLevelMonitor.Dispose();
+        // Its thread lets the audio devices go as it ends.
+        _audioMeter.Stop();
         _hoverAnimationTimer.Stop();
         UnregisterUnfocusedOverlayHotkeys();
         _disposables.Dispose();

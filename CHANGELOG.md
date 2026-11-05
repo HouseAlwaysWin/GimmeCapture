@@ -24,6 +24,11 @@
   throws it away, and when it draws on the CPU ("Use less memory") draws it too: the first pin then took 0.13 s instead
   of 0.9. Drawing on the GPU it only builds it, which saves about half; drawing it there too would keep 27 MB more for
   good.
+- **Record mode's audio meter no longer keeps the interface busy.** The meter that shows the recording's sound levels
+  read them on the interface's own thread every 120 ms, all through a recording, and redrew them whether they had
+  changed or not: in silence that thread woke 63 times a second, and as Record mode opened it set up the audio devices
+  there, for up to 58 ms. The meter now reads on a thread of its own, tells the interface only when a level changes,
+  and leaves the microphone alone when the recording does not take it.
 
 ## v0.73.0 - 2026-11-05
 
