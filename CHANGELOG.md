@@ -67,6 +67,9 @@
   130 to 195 ms on the user's recordings before the frame showed. The pin now keeps that decoder open between such
   moves, 20 to 55 ms for a jump and 10 to 20 ms for a frame a little further on, and lets it go when it plays or after
   30 seconds unused.
+- **Dragging a pinned recording's seek bar shows the picture as it moves.** It showed nothing until the drag had
+  rested for 0.3 seconds, as each frame then took a new open of the file. With the decoder kept open, a frame is shown
+  every 50 ms as the bar moves, and the drag's last spot once it rests, as before.
 
 ### 🖼️ Interface
 

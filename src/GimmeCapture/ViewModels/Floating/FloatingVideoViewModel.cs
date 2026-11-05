@@ -237,6 +237,26 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
     private bool _isDraggingSlider;
     private CancellationTokenSource? _seekDebounceCts;
+    private long _lastScrubFrameMs = long.MinValue / 2;
+
+    /// <summary>Shortest time between two frames shown while the seek bar is dragged.</summary>
+    internal const int ScrubFrameIntervalMs = 50;
+
+    /// <summary>
+    /// Where to show a frame as the seek bar is dragged to <paramref name="value"/>, or null for none yet: one every
+    /// <see cref="ScrubFrameIntervalMs"/>, and none before the duration is known. Kept short of the end, where a seek
+    /// wraps back to the start and would pull the thumb away from under the pointer. The bar showed nothing until the
+    /// drag had rested 300 ms, since each paused seek opened the file (130-195 ms) before the decoder was kept.
+    /// </summary>
+    internal static double? ScrubFrameTarget(long nowMs, long lastFrameMs, double value, double durationSeconds)
+    {
+        if (durationSeconds <= 0 || nowMs - lastFrameMs < ScrubFrameIntervalMs)
+        {
+            return null;
+        }
+
+        return Math.Clamp(value, 0, Math.Max(0, durationSeconds - 0.001));
+    }
 
     public double CurrentTimeSeconds
     {
@@ -264,7 +284,18 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                         this.RaisePropertyChanged(nameof(IsPlaying)));
                 }
 
-                // Debounce the actual seek — only fire after user stops dragging for 300ms
+                // The frame under the thumb as the bar is dragged, from the decoder a paused pin keeps between seeks
+                // (KeptStillFrames, 10-20 ms a step); each new one cancels the one before. Only once the duration is
+                // known: before, a paused seek still opens the file each time.
+                long nowMs = Environment.TickCount64;
+                if (ScrubFrameTarget(nowMs, _lastScrubFrameMs, value, TotalDuration.TotalSeconds) is { } scrubTarget)
+                {
+                    _lastScrubFrameMs = nowMs;
+                    _seekTargetSeconds = scrubTarget;
+                    StartPlayback();
+                }
+
+                // Once the drag rests for 300 ms the playhead follows the decoder again, from the exact spot.
                 _seekDebounceCts?.Cancel();
                 _seekDebounceCts = new CancellationTokenSource();
                 var token = _seekDebounceCts.Token;

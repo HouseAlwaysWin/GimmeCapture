@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 16 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 17 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -879,6 +879,11 @@ tool.
   encoders together on a run's first need (the capability cache answers every other run). `ProbedAnswer` runs one
   probe at a time, the others waiting for its answer, keeps no answer a probe could not reach, and takes an earlier
   run's (`Recall`). `ProbedAnswerTests` (a second caller during a probe gets its answer without probing).
+- Done since batch 1 (2026-11-05, the user's call "邊拖邊顯示"): **the seek bar shows frames while dragged**. The
+  setter of `CurrentTimeSeconds` starts a paused seek at most every `ScrubFrameIntervalMs` (50) once the duration is
+  known, each cancelling the last, kept short of the end (a seek there wraps to the start and would pull the thumb
+  away); the 300 ms rest still ends the drag and seeks to its exact spot. From the kept decoder a step takes 10-20 ms
+  (Status above). `FloatingVideoScrubTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1130,7 +1135,8 @@ These were covered by unit tests only; check them in the real app before a relea
   it should open the main window. From the tray, open the overlay and use something that needs a model you have not
   installed: the main window should open on the Modules tab.
 - **A paused pinned recording's seeks**: pause a pinned recording, press the 5-second buttons both ways and drag the
-  seek bar: each frame should appear about at once (it took a moment before); play on, pause again and repeat.
+  seek bar: each frame should appear about at once (it took a moment before), and the picture should follow the bar
+  while it is dragged, the thumb staying under the pointer (at the end too); play on, pause again and repeat.
 - **The overlay's loading bar**: open the capture overlay with the AI scan on: the red bar along the top should sweep
   while the scan runs and go once it is done, and do the same during a translation.
 - **A recording on the NVIDIA card**: record a region with strong colours (a page with red and green on it) and play
@@ -1263,10 +1269,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   2026-11-03, 13-44 on the CPU), and so does every piece of a timeline with cuts or speeds, whose sound restarts per
   piece. Seeking inside the kept decode would need the sound clock's ticket to change mid-run
   (`PlaybackMediaClock` follows one). A paused pin's seeks keep a decoder now (Status).
-- **The seek bar waits 300 ms after a drag before it shows a frame** (S, the user's call: frames while dragging).
-  `FloatingVideoViewModel.DebounceSeekAsync` was there because each paused seek opened the file (130-195 ms); from the
-  kept decoder a step takes 10-20 ms, so a short debounce would show frames as the bar is dragged, at some CPU while
-  dragging.
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done
