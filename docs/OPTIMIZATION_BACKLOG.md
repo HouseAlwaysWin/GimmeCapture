@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 1 entry (2026-11-05).
+- Since v0.73.0, `## Unreleased` holds 2 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.73.0 (2026-11-05), updated by its own updater from
   0.72.1+d33e5172, a build copied in by hand like those since 2026-11-02, with the sign-in launcher its Run value
   starts. The user turned on software rendering ("Use less memory") the same evening.
@@ -884,6 +884,19 @@ tool.
   known, each cancelling the last, kept short of the end (a seek there wraps to the start and would pull the thumb
   away); the 300 ms rest still ends the drag and seeks to its exact spot. From the kept decoder a step takes 10-20 ms
   (Status above). `FloatingVideoScrubTests`.
+- Done since batch 1, the user's choice (2026-11-05): **the first pin of a run kept a frozen overlay up** (Snip
+  overlay's "Frozen commits keep the overlay up while the pin window is built"). Since 288d5aba the overlay closes once
+  the pin it opens has drawn (`ExecutePinCaptureAsync` waits for its first frame), so a slow pin keeps it up.
+  `PinOpenProbeTests` (opt-in, the real Win32 platform, the pin built off screen as the overlay builds it, the tray's
+  host window up): the first pin of a process took 0.93-1.04 s in a test build (not ReadyToRun), later ones 37-73 ms
+  at 1280x720 and 3968x1160, on the GPU and the CPU alike; 5 of the user's 29 logged overlay closes followed a busy
+  stall of 0.26-0.70 s, all on 2026-10-31. Hiding the overlay first, as the item had it, would leave a gap at every pin
+  to speed up only the first. Instead `SnipWindowFactory.ScheduleWarmUp`, ten seconds after start, now also warms a pin
+  with the app's services: built and thrown away when drawing on the GPU (the first pin then took 0.56 s, nothing
+  kept), and on the CPU also shown off screen until its first frame (0.13 s, 0.5-1.3 MB kept). Shown on the GPU it took
+  the first pin to 0.13 s as well but kept 26-28 MB (Skia's GPU cache and shaders), so it is not. Skipped while an
+  overlay is open. Found on the way: a pin closed before its queued toolbar placement ran threw from `Screens`
+  (`FloatingWindowBase.UpdateToolbarEdgePlacement`), which now returns once the window has no platform left.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1285,10 +1298,9 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   pixels. Only the screen under the cursor would be detected at 1280x736 for less work, but the other screens would
   get no boxes until a rescan. The user has one 1920x1080 display (their log), so it does not touch them. The boxes
   it finds are drawn by one control now (Status).
-- **Frozen commits keep the overlay up while the pin window is built** (M). `Capture.cs:464`: hide the frozen overlay
-  right after the crop. (Explains the 307 ms "blocked" stall before close.) The copy's second encode is done (Status);
-  a Save still keeps a frozen overlay up through its full-compression encode, 0.35 s for a 1920x1080 screen, which the
-  user's own file should keep.
+- **A Save keeps a frozen overlay up through its encode** (S). The full-compression PNG, 0.35 s for a 1920x1080
+  screen, which the user's own file should keep. A pin's (only a run's first was slow) and the copy's second encode
+  are done (Status).
 - **Record-mode audio meter** (S). `SnipWindowViewModel.cs:507`: a 120 ms timer in Record mode even when idle, MMDevice
   COM objects created on the UI thread at the first tick (`AudioLevelMonitorService.cs:54-59`), the mic metered when not
   recorded, at least six notifications per tick (`:749-772`). A long-lived meter off the UI thread posting changes only.

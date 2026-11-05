@@ -19,7 +19,7 @@ internal sealed class NoOpSnipWindowFactory : ISnipWindowFactory
 
     public object? GetActiveViewModel() => null;
 
-    public void ScheduleWarmUp(System.TimeSpan delay) { }
+    public void ScheduleWarmUp(object mainViewModel, System.TimeSpan delay) { }
 }
 
 internal sealed class NoOpScreenLayoutService : IScreenLayoutService

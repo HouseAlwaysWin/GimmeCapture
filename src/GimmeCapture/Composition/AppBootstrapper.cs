@@ -206,10 +206,11 @@ public sealed class AppBootstrapper : IAsyncDisposable
     public void InitializeHotkeys() => _mainWindowViewModel.Value.HotkeyService.Initialize();
 
     /// <summary>
-    /// Loads the capture overlay's code while the app is idle (<see cref="ISnipWindowFactory.ScheduleWarmUp"/>), ten
-    /// seconds in so it stays clear of startup's own work.
+    /// Loads the capture overlay's code, and a pin's, while the app is idle (<see cref="ISnipWindowFactory.ScheduleWarmUp"/>),
+    /// ten seconds in so it stays clear of startup's own work.
     /// </summary>
-    public void ScheduleCaptureOverlayWarmUp() => _snipWindowFactory.Value.ScheduleWarmUp(TimeSpan.FromSeconds(10));
+    public void ScheduleCaptureOverlayWarmUp() =>
+        _snipWindowFactory.Value.ScheduleWarmUp(_mainWindowViewModel.Value, TimeSpan.FromSeconds(10));
 
     /// <summary>
     /// A window nobody sees (1×1, transparent, off-screen) that gives the app a visible top level while the main window is

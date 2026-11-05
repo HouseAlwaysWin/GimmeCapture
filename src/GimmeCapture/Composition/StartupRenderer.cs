@@ -18,8 +18,11 @@ internal static class StartupRenderer
 {
     private static Win32PlatformOptions? _win32Options;
 
-    /// <summary>Whether this process draws on the CPU, as <see cref="Win32Options()"/> chose. False until it has.</summary>
-    internal static bool IsSoftware { get; private set; }
+    /// <summary>
+    /// Whether this process draws on the CPU, as <see cref="Win32Options()"/> chose. False until it has; a probe that
+    /// sets the platform up itself says which it chose.
+    /// </summary>
+    internal static bool IsSoftware { get; set; }
 
     /// <summary>The Win32 platform's options, from the saved setting, decided the first time Avalonia asks.</summary>
     internal static Win32PlatformOptions Win32Options()

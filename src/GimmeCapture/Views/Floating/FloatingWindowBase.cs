@@ -207,7 +207,9 @@ public abstract class FloatingWindowBase : Window
 
     private void UpdateToolbarEdgePlacement()
     {
-        if (DataContext is not FloatingWindowViewModelBase vm || !vm.ShowToolbar)
+        // Queued at the Loaded priority: a window closed before it runs has no platform left to ask for its screen,
+        // and Screens throws then.
+        if (PlatformImpl == null || DataContext is not FloatingWindowViewModelBase vm || !vm.ShowToolbar)
         {
             return;
         }

@@ -18,6 +18,12 @@
   the app then started in 3.3 s. A start uses much less of those files than they hold: the app's own file is 40 MB, 30
   of them fonts a start to the tray never draws. Each start now writes down which parts of each file it used, and the
   launcher, like the app's own read-ahead, reads only those.
+- **The first pin after the app starts opens sooner.** A frozen capture's overlay stays up until the pin it opens has
+  drawn, and the first pin of a run, which loads a pin's code and draws one for the first time, kept it up close to a
+  second longer than later pins in tests. Ten seconds after it starts, the app now builds a pin out of sight and
+  throws it away, and when it draws on the CPU ("Use less memory") draws it too: the first pin then took 0.13 s instead
+  of 0.9. Drawing on the GPU it only builds it, which saves about half; drawing it there too would keep 27 MB more for
+  good.
 
 ## v0.73.0 - 2026-11-05
 

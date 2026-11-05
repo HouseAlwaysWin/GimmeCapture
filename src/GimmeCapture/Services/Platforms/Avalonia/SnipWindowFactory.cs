@@ -1,4 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using System;
 using System.Diagnostics;
@@ -9,7 +13,9 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Translation;
+using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.ViewModels.Main;
+using GimmeCapture.Views.Floating;
 using GimmeCapture.Views.Main;
 using ReactiveUI;
 
@@ -267,42 +273,98 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
     /// one. Building both once while the app is idle, unseen and unwired, takes about half of that out of the first
     /// capture. The rest is the first show of a real, bound window, which cannot be rehearsed without showing one.
     /// </summary>
-    public void ScheduleWarmUp(TimeSpan delay)
+    public void ScheduleWarmUp(object mainViewModel, TimeSpan delay)
     {
         DispatcherTimer.RunOnce(() =>
         {
             // A real overlay has already loaded everything this would.
-            if (_openedOnce)
+            if (!_openedOnce)
             {
-                return;
+                WarmUpOverlay();
             }
 
+            if (mainViewModel is MainWindowViewModel vm)
+            {
+                Dispatcher.UIThread.Post(() => WarmUpPin(vm), DispatcherPriority.Background);
+            }
+        }, delay, DispatcherPriority.Background);
+    }
+
+    private void WarmUpOverlay()
+    {
+        try
+        {
+            new SnipWindow(_screenLayoutService, _windowLayerService) { IsWarmUp = true }.Close();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("SnipWindowFactory.WarmUp", ex);
+            return;
+        }
+
+        // Separately, so neither half holds the UI thread long. The parameterless view model has no main view
+        // model or services behind it, so it registers nothing; Dispose undoes what it set up.
+        Dispatcher.UIThread.Post(() =>
+        {
             try
             {
-                new SnipWindow(_screenLayoutService, _windowLayerService) { IsWarmUp = true }.Close();
+                using (new SnipWindowViewModel())
+                {
+                }
             }
             catch (Exception ex)
             {
                 AppLog.Warning("SnipWindowFactory.WarmUp", ex);
+            }
+        }, DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// A frozen overlay stays up until the pin it opens has drawn, and the first pin of a run took 0.93-1.04 s to build
+    /// and draw in a test build with the tray's host window up, later ones 40-70 ms (<c>PinOpenProbeTests</c>). Built
+    /// first and thrown away, a pin took the next one to 0.32-0.51 s, keeping nothing; shown off screen until it had drawn
+    /// as well, to 0.13 s, but that kept 26-28 MB more when drawing on the GPU (its cache and shaders, which later pins
+    /// reuse) against 3-5 MB on the CPU. So it is shown only when the app draws on the CPU. Skipped while an overlay is
+    /// open, so it never holds up a selection.
+    /// </summary>
+    private void WarmUpPin(MainWindowViewModel vm)
+    {
+        if (_windowManager.FindWindowOfType<SnipWindow>() != null)
+        {
+            return;
+        }
+
+        FloatingImageViewModel? pin = null;
+        try
+        {
+            var picture = new WriteableBitmap(new PixelSize(64, 64), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
+            pin = new FloatingImageViewModel(
+                picture, 64, 64, Colors.Red, 2.0, false, false, new ClipboardService(), vm.AIResourceService,
+                vm.SAM2RuntimeService, vm.AppSettingsService, vm.BackgroundRemoval, vm.ResourceQueue);
+            var window = new FloatingImageWindow
+            {
+                DataContext = pin,
+                Position = new PixelPoint(-20000, -20000),
+                ShowActivated = false,
+            };
+            if (!StartupRenderer.IsSoftware)
+            {
+                window.Close();
+                pin.Dispose();
                 return;
             }
 
-            // Separately, so neither half holds the UI thread long. The parameterless view model has no main view
-            // model or services behind it, so it registers nothing; Dispose undoes what it set up.
-            Dispatcher.UIThread.Post(() =>
-            {
-                try
-                {
-                    using (new SnipWindowViewModel())
-                    {
-                    }
-                }
-                catch (Exception ex)
-                {
-                    AppLog.Warning("SnipWindowFactory.WarmUp", ex);
-                }
-            }, DispatcherPriority.Background);
-        }, delay, DispatcherPriority.Background);
+            window.Show();
+            // The first callback comes as the first frame starts, the second once it has been drawn. Closing the
+            // window disposes its view model.
+            window.RequestAnimationFrame(_ => window.RequestAnimationFrame(_ =>
+                Dispatcher.UIThread.Post(window.Close, DispatcherPriority.Background)));
+        }
+        catch (Exception ex)
+        {
+            pin?.Dispose();
+            AppLog.Warning("SnipWindowFactory.WarmUpPin", ex);
+        }
     }
 
     // What a frozen screenshot grabs: the area the overlay window covers, as CaptureScreenAsync takes it.
