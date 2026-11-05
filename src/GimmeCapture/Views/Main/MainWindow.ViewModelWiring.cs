@@ -82,17 +82,7 @@ public partial class MainWindow
                     return;
                 }
 
-                var hotkeyName = id switch
-                {
-                    HotkeyIds.Snip => LocalizationService.Instance["StartCapture"] ?? "Screenshot",
-                    HotkeyIds.Record => LocalizationService.Instance["CaptureModeRecord"] ?? "Record",
-                    HotkeyIds.Translate => LocalizationService.Instance["TranslateHotkey"] ?? "Translate",
-                    HotkeyIds.Copy => LocalizationService.Instance["TipCopy"] ?? "Copy",
-                    HotkeyIds.Pin => LocalizationService.Instance["TipPin"] ?? "Pin",
-                    HotkeyIds.TextCopy => LocalizationService.Instance["TextCopyHotkey"],
-                    HotkeyIds.ScrollingCapture => LocalizationService.Instance["ScrollingCaptureHotkey"],
-                    _ => hotkey
-                };
+                var hotkeyName = WindowlessMainHandlers.HotkeyName(id, hotkey, LocalizationService.Instance);
 
                 vm.StatusText = $"[RegisterFailed] {hotkey} -> {hotkeyName}";
 
@@ -121,15 +111,15 @@ public partial class MainWindow
     }
 
     // Undoes what OnDataContextChanged wired into the view model, which outlives this window: every action set there
-    // holds this window. The view model is left as a launch to the tray leaves it, before any main window is built.
+    // holds this window. The view model is left as a launch to the tray leaves it, before any main window is built,
+    // with the stand-ins for this window's hotkey dialog and Modules tab back in place.
     private void UnwireViewModel(MainWindowViewModel vm)
     {
         vm.PickFolderAction = null;
         vm.PickGgufFileAction = null;
         vm.ConfirmAction = null;
         vm.ConfirmYesNoAction = null;
-        vm.HotkeyService.OnHotkeyRegistrationFailed = null;
-        vm.RequestOpenModulesAction = null;
+        vm.UseWindowlessHandlers();
         vm.ShowUpdateDialogAction = null;
         _processingSubscription?.Dispose();
         _processingSubscription = null;

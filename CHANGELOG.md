@@ -80,6 +80,14 @@
   than 100%, cropping such a pin also cut out a part of the frame other than the one selected (at 125%, 80% as far in
   and as large): it now cuts out the part selected.
 
+### 🛡️ Reliability
+
+- **Started at sign-in, the app says when another app holds one of its hotkeys.** Started to the tray, the app had
+  not built its main window, whose message it was, so a hotkey that another app had taken simply did nothing. A toast
+  now says which, and opening it opens the main window to change it. The same went for the capture overlay's button
+  that opens the Modules tab to get a missing model, which did nothing from the tray: it now opens the main window on
+  that tab.
+
 ## v0.72.1 - 2026-11-04
 
 ### 🖼️ Interface

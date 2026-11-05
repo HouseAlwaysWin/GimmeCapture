@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 11 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 12 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -844,6 +844,13 @@ tool.
   known a paused seek still takes the old pass, which reports it. `KeptStillFramesTests`. The seek bar still waits
   300 ms after a drag stops before it seeks (`DebounceSeekAsync`), which a kept decoder no longer needs: showing frames
   while dragging is the user's call (Pins).
+- Done since batch 1 (2026-11-05): **tray sessions miss the hotkey dialog and the Modules tab**. The main window wired
+  `OnHotkeyRegistrationFailed` (its dialog) and `RequestOpenModulesAction` (its tab), so in a launch to the tray, the
+  user's at sign-in, a hotkey another app held failed silently and the overlay's request to get a model did nothing.
+  `WindowlessMainHandlers` stands in until a main window is up and again once one lets go (`UseWindowlessHandlers`,
+  from `ConfigureSharedViewModel` before `InitializeHotkeys`, and `UnwireViewModel`): a clickable toast with the
+  dialog's message that opens the main window, and the main window opened on the Modules tab. The hotkey names moved
+  there from `MainWindow.ViewModelWiring.cs` for both. `WindowlessMainHandlersTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1087,6 +1094,10 @@ These were covered by unit tests only; check them in the real app before a relea
   comes back in step after a short restart), turn the loop off (it stops at the end), trim it in the timeline (it loops
   the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
   should loop where the picture ends, without holding its last frame.
+- **A launch to the tray**: give the capture hotkey a combination another app holds (or start a second app that
+  takes it first), sign out and in (or start the app with `--startup`): a toast should name the hotkey, and clicking
+  it should open the main window. From the tray, open the overlay and use something that needs a model you have not
+  installed: the main window should open on the Modules tab.
 - **A paused pinned recording's seeks**: pause a pinned recording, press the 5-second buttons both ways and drag the
   seek bar: each frame should appear about at once (it took a moment before); play on, pause again and repeat.
 - **The overlay's loading bar**: open the capture overlay with the AI scan on: the red bar along the top should sweep
@@ -1291,8 +1302,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
   was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files
   parsed through `x:Static`.
-- **Tray sessions still miss** the failed-hotkey-registration dialog and the overlay's request to open the Modules tab.
-  An update found there is announced by a toast now (Status).
 - **Two AV1 probes can run at once** (S): `HasUsableHardwareAv1Encoder` does not guard against the Record tab, the
   Record-mode warm-up and a recording start probing together (`LibavRecordingEncoder`).
 - **A Direct3D 11 decode leaves 150-240 MB in the process after it ends** (measured in the app 2026-11-04: it does

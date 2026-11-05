@@ -306,6 +306,9 @@ public sealed class AppBootstrapper : IAsyncDisposable
         viewModel.ShowToastAction = (message, severity) => _toastService.Value.Show(message, severity);
         viewModel.ShowPreviewToastAction = (message, severity, preview) => _toastService.Value.Show(message, severity, preview);
         viewModel.ShowClickableToastAction = (message, severity, onClick) => _toastService.Value.Show(message, severity, onClick: onClick);
+        // So were the main window's dialog for a hotkey that could not be registered, at a launch to the tray before the
+        // hotkeys are registered, and the Modules tab the capture overlay asks for: stand-ins until a main window is up.
+        viewModel.UseWindowlessHandlers();
         var captureCountdown = new AvaloniaCaptureCountdownService(viewModel.CancelCaptureCountdown);
         viewModel.ShowCaptureCountdownAction = captureCountdown.ShowAsync;
         viewModel.CloseCaptureCountdownAction = captureCountdown.Close;
