@@ -182,6 +182,28 @@ public sealed class CompressPipelineGifWebmTests : IDisposable
         Assert.Equal(await player.ProbeHasAudioAsync(through), await player.ProbeHasAudioAsync(straight));
     }
 
+    // The tab's quality follows the CRF slider (20 or less High, 30 or more Low), and its GIF is dithered as a GIF
+    // recording of that quality is (RecordingService.FinalizeAsGifAsync). It was dithered with the finest at every
+    // quality, which at Medium, the default CRF 22's, made a 34-second recording's GIF nearly twice the size.
+    [Theory]
+    [InlineData(18, VideoQuality.High, "dither=sierra2_4a")]
+    [InlineData(22, VideoQuality.Medium, "dither=bayer:bayer_scale=3")]
+    [InlineData(32, VideoQuality.Low, "dither=none")]
+    public async Task AGif_IsDitheredAsAGifRecordingOfItsQuality(int crf, VideoQuality quality, string recordingDither)
+    {
+        // Thousands of colours, so the dithering shows in every frame; unedited, so it is made from the clip itself.
+        string clip = VideoTestClips.WriteColourY4m(Path.Combine(_dir, "clip.y4m"), 320, 240, 60);
+        (int fps, int maxWidth) = LibavGifTranscoder.QualityLadder(quality);
+        string recorded = Path.Combine(_dir, "recorded.gif");
+        LibavGifTranscoder.TranscodeToGif(clip, recorded, fps, maxWidth, recordingDither);
+        string compressed = Path.Combine(_dir, "compressed.gif");
+
+        Assert.True(await CompressPipeline.EncodeOneFileAsync(
+            clip, compressed, Settings(crf), 0, 2.0, new InlineProgress(_ => { }), CancellationToken.None, pauseGate: null));
+
+        Assert.Equal(File.ReadAllBytes(recorded), File.ReadAllBytes(compressed));
+    }
+
     [Theory]
     [InlineData(".gif", false)]
     [InlineData(".gif", true)]

@@ -33,10 +33,11 @@ internal static class LibavGifTranscoder
     internal const string FinestDither = "dither=sierra2_4a";
 
     /// <summary>
-    /// The dithering a GIF of this quality gets, as paletteuse's arguments: a GIF recording's and a pinned recording's
-    /// GIF copy's. Error diffusion looks best, but its fine noise compresses poorly and makes the largest files; ordered
-    /// (bayer) dithering compresses far better and leaves a regular grain on gradients; none is the smallest and bands
-    /// gradients. The copy was dithered with the finest at every quality: at Medium a 34-second 1450x900 recording's GIF
+    /// The dithering a GIF of this quality gets, as paletteuse's arguments: a GIF recording, a pinned recording's GIF
+    /// copy and a GIF from the Compress tab (its quality follows the CRF slider) all take it. Error diffusion looks
+    /// best, but its fine noise compresses poorly and makes the largest files; ordered (bayer) dithering compresses far
+    /// better and leaves a regular grain on gradients; none is the smallest and bands gradients. The copy and the
+    /// Compress tab's GIF were dithered with the finest at every quality: at Medium a 34-second 1450x900 recording's GIF
     /// came out 6.5 MB in 8.4 s, where bayer makes it 3.5 MB in 5.6 s.
     /// </summary>
     public static string QualityDither(VideoQuality quality) => quality switch

@@ -433,7 +433,7 @@ internal static class CompressPipeline
                 int gifFps = s.MaxFps > 0 ? s.MaxFps : ladderFps;
                 int maxWidth = s.MaxHeight > 0 ? 0 : ladderWidth;
                 ok = await Task.Run(() => GifWebmVideoExporter.TranscodeToGif(
-                    transcodeSource, finalTemp, gifFps, maxWidth, transcodeProgress, token, pauseGate), token);
+                    transcodeSource, finalTemp, gifFps, maxWidth, quality, transcodeProgress, token, pauseGate), token);
             }
             else
             {

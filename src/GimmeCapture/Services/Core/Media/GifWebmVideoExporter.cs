@@ -23,18 +23,17 @@ internal static class GifWebmVideoExporter
 
     /// <summary>
     /// GIF via the two-pass palette encoder. <paramref name="maxWidth"/> 0 keeps the source width;
-    /// <paramref name="gifFps"/> decimates to that rate; <paramref name="paletteuseArgs"/> is the dithering
-    /// (<see cref="LibavGifTranscoder.QualityDither"/> for a pin's copy), the finest unless named. Returns true when a
-    /// non-empty file is produced; cancelling throws <see cref="OperationCanceledException"/>.
+    /// <paramref name="gifFps"/> decimates to that rate. Dithered as a GIF recording of <paramref name="quality"/> is
+    /// (<see cref="LibavGifTranscoder.QualityDither"/>). Returns true when a non-empty file is produced; cancelling throws
+    /// <see cref="OperationCanceledException"/>.
     /// </summary>
     public static bool TranscodeToGif(
-        string sourcePath, string outputPath, int gifFps, int maxWidth,
-        IProgress<double>? progress = null, CancellationToken ct = default, ManualResetEventSlim? pauseGate = null,
-        string paletteuseArgs = LibavGifTranscoder.FinestDither)
+        string sourcePath, string outputPath, int gifFps, int maxWidth, VideoQuality quality,
+        IProgress<double>? progress = null, CancellationToken ct = default, ManualResetEventSlim? pauseGate = null)
     {
         LibavGifTranscoder.TranscodeToGif(
-            sourcePath, outputPath, gifFps, maxWidth, paletteuseArgs, progress: progress, cancellationToken: ct,
-            pauseGate: pauseGate);
+            sourcePath, outputPath, gifFps, maxWidth, LibavGifTranscoder.QualityDither(quality), progress: progress,
+            cancellationToken: ct, pauseGate: pauseGate);
         return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
     }
 
