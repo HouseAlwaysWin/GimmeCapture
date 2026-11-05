@@ -1218,8 +1218,12 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Snip overlay
 
-- **The OCR scan grabs every monitor** (S). `AIScanSessionService.cs:77-81`: grab only the active monitor. The
-  boxes it finds are drawn by one control now (Status).
+- **The OCR scan grabs every monitor** (S, the user's call: what a scan covers). The overlay spans every screen
+  (`SnipWindowFactory.ConfigureWindowBounds`) and the scan its whole viewport (`CreateAIScanSessionRequest`), so
+  two 1920x1080 screens side by side are read as one 3840x1080 grab detected at 1280x384, a third of each screen's
+  pixels. Only the screen under the cursor would be detected at 1280x736 for less work, but the other screens would
+  get no boxes until a rescan. The user has one 1920x1080 display (their log), so it does not touch them. The boxes
+  it finds are drawn by one control now (Status).
 - **Frozen commits keep the overlay up while the pin window is built** (M). `Capture.cs:464`: hide the frozen overlay
   right after the crop. (Explains the 307 ms "blocked" stall before close.) The copy's second encode is done (Status);
   a Save still keeps a frozen overlay up through its full-compression encode, 0.35 s for a 1920x1080 screen, which the
