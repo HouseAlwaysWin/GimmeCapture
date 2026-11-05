@@ -53,6 +53,10 @@ public sealed class OcrRuntimeService : IDisposable
     private InferenceSession? _recSession;
     private OCRLanguage? _loadedLanguage;
     private List<string> _dictionary = new();
+    // Detection's input, 10.8 MB for a 1920x1080 capture. Allocated for every scan, it went to the large object heap,
+    // and a full collection followed every second or third scan in a test host. Kept while the detector is loaded, and
+    // handed only to the one inference running (BeginSessionUse).
+    private float[]? _detectionInput;
 
     public OcrRuntimeService(AIResourceService aiResourceService)
     {
@@ -111,7 +115,19 @@ public sealed class OcrRuntimeService : IDisposable
             },
             _detSession,
             _recSession,
-            _dictionary);
+            _dictionary,
+            DetectionInput);
+    }
+
+    // Called inside a session use, so by the one inference running; the unload, which drops it, waits for every use.
+    private float[] DetectionInput(int length)
+    {
+        if (_detectionInput == null || _detectionInput.Length < length)
+        {
+            _detectionInput = new float[length];
+        }
+
+        return _detectionInput;
     }
 
     public string AcquireLease()
@@ -304,6 +320,7 @@ public sealed class OcrRuntimeService : IDisposable
     {
         _detSession?.Dispose();
         _detSession = null;
+        _detectionInput = null;
         DisposeRecognizer();
     }
 

@@ -63,6 +63,34 @@ public sealed class OcrRuntimeServiceTests : IDisposable
     }
 
     [Fact]
+    public void DetectionsInput_IsOneBufferKeptWhileLoaded_AndGoesWithTheUnload()
+    {
+        // 10.8 MB a 1920x1080 scan: allocated for each, it went to the large object heap and brought full collections.
+        float[] first;
+        using (var use = _sut.BeginSessionUse())
+        {
+            first = use.DetectionInput(1000);
+            Assert.True(first.Length >= 1000);
+        }
+
+        using (var use = _sut.BeginSessionUse())
+        {
+            Assert.Same(first, use.DetectionInput(1000));
+            Assert.Same(first, use.DetectionInput(10));
+            float[] larger = use.DetectionInput(5000);
+            Assert.True(larger.Length >= 5000);
+            Assert.Same(larger, use.DetectionInput(4000));
+        }
+
+        _sut.Unload();
+
+        using (var use = _sut.BeginSessionUse())
+        {
+            Assert.Equal(1000, use.DetectionInput(1000).Length);
+        }
+    }
+
+    [Fact]
     public async Task TheRecognizer_JoinsTheLoadedDetector_WithoutRebuildingIt()
     {
         InstallModels(OCRLanguage.TraditionalChinese);

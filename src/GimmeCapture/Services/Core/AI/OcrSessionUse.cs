@@ -18,22 +18,31 @@ namespace GimmeCapture.Services.Core.AI;
 public sealed class OcrSessionUse : IDisposable
 {
     private Action? _release;
+    private readonly Func<int, float[]>? _detectionInput;
 
     internal OcrSessionUse(
         Action? release,
         InferenceSession? detection,
         InferenceSession? recognition,
-        IReadOnlyList<string> dictionary)
+        IReadOnlyList<string> dictionary,
+        Func<int, float[]>? detectionInput = null)
     {
         _release = release;
         Detection = detection;
         Recognition = recognition;
         Dictionary = dictionary;
+        _detectionInput = detectionInput;
     }
 
     public InferenceSession? Detection { get; }
     public InferenceSession? Recognition { get; }
     public IReadOnlyList<string> Dictionary { get; }
+
+    /// <summary>
+    /// At least <paramref name="length"/> floats for detection's input: the runtime's own, kept while the detector stays
+    /// loaded. Only this scope uses it, inference running one at a time, and only until it is disposed.
+    /// </summary>
+    public float[] DetectionInput(int length) => _detectionInput?.Invoke(length) ?? new float[length];
 
     /// <summary>Idempotent: releasing twice would hand a second caller into inference alongside the first.</summary>
     public void Dispose() => Interlocked.Exchange(ref _release, null)?.Invoke();

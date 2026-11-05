@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 8 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 9 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -819,6 +819,15 @@ tool.
   18.9 at 4.0 M hidden, 17.6 at 3.9 M after showing, 943 while it shows (the probe checks it still runs).
   `StyleAnimationMarkupTests` fails an infinite style animation whose selector does not say `[IsVisible=True]` (the old
   bar's `Rectangle`); it is the only one in the app's own markup.
+- Done since batch 1 (2026-11-05): **detection's input tensor is kept**. A throwaway test ran `DetectText` on 1920x1080
+  frames of the user's recordings (read-only, the installed detector from `D:\GimmeCapture_win-x64\AI`): 10.78 MB
+  allocated a scan, all of it the 1x3x736x1280 input, a gen2 collection every second or third scan, 154-190 ms. The
+  input is now a buffer `OcrRuntimeService` keeps while the detector is loaded and drops with it, handed out through
+  `OcrSessionUse.DetectionInput` (one inference at a time holds the scope): 0.00 MB a scan after the first, no gen2,
+  152-173 ms, the boxes identical. `OcrRuntimeServiceTests.DetectionsInput_IsOneBufferKeptWhileLoaded_AndGoesWithTheUnload`.
+  Measured and left in the same round: a drag-select's pointer move costs the overlay's view model 15-19 us and 1.4 KB
+  (five changes a move, with a subscriber reading the 28 hotkeys as the keyboard filter does), about 0.2% of a core at
+  125 moves a second, so neither the filter's rebuild nor `ToolbarMaxWidth`'s notification is worth a change.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1127,7 +1136,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   matters with several OCR languages installed, as the user has (Auto, with Simplified and Traditional Chinese). The
   detector keeps its verdict for one overlay on purpose: kept app-wide, a capture in the other script (a Simplified
   Chinese page after Traditional ones) would be read with the wrong model until something re-probes.
-- **11 MB input tensor allocated per scan** (S). `PaddleOCREngine.cs:78`. Reuse belongs in `OcrRuntimeService`.
 - **Two resizes per OCR search** (S). The search copies the grab to 1600 px (Mitchell, now on the pool: Status), then
   `DetectText` resizes again to 1280. One would do, but it changes what the detector sees: compare the boxes found on
   real captures first.
@@ -1223,8 +1231,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   when nothing scrolls (`ScrollingManual.cs:304-309`). Carry signatures in rented buffers, skip unchanged frames.
 - **Freezing mid-session after entering drawing mode live keeps the live snapshot** (S). Needs
   `SnipWindowViewModel.Capture.cs` (left from batch 1).
-- **Small ones**: `ToolbarMaxWidth` raised on every pointer move (`Selection.AIScan.cs:852`, `State.cs:812`); the key
-  filter rebuilds a 28-field record on every view-model PropertyChanged (`SnipWindow.Win32.cs:148,227`).
 
 ### Idle, start-up and memory
 

@@ -55,6 +55,10 @@
   a scan or a translation runs, kept its animation going hidden from the moment the overlay opened: the overlay's
   interface thread woke about 580 times a second instead of 19, at ten times the processor, for as long as it was open.
   It now animates only while it shows.
+- **The capture overlay's text scan no longer sets aside 11 MB each time.** The picture handed to the text detector,
+  10.8 MB for a 1920x1080 screen, was made anew for every scan and thrown away after it, and a full clean-up of the
+  app's memory followed about every second scan. It is now kept while the detector stays loaded: scans after the first
+  set aside nothing, and the boxes found are the same.
 
 ### 🖼️ Interface
 

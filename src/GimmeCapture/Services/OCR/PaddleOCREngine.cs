@@ -94,7 +94,10 @@ public class PaddleOCREngine : IOCREngine
 
         var (targetWidth, targetHeight) = DetectionInputSize(bitmap.Width, bitmap.Height);
         using var resized = bitmap.Resize(new SKImageInfo(targetWidth, targetHeight), SKSamplingOptions.Default);
-        var input = new DenseTensor<float>(new[] { 1, 3, targetHeight, targetWidth });
+        // Every element is written below, so the runtime's kept buffer needs no clearing.
+        int inputLength = 3 * targetHeight * targetWidth;
+        var input = new DenseTensor<float>(
+            use.DetectionInput(inputLength).AsMemory(0, inputLength), new[] { 1, 3, targetHeight, targetWidth });
         float[] mean = { 0.485f, 0.456f, 0.406f };
         float[] std = { 0.229f, 0.224f, 0.225f };
         FillDetectionTensor(resized, input, mean, std);
