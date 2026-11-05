@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using FFmpeg.AutoGen;
@@ -11,10 +13,10 @@ internal static class LibavGifTranscoder
 {
     /// <summary>
     /// The part of <see cref="TranscodeToGif"/>'s progress the palette pass covers; the encode pass covers the rest.
-    /// Both decode and scale the whole clip, but only the encode dithers and compresses it: on a screen recording at
-    /// Medium the palette pass takes about 30% of the time.
+    /// Both decode and scale the whole clip, and the encode also dithers and compresses it, on several cores since the
+    /// dithering is spread over them (PaletteMapper): on screen recordings at Medium each pass takes about half the time.
     /// </summary>
-    internal const double PalettePassShare = 0.3;
+    internal const double PalettePassShare = 0.5;
 
     /// <summary>
     /// Quality → (fps, max output width; 0 = source width) ladder, the single home for the numbers that
@@ -32,7 +34,8 @@ internal static class LibavGifTranscoder
     /// much better color, and falls back to the single-pass RGB8 path if the filters are unavailable or fail — so
     /// GIF export never regresses. <paramref name="progress"/> gets 0..1 across both passes. Cancelling throws
     /// <see cref="OperationCanceledException"/>, and an export that does not finish deletes the GIF it started. While
-    /// <paramref name="pauseGate"/> is reset, the transcode waits before its next packet.
+    /// <paramref name="pauseGate"/> is reset, the transcode waits before its next packet. <paramref name="mapThreads"/>
+    /// is how many threads map frames to the palette, half the processor's by default; the GIF is the same either way.
     /// </summary>
     public static void TranscodeToGif(
         string inputPath,
@@ -42,15 +45,20 @@ internal static class LibavGifTranscoder
         string paletteuseArgs = "dither=sierra2_4a",
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default,
-        ManualResetEventSlim? pauseGate = null)
+        ManualResetEventSlim? pauseGate = null,
+        int mapThreads = 0)
     {
         FFmpegRuntime.EnsureInitialized();
         cancellationToken.ThrowIfCancellationRequested();
         var reporter = new GifProgress(progress);
+        // With a diff_mode, paletteuse maps each frame from the one before it as well: one thread, then.
+        int threads = paletteuseArgs.Contains("diff_mode", StringComparison.OrdinalIgnoreCase)
+            ? 1
+            : mapThreads > 0 ? mapThreads : Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
         try
         {
             TranscodeToGifWithPalette(
-                inputPath, outputPath, targetFps, maxWidth, paletteuseArgs, reporter, pauseGate, cancellationToken);
+                inputPath, outputPath, targetFps, maxWidth, paletteuseArgs, reporter, pauseGate, cancellationToken, threads);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -99,7 +107,8 @@ internal static class LibavGifTranscoder
     // whole clip, and paletteuse cannot map a frame without it, so one graph feeding both (split) held every frame of
     // the clip in memory until the end: over 1 GB a minute at Medium, about 12 GB a minute of 1080p at High. Here the
     // first pass feeds palettegen alone, which keeps a color histogram and frees each frame as it counts it; the
-    // second decodes the clip again and maps each frame to PAL8 for the encoder as soon as it arrives.
+    // second decodes the clip again and maps each frame to PAL8 for the encoder as soon as it arrives, on
+    // `mapThreads` threads (PaletteMapper).
     private static unsafe void TranscodeToGifWithPalette(
         string inputPath,
         string outputPath,
@@ -108,7 +117,8 @@ internal static class LibavGifTranscoder
         string paletteuseArgs,
         GifProgress progress,
         ManualResetEventSlim? pauseGate,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int mapThreads)
     {
         AVFilter* bufferF = ffmpeg.avfilter_get_by_name("buffer");
         AVFilter* palettegenF = ffmpeg.avfilter_get_by_name("palettegen");
@@ -120,9 +130,9 @@ internal static class LibavGifTranscoder
         }
 
         AVFilterGraph* paletteGraph = null;
-        AVFilterGraph* encodeGraph = null;
+        PaletteMapper? mapper = null;
         AVFrame* frame = null;
-        AVFrame* pulled = null; // what the sinks give: the palette after the first pass, then each mapped frame
+        AVFrame* pulled = null; // what palettegen's sink gives: the palette after the first pass
         try
         {
             frame = ffmpeg.av_frame_alloc();
@@ -135,9 +145,6 @@ internal static class LibavGifTranscoder
             int width;
             int height;
             int fps;
-            AVFilterContext* encodeSrc;
-            AVFilterContext* paletteSrc;
-            AVFilterContext* encodeSink;
             using (var firstPass = new GifFrameSource(
                 inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB24, evenSize: true))
             {
@@ -156,24 +163,17 @@ internal static class LibavGifTranscoder
                 ThrowIfErr(ffmpeg.avfilter_link(pgCtx, 0, paletteSink, 0), "gifp_link_pg_sink");
                 ThrowIfErr(ffmpeg.avfilter_graph_config(paletteGraph, null), "gifp_graph_config");
 
-                // Pass 2 graph: frames on paletteuse's first input, the palette on its second. Built before the
-                // first pass so that a filter that cannot be set up (bad paletteuse args) falls back to RGB8
-                // before the clip has been decoded at all. The palette input is described exactly as palettegen's
-                // output (size, format, color properties), so its frame goes in as it is, without a libav warning.
+                // Pass 2 graphs, one a mapping thread: frames on paletteuse's first input, the palette on its second.
+                // Built before the first pass so that a filter that cannot be set up (bad paletteuse args) falls back
+                // to RGB8 before the clip has been decoded at all. The palette input is described exactly as
+                // palettegen's output (size, format, color properties), so its frame goes in as it is, without a
+                // libav warning.
                 string paletteArgs =
                     $"video_size={ffmpeg.av_buffersink_get_w(paletteSink)}x{ffmpeg.av_buffersink_get_h(paletteSink)}" +
                     $":pix_fmt={ffmpeg.av_buffersink_get_format(paletteSink)}:time_base=1/{fps}:pixel_aspect=1/1" +
                     $":colorspace={(int)ffmpeg.av_buffersink_get_colorspace(paletteSink)}" +
                     $":range={(int)ffmpeg.av_buffersink_get_color_range(paletteSink)}";
-                encodeGraph = AllocGraph();
-                encodeSrc = CreateFilter(encodeGraph, bufferF, "in", frameArgs, "gifp_src2");
-                paletteSrc = CreateFilter(encodeGraph, bufferF, "palette", paletteArgs, "gifp_palette_src");
-                AVFilterContext* puCtx = CreateFilter(encodeGraph, paletteuseF, "pu", paletteuseArgs, "gifp_pu");
-                encodeSink = CreateFilter(encodeGraph, sinkF, "out", null, "gifp_sink2");
-                ThrowIfErr(ffmpeg.avfilter_link(encodeSrc, 0, puCtx, 0), "gifp_link_src_pu");     // frames -> paletteuse in0
-                ThrowIfErr(ffmpeg.avfilter_link(paletteSrc, 0, puCtx, 1), "gifp_link_palette_pu"); // palette -> paletteuse in1
-                ThrowIfErr(ffmpeg.avfilter_link(puCtx, 0, encodeSink, 0), "gifp_link_pu_sink");
-                ThrowIfErr(ffmpeg.avfilter_graph_config(encodeGraph, null), "gifp_graph2_config");
+                mapper = new PaletteMapper(mapThreads, frameArgs, paletteArgs, paletteuseArgs);
 
                 while (firstPass.NextFrame(frame, pauseGate, cancellationToken))
                 {
@@ -194,34 +194,311 @@ internal static class LibavGifTranscoder
 
             ffmpeg.avfilter_graph_free(&paletteGraph); // drops the histogram before the second decode
 
-            // paletteuse waits for every input to have its next frame or to have ended, so the palette input is
-            // closed right after its one frame: from then on it holds the palette for the whole clip and paletteuse
-            // maps each frame the moment it arrives.
             pulled->pts = 0; // the palette applies from the first frame on
-            ThrowIfErr(ffmpeg.av_buffersrc_add_frame(paletteSrc, pulled), "gifp_palette_push"); // consumes the palette
-            ThrowIfErr(ffmpeg.av_buffersrc_add_frame(paletteSrc, null), "gifp_palette_eof");
+            mapper.SetPalette(pulled);
 
             using var secondPass = new GifFrameSource(
                 inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB24, evenSize: true);
             using var writer = new GifWriter(outputPath, width, height, fps, AVPixelFormat.AV_PIX_FMT_PAL8);
+            mapper.Start();
             while (secondPass.NextFrame(frame, pauseGate, cancellationToken))
             {
-                ThrowIfErr(ffmpeg.av_buffersrc_add_frame(encodeSrc, frame), "gifp_src2_push"); // consumes frame
-                EncodeMapped(encodeSink, pulled, writer);
+                mapper.Submit(frame, writer, cancellationToken); // takes the frame's picture
+                mapper.WriteMapped(writer, waitForAll: false, cancellationToken);
                 progress.Report(PalettePassShare, 1 - PalettePassShare, secondPass.Progress);
             }
 
-            ThrowIfErr(ffmpeg.av_buffersrc_add_frame(encodeSrc, null), "gifp_src2_eof");
-            EncodeMapped(encodeSink, pulled, writer);
+            mapper.WriteMapped(writer, waitForAll: true, cancellationToken);
             writer.Finish();
             progress.Report(0, 1, 1);
         }
         finally
         {
+            mapper?.Dispose();
             if (frame != null) ffmpeg.av_frame_free(&frame);
             if (pulled != null) ffmpeg.av_frame_free(&pulled);
             if (paletteGraph != null) ffmpeg.avfilter_graph_free(&paletteGraph);
-            if (encodeGraph != null) ffmpeg.avfilter_graph_free(&encodeGraph);
+        }
+    }
+
+    // Maps the second pass's frames to the palette on a few threads, each with a paletteuse graph of its own, and hands
+    // them to the writer in order. Without diff_mode, paletteuse maps a frame from that frame alone, so this writes the
+    // same GIF, byte for byte, as one graph mapping every frame in turn: that dithering ran on one core and took most of
+    // an export, 10 of the 18 s a 34 s 1450x900 recording took at Medium. One thread hands the frames in and writes them
+    // out, so a few at most are on their way (two a mapping thread) and memory stays as it was: when that many are, it
+    // waits for the oldest and writes it before it hands in the next.
+    private sealed unsafe class PaletteMapper : IDisposable
+    {
+        private readonly AVFilterGraph*[] _graphs;
+        private readonly AVFilterContext*[] _frameSources;
+        private readonly AVFilterContext*[] _paletteSources;
+        private readonly AVFilterContext*[] _sinks;
+        private readonly Thread[] _threads;
+        private readonly BlockingCollection<(long Index, IntPtr Frame)> _queue = new();
+        private readonly Dictionary<long, IntPtr> _mapped = new(); // under _gate
+        private readonly object _gate = new();
+        private readonly int _capacity;
+        private Exception? _failure; // under _gate
+        private volatile bool _stopping;
+        private long _submitted;
+        private long _written;
+        private bool _started;
+
+        public PaletteMapper(int threads, string frameArgs, string paletteArgs, string paletteuseArgs)
+        {
+            AVFilter* bufferF = ffmpeg.avfilter_get_by_name("buffer");
+            AVFilter* paletteuseF = ffmpeg.avfilter_get_by_name("paletteuse");
+            AVFilter* sinkF = ffmpeg.avfilter_get_by_name("buffersink");
+            int count = Math.Max(1, threads);
+            _graphs = new AVFilterGraph*[count];
+            _frameSources = new AVFilterContext*[count];
+            _paletteSources = new AVFilterContext*[count];
+            _sinks = new AVFilterContext*[count];
+            _threads = new Thread[count];
+            _capacity = count * 2;
+            try
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    AVFilterGraph* graph = AllocGraph();
+                    _graphs[i] = graph;
+                    _frameSources[i] = CreateFilter(graph, bufferF, "in", frameArgs, "gifp_src2");
+                    _paletteSources[i] = CreateFilter(graph, bufferF, "palette", paletteArgs, "gifp_palette_src");
+                    AVFilterContext* pu = CreateFilter(graph, paletteuseF, "pu", paletteuseArgs, "gifp_pu");
+                    _sinks[i] = CreateFilter(graph, sinkF, "out", null, "gifp_sink2");
+                    ThrowIfErr(ffmpeg.avfilter_link(_frameSources[i], 0, pu, 0), "gifp_link_src_pu");     // frames -> in0
+                    ThrowIfErr(ffmpeg.avfilter_link(_paletteSources[i], 0, pu, 1), "gifp_link_palette_pu"); // palette -> in1
+                    ThrowIfErr(ffmpeg.avfilter_link(pu, 0, _sinks[i], 0), "gifp_link_pu_sink");
+                    ThrowIfErr(ffmpeg.avfilter_graph_config(graph, null), "gifp_graph2_config");
+                }
+            }
+            catch
+            {
+                Dispose();
+                throw;
+            }
+        }
+
+        // paletteuse waits for every input to have its next frame or to have ended, so each graph's palette input is
+        // closed right after its one frame: from then on it holds the palette for the whole clip and paletteuse maps
+        // each frame the moment it arrives.
+        public void SetPalette(AVFrame* palette)
+        {
+            for (int i = 0; i < _graphs.Length; i++)
+            {
+                AVFrame* copy = ffmpeg.av_frame_clone(palette);
+                if (copy == null)
+                {
+                    throw new OutOfMemoryException("gifp_palette_clone");
+                }
+
+                int pushed = ffmpeg.av_buffersrc_add_frame(_paletteSources[i], copy); // takes the copy's palette
+                ffmpeg.av_frame_free(&copy);
+                ThrowIfErr(pushed, "gifp_palette_push");
+                ThrowIfErr(ffmpeg.av_buffersrc_add_frame(_paletteSources[i], null), "gifp_palette_eof");
+            }
+        }
+
+        public void Start()
+        {
+            for (int i = 0; i < _threads.Length; i++)
+            {
+                int graph = i;
+                _threads[i] = new Thread(() => Map(graph)) { IsBackground = true, Name = "GIF palette map" };
+                _threads[i].Start();
+            }
+
+            _started = true;
+        }
+
+        // Takes the picture of `frame` (leaving it empty) for the next mapping thread free; with as many frames on
+        // their way as it allows, it first waits for the oldest and writes it.
+        public void Submit(AVFrame* frame, GifWriter writer, CancellationToken cancellationToken)
+        {
+            while (_submitted - _written >= _capacity)
+            {
+                WriteNext(writer, wait: true, cancellationToken);
+            }
+
+            ThrowIfFailed();
+            AVFrame* job = ffmpeg.av_frame_alloc();
+            if (job == null)
+            {
+                throw new OutOfMemoryException("gifp_job_alloc");
+            }
+
+            ffmpeg.av_frame_move_ref(job, frame);
+            try
+            {
+                _queue.Add((_submitted, (IntPtr)job), cancellationToken);
+            }
+            catch
+            {
+                ffmpeg.av_frame_free(&job); // cancelled: never queued, so no thread frees it
+                throw;
+            }
+
+            _submitted++;
+        }
+
+        // Writes the frames mapped so far, in order; with `waitForAll`, every frame submitted.
+        public void WriteMapped(GifWriter writer, bool waitForAll, CancellationToken cancellationToken)
+        {
+            if (waitForAll)
+            {
+                _queue.CompleteAdding();
+            }
+
+            while (_written < _submitted && WriteNext(writer, waitForAll, cancellationToken))
+            {
+            }
+        }
+
+        // Writes the oldest frame on its way once it is mapped: false when it is not yet and `wait` is false.
+        private bool WriteNext(GifWriter writer, bool wait, CancellationToken cancellationToken)
+        {
+            AVFrame* mapped;
+            lock (_gate)
+            {
+                while (true)
+                {
+                    if (_failure != null)
+                    {
+                        throw new InvalidOperationException("Mapping a GIF frame to its palette failed.", _failure);
+                    }
+
+                    if (_mapped.Remove(_written, out IntPtr ready))
+                    {
+                        mapped = (AVFrame*)ready;
+                        break;
+                    }
+
+                    if (!wait)
+                    {
+                        return false;
+                    }
+
+                    cancellationToken.ThrowIfCancellationRequested();
+                    Monitor.Wait(_gate, 50);
+                }
+            }
+
+            try
+            {
+                writer.Write(mapped);
+            }
+            finally
+            {
+                ffmpeg.av_frame_free(&mapped);
+                _written++;
+            }
+
+            return true;
+        }
+
+        // A mapping thread: each frame through this thread's own graph, one frame out for each frame in.
+        private void Map(int graph)
+        {
+            AVFrame* mapped = null;
+            try
+            {
+                foreach (var (index, pointer) in _queue.GetConsumingEnumerable())
+                {
+                    AVFrame* frame = (AVFrame*)pointer;
+                    if (_stopping || Volatile.Read(ref _failure) != null)
+                    {
+                        ffmpeg.av_frame_free(&frame);
+                        continue;
+                    }
+
+                    int pushed = ffmpeg.av_buffersrc_add_frame(_frameSources[graph], frame); // takes its picture
+                    ffmpeg.av_frame_free(&frame);
+                    ThrowIfErr(pushed, "gifp_src2_push");
+                    mapped = ffmpeg.av_frame_alloc();
+                    if (mapped == null)
+                    {
+                        throw new OutOfMemoryException("gifp_mapped_alloc");
+                    }
+
+                    ThrowIfErr(ffmpeg.av_buffersink_get_frame(_sinks[graph], mapped), "gifp_sink_pull");
+                    lock (_gate)
+                    {
+                        _mapped[index] = (IntPtr)mapped;
+                        Monitor.PulseAll(_gate);
+                    }
+
+                    mapped = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                lock (_gate)
+                {
+                    _failure ??= ex;
+                    Monitor.PulseAll(_gate);
+                }
+            }
+            finally
+            {
+                if (mapped != null)
+                {
+                    ffmpeg.av_frame_free(&mapped);
+                }
+            }
+        }
+
+        private void ThrowIfFailed()
+        {
+            lock (_gate)
+            {
+                if (_failure != null)
+                {
+                    throw new InvalidOperationException("Mapping a GIF frame to its palette failed.", _failure);
+                }
+            }
+        }
+
+        // Stops the threads, then frees whatever frames are left and the graphs: a cancelled or failed export too.
+        public void Dispose()
+        {
+            _stopping = true; // what is still queued is freed, not mapped
+            if (!_queue.IsAddingCompleted)
+            {
+                _queue.CompleteAdding();
+            }
+
+            if (_started)
+            {
+                foreach (Thread thread in _threads)
+                {
+                    thread?.Join();
+                }
+            }
+
+            while (_queue.TryTake(out var left))
+            {
+                AVFrame* frame = (AVFrame*)left.Frame;
+                ffmpeg.av_frame_free(&frame);
+            }
+
+            foreach (IntPtr left in _mapped.Values)
+            {
+                AVFrame* frame = (AVFrame*)left;
+                ffmpeg.av_frame_free(&frame);
+            }
+
+            _mapped.Clear();
+            for (int i = 0; i < _graphs.Length; i++)
+            {
+                AVFilterGraph* graph = _graphs[i];
+                if (graph != null)
+                {
+                    ffmpeg.avfilter_graph_free(&graph);
+                    _graphs[i] = null;
+                }
+            }
+
+            _queue.Dispose();
         }
     }
 
@@ -238,23 +515,6 @@ internal static class LibavGifTranscoder
         if (got != ffmpeg.AVERROR(11))
         {
             ThrowIfErr(got, "gifp_palette_run");
-        }
-    }
-
-    // Encodes every frame paletteuse has mapped so far.
-    private static unsafe void EncodeMapped(AVFilterContext* encodeSink, AVFrame* mapped, GifWriter writer)
-    {
-        while (true)
-        {
-            int got = ffmpeg.av_buffersink_get_frame(encodeSink, mapped);
-            if (got == ffmpeg.AVERROR_EOF || got == ffmpeg.AVERROR(11))
-            {
-                return;
-            }
-
-            ThrowIfErr(got, "gifp_sink_pull");
-            writer.Write(mapped);
-            ffmpeg.av_frame_unref(mapped);
         }
     }
 

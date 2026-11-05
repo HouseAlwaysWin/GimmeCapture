@@ -124,6 +124,26 @@ public sealed class LibavGifTranscoderTests : IDisposable
         Assert.False(File.Exists(gif));
     }
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(5)]
+    public void MappedOnSeveralThreads_TheGifIsTheSameByteForByte(int threads)
+    {
+        // Thousands of colours, so the palette's 256 are dithered everywhere: each frame maps only from itself.
+        string clip = WriteColourClip();
+        string one = Path.Combine(_dir, "one.gif");
+        string several = Path.Combine(_dir, "several.gif");
+
+        LibavGifTranscoder.TranscodeToGif(clip, one, GifFps, maxWidth: 0, mapThreads: 1);
+        LibavGifTranscoder.TranscodeToGif(clip, several, GifFps, maxWidth: 0, mapThreads: threads);
+
+        byte[] expected = File.ReadAllBytes(one);
+        Assert.True(expected.Length > 100_000, $"the GIF is {expected.Length} bytes: too little dithered to tell");
+        Assert.Equal(expected, File.ReadAllBytes(several));
+        using SKCodec codec = OpenGif(several);
+        Assert.Equal(GifFrames / 2, codec.FrameCount);
+    }
+
     [Fact]
     public void WhenThePaletteFiltersCannotBeSetUp_TheFixedPaletteStillMakesTheGif()
     {
@@ -148,6 +168,44 @@ public sealed class LibavGifTranscoderTests : IDisposable
     {
         var random = new Random(20261029);
         return WriteClip("noise.y4m", 320, 240, (_, _, _) => (byte)(20 + (14 * random.Next(16))));
+    }
+
+    // Two seconds of 4:2:0 at 30 fps in thousands of colours that shift every frame.
+    private string WriteColourClip()
+    {
+        const int width = 320, height = 240, frames = ClipFrames / 2;
+        string path = Path.Combine(_dir, "colour.y4m");
+        using FileStream file = File.Create(path);
+        file.Write(Encoding.ASCII.GetBytes($"YUV4MPEG2 W{width} H{height} F30:1 Ip A1:1 C420jpeg\n"));
+        var luma = new byte[width * height];
+        var chroma = new byte[(width / 2) * (height / 2)];
+        for (int i = 0; i < frames; i++)
+        {
+            file.Write(Encoding.ASCII.GetBytes("FRAME\n"));
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    luma[(y * width) + x] = (byte)((x * 3) + (y * 5) + (i * 7));
+                }
+            }
+
+            file.Write(luma);
+            for (int plane = 0; plane < 2; plane++)
+            {
+                for (int y = 0; y < height / 2; y++)
+                {
+                    for (int x = 0; x < width / 2; x++)
+                    {
+                        chroma[(y * (width / 2)) + x] = (byte)(plane == 0 ? (x * 2) + (i * 11) : (y * 3) + (i * 5));
+                    }
+                }
+
+                file.Write(chroma);
+            }
+        }
+
+        return path;
     }
 
     // A ClipFrames-long 4:2:0 clip at 30 fps without colour; frame i's luma at (x, y) is lumaAt(i, x, y).

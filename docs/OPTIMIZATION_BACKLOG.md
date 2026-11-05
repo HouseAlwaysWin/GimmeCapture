@@ -18,7 +18,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.72.1, `## Unreleased` holds 4 entries (2026-11-05).
+- Since v0.72.1, `## Unreleased` holds 5 entries (2026-11-05).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs 0.72.1+d33e5172 (2026-11-04): builds copied in by hand
   since 2026-11-02, the sign-in launcher included, which its Run value starts, and the settings carried to each new
   version's folder as the updater does. An update its start-up check finds in a launch to the tray is announced with a
@@ -754,6 +754,22 @@ tool.
   the right half of a 1134-pixel recording came out as pixels 454-908; it maps onto the decode size now, the file's own
   (`FloatingVideoCropTests`), and a copied clip goes to History with its pixels too. Not looked at: an image pin with its border shown has the same layout (`FloatingImageWindow`
   draws its picture inside `MainBorder` too); the user hides the snip pins' border, so theirs are drawn at their size.
+- Done since batch 1 (2026-11-05, "繼續下一項", chosen by the user's use: they copy pinned recordings as GIF, 18 MB
+  ones on 11-03): **a GIF's dithering ran on one core**. A throwaway test (not committed) ran
+  `TranscodeGifWebmAsync`/`LibavGifTranscoder.TranscodeToGif` at Medium (15 fps, 720 wide, sierra2_4a) on the user's
+  recordings, read-only: 2.4 s for the 6 s 1134x624 one, 15.4 s for the 34 s 1450x900 HEVC one, the palette pass
+  3.9 s of that and the map/encode pass 14.5; with `dither=none` the second pass took 4.0 s, so paletteuse's error
+  diffusion was ~10.5 s, single-threaded. Without `diff_mode`, paletteuse maps a frame from that frame alone (its colour
+  cache changes no result), so `PaletteMapper` maps the second pass's frames on `mapThreads` threads (half the
+  processor's, 8 at most), each with a paletteuse graph of its own, the decoding thread handing frames in (two a thread
+  on their way at most) and writing them in order; a `diff_mode` forces one thread. ABBA on the laptop, one thread
+  against the default (6): 23.8/24.0 s against 10.7/10.8 for the HEVC clip, 3.1/3.3 against 1.7/1.7 for the 1134x624
+  one, 4.4/4.6 against 2.0/2.0 for a 432x766 one, the same sizes; the process's cycles rose about 30% (cores sharing
+  turbo and SMT), the wall time halved. Each pass now takes about half, so `PalettePassShare` is 0.5. The first version
+  deadlocked: the decoding thread waited for room only the writer frees, and it is the writer.
+  `LibavGifTranscoderTests.MappedOnSeveralThreads_TheGifIsTheSameByteForByte` (2 and 5 threads, a clip of thousands
+  of colours so the dithering works everywhere). Left: both passes decode and scale on one thread (sws is the
+  legacy single-threaded call); a short clip could keep pass 1's frames for pass 2.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -997,6 +1013,9 @@ These were covered by unit tests only; check them in the real app before a relea
   comes back in step after a short restart), turn the loop off (it stops at the end), trim it in the timeline (it loops
   the trimmed stretch), play it at 1.5× (pass by pass, as before). A recording whose sound runs past its picture
   should loop where the picture ends, without holding its last frame.
+- **A pinned recording copied as a GIF**: copy one of your recordings as GIF from its pin, a short one and a long one.
+  It should take about half as long as before and look the same (the file is the same). A GIF export from the Compress
+  tab: its bar should fill evenly, about half way when the palette is done.
 - **A pinned recording, pixel for pixel**: at 125%, record a region with small text in it and pin it. The pin should
   look as sharp as the screen did (it was soft before), the red border hugging the picture's outside where the
   capture overlay drew it round the selection. Resize the pin: smoothed as before. Move it to a screen at another
@@ -1118,6 +1137,12 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   2026-11-03, 13-44 on the CPU), and so does every piece of a timeline with cuts or speeds, whose sound restarts per
   piece. Seeking inside the kept decode would need the sound clock's ticket to change mid-run
   (`PlaybackMediaClock` follows one); a paused pin's seeks (single-frame passes, no sound) would gain on their own.
+- **A pin's GIF copy dithers with sierra2_4a at every quality** (S, the user's call: look and size).
+  `FloatingVideoViewModel.TranscodeGifWebmAsync` passes no `paletteuseArgs`, so the default; a GIF recording
+  (`RecordingService.FinalizeAsGifAsync`) uses bayer:bayer_scale=3 at Medium and none at Low. Measured 2026-11-05 on the
+  user's 34 s 1450x900 recording at Medium, one thread: sierra2_4a 18.4 s and 6.5 MB, bayer:bayer_scale=5 8.7 s and
+  3.3 MB, none 7.8 s and 3.3 MB; `diff_mode=rectangle` (map only what changed) halved sierra's time on that clip and did
+  nothing for a scrolling 432x766 one, and would need the mapping back on one thread (it maps from the frame before).
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done

@@ -29,6 +29,12 @@
   closed. Once the pictures kept pass 256 MB the oldest such steps now go, the newest always kept: 8 steps of a 4K
   picture, 18 of 2560x1440, still all 30 of 1080p. Steps that keep no picture, such as strokes and shapes, are as
   before.
+- **Copying a pinned recording as a GIF takes about half as long.** A GIF has 256 colours, and every frame is mapped
+  onto them, each pixel's error spread onto its neighbours: that ran on one core and took about three quarters of the
+  time. Frames are now mapped on several cores at once and written in order, so the GIF is the same, byte for byte: at
+  the Medium quality, 10.7 s instead of 24 for a 34-second 1450x900 recording, 1.7 s instead of 3.2 for a 6-second
+  1134x624 one. GIF exports from the Compress tab and GIF recordings are made the same way, and the Compress tab's bar
+  for one now fills evenly.
 
 ### 🖼️ Interface
 
