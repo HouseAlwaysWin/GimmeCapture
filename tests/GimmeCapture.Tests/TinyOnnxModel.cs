@@ -35,6 +35,23 @@ internal static class TinyOnnxModel
             Message(7, graph));
     }
 
+    /// <summary>y = x + c: x and y float[4], c an initializer, so two models can answer differently.</summary>
+    public static void WriteAdd(string path, float[] c)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        byte[] constants = new byte[c.Length * 4];
+        System.Buffer.BlockCopy(c, 0, constants, 0, constants.Length);
+        byte[] type = Message(1, Join(Number(1, 1 /* FLOAT */), Message(2, Message(1, Number(1, c.Length)))));
+        byte[] initializer = Join(Number(1, c.Length), Number(2, 1 /* FLOAT */), Text(8, "c"), Message(9, constants));
+        byte[] graph = Join(
+            Message(1, Join(Text(1, "x"), Text(1, "c"), Text(2, "y"), Text(4, "Add"))),
+            Text(2, "add"),
+            Message(5, initializer),
+            Message(11, Join(Text(1, "x"), Message(2, type))),
+            Message(12, Join(Text(1, "y"), Message(2, type))));
+        File.WriteAllBytes(path, Join(Number(1, 7), Message(8, Number(2, 13)), Message(7, graph)));
+    }
+
     private static byte[] Number(int field, long value) => Join(Varint((ulong)(field << 3)), Varint((ulong)value));
 
     private static byte[] Text(int field, string value) => Message(field, Encoding.UTF8.GetBytes(value));

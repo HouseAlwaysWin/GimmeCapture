@@ -28,6 +28,7 @@ public sealed class OcrRuntimeServiceTests : IDisposable
     private readonly ITestOutputHelper _output;
     private readonly string _baseDir;
     private readonly AIPathService _pathService;
+    private readonly AIResourceService _aiResources;
     private readonly OcrRuntimeService _sut;
 
     public OcrRuntimeServiceTests(ITestOutputHelper output)
@@ -43,6 +44,7 @@ public sealed class OcrRuntimeServiceTests : IDisposable
             settingsService,
             _pathService,
             new AIModelDownloader());
+        _aiResources = aiResourceService;
 
         _sut = new OcrRuntimeService(aiResourceService);
     }
@@ -122,6 +124,45 @@ public sealed class OcrRuntimeServiceTests : IDisposable
         Assert.NotSame(recognition, use.Recognition);
         Assert.Equal(OCRLanguage.Japanese, _sut.LoadedLanguage);
         Assert.Equal("Japanese", use.Dictionary[^1]);
+    }
+
+    [Fact]
+    public async Task TheIdleUnload_SavesOptimizedCopies_WhichTheNextLoadBuildsFrom_AndTheModuleTakesAlong()
+    {
+        // Building a session optimizes its model's graph each time: about 50 ms of each OCR load, saved once a copy of
+        // the optimized graph is there to build from.
+        InstallModels(OCRLanguage.TraditionalChinese);
+        var paths = _pathService.GetOCRPaths(OCRLanguage.TraditionalChinese);
+        using var runtime = new OcrRuntimeService(_aiResources, useOptimizedCopies: true);
+
+        await runtime.EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
+        Assert.Equal(0, runtime.SessionsFromCopies);
+        runtime.UnloadWhenIdle();
+
+        Assert.False(runtime.IsDetectionLoaded);
+        Assert.True(File.Exists(OnnxOptimizedModels.CopyPathFor(paths.Det, OnnxProviderConfigurator.CpuProvider)));
+        Assert.True(File.Exists(OnnxOptimizedModels.CopyPathFor(paths.Rec, OnnxProviderConfigurator.CpuProvider)));
+
+        await runtime.EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
+        Assert.Equal(2, runtime.SessionsFromCopies);
+        Assert.True(runtime.IsLoaded);
+
+        // Removing the module deletes its folder, the copies in it too.
+        Assert.True(_aiResources.RemoveOCRResources());
+        Assert.False(Directory.Exists(Path.GetDirectoryName(paths.Det)));
+    }
+
+    [Fact]
+    public async Task TheDefaultRuntime_LeavesTheModelsFolderAlone()
+    {
+        // Tests point the plain constructor at an install's real models: it must write nothing beside them.
+        InstallModels(OCRLanguage.TraditionalChinese);
+        var paths = _pathService.GetOCRPaths(OCRLanguage.TraditionalChinese);
+
+        await _sut.EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
+        _sut.UnloadWhenIdle();
+
+        Assert.False(Directory.Exists(Path.Combine(Path.GetDirectoryName(paths.Det)!, OnnxOptimizedModels.FolderName)));
     }
 
     // Real, tiny models where the app keeps OCR's: the shared detector, and a recognizer and dictionary per language.
@@ -259,6 +300,87 @@ public sealed class OcrRuntimeServiceTests : IDisposable
         Assert.InRange(detection, long.MinValue, 100 * Mb);
         Assert.InRange(both, long.MinValue, 120 * Mb);
         Assert.InRange(unloaded, long.MinValue, 40 * Mb);
+    }
+
+    /// <summary>
+    /// How long the real models take to load from the files as shipped and from their optimized copies, alternately in
+    /// one process, and whether the boxes found on a 1920x1080 screen of text are the same. Opt-in, naming the AI folder
+    /// of an install with the Traditional Chinese OCR module (<c>AI_MODELS_DIR</c>) and OPTIMIZED_COPY_PROBE=1; the
+    /// models are copied to a folder of the test's own first, so nothing is written beside the install's.
+    /// </summary>
+    [OptInFact(ModelsVariable, "OPTIMIZED_COPY_PROBE=1")]
+    public async Task TheRealModels_LoadFasterFromTheirOptimizedCopies_AndFindTheSameBoxes()
+    {
+        string source = Path.Combine(Environment.GetEnvironmentVariable(ModelsVariable)!, "ocr");
+        string ocr = Path.Combine(_baseDir, "AI", "ocr");
+        Directory.CreateDirectory(ocr);
+        foreach (string name in new[] { "ocr_det.onnx", "ocr_rec_cht.onnx", "ocr_dict_cht.txt" })
+        {
+            File.Copy(Path.Combine(source, name), Path.Combine(ocr, name));
+        }
+
+        var settings = new AppSettingsService(_baseDir);
+        settings.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
+        var aiResources = new AIResourceService(settings, new AIPathService(settings), new AIModelDownloader());
+        using var shipped = new OcrRuntimeService(aiResources);
+        using var copies = new OcrRuntimeService(aiResources, useOptimizedCopies: true);
+        using var screen = new SKBitmap(1920, 1080);
+        using (var canvas = new SKCanvas(screen))
+        using (var paint = new SKPaint { Color = SKColors.Black })
+        using (var font = new SKFont { Size = 18 })
+        {
+            canvas.Clear(SKColors.White);
+            for (int row = 0; row < 24; row++)
+            {
+                canvas.DrawText(new string('設', 3 + row % 11) + " 定已儲存 OK " + row, 40 + (row % 2) * 900, 40 + row * 42, font, paint);
+            }
+        }
+
+        // The app's first load of a run builds from the files and its idle unload saves the copies.
+        await copies.EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
+        copies.UnloadWhenIdle();
+        await shipped.EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
+        shipped.Unload();
+
+        var detection = new Dictionary<bool, List<double>> { [false] = new(), [true] = new() };
+        var both = new Dictionary<bool, List<double>> { [false] = new(), [true] = new() };
+        var boxes = new Dictionary<bool, List<SKRectI>>();
+        for (int round = 0; round < 8; round++)
+        {
+            foreach (bool fromCopies in round % 2 == 0 ? new[] { false, true } : new[] { true, false })
+            {
+                // An engine holds a lease on the runtime, which no unload goes past: each is let go before its unload.
+                var runtime = fromCopies ? copies : shipped;
+                var stopwatch = Stopwatch.StartNew();
+                using (var engine = new PaddleOCREngine(aiResources, settings, runtime))
+                {
+                    await engine.EnsureDetectionLoadedAsync(OCRLanguage.TraditionalChinese);
+                    detection[fromCopies].Add(stopwatch.Elapsed.TotalMilliseconds);
+                    boxes[fromCopies] = engine.DetectText(screen);
+                }
+
+                runtime.Unload();
+                Assert.False(runtime.IsDetectionLoaded);
+                stopwatch.Restart();
+                using (var engine = new PaddleOCREngine(aiResources, settings, runtime))
+                {
+                    await engine.EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
+                    both[fromCopies].Add(stopwatch.Elapsed.TotalMilliseconds);
+                }
+
+                runtime.Unload();
+                Assert.False(runtime.IsDetectionLoaded);
+            }
+        }
+
+        static string Median(List<double> values) => $"{values.OrderBy(v => v).ElementAt(values.Count / 2):0} ms ({values.Min():0}-{values.Max():0})";
+        _output.WriteLine($"Detection loads: from the files {Median(detection[false])}, from the copies {Median(detection[true])}.");
+        _output.WriteLine($"Detection and recognition: from the files {Median(both[false])}, from the copies {Median(both[true])}.");
+        _output.WriteLine($"{boxes[false].Count} boxes from the files, {boxes[true].Count} from the copies; {copies.SessionsFromCopies} sessions from copies.");
+
+        Assert.Equal(boxes[false], boxes[true]);
+        Assert.NotEmpty(boxes[true]);
+        Assert.Equal(8 * 3, copies.SessionsFromCopies);
     }
 
     // Two screens side by side, 3968x1160, with 30 lines of UI text of different lengths.

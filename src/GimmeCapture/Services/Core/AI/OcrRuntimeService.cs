@@ -58,10 +58,31 @@ public sealed class OcrRuntimeService : IDisposable
     // handed only to the one inference running (BeginSessionUse).
     private float[]? _detectionInput;
 
+    // Sessions build from the models' optimized copies (OnnxOptimizedModels), saved by the idle unload for the models
+    // that had none: about 50 ms less each time a session builds.
+    private readonly bool _useOptimizedCopies;
+    private readonly HashSet<string> _modelsWithoutCopies = new(StringComparer.OrdinalIgnoreCase);
+    // Models whose copy could not be saved this run (a full disk, a folder that cannot be written): not tried again.
+    private readonly HashSet<string> _modelsCopyFailed = new(StringComparer.OrdinalIgnoreCase);
+    // Held while copies are saved. A module removal deletes the models' folder after its global unload, which waits here
+    // so that no copy is still being written into it.
+    private readonly object _copyGate = new();
+    private int _sessionsFromCopies;
+
     public OcrRuntimeService(AIResourceService aiResourceService)
+        : this(aiResourceService, useOptimizedCopies: false)
+    {
+    }
+
+    /// <param name="useOptimizedCopies">
+    /// Whether sessions build from the models' optimized copies, saved beside the models while the app is idle. The app's
+    /// runtime does; a test pointed at an install's models leaves that install's folders as they are.
+    /// </param>
+    internal OcrRuntimeService(AIResourceService aiResourceService, bool useOptimizedCopies)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
-        _idleUnload = new IdleReleaseScheduler(UnloadIdleDelay, Unload);
+        _useOptimizedCopies = useOptimizedCopies;
+        _idleUnload = new IdleReleaseScheduler(UnloadIdleDelay, UnloadWhenIdle);
         AIResourceService.RequestGlobalUnload += HandleGlobalUnload;
     }
 
@@ -72,6 +93,9 @@ public sealed class OcrRuntimeService : IDisposable
     public bool IsDetectionLoaded => _detSession != null;
 
     public OCRLanguage? LoadedLanguage => _loadedLanguage;
+
+    /// <summary>How many sessions this runtime has built from optimized copies (<see cref="OnnxOptimizedModels"/>).</summary>
+    internal int SessionsFromCopies => Volatile.Read(ref _sessionsFromCopies);
     public bool HasActiveLeases
     {
         get
@@ -251,15 +275,81 @@ public sealed class OcrRuntimeService : IDisposable
     /// against 95-110; and reading 30 lines took 1.9 s against 0.5, as DirectML set itself up again whenever the width
     /// of the text changed.
     /// </summary>
-    private static InferenceSession CreateSession(string modelPath, string part)
+    private InferenceSession CreateSession(string modelPath, string part)
     {
         var stopwatch = Stopwatch.StartNew();
-        using var options = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL };
-        var session = new InferenceSession(modelPath, options);
+        bool fromCopy = false;
+        InferenceSession session;
+        if (_useOptimizedCopies)
+        {
+            session = OnnxOptimizedModels.CreateSession(
+                modelPath, static () => new SessionOptions(), OnnxProviderConfigurator.CpuProvider, out fromCopy);
+            if (fromCopy)
+            {
+                Interlocked.Increment(ref _sessionsFromCopies);
+            }
+            else
+            {
+                lock (_modelsWithoutCopies)
+                {
+                    if (!_modelsCopyFailed.Contains(modelPath))
+                    {
+                        _modelsWithoutCopies.Add(modelPath);
+                    }
+                }
+            }
+        }
+        else
+        {
+            using var options = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL };
+            session = new InferenceSession(modelPath, options);
+        }
+
         AppLog.Information(
             "OcrRuntime.SessionCreated",
-            $"{part}: {OnnxProviderConfigurator.CpuProvider} in {stopwatch.ElapsedMilliseconds} ms");
+            $"{part}: {OnnxProviderConfigurator.CpuProvider} in {stopwatch.ElapsedMilliseconds} ms"
+            + (fromCopy ? " from its optimized copy" : ""));
         return session;
+    }
+
+    // The idle unload, on the pool. With the sessions gone and the app idle, the copies the next load would build from
+    // are saved: 230-340 ms of the processor for each model, once per model file and ONNX Runtime build.
+    internal void UnloadWhenIdle()
+    {
+        Unload();
+        if (!_useOptimizedCopies || _detSession != null || _recSession != null)
+        {
+            return;
+        }
+
+        lock (_copyGate)
+        {
+            string[] models;
+            lock (_modelsWithoutCopies)
+            {
+                models = [.. _modelsWithoutCopies];
+                _modelsWithoutCopies.Clear();
+            }
+
+            foreach (string model in models)
+            {
+                var stopwatch = Stopwatch.StartNew();
+                const string providers = OnnxProviderConfigurator.CpuProvider;
+                if (OnnxOptimizedModels.EnsureSaved(model, static () => new SessionOptions(), providers))
+                {
+                    AppLog.Information(
+                        "OcrRuntime.OptimizedCopySaved",
+                        $"{Path.GetFileName(model)} in {stopwatch.ElapsedMilliseconds} ms");
+                }
+                else if (OnnxOptimizedModels.CopyPathFor(model, providers) is not { } copy || !File.Exists(copy))
+                {
+                    lock (_modelsWithoutCopies)
+                    {
+                        _modelsCopyFailed.Add(model);
+                    }
+                }
+            }
+        }
     }
 
     public void Unload()
@@ -334,7 +424,18 @@ public sealed class OcrRuntimeService : IDisposable
     }
 
     // AI turned off or a module removed: the user is asking for the memory back.
-    private void HandleGlobalUnload() => ForceUnload();
+    private void HandleGlobalUnload()
+    {
+        ForceUnload();
+        // A module removal deletes the models' folder next: a copy being written into it holds a file open there.
+        lock (_copyGate)
+        {
+            lock (_modelsWithoutCopies)
+            {
+                _modelsWithoutCopies.Clear();
+            }
+        }
+    }
 
     private static List<string> LoadDictionaryWithEncodingFallback(string path)
     {

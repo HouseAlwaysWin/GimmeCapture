@@ -62,7 +62,7 @@ public static class MainWindowViewModelDependenciesFactory
             aiModelCatalog,
             sam2RuntimeService.Value.UnloadModels));
         var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Value.Orchestrator);
-        var ocrRuntimeService = new Lazy<OcrRuntimeService>(() => new OcrRuntimeService(aiResourceService.Value));
+        var ocrRuntimeService = new Lazy<OcrRuntimeService>(() => new OcrRuntimeService(aiResourceService.Value, useOptimizedCopies: true));
         var backgroundRemoval = new Lazy<IBackgroundRemovalService>(() => new BackgroundRemovalService(aiResourceService.Value, aiPathService));
         var translationResultLayer = new TranslationResultLayerService();
 

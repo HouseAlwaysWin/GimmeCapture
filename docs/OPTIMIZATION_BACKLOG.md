@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 10 entries (2026-11-06).
+- Since v0.73.0, `## Unreleased` holds 11 entries (2026-11-06).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.72.1, the release build (`0.72.1+ed421b3d`), which its
   updater put over 0.68.1 on 2026-11-05 at 17:19, with the sign-in launcher its Run value starts. It draws on the GPU:
   its config's `SoftwareRendering` is false, last written at that update, and every start since logs
@@ -1028,6 +1028,24 @@ tool.
   or without the GPU, hidden or closed, with no message posted or sent (a `WH_GETMESSAGE` and `WH_CALLWNDPROC` count),
   then settles; left alone. The window hit test at the screen's corner, where Windows puts the tray host whatever its
   position, goes to the window above it.
+- Done since batch 1 (2026-11-06, "Keep optimizing"): **OCR's models optimized again at every load** (OCR). The user's
+  log: most captures come more than the 2-minute keep-alive after the last (3 of 4 that day), so a scan loads detection
+  again, `SessionCreated` 138-202 ms (387 the first of the day) before `detect=` 218-281. ONNX Runtime optimizes the
+  graph at every build (`ORT_ENABLE_ALL`). Raw sessions on the installed models, ABAB in one process (a throwaway
+  probe): the detector 163-178 ms from the file, 113-118 from a copy saved optimized (`OptimizedModelFilePath`) and
+  loaded with optimization off, 143 from an ORT-format copy (no better), 78-93 from a copy optimized short of the layout
+  passes but 20 ms slower a run; the recognizer 87 against 37; outputs within 1e-5 (the layout reorders sums).
+  `OnnxOptimizedModels` keeps the full copy in `optimized\` beside its model, so it goes with the OCR module's folder,
+  named by a key over the model's path, size and time, the execution providers, the ONNX Runtime build and the
+  processor's instruction sets; a copy that fails to load is deleted and the model loads as before. The app's
+  `OcrRuntimeService` (`useOptimizedCopies`) saves the missing copies at its idle unload, on the pool (230-340 ms each,
+  once per model file and build), and a module removal's global unload waits for a save under way. Through the runtime
+  (`OcrRuntimeServiceTests.TheRealModels_LoadFasterFromTheirOptimizedCopies_AndFindTheSameBoxes`, opt-in, the models
+  copied to a folder of its own, 8 rounds ABAB): detection 106 ms (99-127) against 73 (69-75), detection and recognition
+  207 (182-258) against 116 (105-120), the same 24 boxes. `OnnxOptimizedModelsTests` (a hand-written y = x + c model: a
+  saved copy is what the next session builds from, with the same answer; a bad copy is deleted; a changed model is not
+  served the old copy) and the runtime's `TheIdleUnload_SavesOptimizedCopies_…`, which fail on the old code. Left: the
+  same for U2Net and SAM2 (smart selection's load was 2.7-2.8 s), off the user's usage so far.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

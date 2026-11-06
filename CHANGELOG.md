@@ -65,6 +65,12 @@
   It now checks once a second while none of the app's windows is open, which took that to 21-24 times a second and
   4.2-4.3 M cycles, and a hotkey press or a click on the tray icon has it check at once, so the wait a press meets is
   still measured, now from the press itself.
+- **Text boxes come up sooner on a capture after a pause.** OCR's models leave memory two minutes after their last
+  use, and most captures come later than that, so each loaded them again, and ONNX Runtime optimized their graphs
+  again every time. The app now keeps a copy of each model as ONNX Runtime optimized it, saved while the app is idle
+  after the first load, beside the model (it goes with the OCR module if you remove it), and loads that: the detector
+  in about 73 ms instead of 106 in tests, the detector and the recognizer for copying text in 116 instead of 207, with
+  the same boxes found.
 
 ### 🛡️ Reliability
 

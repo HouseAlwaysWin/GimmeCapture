@@ -223,6 +223,10 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
   `AIModelCatalog`, `AIResourceInstaller`/`ModuleInstallCoordinator`,
   `*RuntimeService`, `ResourceQueueService`. ONNX provider config is centralized
   in `OnnxProviderConfigurator`.
+- OCR's sessions build from copies of the models that ONNX Runtime saved already optimized (`OnnxOptimizedModels`,
+  in an `optimized` folder beside each model, saved at the runtime's idle unload). A copy's name is keyed by the model
+  file, the execution providers, the ONNX Runtime build and the processor: a change to how those sessions are built
+  that alters the graph (another provider, say) must change the `providers` string the runtime passes.
 
 ### UI thread
 - An `async` method runs on its caller's thread until its first real yield, and `ConfigureAwait(false)` does not
