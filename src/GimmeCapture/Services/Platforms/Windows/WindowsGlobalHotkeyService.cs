@@ -881,6 +881,8 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         AppLog.Debug("WindowsGlobalHotkeyService", $"[GlobalHotkey] Triggered ID {id} via {source}");
         WriteDebugLog($"triggered id={id} source={source}");
         PostToUi(() => OnHotkeyPressed?.Invoke(new HotkeyPress(id, pressedAt)), "Hotkey.Callback");
+        // Behind the press, so the stall monitor reads its wait from here even at its slow beat in the tray.
+        UiThreadStallMonitor.NotifyInput();
     }
 
     private void PostToUi(Action action, string operation)

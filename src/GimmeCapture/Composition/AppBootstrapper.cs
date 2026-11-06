@@ -237,6 +237,9 @@ public sealed class AppBootstrapper : IAsyncDisposable
         };
     }
 
+    /// <summary>Whether <paramref name="window"/> is the tray's host (<see cref="CreateTrayHostWindow"/>), which nobody sees.</summary>
+    public bool IsTrayHostWindow(Window window) => ReferenceEquals(window, _trayHostWindow);
+
     public bool RunOnStartup
     {
         get => _settingsService.Settings.RunOnStartup;

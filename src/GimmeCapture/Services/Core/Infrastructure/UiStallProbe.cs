@@ -20,6 +20,9 @@ internal sealed class UiStallProbe
     // The probe whose wait has been written down while it lasted.
     private long _reportedSequence;
 
+    // An input event came while a probe was waiting: one more goes as soon as that one has run.
+    private bool _followUp;
+
     /// <summary>The generation a watchdog starting now posts in, until <see cref="Reset"/>.</summary>
     internal long Generation
     {
@@ -48,6 +51,46 @@ internal sealed class UiStallProbe
             _pendingSequence = ++_lastSequence;
             _posted = now;
             return _pendingSequence;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="TryPost"/> for an input event on its way to the UI thread, a hotkey press: posted behind it, the probe
+    /// waits for what the press sets off as well. When a probe is already waiting, the UI thread runs that one before the
+    /// press, so another is wanted once it has (<see cref="TakeFollowUp"/>).
+    /// </summary>
+    internal long? TryPostForInput(UiThreadSample now, long generation)
+    {
+        lock (_gate)
+        {
+            if (generation != _generation)
+            {
+                return null;
+            }
+
+            if (_pendingSequence != 0)
+            {
+                _followUp = true;
+                return null;
+            }
+
+            _pendingSequence = ++_lastSequence;
+            _posted = now;
+            return _pendingSequence;
+        }
+    }
+
+    /// <summary>
+    /// Whether an input event arrived while the probe that has just run was waiting, once: the UI thread then posts the
+    /// next probe itself, which queues behind the event.
+    /// </summary>
+    internal bool TakeFollowUp()
+    {
+        lock (_gate)
+        {
+            bool followUp = _followUp;
+            _followUp = false;
+            return followUp;
         }
     }
 
@@ -97,6 +140,7 @@ internal sealed class UiStallProbe
         lock (_gate)
         {
             _pendingSequence = 0;
+            _followUp = false;
             _generation++;
         }
     }

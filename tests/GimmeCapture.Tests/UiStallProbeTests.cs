@@ -30,6 +30,47 @@ public sealed class UiStallProbeTests
     }
 
     [Fact]
+    public void APress_PostsAProbeBehindIt()
+    {
+        // In the tray the watchdog beats once a second: the press's own probe reads its wait from the press.
+        var probe = new UiStallProbe();
+        long? sequence = probe.TryPostForInput(At(0), probe.Generation);
+
+        Assert.NotNull(sequence);
+        Assert.Equal(At(0), probe.Complete(sequence!.Value));
+        Assert.False(probe.TakeFollowUp());
+    }
+
+    [Fact]
+    public void APressWhileAProbeWaits_AsksForOneMoreAfterIt()
+    {
+        // The waiting probe runs before the press does, so what the press sets off needs a probe of its own, posted once
+        // the first has run and so behind the press.
+        var probe = new UiStallProbe();
+        long first = Post(probe, 0);
+
+        Assert.Null(probe.TryPostForInput(At(40), probe.Generation));
+        Assert.Equal(At(0), probe.Complete(first));
+        Assert.True(probe.TakeFollowUp());
+        Assert.False(probe.TakeFollowUp());
+        Assert.NotNull(probe.TryPost(At(300), probe.Generation));
+    }
+
+    [Fact]
+    public void APressAfterAStop_PostsNothing()
+    {
+        var probe = new UiStallProbe();
+        long generation = probe.Generation;
+        Post(probe, 0);
+        Assert.Null(probe.TryPostForInput(At(40), generation));
+        probe.Reset();
+
+        Assert.False(probe.TakeFollowUp());
+        Assert.Null(probe.TryPostForInput(At(80), generation));
+        Assert.False(probe.TakeFollowUp());
+    }
+
+    [Fact]
     public void AProbeIsReadOnce()
     {
         var probe = new UiStallProbe();

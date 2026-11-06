@@ -13,12 +13,14 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// nothing happened": WM_HOTKEY and the dispatcher post that follows it queue behind whatever is running, so the
 /// overlay appears only once that finishes. A watchdog thread posts a probe to the UI thread every beat, one at a time,
 /// and a probe waits for the length of the block, minus however much of the block fell before it was posted — so the
-/// reading is short by up to one beat. The beat is kept small for that reason: at one second, a 1.8 s freeze at
-/// recording start was logged as 698 ms, and a freeze just under 1.25 s could go unreported altogether.
+/// reading is short by up to one beat (<see cref="UiStallWatchdog.Beat"/>).
 ///
 /// Until 2026-11 the beat was a 100 ms DispatcherTimer on the UI thread, which came to 80-110 wakeups a second, in the
-/// tray too: nearly all the app's idle wakeups. A probe costs the UI thread about two, as any post from another thread
-/// does, so the monitor now takes about 35 a second, the watchdog's included.
+/// tray too: nearly all the app's idle wakeups. A probe cost the watchdog about two wakeups and the UI thread one or two
+/// more, so at a 100 ms beat the monitor still took 30-45 a second of the app's 55-70 in the tray. It beats once a second
+/// there now (<see cref="UiStallWatchdog.TrayBeat"/>), told by <see cref="SetWindowShown"/>, and what can reach the app
+/// in the tray, a hotkey press or the tray icon, posts a probe as it arrives (<see cref="NotifyInput"/>): behind the
+/// press, it waits for whatever the press waits for, and for what the press sets off.
 ///
 /// Each line also says whether the UI thread was working, waiting or held by the GC meanwhile (see
 /// <see cref="UiStallReport"/>): a 2.69 s stall was once the last line its process wrote, with nothing to say what it
@@ -29,19 +31,22 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// </summary>
 internal static class UiThreadStallMonitor
 {
-    private static readonly TimeSpan Beat = TimeSpan.FromMilliseconds(100);
-
     /// <summary>Below this, a wait is ordinary scheduling noise (a frame, a layout pass) and not worth a line.</summary>
     private static readonly TimeSpan WarnThreshold = TimeSpan.FromMilliseconds(250);
 
     private static readonly UiStallProbe Probe = new();
     private static ThreadCpuClock? _uiThreadCpu;
-    private static ManualResetEventSlim? _watchdogStop;
+    private static Running? _running;
+
+    // Until the app says otherwise, as a window may be shown: the short beat. Kept across a pause.
+    private static volatile bool _windowShown = true;
+
+    private sealed record Running(UiStallWatchdog Watchdog, long Generation);
 
     /// <summary>Starts the monitor, and its watchdog thread, from the UI thread. Safe to call more than once.</summary>
     internal static void Start()
     {
-        if (_watchdogStop != null)
+        if (_running != null)
         {
             return;
         }
@@ -51,13 +56,11 @@ internal static class UiThreadStallMonitor
 
         // The first probe now rather than a beat from now, so whatever the caller goes on to do before the UI thread
         // pumps is measured from here: a slow start-up included.
-        PostProbeOrReportOngoing(generation);
+        PostProbeOrReportOngoing(generation, forInput: false);
 
-        // Its own thread rather than a pool timer: a stalled UI thread is often waiting on the pool, which then has no
-        // thread to spare for a timer either. No spinning before each wait, as every wait lasts the whole beat.
-        var stop = new ManualResetEventSlim(initialState: false, spinCount: 0);
-        _watchdogStop = stop;
-        new Thread(() => RunWatchdog(stop, generation)) { IsBackground = true, Name = "UiStall watchdog" }.Start();
+        var watchdog = new UiStallWatchdog(() => PostProbeOrReportOngoing(generation, forInput: false), _windowShown);
+        Volatile.Write(ref _running, new Running(watchdog, generation));
+        watchdog.Start("UiStall watchdog");
     }
 
     /// <summary>
@@ -66,7 +69,7 @@ internal static class UiThreadStallMonitor
     /// </summary>
     internal static IDisposable Pause()
     {
-        if (_watchdogStop == null)
+        if (_running == null)
         {
             return System.Reactive.Disposables.Disposable.Empty;
         }
@@ -77,44 +80,63 @@ internal static class UiThreadStallMonitor
 
     internal static void Stop()
     {
-        _watchdogStop?.Set();
-        _watchdogStop = null;
+        _running?.Watchdog.Stop();
+        Volatile.Write(ref _running, null);
         Probe.Reset();
         _uiThreadCpu?.Dispose();
         _uiThreadCpu = null;
     }
 
-    private static void RunWatchdog(ManualResetEventSlim stop, long generation)
+    /// <summary>
+    /// Whether a window of the app's is on screen (<c>AppWindowsOnScreen</c>): with none, the app sits in the tray and the
+    /// watchdog beats once a second.
+    /// </summary>
+    internal static void SetWindowShown(bool shown)
     {
-        while (!stop.Wait(Beat))
+        _windowShown = shown;
+        if (Volatile.Read(ref _running) is { } running)
         {
-            try
-            {
-                PostProbeOrReportOngoing(generation);
-            }
-            catch (Exception ex)
-            {
-                // A watchdog that fails costs one report, never the app.
-                AppLog.Debug("UiStall.Watchdog", ex);
-            }
+            running.Watchdog.WindowShown = shown;
         }
     }
 
-    private static void PostProbeOrReportOngoing(long generation)
+    /// <summary>
+    /// From the thread an input event arrives on, a hotkey press just posted to the UI thread: a probe posted behind it
+    /// reads how long the press waited and what it set off, whatever the beat. Never waits for the UI thread.
+    /// </summary>
+    internal static void NotifyInput()
+    {
+        if (Volatile.Read(ref _running) is not { } running)
+        {
+            return;
+        }
+
+        try
+        {
+            PostProbeOrReportOngoing(running.Generation, forInput: true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Debug("UiStall.Input", ex);
+        }
+    }
+
+    private static void PostProbeOrReportOngoing(long generation, bool forInput)
     {
         UiThreadSample now = TakeSample();
-        if (Probe.TryPost(now, generation) is { } sequence)
+        long? sequence = forInput ? Probe.TryPostForInput(now, generation) : Probe.TryPost(now, generation);
+        if (sequence is { } posted)
         {
             // The priority a hotkey press is posted at, so the probe waits for just what a press would: whatever runs,
             // and queued work at that priority or above (rendering, layout), not input. The old timer ran at
             // Background, behind input as well, and Avalonia runs a Background job only while no message is waiting,
             // else on a timer: about 2.6 UI-thread wakeups a post against 1.9.
-            Dispatcher.UIThread.Post(() => OnProbe(sequence), DispatcherPriority.Default);
+            Dispatcher.UIThread.Post(() => OnProbe(posted), DispatcherPriority.Default);
         }
-        else if (Probe.TakeOngoing(now.Timestamp) is { } posted)
+        else if (Probe.TakeOngoing(now.Timestamp) is { } waiting)
         {
-            var stalled = Stopwatch.GetElapsedTime(posted.Timestamp, now.Timestamp);
-            AppLog.Warning("UiStall", UiStallReport.DescribeOngoing(stalled, posted, now));
+            var stalled = Stopwatch.GetElapsedTime(waiting.Timestamp, now.Timestamp);
+            AppLog.Warning("UiStall", UiStallReport.DescribeOngoing(stalled, waiting, now));
         }
     }
 
@@ -130,6 +152,13 @@ internal static class UiThreadStallMonitor
         if (stalled >= WarnThreshold)
         {
             AppLog.Warning("UiStall", UiStallReport.DescribeEnded(stalled, posted, now));
+        }
+
+        // A press arrived while this probe waited and is queued behind it: a probe posted from here queues behind the
+        // press. A stop since would have ended this probe, so the running generation is still this probe's.
+        if (Probe.TakeFollowUp() && Volatile.Read(ref _running) is { } running)
+        {
+            PostProbeOrReportOngoing(running.Generation, forInput: false);
         }
     }
 

@@ -59,6 +59,12 @@
   runs the interface, from a copy the decoding thread had made of it: while a 1450x900 recording played, that copy was
   most of that thread's work. The decoding thread now writes each frame into the picture itself, and the interface's
   thread took 40-43 M cycles a second instead of about 77.
+- **The app wakes the processor about a third as often while it waits in the tray.** The watchdog that notices when
+  the interface stops responding (the log's `UiStall` lines) checked on it ten times a second whatever the app showed,
+  and in the tray that was most of the app's wakeups: a test build there woke 55-69 times a second, for 6.5-8 M cycles.
+  It now checks once a second while none of the app's windows is open, which took that to 21-24 times a second and
+  4.2-4.3 M cycles, and a hotkey press or a click on the tray icon has it check at once, so the wait a press meets is
+  still measured, now from the press itself.
 
 ### 🛡️ Reliability
 

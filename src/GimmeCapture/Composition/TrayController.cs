@@ -125,6 +125,8 @@ public sealed class TrayController
 
     private void ShowMainWindow()
     {
+        // The stall monitor beats once a second in the tray: a probe of its own reads the window's build and show.
+        UiThreadStallMonitor.NotifyInput();
         var mainWindow = EnsureMainWindow();
         mainWindow.Show();
         mainWindow.WindowState = WindowState.Normal;

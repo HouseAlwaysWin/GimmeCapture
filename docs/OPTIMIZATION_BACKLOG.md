@@ -19,10 +19,12 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 9 entries (2026-11-06).
-- The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.73.0 (2026-11-05), updated by its own updater from
-  0.72.1+d33e5172, a build copied in by hand like those since 2026-11-02, with the sign-in launcher its Run value
-  starts. The user turned on software rendering ("Use less memory") the same evening.
+- Since v0.73.0, `## Unreleased` holds 10 entries (2026-11-06).
+- The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.72.1, the release build (`0.72.1+ed421b3d`), which its
+  updater put over 0.68.1 on 2026-11-05 at 17:19, with the sign-in launcher its Run value starts. It draws on the GPU:
+  its config's `SoftwareRendering` is false, last written at that update, and every start since logs
+  `Startup.Renderer: GPU` (an earlier line here said v0.73.0 and software rendering; neither held, checked
+  2026-11-06).
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
   open of 135-260 ms instead of 80-100 ms on a run's first start, and `GraphicsCaptureSession.IsSupported()` 16 ms on
@@ -318,9 +320,10 @@ tool.
   the timer ran, about 2.6, so probes go at Default, the hotkey press's own. Six 600 ms holds read 531-615 ms before and
   507-599 after. Stop/`Pause` ends a probe generation, so a watchdog caught mid-beat posts nothing that would wait out
   the UAC prompt. The user's logs since 2026-10-26 hold no `UiStall` over 10 s: no sign of the false stall across Modern
-  Standby the item guessed. Left: fewer probes while no window is shown, at the cost of precision when a hotkey arrives
-  in the tray. The probe also found that `Dispatcher.MainLoop(token)` sleeps through a token cancelled from another
-  thread (10 min and 2 h 44 min, until a UAC prompt); the three probes' `PumpFor` cancel from the UI thread now.
+  Standby the item guessed. Left then: fewer probes while no window is shown, at the cost of precision when a hotkey
+  arrives in the tray; done 2026-11-06 without that cost ("the stall monitor in the tray"). The probe also found that
+  `Dispatcher.MainLoop(token)` sleeps through a token cancelled from another thread (10 min and 2 h 44 min, until a UAC
+  prompt); the three probes' `PumpFor` cancel from the UI thread now.
 - Done since batch 1: **the first Record press of a run waited for FFmpeg**. The user's log, 2026-11-02 21:16, three
   idle hours after the start: `SnipOpen.Timings mode=Record waitedForUiThread=2927 ... show=1428`, no `UiStall` in
   those 2.9 s, then one of 1.9 s blocked at 11% CPU across `show`; the next press, 4 s later, took 44 ms in all.
@@ -1000,6 +1003,31 @@ tool.
   Found on the way: in a few runs the probe's UI thread woke 1100-1400 times a second; Windows had put its window on
   the desktop at 0,0, whatever position it was given, and it was being moved and resized by hand (its moves and margins,
   logged, said so). The probe now moves the window off every screen once it shows, and checks it stays there.
+- Done since batch 1 (2026-11-06, "Keep optimizing"): **the stall monitor in the tray** (Idle, start-up and memory).
+  Sampled read-only, the user's v0.72.1 in the tray woke 67 times a second for 6.9 M cycles/s: the `UiStall` watchdog
+  24 (2.7 M cycles/s), the UI thread 25.6 (2.1), Avalonia's render timer 12.9 (1.4), the hotkey thread 3 (keys typed).
+  Each probe of the watchdog's 100 ms beat cost it about two wakeups and the UI thread two more: about 44 of the 67.
+  One sample, at 13:49, found the render thread at 24.8 M cycles/s (19 ticks a second, ~1.3 M cycles each) and 20 s
+  later back at 1.4; nothing on screen of the app's then, not seen in the dev build, cause unknown. The monitor now
+  beats once a second while none of the app's windows is shown (`UiStallWatchdog.TrayBeat`, told by
+  `AppWindowsOnScreen`, which follows every `Window`'s `IsVisible` and close and leaves out the tray's host), and a
+  hotkey press (Windows and X11) or the tray's Show posts a probe of its own (`UiThreadStallMonitor.NotifyInput`),
+  behind the press; one that finds a probe still waiting has the next posted once that one runs, from the UI thread,
+  so behind the press too (`UiStallProbe.TryPostForInput`/`TakeFollowUp`). `UiStallMonitorIdleProbeTests` (opt-in,
+  real Win32, the tray host up): 27.6 UI-thread and 22.0 watchdog wakeups a second at 100 ms, 3.1 and 2.6 in the tray
+  (the process 82.6 against 37.4). Six 600 ms holds read 0-570 ms in the tray with nothing pressed (a timer's stall is
+  now read short by up to a second, or missed below it), 602-614 after a press, 509-555 with a window shown; the
+  tracker said false, true, false, true, false through a window's show, hide, show and close. The dev build in the
+  tray, 25-60 s after a launch to it, eight runs ABBAABBA: 55-69 wakeups a second at the 100 ms beat (one run 73,
+  keys typed), 6.5-8.0 M cycles/s, the watchdog 18-24 and the UI thread 25-30; 21-24 at the tray beat, 4.2-4.3 M
+  cycles/s, the watchdog 2.1-2.6 and the UI thread 5.9-6.9 (one run 38 and 6.8, its UI thread at 19 and the render
+  timer busier, as in the probe's settling below). `UiStallWatchdogTests` (in 2.5 s, 1-3 beats in the tray and
+  10-27 with a window; a window shown starts the short beat at once) and `UiStallProbeTests` (the press's probe and
+  its follow-up). Found on the way:
+  once a window has been made, Avalonia itself wakes the UI thread 12-19 times a second for some tens of seconds, with
+  or without the GPU, hidden or closed, with no message posted or sent (a `WH_GETMESSAGE` and `WH_CALLWNDPROC` count),
+  then settles; left alone. The window hit test at the screen's corner, where Windows puts the tray host whatever its
+  position, goes to the window above it.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

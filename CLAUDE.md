@@ -229,7 +229,10 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
   change that when the awaited task has already completed. A service method the UI awaits must leave the caller's
   thread before blocking work — native/COM initialization, model loads, large file I/O — with `Task.Run` or
   `ConfigureAwaitOptions.ForceYielding`. Missing this caused the OCR-session, history-thumbnail and recording-start
-  freezes. `UiStall` warnings in the log (any freeze over ~0.35 s, with its length) are where these show up.
+  freezes. `UiStall` warnings in the log (any freeze over ~0.35 s, with its length) are where these show up. While
+  no window but the tray's host is shown (`AppWindowsOnScreen`), the monitor checks once a second, not ten times: a
+  freeze there that no hotkey press or tray click set off reads short by up to a second, or not at all below it, and
+  one after a press reads from the press (`UiThreadStallMonitor.NotifyInput`).
 - Every settings tab except General is built the first time it is shown (`EnsureLazyTabContent` in
   `MainWindow.Tabs.cs`), and set-up only one tab needs belongs there too (`EnsureCompressInitializedAsync`).
   `Startup.Timings` in the log breaks a launch down by stage, each as `wall/cpu` ms; on Windows it adds what a slow

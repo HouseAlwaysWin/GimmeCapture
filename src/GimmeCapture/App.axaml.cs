@@ -13,6 +13,7 @@ public partial class App : Application
 {
     private AppBootstrapper? _bootstrapper;
     private TrayController? _trayController;
+    private AppWindowsOnScreen? _windowsOnScreen;
 
     public override void Initialize()
     {
@@ -63,11 +64,14 @@ public partial class App : Application
             }
 
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
+            // Before any window is shown. In the tray the stall monitor beats once a second instead of ten times.
+            _windowsOnScreen = new AppWindowsOnScreen(_bootstrapper.IsTrayHostWindow, UiThreadStallMonitor.SetWindowShown);
             desktop.Exit += (_, _) =>
                 _bootstrapper.DisposeAsync().AsTask().GetAwaiter().GetResult();
             // After that dispose, which the stall watchdog still covers: past it the UI thread stops pumping for good,
             // and the watchdog would report the rest of the exit as a stall.
             desktop.Exit += (_, _) => UiThreadStallMonitor.Stop();
+            desktop.Exit += (_, _) => _windowsOnScreen?.Dispose();
             // The main view model applies the saved settings as it is built, hotkeys included: Main has read them
             // (SettingsPreload).
             _bootstrapper.CreateMainViewModel();

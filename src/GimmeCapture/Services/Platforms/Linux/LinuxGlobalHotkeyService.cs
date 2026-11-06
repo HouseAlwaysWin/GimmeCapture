@@ -255,6 +255,8 @@ public sealed class LinuxGlobalHotkeyService : IGlobalHotkeyService
                         AppLog.Error("LinuxGlobalHotkey.Callback", ex);
                     }
                 });
+                // Behind the press, so the stall monitor reads its wait from here even at its slow beat in the tray.
+                UiThreadStallMonitor.NotifyInput();
                 return;
             }
         }
