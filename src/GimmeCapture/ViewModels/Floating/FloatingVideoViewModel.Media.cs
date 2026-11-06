@@ -608,35 +608,46 @@ public partial class FloatingVideoViewModel
         });
     }
 
-    // UI thread: copies the newest decoded frame into the bitmap. False when there was no new frame to show.
-    private bool ShowLatestFrame()
-    {
-        if (_isDisposed) return false;
+    // UI thread: whether a frame went into the bitmap since the last refresh, which the redraw then shows.
+    private bool ShowLatestFrame() => !_isDisposed && Interlocked.Exchange(ref _frameWritten, 0) != 0;
 
-        int generation = Volatile.Read(ref _playbackGeneration);
+    // Decode thread: writes the frame into the bitmap, and the UI refreshes redraw it at their own pace. `force` shows it
+    // even inside that pace's throttle (a paused seek's single frame). The UI thread used to copy each frame into the
+    // bitmap from a buffer the decoder had copied it into: at 1450x900 that copy was most of the UI thread's work while
+    // the pin played. Written under the bitmap's lock, which Avalonia's renderer takes while it draws the bitmap, no
+    // frame shows half written; the decoder waits for a draw at most, well inside a frame's time.
+    internal void UpdateBitmap(ReadOnlySpan<byte> frame, int generation, bool force = false)
+    {
+        if (_isDisposed || generation != Volatile.Read(ref _playbackGeneration)) return;
         lock (_videoBitmapLock)
         {
             var bitmap = _videoBitmap;
-            if (bitmap == null || !_frameHandoff.HasNewFrame(generation)) return false;
+            if (bitmap == null || generation != Volatile.Read(ref _playbackGeneration)) return;
 
-            // The bitmap is locked first: the decoder waits for the copy below, never for the renderer.
-            using var lockedBitmap = bitmap.Lock();
-            int destinationCapacity = checked((int)(lockedBitmap.RowBytes * bitmap.PixelSize.Height));
+            // A frame of another size is one from before a crop or a resize, which the bitmap no longer is.
+            var size = bitmap.PixelSize;
+            int rowBytes = size.Width * 4;
+            if (frame.Length != rowBytes * size.Height) return;
+
+            using var locked = bitmap.Lock();
             unsafe
             {
-                var destination = new Span<byte>((void*)lockedBitmap.Address, destinationCapacity);
-                return _frameHandoff.CopyLatestTo(destination, generation) > 0;
+                byte* destination = (byte*)locked.Address;
+                if (locked.RowBytes == rowBytes)
+                {
+                    frame.CopyTo(new Span<byte>(destination, frame.Length));
+                }
+                else
+                {
+                    for (int y = 0; y < size.Height; y++)
+                    {
+                        frame.Slice(y * rowBytes, rowBytes).CopyTo(new Span<byte>(destination + ((long)y * locked.RowBytes), rowBytes));
+                    }
+                }
             }
         }
-    }
 
-    // Decode thread: copies the frame for the UI, which shows the newest one at its own pace. `force` shows it even
-    // inside that pace's throttle (a paused seek's single frame).
-    private void UpdateBitmap(ReadOnlySpan<byte> frame, int generation, bool force = false)
-    {
-        if (VideoBitmap == null || _isDisposed) return;
-        if (generation != Volatile.Read(ref _playbackGeneration)) return;
-        _frameHandoff.Publish(frame, generation);
+        Volatile.Write(ref _frameWritten, 1);
         TryScheduleFrameUiRefresh(force);
     }
 }

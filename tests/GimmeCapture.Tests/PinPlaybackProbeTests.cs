@@ -17,7 +17,8 @@ namespace GimmeCapture.Tests;
 /// HEVC recording drawn on the GPU (2026-11-06): the process 1032-1055 M cycles/s, Avalonia's render thread 469-496, the
 /// decode thread 283-287, which converting NV12 through YUV420P (LibavBgraConverter) took to 188-212. The toolbar's
 /// drop shadow, redrawn for every move of the playhead, then cost the render thread 150 more than without it; drawn by a
-/// GlowDecorator, the process took 814-823. PIN_PLAYBACK_VARIANT=paused, paused-no-toolbar or no-toolbar measures those;
+/// GlowDecorator, the process took 814-823, and with the decode thread writing frames into the bitmap the UI thread
+/// took 40-43 instead of 77. PIN_PLAYBACK_VARIANT=paused, paused-no-toolbar or no-toolbar measures those;
 /// PIN_TIMELINE_FPS sets the playhead's rate, PIN_PLAYBACK_SECONDS the length measured. Opt-in (PIN_PLAYBACK_PROBE=1,
 /// PIN_PLAYBACK_CLIP=a video file; PIN_PLAYBACK_RENDERER=software draws on the CPU): it sets up Avalonia on the real
 /// platform, which a process can do only once.
@@ -85,7 +86,11 @@ public sealed class PinPlaybackProbeTests(ITestOutputHelper output) : IDisposabl
             ShowActivated = false,
         };
         window.Show();
+        // Windows puts a new window on a screen whatever position it was given: moved off every screen once shown, it
+        // stays there, out of the way of whoever uses the desktop meanwhile.
+        window.Position = new PixelPoint(-20000, -20000);
         PumpFor(TimeSpan.FromSeconds(4));
+        Assert.True(window.Position.X < -10000, $"the pin is on screen at {window.Position}");
         string variant = Environment.GetEnvironmentVariable("PIN_PLAYBACK_VARIANT") ?? "playing";
         if (variant.StartsWith("paused", StringComparison.Ordinal))
         {
@@ -107,6 +112,24 @@ public sealed class PinPlaybackProbeTests(ITestOutputHelper output) : IDisposabl
         output.WriteLine($"variant {variant}, toolbar {vm.ShowToolbar}, playing {vm.IsPlaying}");
 
         uint ui = ThreadActivity.CurrentThreadId;
+        // What the UI thread does besides the frames: the playhead's changes, and the layout passes they cause.
+        int layouts = 0, resizes = 0, moves = 0;
+        var events = new List<string>();
+        var clock = Stopwatch.StartNew();
+        void Note(string what) { if (events.Count < 60) events.Add($"{clock.ElapsedMilliseconds,6} {what}"); }
+        window.PositionChanged += (_, e) => { moves++; Note($"moved to {e.Point}"); };
+        window.GetObservable(Visual.BoundsProperty).Subscribe(b => Note($"bounds {b.Width:0.#}x{b.Height:0.#}"));
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is "ToolbarMargin" or "IsToolbarFlipped" or "SubToolbarMargin" or "WindowPadding" or "DisplayWidth" or "DisplayHeight")
+            {
+                Note($"{e.PropertyName} = {vm.GetType().GetProperty(e.PropertyName)?.GetValue(vm)}");
+            }
+        };
+        var changed = new Dictionary<string, int>();
+        window.LayoutUpdated += (_, _) => layouts++;
+        window.SizeChanged += (_, _) => resizes++;
+        vm.PropertyChanged += (_, e) => changed[e.PropertyName ?? "?"] = changed.GetValueOrDefault(e.PropertyName ?? "?") + 1;
         long before = ProcessCycles();
         var watch = Stopwatch.StartNew();
         var rows = ThreadActivity.Measure(() => PumpFor(TimeSpan.FromSeconds(double.Parse(Environment.GetEnvironmentVariable("PIN_PLAYBACK_SECONDS") ?? "10"))));
@@ -119,6 +142,17 @@ public sealed class PinPlaybackProbeTests(ITestOutputHelper output) : IDisposabl
         {
             output.WriteLine($"  {row.MegaCycles,8:0.0} M cycles/s {row.Wakeups,7:0.0} wakeups/s  {(row.Thread == ui ? "UI thread" : ThreadActivity.Describe(row.Thread))}");
         }
+
+        var uiRow = rows.FirstOrDefault(r => r.Thread == ui);
+        if (moves > 5)
+        {
+            foreach (string e in events) output.WriteLine("  event " + e);
+            var screen = window.Screens.ScreenFromWindow(window);
+            output.WriteLine($"  screen bounds {screen?.Bounds} working {screen?.WorkingArea} scaling {screen?.Scaling}; window {window.Bounds} min {window.MinWidth}x{window.MinHeight}");
+        }
+
+        output.WriteLine($"UI thread {uiRow.Wakeups:0}/s {uiRow.MegaCycles:0} Mc/s; layouts {layouts / seconds:0.0}/s, resizes {resizes / seconds:0.0}/s, moves {moves / seconds:0.0}/s at {window.Position}; changes/s: " +
+            string.Join(", ", changed.OrderByDescending(c => c.Value).Take(6).Select(c => $"{c.Key} {c.Value / seconds:0.0}")));
 
         window.Close();
         vm.Dispose();

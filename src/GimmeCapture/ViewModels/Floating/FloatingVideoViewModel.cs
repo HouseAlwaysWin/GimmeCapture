@@ -29,7 +29,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private Task? _bootMediaTask;
     private readonly object _videoBitmapLock = new();
     // Each decoded frame, and the time it shows, on the way from the decode thread to the UI thread.
-    private readonly LatestFrameHandoff _frameHandoff = new();
+    // Set by the decode thread when a frame goes into the bitmap, cleared by the UI refresh that redraws it.
+    private int _frameWritten;
     private readonly PlayheadHandoff _decodedPlayhead = new();
     // The kept timeline pieces, on the way from the UI thread to the playback loop, which must not read EditSegments.
     private readonly KeptSegmentsHandoff _keptForPlayback;
@@ -621,7 +622,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             _videoBitmap = null;
         }
         oldBitmap?.Dispose();
-        _frameHandoff.Dispose();
 
         // The native player released the file handle above. The pin's temporary files (an unsaved recording, a
         // cropped-clip copy or a GIF recording's audio sidecar in %TEMP%/GimmeCapture_Pins) go now, or once a save or

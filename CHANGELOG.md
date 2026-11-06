@@ -55,6 +55,10 @@
   the graphics card, that was about 170 M cycles a second of a 1450x900 recording's pin. The shadow is now drawn the
   way the pin's coloured frame already is, the same to the eye, and the pin took 814-823 M cycles a second instead of
   about 990.
+- **A playing pin leaves the interface's thread freer.** Each frame was copied into the pin's picture on the thread that
+  runs the interface, from a copy the decoding thread had made of it: while a 1450x900 recording played, that copy was
+  most of that thread's work. The decoding thread now writes each frame into the picture itself, and the interface's
+  thread took 40-43 M cycles a second instead of about 77.
 
 ### 🛡️ Reliability
 

@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 8 entries (2026-11-06).
+- Since v0.73.0, `## Unreleased` holds 9 entries (2026-11-06).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.73.0 (2026-11-05), updated by its own updater from
   0.72.1+d33e5172, a build copied in by hand like those since 2026-11-02, with the sign-in launcher its Run value
   starts. The user turned on software rendering ("Use less memory") the same evening.
@@ -987,9 +987,19 @@ tool.
   image filter. `GlowDecorator`, whose mask blur the pin frame's glow already used, now draws rounded corners too
   (`SKRoundRect`, clipped out and spread as Avalonia does) and holds the video pin's bottom toolbar: 814, 819, 823 (the
   render thread 368-377). `GlowDecoratorRenderTests`' new toolbar case: 7 levels apart at most at 100%, 8 at 125%, 2 at
-  150% (0.02-0.19 on average), the same to the eye. `ToolbarShadowMarkupTests` (fails on the old markup). The probe also
-  caught the UI thread waking 1100-1400 times a second, for 190-240 M cycles/s, in 3 of about 20 runs: after a pause,
-  after hiding the toolbar, and once after neither (Pins, open).
+  150% (0.02-0.19 on average), the same to the eye. `ToolbarShadowMarkupTests` (fails on the old markup).
+- Done since batch 1 (2026-11-06, "繼續優化"): **a playing pin's frames copied on the UI thread** (Pins). The decode
+  thread copied each frame into `LatestFrameHandoff` and the UI thread copied it from there into the pin's
+  `WriteableBitmap`. Avalonia 12's Skia `WriteableBitmapImpl` (its IL, read through reflection) enters a monitor in
+  `Lock` until the framebuffer is disposed, and its `Draw` enters the same one around `SKImage.FromPixels` and
+  `DrawImage`, so a frame written under `Lock` on any thread never shows half written. `UpdateBitmap` now writes the
+  frame into the bitmap on the decode thread (under `_videoBitmapLock`, skipping a frame of another size or an earlier
+  playback) and the UI refresh only redraws; `LatestFrameHandoff` is gone. `PinPlaybackProbeTests`: the UI thread 40-43 M
+  cycles/s against about 77, the process 765-834 against 796-823 (within its spread); the decode thread the same, its
+  copy now going into the bitmap. `FloatingVideoFrameTests` (the frame in the bitmap at once fails on the old code).
+  Found on the way: in a few runs the probe's UI thread woke 1100-1400 times a second; Windows had put its window on
+  the desktop at 0,0, whatever position it was given, and it was being moved and resized by hand (its moves and margins,
+  logged, said so). The probe now moves the window off every screen once it shows, and checks it stays there.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1400,14 +1410,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   upload. A frame the GPU could show as it decoded it (Avalonia's GPU interop) would leave out the download, the
   conversion, both copies and the upload, at the cost of a second way to draw a pin. The toolbar's shadow is done
   (Status).
-- **A pin's UI thread sometimes wakes 1100-1400 times a second** (S-M to find). In 3 of about 20 `PinPlaybackProbeTests`
-  runs it did, for 190-240 M cycles/s against 80-90, right after a pause, after hiding the toolbar, and once after
-  neither; the render thread woke more with it (538 a second). Not reproduced on demand: the same variants ran quiet
-  before and after. A `dotnet-trace` sampling resolved no managed frames (`?!?`), so catch it with the probe in a loop and
-  a trace taken while it lasts.
-- **Lower**: video pins copy each frame twice (`LatestFrameHandoff.cs:40`, then `FloatingVideoViewModel.Media.cs:564`,
-  about 50 M cycles/s each at 1450x900, 33 MB a frame at 4K) and keep decoding when covered; the conversion to BGRA is
-  done (Status). The translation layer adds results one at a time, rebuilding its region per item
+- **Lower**: a video pin still copies each frame once on the decode thread, from the player's frame into its bitmap
+  (about 50 M cycles/s at 1450x900); converting straight into the locked bitmap would need the player to ask for a
+  destination before it converts, and the pin's per-frame checks (the trim end, the sound's start) to run before it.
+  Pins keep decoding when covered. The conversion to BGRA and the UI thread's copy are done (Status). The translation layer adds results one at a time, rebuilding its region per item
   (`FloatingTranslationWindow.axaml.cs:109-117`).
 
 ### Snip overlay
