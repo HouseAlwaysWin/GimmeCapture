@@ -29,12 +29,19 @@ public class FrameDeadlineWaiterTests
     {
         using var cts = new CancellationTokenSource();
         using var waiter = FrameDeadlineWaiter.Create(cts.Token);
-        cts.CancelAfter(50);
+        // Cancelled from a thread of its own: CancelAfter's timer fires on the thread pool, which the rest of the suite
+        // keeps busy, and once in CI it cancelled 2.1 s late with nothing wrong with the waiter.
+        var cancel = OwnThread.Run(() =>
+        {
+            Thread.Sleep(50);
+            cts.Cancel();
+        });
 
         var elapsed = Stopwatch.StartNew();
         waiter.Wait(TimeSpan.FromSeconds(10));
 
         Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(2), $"the wait took {elapsed.ElapsedMilliseconds} ms after a cancel at 50 ms");
+        cancel.Wait();
     }
 
     [Fact]
