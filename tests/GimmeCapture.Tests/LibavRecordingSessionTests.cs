@@ -17,6 +17,7 @@ namespace GimmeCapture.Tests;
 /// through gdigrab and through Desktop Duplication; the WGC ones and the ones that look at what was recorded put small
 /// windows on screen, so they are opt-in (RECORDING_PROBE=1).
 /// </summary>
+[Collection(ScreenRecordingCollection.Name)]
 public sealed class LibavRecordingSessionTests : IDisposable
 {
     private const int Fps = 15; // not 30, which is what the frame-rate probe reports when it fails

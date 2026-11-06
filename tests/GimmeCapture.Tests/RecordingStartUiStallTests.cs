@@ -22,6 +22,7 @@ namespace GimmeCapture.Tests;
 /// measures how long each start holds it. Opt-in: it records the real screen and system audio, so it needs a Windows
 /// desktop session with an audio endpoint — run it by hand when touching the recording start path.
 /// </summary>
+[Collection(ScreenRecordingCollection.Name)]
 public class RecordingStartUiStallTests
 {
     private const int Starts = 3;

@@ -14,6 +14,7 @@ namespace GimmeCapture.Tests;
 /// it needs that hardware, records the real screen, and only means something run alone, in a process of its own,
 /// before anything else in it has touched DXGI or CUDA.
 /// </summary>
+[Collection(ScreenRecordingCollection.Name)]
 public sealed class RecordingDesktopDuplicationProbeTests(ITestOutputHelper output)
 {
     [OptInFact("DESKTOP_DUPLICATION_PROBE=1")]

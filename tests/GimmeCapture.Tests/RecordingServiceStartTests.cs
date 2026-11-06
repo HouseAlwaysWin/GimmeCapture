@@ -12,6 +12,7 @@ namespace GimmeCapture.Tests;
 /// Starts real recordings through <see cref="RecordingService"/>: a corner of the desktop, no audio, the software
 /// encoder. Like the gdigrab session tests it records without showing anything, so it runs with the other Windows tests.
 /// </summary>
+[Collection(ScreenRecordingCollection.Name)]
 public sealed class RecordingServiceStartTests : IDisposable
 {
     private readonly string _folder =

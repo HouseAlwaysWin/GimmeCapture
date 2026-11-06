@@ -171,8 +171,10 @@ internal sealed unsafe class LibavDesktopDuplicationSource : ICapturedFrameSourc
         }
         catch (Exception ex) when (ex is FFmpegNativeException or InvalidOperationException)
         {
-            // No such display any more, a device that cannot duplicate, too many duplications open, or a desktop that
-            // is not the user's (the secure desktop of a UAC prompt). The error text holds no path.
+            // No such display any more, a device that cannot duplicate, too many duplications open, a desktop that is
+            // not the user's (the secure desktop of a UAC prompt), or this process duplicating the display already
+            // ("Invalid argument": Windows allows one at a time, so of several windows recorded to their own files at
+            // once only the first is duplicated). The error text holds no path.
             AppLog.Information("RecordingNative", $"Desktop Duplication did not open: {ex.Message}");
             return null;
         }

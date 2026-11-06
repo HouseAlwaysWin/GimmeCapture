@@ -17,6 +17,7 @@ namespace GimmeCapture.Tests;
 // fields: where each stream's first packet starts and where its last one ends. A recording covers one stretch of
 // wall-clock time, so both streams should start together and run the same length. Audio captured before the first
 // video frame (or after the last) shows up here as a start offset and a length difference.
+[Collection(ScreenRecordingCollection.Name)]
 public sealed class RecordingAvSyncTests
 {
     private const string FileVariable = "GIMMECAPTURE_AV_FILE";

@@ -935,6 +935,11 @@ tool.
   rendering on: `DisplayAdapterOrder.SettleBeforeCuda` (a DXGI factory, 36-40 ms cold) now runs before the warm-up's
   `cuInit` and every NVENC open. gdigrab's GDI handles fail on another thread than the one that opened them (EIO), so
   the screen grab opens on the worker. A recording's start: 263-373 ms against gdigrab's 241-272 in fresh processes.
+  Windows lets a process duplicate a display once at a time: a second `DuplicateOutput` gets E_INVALIDARG (ddagrab's
+  "Invalid argument"; three recordings at once, six rounds: one duplicated each round, two on gdigrab). So of several
+  windows recorded to their own files at once (the separate-window fallback) only the first is duplicated, and the test
+  classes that record the screen take turns (`ScreenRecordingCollection`): two at once failed the check that a recording
+  duplicated its display, once in a `verify.ps1` run.
   The encoder now opens before the capture, so a start whose capture fails deletes the header-only segment it left
   (the finalize took any non-empty file for a segment). `RegionCaptureSourceTests`, `DuplicationOutputTests`,
   `LibavRecordingSessionTests` (gdigrab pinned; `DesktopDuplication_RecordsTheRegion_WhereItCanDuplicateTheDisplay`;
