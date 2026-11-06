@@ -938,7 +938,10 @@ tool.
   The encoder now opens before the capture, so a start whose capture fails deletes the header-only segment it left
   (the finalize took any non-empty file for a segment). `RegionCaptureSourceTests`, `DuplicationOutputTests`,
   `LibavRecordingSessionTests` (gdigrab pinned; `DesktopDuplication_RecordsTheRegion_WhereItCanDuplicateTheDisplay`;
-  opt-in: `DesktopDuplication_LeavesOutAWindowExcludedFromCapture`, `DesktopDuplication_OnNvenc_KeepsTheColours_...`).
+  opt-in: `DesktopDuplication_LeavesOutAWindowExcludedFromCapture`, `DesktopDuplication_OnNvenc_KeepsTheColours_...`),
+  `RecordingDesktopDuplicationProbeTests` (opt-in, alone in its process: Record mode's warm-up, `encoderWarmUp=cuInit`,
+  then a real `RecordingService` recording logs `Capture source: ddagrab` on the AMD chip; without `DisplayAdapterOrder`
+  it logged the NVIDIA card, "did not open" and `Capture source: gdigrab`).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
