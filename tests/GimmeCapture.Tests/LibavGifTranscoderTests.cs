@@ -145,6 +145,24 @@ public sealed class LibavGifTranscoderTests : IDisposable
         Assert.Equal(GifFrames / 2, codec.FrameCount);
     }
 
+    [Theory]
+    [InlineData(LibavGifTranscoder.FinestDither)]
+    [InlineData("dither=bayer:bayer_scale=3")] // a Medium GIF's
+    public void DecodedAhead_TheGifIsTheSameByteForByte(string dither)
+    {
+        // Each pass decodes on a thread of its own a few frames ahead while the caller counts or maps the ones before.
+        string clip = WriteColourClip();
+        string inTurn = Path.Combine(_dir, "in-turn.gif");
+        string ahead = Path.Combine(_dir, "ahead.gif");
+
+        LibavGifTranscoder.TranscodeToGif(clip, inTurn, GifFps, maxWidth: 0, dither, decodeAhead: false);
+        LibavGifTranscoder.TranscodeToGif(clip, ahead, GifFps, maxWidth: 0, dither, decodeAhead: true);
+
+        byte[] expected = File.ReadAllBytes(inTurn);
+        Assert.True(expected.Length > 100_000, $"the GIF is {expected.Length} bytes: too little dithered to tell");
+        Assert.Equal(expected, File.ReadAllBytes(ahead));
+    }
+
     [Fact]
     public void WhenThePaletteFiltersCannotBeSetUp_TheFixedPaletteStillMakesTheGif()
     {

@@ -76,6 +76,13 @@
   after it starts, the app already built an overlay out of sight to load its code; it now also connects that overlay
   to its settings and lays it out, as an opening does, in steps of under 70 ms. The first overlay then came up in
   123-180 ms, and later ones no slower than before.
+- **GIFs are made about a third faster.** A GIF is made in two passes over the video, one that picks its 256 colours
+  and one that maps every frame to them, and in each pass the next frame was decoded only once the frame before had
+  been dealt with. Each pass now decodes a few frames ahead on a core of its own, so the GIF comes out the same, byte
+  for byte, sooner: a 21-second cut of a 1450x900 recording took 5.1 s to turn into a GIF instead of 7.9, and the whole
+  save from its pin 7.9 s instead of 10.7. GIF recordings, a pinned recording's GIF and the Compress tab's GIFs all
+  gain. A pinned recording cut before it is saved as a GIF also no longer makes its sound for the in-between copy the
+  GIF is made from, which leaves the sound out anyway.
 
 ### 🛡️ Reliability
 

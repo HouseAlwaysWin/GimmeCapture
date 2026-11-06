@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 12 entries (2026-11-06).
+- Since v0.73.0, `## Unreleased` holds 13 entries (2026-11-06).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.72.1, the release build (`0.72.1+ed421b3d`), which its
   updater put over 0.68.1 on 2026-11-05 at 17:19, with the sign-in launcher its Run value starts. It draws on the GPU:
   its config's `SoftwareRendering` is false, last written at that update, and every start since logs
@@ -1068,6 +1068,21 @@ tool.
   posted work), which only a shown window rehearses; shown off screen on the GPU, the pin's warm-up kept 26-28 MB, so
   not without the user's say. While the probe's overlays were up the user typed: two `Hotkey.HookLate` lines (156 ms),
   one in each build, and the overlay may have taken some of those keys.
+- Done since batch 1 (2026-11-06, "Keep optimizing"): **a GIF's passes decoded in turn** (GIF). The user's log and folder
+  that day: short region recordings pinned, cut and saved as GIFs (7-13 MB each), and a cut pin's GIF goes through an
+  intermediate MP4 (`ExportTrimmedInProcessAsync`) that kept its sound, which the GIF drops. Timed on their recording
+  `20261020_162541` with its middle fifth cut (a temporary stopwatch in `TranscodeToGifWithPalette`, 75 frames at
+  720x396): the intermediate 0.42 s, the GIF 1.3 s, of which the first pass decoding 250 ms and palettegen counting
+  280, its palette at the end 150-185, the second pass decoding 260 and mapping and writing 270. Made only for the GIF
+  (no sound, ultrafast, CRF 16, 15 fps) the intermediate took 0.2 s less, but the GIF came out 13-17% larger (the
+  cleaner intermediate compresses worse), so only the sound went: the same GIF, byte for byte. Each pass now decodes
+  and scales on a thread of its own up to about 8 MB of frames ahead (`LibavGifTranscoder.FrameFeed`), each frame
+  carrying the progress at which it was decoded. `PinGifCutProbeTests` (opt-in, PIN_GIF_CUT_CLIP, the pin's way,
+  alternately, four rounds): `20261020_162541` 2.11 s before against 1.56 (the GIF 1.60 against 1.15), `20260803_160036`
+  (34.6 s 1450x900 HEVC, a 21 s cut) 10.7 s against 7.9 (the GIF 7.9 against 5.1), the GIFs the same byte for byte.
+  `LibavGifTranscoderTests.DecodedAhead_TheGifIsTheSameByteForByte`; the cancellation, progress and fallback tests run
+  through the new feed. Left: a cut GIF still goes through the intermediate (2.8 s of the long clip's 7.9); taking the
+  cut's ranges straight into the GIF's passes would save that and a generation.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

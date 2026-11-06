@@ -53,7 +53,9 @@ internal static class LibavGifTranscoder
     /// GIF export never regresses. <paramref name="progress"/> gets 0..1 across both passes. Cancelling throws
     /// <see cref="OperationCanceledException"/>, and an export that does not finish deletes the GIF it started. While
     /// <paramref name="pauseGate"/> is reset, the transcode waits before its next packet. <paramref name="mapThreads"/>
-    /// is how many threads map frames to the palette, half the processor's by default; the GIF is the same either way.
+    /// is how many threads map frames to the palette, half the processor's by default, and
+    /// <paramref name="decodeAhead"/> whether each pass decodes on a thread of its own a few frames ahead
+    /// (<see cref="FrameFeed"/>); the GIF is the same either way.
     /// </summary>
     public static void TranscodeToGif(
         string inputPath,
@@ -64,7 +66,8 @@ internal static class LibavGifTranscoder
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default,
         ManualResetEventSlim? pauseGate = null,
-        int mapThreads = 0)
+        int mapThreads = 0,
+        bool decodeAhead = true)
     {
         FFmpegRuntime.EnsureInitialized();
         cancellationToken.ThrowIfCancellationRequested();
@@ -76,7 +79,8 @@ internal static class LibavGifTranscoder
         try
         {
             TranscodeToGifWithPalette(
-                inputPath, outputPath, targetFps, maxWidth, paletteuseArgs, reporter, pauseGate, cancellationToken, threads);
+                inputPath, outputPath, targetFps, maxWidth, paletteuseArgs, reporter, pauseGate, cancellationToken,
+                threads, decodeAhead);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -136,7 +140,8 @@ internal static class LibavGifTranscoder
         GifProgress progress,
         ManualResetEventSlim? pauseGate,
         CancellationToken cancellationToken,
-        int mapThreads)
+        int mapThreads,
+        bool decodeAhead)
     {
         AVFilter* bufferF = ffmpeg.avfilter_get_by_name("buffer");
         AVFilter* palettegenF = ffmpeg.avfilter_get_by_name("palettegen");
@@ -193,11 +198,12 @@ internal static class LibavGifTranscoder
                     $":range={(int)ffmpeg.av_buffersink_get_color_range(paletteSink)}";
                 mapper = new PaletteMapper(mapThreads, frameArgs, paletteArgs, paletteuseArgs);
 
-                while (firstPass.NextFrame(frame, pauseGate, cancellationToken))
+                using var firstFrames = new FrameFeed(firstPass, decodeAhead, pauseGate, cancellationToken);
+                while (firstFrames.NextFrame(frame, cancellationToken))
                 {
                     ThrowIfErr(ffmpeg.av_buffersrc_add_frame(paletteFrameSrc, frame), "gifp_src_push"); // consumes frame
                     CountColors(paletteSink, frame);
-                    progress.Report(0, PalettePassShare, firstPass.Progress);
+                    progress.Report(0, PalettePassShare, firstFrames.Progress);
                 }
 
                 ThrowIfErr(ffmpeg.av_buffersrc_add_frame(paletteFrameSrc, null), "gifp_src_eof"); // palettegen emits palette at EOF
@@ -217,13 +223,14 @@ internal static class LibavGifTranscoder
 
             using var secondPass = new GifFrameSource(
                 inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB24, evenSize: true);
+            using var secondFrames = new FrameFeed(secondPass, decodeAhead, pauseGate, cancellationToken);
             using var writer = new GifWriter(outputPath, width, height, fps, AVPixelFormat.AV_PIX_FMT_PAL8);
             mapper.Start();
-            while (secondPass.NextFrame(frame, pauseGate, cancellationToken))
+            while (secondFrames.NextFrame(frame, cancellationToken))
             {
                 mapper.Submit(frame, writer, cancellationToken); // takes the frame's picture
                 mapper.WriteMapped(writer, waitForAll: false, cancellationToken);
-                progress.Report(PalettePassShare, 1 - PalettePassShare, secondPass.Progress);
+                progress.Report(PalettePassShare, 1 - PalettePassShare, secondFrames.Progress);
             }
 
             mapper.WriteMapped(writer, waitForAll: true, cancellationToken);
@@ -566,6 +573,146 @@ internal static class LibavGifTranscoder
     // One pass over the clip's video: decodes it, keeps the frames GifFrameTimeline schedules at the GIF's frame
     // rate and scales each to the GIF's size. Every pass opens the clip afresh, so both passes of the palette path
     // see the very same frames.
+    /// <summary>
+    /// A pass's frames, decoded and scaled on a thread of their own a few ahead of the caller, who meanwhile counts
+    /// their colours (the first pass) or maps and writes them (the second); or on the caller's thread, one at a time,
+    /// as before. One at a time, a 75-frame 720x396 GIF spent about 250 ms decoding in each pass while nothing else
+    /// ran, of a transcode of 1.3 s. The same frames come in the same order with the same timestamps either way, so
+    /// the GIF is the same byte for byte. Each frame keeps the pass's progress as it was when that frame was decoded,
+    /// so progress reads as before. Up to about 8 MB of frames wait at once.
+    /// </summary>
+    private sealed unsafe class FrameFeed : IDisposable
+    {
+        private const long QueueBytes = 8L << 20;
+
+        private readonly GifFrameSource _source;
+        private readonly ManualResetEventSlim? _pauseGate;
+        private readonly BlockingCollection<(IntPtr Frame, double Progress)>? _ready;
+        private readonly CancellationTokenSource? _stop;
+        private readonly Thread? _thread;
+        private Exception? _failure;
+
+        public FrameFeed(
+            GifFrameSource source, bool ahead, ManualResetEventSlim? pauseGate, CancellationToken cancellationToken)
+        {
+            _source = source;
+            _pauseGate = pauseGate;
+            if (!ahead)
+            {
+                return;
+            }
+
+            long frameBytes = Math.Max(1L, (long)source.Width * source.Height * 3);
+            int depth = (int)Math.Clamp(QueueBytes / frameBytes, 2, 8);
+            _ready = new BlockingCollection<(IntPtr, double)>(depth);
+            _stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _thread = new Thread(Decode) { IsBackground = true, Name = "GIF decode" };
+            _thread.Start();
+        }
+
+        /// <summary>How far the pass had decoded when the frame last handed over was decoded, 0..1.</summary>
+        public double Progress { get; private set; }
+
+        /// <summary>
+        /// The pass's next frame, moved into <paramref name="output"/>, or false at the end of the clip. Rethrows what
+        /// the decode failed with, and throws <see cref="OperationCanceledException"/> once
+        /// <paramref name="cancellationToken"/> is cancelled.
+        /// </summary>
+        public bool NextFrame(AVFrame* output, CancellationToken cancellationToken)
+        {
+            if (_ready == null)
+            {
+                bool got = _source.NextFrame(output, _pauseGate, cancellationToken);
+                Progress = _source.Progress;
+                return got;
+            }
+
+            if (!_ready.TryTake(out var next, Timeout.Infinite, cancellationToken))
+            {
+                // The decode thread has finished: at the end of the clip, or stopped by a failure or a cancellation.
+                if (_failure != null)
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(_failure).Throw();
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                return false;
+            }
+
+            AVFrame* frame = (AVFrame*)next.Frame;
+            ffmpeg.av_frame_unref(output);
+            ffmpeg.av_frame_move_ref(output, frame);
+            ffmpeg.av_frame_free(&frame);
+            Progress = next.Progress;
+            return true;
+        }
+
+        private void Decode()
+        {
+            try
+            {
+                while (true)
+                {
+                    AVFrame* frame = ffmpeg.av_frame_alloc();
+                    if (frame == null)
+                    {
+                        throw new OutOfMemoryException("gif_decode_ahead_frame");
+                    }
+
+                    bool queued = false;
+                    try
+                    {
+                        if (!_source.NextFrame(frame, _pauseGate, _stop!.Token))
+                        {
+                            return;
+                        }
+
+                        _ready!.Add(((IntPtr)frame, _source.Progress), _stop.Token);
+                        queued = true;
+                    }
+                    finally
+                    {
+                        if (!queued)
+                        {
+                            ffmpeg.av_frame_free(&frame);
+                        }
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (_stop!.IsCancellationRequested)
+            {
+                // Disposed, or the caller cancelled: NextFrame tells which.
+            }
+            catch (Exception ex)
+            {
+                _failure = ex;
+            }
+            finally
+            {
+                _ready!.CompleteAdding();
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_ready == null)
+            {
+                return;
+            }
+
+            _stop!.Cancel();
+            _thread!.Join();
+            while (_ready.TryTake(out var left))
+            {
+                AVFrame* frame = (AVFrame*)left.Frame;
+                ffmpeg.av_frame_free(&frame);
+            }
+
+            _ready.Dispose();
+            _stop.Dispose();
+        }
+    }
+
     private sealed unsafe class GifFrameSource : IDisposable
     {
         private readonly AVPixelFormat _format;

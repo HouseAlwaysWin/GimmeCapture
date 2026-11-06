@@ -357,7 +357,11 @@ public partial class FloatingVideoViewModel
     /// Frame-accurate trim/concat of the kept runs into a temp file using the in-process libav exporter
     /// (no ffmpeg.exe). Returns the temp output path, or null on failure (logged).
     /// </summary>
-    private async Task<string?> ExportTrimmedInProcessAsync(string targetExtension)
+    /// <param name="withoutSound">
+    /// For a GIF's intermediate, which the GIF leaves the sound out of: its MP4 then skips decoding and encoding the
+    /// sound and is written straight into its file, and the GIF comes out the same.
+    /// </param>
+    private async Task<string?> ExportTrimmedInProcessAsync(string targetExtension, bool withoutSound = false)
     {
         // Redaction alone (no cut/speed) still needs re-encoding the whole clip, so fall back to a
         // full-clip range when there are no kept runs but there is something to burn in.
@@ -380,7 +384,9 @@ public partial class FloatingVideoViewModel
         BeginExport();
         try
         {
-            bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, outputPath, quality, frameComposite: redactionComposite));
+            var options = withoutSound ? new LibavExportOptions { DropAudio = true } : null;
+            bool ok = await Task.Run(() => LibavClipExporter.TryExport(
+                VideoPath, ranges, outputPath, quality, frameComposite: redactionComposite, options: options));
             if (ok)
             {
                 return outputPath;
@@ -475,13 +481,14 @@ public partial class FloatingVideoViewModel
             // The transcode source is a trimmed mp4 when the edit changes the output (cut or speed),
             // else the original recording.
             string? trimmed = null;
+            bool gif = targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase);
             if (EditChangesOutput)
             {
-                trimmed = await ExportTrimmedInProcessAsync(".mp4");
+                trimmed = await ExportTrimmedInProcessAsync(".mp4", withoutSound: gif);
                 if (string.IsNullOrEmpty(trimmed) || !File.Exists(trimmed)) return null;
             }
 
-            bool keepAudio = !targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase) && await EnsureSourceHasAudioAsync();
+            bool keepAudio = !gif && await EnsureSourceHasAudioAsync();
             return await TranscodeGifWebmAsync(trimmed ?? VideoPath, trimmed, targetExt, quality, keepAudio);
         }
         catch (Exception ex)
