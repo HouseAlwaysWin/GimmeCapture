@@ -90,6 +90,8 @@ internal static class StartupTrace
         }
 
         Environment.SetEnvironmentVariable(ReadAhead.HandOffVariable, null);
+        // The launcher started this process above normal priority, for its start only.
+        StartupPriority.Raised();
         if (ReadAhead.TryParseHandOff(handOff, out DateTime launcherStartedUtc, out long bytesRead))
         {
             _launcher = FormatLauncher(processStartedUtc - launcherStartedUtc, bytesRead);
@@ -152,6 +154,8 @@ internal static class StartupTrace
 
         if (timings is { } complete)
         {
+            // The start is done: what follows is no reason to stay ahead of other programs.
+            StartupPriority.Restore();
             // The page faults come from a snapshot of every process on the machine, 5-7 ms: not on the thread that
             // marked the last stage, usually the UI thread.
             _ = Task.Run(() =>

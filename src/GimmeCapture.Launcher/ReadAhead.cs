@@ -32,6 +32,16 @@ internal static class ReadAhead
     internal const string HandOffVariable = "GIMMECAPTURE_LAUNCHER";
 
     /// <summary>
+    /// The priority the launcher runs at and starts the app at, until the app's start is done. At sign-in the runtime's
+    /// own start, which takes the app 50-200 ms at other times and about 80 ms of processor, took 1.4-3.2 s, the longer
+    /// the busier the machine (29% to 99%): it waited its turn for a processor behind the sign-in's other programs. With
+    /// every one of 16 processors kept busy at normal priority, a .NET process reached Main in 817 ms (551-862) and did
+    /// 300 ms of work in 570 at normal priority, against 376 (180-420) and 317 above it, and 54 and 300 on an idle
+    /// machine.
+    /// </summary>
+    internal const System.Diagnostics.ProcessPriorityClass StartPriority = System.Diagnostics.ProcessPriorityClass.AboveNormal;
+
+    /// <summary>
     /// How many files <see cref="ReadAll"/> reads at once. At sign-in other programs read the same hard disk, and each
     /// read of the launcher's waited behind theirs: one file after another, its 141 MB took 22.6 s on 2026-11-05. With
     /// four of its files being read, the disk always has reads of the launcher's to choose from. On cold copies of the

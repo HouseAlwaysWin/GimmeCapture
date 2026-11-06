@@ -11,8 +11,9 @@ namespace GimmeCapture.Launcher;
 /// time while other programs read the same disk. This program runs on .NET Framework 4.8, which Windows keeps on its own
 /// drive, so it starts at once. It reads those files through in one pass each, then the rest of the files the app's last
 /// start mapped, as the app wrote them down, several at a time (<see cref="ReadAhead.ReadThreads"/>), and then starts the
-/// app with its own arguments, whose start finds them in memory. Whatever goes wrong with the reading, the app is still
-/// started.
+/// app with its own arguments, whose start finds them in memory. Both run above normal priority
+/// (<see cref="ReadAhead.StartPriority"/>) until the app's start is done. Whatever goes wrong with the reading, the app is
+/// still started.
 /// </summary>
 internal static class Program
 {
@@ -27,6 +28,9 @@ internal static class Program
             using (var self = Process.GetCurrentProcess())
             {
                 startedUtc = self.StartTime.ToUniversalTime();
+                // Ahead of the sign-in's other programs, so that this one is not the one waiting for a processor
+                // when it raises the app's priority below.
+                self.PriorityClass = ReadAhead.StartPriority;
             }
 
             bytesRead = ReadAhead.ReadAll(ReadAhead.Plan(StartupList(folder), folder), ReadAhead.ReadThreads);
@@ -45,8 +49,21 @@ internal static class Program
         start.EnvironmentVariables[ReadAhead.HandOffVariable] = ReadAhead.FormatHandOff(startedUtc, bytesRead);
         try
         {
-            using (Process.Start(start))
+            using (var app = Process.Start(start))
             {
+                try
+                {
+                    // Not inherited: Windows starts a child at normal priority. The app lowers itself back once its
+                    // start is done (StartupPriority).
+                    if (app != null)
+                    {
+                        app.PriorityClass = ReadAhead.StartPriority;
+                    }
+                }
+                catch (Exception)
+                {
+                    // Started is what matters.
+                }
             }
 
             return 0;

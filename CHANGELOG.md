@@ -28,6 +28,12 @@
   pressed then would have waited. A start to the tray now adds the files that warm-up loads (about 2.4 MB) to its
   start-up list, which the next sign-in reads with the rest. Whatever loaded more meanwhile, such as a capture's text
   recognition or a video's decoder, is left out, so as not to slow every later sign-in.
+- **At sign-in the app no longer waits its turn for a processor.** While Windows signs in, its other programs keep the
+  processors busy, and the app's start, which needs well under a second of processor time, waited for one: the .NET
+  runtime's own start took 1.4 to 3.2 s at the last four sign-ins, the longer the busier the machine, against 0.05 to
+  0.2 s at other times. The launcher now starts the app above normal priority, and the app goes back to normal as soon
+  as its hotkeys work. In a test with every processor kept busy, a .NET program reached its code in 0.38 s instead of
+  0.82, and did its work at almost the speed of an idle machine.
 
 ### 🔤 OCR
 

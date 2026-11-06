@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 3 entries (2026-11-06).
+- Since v0.74.0, `## Unreleased` holds 4 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.73.0+b0a10013`, installed by hand late on 2026-11-05 over the release
   v0.73.0 its updater had put there that evening, started at sign-in by the launcher its Run value names. It draws on
@@ -1587,8 +1587,18 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   UI Automation, 2.4 MB of the 19 files and 192 MB the running app later had beyond it; FFmpeg's 190 MB came with a
   video list opened later). So a start to the tray now adds to the list what it loaded by 5 s after the warm-up began
   (`StartupPrefetch.RecordWarmUp`, `WithWarmUp`), unless a real overlay opened meanwhile or the additions come to more
-  than 16 MB (`WarmUpLimit`). Next: the sign-in after that is installed (`launcher=` a few MB more, no `UiStall` at the
-  warm-up). Moving the install to
+  than 16 MB (`WarmUpLimit`). The sign-in on 2026-11-07 06:18 (same build): `launcher=6582ms/134MB
+  beforeMain=2179/78 hotkeysAt=690 systemCpu=69%`, about 9.5 s; the warm-up's bind took 295 ms and logged no stall.
+  `beforeMain` at the four sign-ins grew with `systemCpu` (29% 1.4 s, 60% 2.0, 69% 2.2, 99% 3.2) against 0.07-0.2 s at
+  other launches, with 62-94 ms of it on the CPU: the start waited for a processor. A throwaway probe kept all 16
+  processors busy at normal priority (32 threads) and started a .NET 10 console program at each priority, ten times
+  each, alternating: to Main 817 ms (551-862) at normal against 376 (180-420) above normal (54-55 idle), and 300 ms of
+  work in 570 (531-687) against 317 (307-326); above normal reached Main later than idle because its parent, starved
+  too, raised it only after starting it. So the launcher raises its own priority first, then the app's right after
+  starting it (`ReadAhead.StartPriority`, AboveNormal), and the app lowers itself to normal when `Startup.Timings` is
+  complete, or a minute after Main (`StartupPriority`), only if it still has the launcher's priority. Checked with the
+  built launcher and a stand-in app: it ran AboveNormal with the hand-off. Next: a sign-in on that build (`beforeMain`
+  near the other launches' at a busy `systemCpu`, and the running app at normal priority after). Moving the install to
   the SSD would do the rest; the user declined. `hardFaults` stays high, as a fault on a file read through still
   counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
   was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files
