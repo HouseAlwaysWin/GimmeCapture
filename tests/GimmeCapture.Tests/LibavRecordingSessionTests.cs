@@ -232,6 +232,7 @@ public sealed class LibavRecordingSessionTests : IDisposable
         using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = false, UseWallClockPts = true };
 
         // Inside both windows: the crimson one is on top, on screen.
+        above.EnsureOnTopAt(460, 330);
         await RecordAsync(
             session.StartAsync(path, 300, 250, 320, 160, Fps, drawMouse: false, VideoCodec.H264),
             session.StopAsync,
@@ -248,6 +249,7 @@ public sealed class LibavRecordingSessionTests : IDisposable
         using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = true, UseWallClockPts = true, UseDesktopDuplication = duplicate };
 
         // Well inside the window, below its title bar.
+        window.EnsureOnTopAt(460, 330);
         await RecordAsync(
             session.StartAsync(path, 300, 250, 320, 160, Fps, drawMouse: false, VideoCodec.H265),
             session.StopAsync,
@@ -257,15 +259,46 @@ public sealed class LibavRecordingSessionTests : IDisposable
         Assert.Equal(expectedSource, session.CaptureSourceName);
         Assert.Equal(AVColorSpace.AVCOL_SPC_BT470BG, ReadColourSpace(path));
         AssertCentreIs(Color.SteelBlue, await LibavVideoFramePlayer.DecodeFrameAtAsync(path, 0.5, 320, 160), tolerance: 3);
+
+        // The captured BGRA goes to NVENC as it is: it must not bring gdigrab's intra-picture marks along, which made
+        // every frame a keyframe, nor a time of its own. A keyframe every two seconds: one in a second and a half.
+        Assert.Equal(1, CountKeyPackets(path));
+        using var player = new LibavVideoFramePlayer();
+        Assert.InRange(await player.ProbeDurationSecondsAsync(path) ?? 0, 0.5, 4.0);
+        Assert.Equal(Fps, LibavClipExporter.ProbeFps(path));
+    }
+
+    private static unsafe int CountKeyPackets(string path)
+    {
+        AVFormatContext* format = null;
+        AVPacket* packet = ffmpeg.av_packet_alloc();
+        try
+        {
+            Assert.True(ffmpeg.avformat_open_input(&format, path, null, null) >= 0);
+            int keys = 0;
+            while (ffmpeg.av_read_frame(format, packet) >= 0)
+            {
+                keys += (packet->flags & ffmpeg.AV_PKT_FLAG_KEY) != 0 ? 1 : 0;
+                ffmpeg.av_packet_unref(packet);
+            }
+
+            return keys;
+        }
+        finally
+        {
+            ffmpeg.av_packet_free(&packet);
+            ffmpeg.avformat_close_input(&format);
+        }
     }
 
     private static void AssertCentreIs(Color expected, byte[]? bgra, int tolerance)
     {
         Assert.NotNull(bgra);
         int centre = ((80 * 320) + 160) * 4;
-        Assert.InRange(bgra[centre + 2], expected.R - tolerance, expected.R + tolerance);
-        Assert.InRange(bgra[centre + 1], expected.G - tolerance, expected.G + tolerance);
-        Assert.InRange(bgra[centre], expected.B - tolerance, expected.B + tolerance);
+        (int r, int g, int b) = (bgra[centre + 2], bgra[centre + 1], bgra[centre]);
+        Assert.True(
+            Math.Abs(r - expected.R) <= tolerance && Math.Abs(g - expected.G) <= tolerance && Math.Abs(b - expected.B) <= tolerance,
+            $"the centre is ({r}, {g}, {b}), the corner ({bgra[2]}, {bgra[1]}, {bgra[0]}); expected ({expected.R}, {expected.G}, {expected.B}) within {tolerance}");
     }
 
     // Whether Desktop Duplication opens on the region here and now: not on a machine without a display adapter that
@@ -354,6 +387,11 @@ public sealed class LibavRecordingSessionTests : IDisposable
                         Win32Helpers.SetWindowCaptureVisibility(Handle, visible: false);
                     }
 
+                    // Painted and composed before anything grabs it. Shown comes before the first paint, which in a
+                    // fresh test process can come late; until it does the screen shows a dark stand-in, and a colour
+                    // check read (31, ...) where the window is SteelBlue.
+                    _form.Refresh();
+                    DwmFlush();
                     shown.Set();
                 };
                 Application.Run(_form);
@@ -369,11 +407,127 @@ public sealed class LibavRecordingSessionTests : IDisposable
 
         public IntPtr Handle { get; private set; }
 
+        /// <summary>
+        /// Makes sure this window is the one on screen at the point (physical pixels, as a recording region is given),
+        /// raising it again for up to a second, and fails naming what is there instead. The screen is shared with
+        /// whoever runs the tests: twice a window of the browser in use covered the test window, which the colour check
+        /// then failed on (31, ...).
+        /// </summary>
+        public void EnsureOnTopAt(int x, int y)
+        {
+            IntPtr previous = SetThreadDpiAwarenessContext(PerMonitorAwareV2);
+            try
+            {
+                IntPtr there = IntPtr.Zero;
+                for (int attempt = 0; attempt < 10; attempt++)
+                {
+                    there = GetAncestor(WindowFromPoint(new PointStruct { X = x, Y = y }), GaRoot);
+                    if (there == Handle)
+                    {
+                        return;
+                    }
+
+                    SetWindowPos(Handle, HwndTopmost, 0, 0, 0, 0, SwpNoSize | SwpNoMove | SwpNoActivate | SwpShowWindow);
+                    DwmFlush();
+                    Thread.Sleep(100);
+                }
+
+                Assert.Fail($"The test window ({Describe(Handle)}) is covered at ({x}, {y}) by {Describe(there)}.");
+            }
+            finally
+            {
+                if (previous != IntPtr.Zero)
+                {
+                    SetThreadDpiAwarenessContext(previous);
+                }
+            }
+        }
+
+        private static string Describe(IntPtr window)
+        {
+            GetWindowThreadProcessId(window, out uint process);
+            string who;
+            try
+            {
+                using var owner = System.Diagnostics.Process.GetProcessById((int)process);
+                who = owner.ProcessName;
+            }
+            catch (ArgumentException)
+            {
+                who = $"process {process}";
+            }
+
+            var className = new System.Text.StringBuilder(128);
+            GetClassName(window, className, className.Capacity);
+            DwmGetWindowAttribute(window, DwmwaExtendedFrameBounds, out RectStruct bounds, System.Runtime.InteropServices.Marshal.SizeOf<RectStruct>());
+            bool topmost = (GetWindowLong(window, GwlExStyle) & WsExTopmost) != 0;
+            return $"{who} {className}, topmost {topmost}, visible {IsWindowVisible(window)}, ({bounds.Left},{bounds.Top})-({bounds.Right},{bounds.Bottom})";
+        }
+
         public void Dispose()
         {
             _form?.Invoke(() => _form.Close());
             _thread.Join(TimeSpan.FromSeconds(5));
         }
+
+        private const uint GaRoot = 2;
+        private const int GwlExStyle = -20;
+        private const int WsExTopmost = 0x8;
+        private const int DwmwaExtendedFrameBounds = 9;
+        private const uint SwpNoSize = 0x1;
+        private const uint SwpNoMove = 0x2;
+        private const uint SwpNoActivate = 0x10;
+        private const uint SwpShowWindow = 0x40;
+        private static readonly IntPtr HwndTopmost = new(-1);
+        private static readonly IntPtr PerMonitorAwareV2 = new(-4);
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct PointStruct
+        {
+            public int X;
+            public int Y;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct RectStruct
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        private static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out RectStruct value, int size);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern int GetWindowLong(IntPtr window, int index);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool IsWindowVisible(IntPtr window);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int capacity);
+
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        private static extern int DwmFlush();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr WindowFromPoint(PointStruct point);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
 
         // Appears without taking the keyboard from whatever the person running the tests is typing into.
         private sealed class QuietForm : Form

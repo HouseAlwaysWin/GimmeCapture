@@ -148,6 +148,46 @@ internal sealed unsafe class RecordingSegmentWriter : IDisposable
         LibavRecordingEncoder.WriteEncodedPackets(_encoder, _output, _stream, _packet, ref _packets);
     }
 
+    /// <summary>
+    /// Encodes <paramref name="frame"/> itself, stamped with <paramref name="pts"/> (in 1/fps): a captured frame already
+    /// in the encoder's pixel format and size, which saves converting it into <see cref="FrameToFill"/>'s, a copy of every
+    /// frame. The encoder takes a reference of its own; the caller keeps its. What the frame says of itself besides its
+    /// pixels is cleared first (<see cref="ClearSourceProperties"/>).
+    /// </summary>
+    public void EncodeAsIs(AVFrame* frame, long pts)
+    {
+        ClearSourceProperties(frame);
+        frame->pts = pts;
+        _lastPts = Math.Max(_lastPts, pts);
+        FrameCount++;
+        ThrowIfErr(ffmpeg.avcodec_send_frame(_encoder, frame), "send_frame(enc,as is)");
+        LibavRecordingEncoder.WriteEncodedPackets(_encoder, _output, _stream, _packet, ref _packets);
+    }
+
+    /// <summary>
+    /// Leaves a captured frame saying no more than <see cref="FrameToFill"/>'s frames do: its pixels, format, size and
+    /// stamp. A grabber's frame says more, which an encoder acts on: gdigrab's come out of the bitmap decoder as intra
+    /// pictures with the key flag, which an encoder takes for an order to make every frame a keyframe, and Desktop
+    /// Duplication's carry sRGB tags and a 1:1 aspect of their own.
+    /// </summary>
+    public static void ClearSourceProperties(AVFrame* frame)
+    {
+        frame->pict_type = AVPictureType.AV_PICTURE_TYPE_NONE;
+        frame->flags = 0;
+        frame->duration = 0;
+        frame->time_base = new AVRational { num = 0, den = 1 };
+        frame->sample_aspect_ratio = new AVRational { num = 0, den = 1 };
+        frame->colorspace = AVColorSpace.AVCOL_SPC_UNSPECIFIED;
+        frame->color_range = AVColorRange.AVCOL_RANGE_UNSPECIFIED;
+        frame->color_primaries = AVColorPrimaries.AVCOL_PRI_UNSPECIFIED;
+        frame->color_trc = AVColorTransferCharacteristic.AVCOL_TRC_UNSPECIFIED;
+        frame->chroma_location = AVChromaLocation.AVCHROMA_LOC_UNSPECIFIED;
+        if (frame->nb_side_data > 0)
+        {
+            ffmpeg.av_frame_side_data_free(&frame->side_data, &frame->nb_side_data);
+        }
+    }
+
     /// <summary>Encodes a frame the caller allocated and stamped, then frees it.</summary>
     public void EncodeAndFree(AVFrame* frame, string context)
     {

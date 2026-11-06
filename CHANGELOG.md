@@ -39,6 +39,12 @@
   card beside the chip the display hangs off, the app now asks Windows about its displays before it starts the NVIDIA
   driver: started first, the driver had Windows put the whole app on the NVIDIA card, from which Desktop Duplication
   cannot reach the display.
+- **A recording then takes about a fifth less processor again.** Desktop Duplication and GDI both hand over each frame
+  in the colour format NVENC and AMD's encoder take, yet every frame was still copied into one of the encoder's own
+  before it was encoded. A frame already in the encoder's format and size, with nothing drawn on it (a cursor highlight,
+  clicks, keystrokes or the webcam draw on it), now goes to the encoder as it is: recording 1450x900 at 30 fps on NVENC
+  took 210-214 M cycles a second instead of 263-265, and 601-604 instead of 621-632 where GDI grabs it. The file is the
+  same: a keyframe every two seconds, the same colours and the same length.
 
 ### 🛡️ Reliability
 

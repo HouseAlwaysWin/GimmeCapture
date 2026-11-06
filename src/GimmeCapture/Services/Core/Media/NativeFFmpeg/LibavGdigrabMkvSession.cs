@@ -282,7 +282,8 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         return null;
     }
 
-    // Single-threaded encode step: converts the captured frame straight into the writer's frame and encodes it here.
+    // Single-threaded encode step: hands the captured frame to the encoder as it is when it already is what the encoder
+    // takes, or converts it into the writer's frame, and encodes it here.
     private static unsafe void EncodeCaptured(
         AVFrame* captured,
         RecordingSegmentWriter writer,
@@ -290,8 +291,12 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         WallClockPts? wallClock,
         TaskCompletionSource<bool> firstFrameTcs)
     {
-        AVFrame* encFrame = writer.FrameToFill();
-        converter.Convert(captured, encFrame);
+        bool asIs = converter.PassesThrough(captured);
+        if (!asIs)
+        {
+            converter.Convert(captured, writer.FrameToFill());
+        }
+
         long framePts = wallClock?.Next() ?? writer.FrameCount;
 
         if (writer.FrameCount == 0)
@@ -299,7 +304,14 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             firstFrameTcs.TrySetResult(true);
         }
 
-        writer.EncodeFrame(framePts);
+        if (asIs)
+        {
+            writer.EncodeAsIs(captured, framePts);
+        }
+        else
+        {
+            writer.EncodeFrame(framePts);
+        }
     }
 
     // Producer/consumer variant of the encode loop. This (the worker) thread grabs + composites
@@ -381,19 +393,34 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         ref long producedFrames,
         TaskCompletionSource<bool> firstFrameTcs)
     {
-        AVFrame* encFrame = ffmpeg.av_frame_alloc();
-        try
+        AVFrame* encFrame;
+        if (converter.PassesThrough(captured))
         {
-            encFrame->format = (int)encCtx->pix_fmt;
-            encFrame->width = encCtx->width;
-            encFrame->height = encCtx->height;
-            ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "frame_get_buffer(enc,pipe)");
-            converter.Convert(captured, encFrame);
+            // A second reference to the captured pixels, which the next grab leaves alone: it fills a buffer of its own.
+            encFrame = ffmpeg.av_frame_clone(captured);
+            if (encFrame == null)
+            {
+                throw new OutOfMemoryException("frame_clone(enc,pipe)");
+            }
+
+            RecordingSegmentWriter.ClearSourceProperties(encFrame);
         }
-        catch
+        else
         {
-            ffmpeg.av_frame_free(&encFrame);
-            throw;
+            encFrame = ffmpeg.av_frame_alloc();
+            try
+            {
+                encFrame->format = (int)encCtx->pix_fmt;
+                encFrame->width = encCtx->width;
+                encFrame->height = encCtx->height;
+                ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "frame_get_buffer(enc,pipe)");
+                converter.Convert(captured, encFrame);
+            }
+            catch
+            {
+                ffmpeg.av_frame_free(&encFrame);
+                throw;
+            }
         }
 
         encFrame->pts = wallClock?.Next() ?? producedFrames;
@@ -464,6 +491,17 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             _targetHeight = encoder->height;
             _overlays = overlays;
         }
+
+        /// <summary>
+        /// Whether <paramref name="captured"/> already is what the encoder takes, in its pixel format and size with nothing
+        /// to draw on it, so it is encoded as it is rather than converted: BGRA from either grabber for NVENC and AMF.
+        /// Converting it was a copy of every frame, 48-49 M cycles a second of a 1450x900 recording's 263-265.
+        /// </summary>
+        public bool PassesThrough(AVFrame* captured) =>
+            _overlays == null
+            && (AVPixelFormat)captured->format == _targetFormat
+            && captured->width == _targetWidth
+            && captured->height == _targetHeight;
 
         /// <summary>Converts <paramref name="captured"/> into <paramref name="target"/>, a frame in the encoder's format.</summary>
         public void Convert(AVFrame* captured, AVFrame* target)

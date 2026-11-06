@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 5 entries (2026-11-06).
+- Since v0.73.0, `## Unreleased` holds 6 entries (2026-11-06).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.73.0 (2026-11-05), updated by its own updater from
   0.72.1+d33e5172, a build copied in by hand like those since 2026-11-02, with the sign-in launcher its Run value
   starts. The user turned on software rendering ("Use less memory") the same evening.
@@ -942,6 +942,22 @@ tool.
   `RecordingDesktopDuplicationProbeTests` (opt-in, alone in its process: Record mode's warm-up, `encoderWarmUp=cuInit`,
   then a real `RecordingService` recording logs `Capture source: ddagrab` on the AMD chip; without `DisplayAdapterOrder`
   it logged the NVIDIA card, "did not open" and `Capture source: gdigrab`).
+- Done since batch 1 (2026-11-06, "Keep optimizing"): **the converter's copy of every captured frame** (Recording).
+  With Desktop Duplication a 1450x900@30 recording on `hevc_nvenc` still took 245-265 M cycles/s. Timed by stage on the
+  recording thread (a throwaway probe, the session's own loop): grab 85-86, `CapturedFrameConverter`'s BGRA to BGRA
+  `sws_scale` 48-49 (0.23 ms a frame in a cache-warm loop, double that on a frame fresh from `hwdownload`), the encoder
+  88; the process 263-265. Where the frame already is in the encoder's pixel format and size and no overlay draws on
+  it (`PassesThrough`: BGRA from either grabber on NVENC and AMF), it now goes to the encoder itself
+  (`RecordingSegmentWriter.EncodeAsIs`; the pipelined loop queues a clone), cleared first of what it says of itself
+  (`ClearSourceProperties`): gdigrab's frames come out of the BMP decoder as intra pictures with the key flag, which an
+  encoder takes for an order to make the frame a keyframe (20 keyframes in 20 frames in the writer test without the
+  clearing), and ddagrab's carry RGB/sRGB tags and a 1:1 aspect. By stage: 210-214 M cycles/s. Through the real
+  session, on and off interleaved: 211, 219, 251 against 245, 297, 275; gdigrab's path 601-604 against 621-632.
+  `RecordingSegmentWriterTests.FramesEncodedAsIs_MakeNoKeyframesOfTheirOwn`, `ClearingAFramesSourceProperties_...`;
+  the opt-in NVENC session tests now also count keyframes (one in 1.5 s) and check the length and frame rate. Found
+  on the way: those opt-in colour tests failed twice reading (31, ...) where the window is SteelBlue; the browser in
+  use was on top at the region (the check that now runs first said so), so `TargetWindow` paints and waits for a
+  composition before it is used, and `EnsureOnTopAt` raises it again for up to a second or names what covers it.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1299,6 +1315,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   end, so after a pause every later part plays early by the video's overrun (45-105 ms on Windows). Give it a `Feed`,
   placing each packet by its arrival as on Windows, and the `PadToVideoLength` step; check a paused recording's file
   with `RecordingAvSyncTests`' file mode.
+- **Overlays still convert every frame twice** (S-M). With a cursor highlight, clicks, keystrokes or the webcam on,
+  `CapturedFrameConverter` copies each frame to BGRA, draws on it and converts it again; on NVENC and AMF, which take
+  BGRA, the overlays could draw on the captured frame itself (after `av_frame_make_writable`) and it could go to the
+  encoder as it is, saving both passes (est. twice the 48-49 M cycles/s measured for one at 1450x900@30). The user
+  records without overlays.
 - **Desktop Duplication straight into the encoder** (L). A region recording reads the duplicated region back to the
   CPU (`hwdownload`) for NVENC to upload again; where the display and the encoder share an adapter (a desktop's own
   card), the D3D11 frame could go to the encoder as it is. On the laptop the panel hangs off the AMD chip and NVENC is
