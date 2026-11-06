@@ -168,6 +168,7 @@ public partial class SnipWindowViewModel
         }
 
         RefreshInteractionRegion();
+        await RetakeDrawingSnapshotAsync();
     }
 
     /// <summary>

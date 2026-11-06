@@ -99,6 +99,39 @@ public sealed class DrawingModeSnapshotTests
         Assert.Throws<ObjectDisposedException>(() => second.PixelSize);
     }
 
+    [Fact]
+    public async Task FreezingWhileDrawing_TakesTheSelectionFromTheStill_ForWhatIsAlreadyDrawn()
+    {
+        // Drawing began on a live overlay, so the mosaics sample a live grab. The toolbar then freezes it, and the export
+        // crops the still from then on: the mosaics kept sampling the grab taken before, which could show other pixels.
+        AvaloniaRenderer.EnsureRegistered();
+        var capture = new Mock<IScreenCaptureService>();
+        capture
+            .Setup(c => c.CaptureScreenAsync(It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(), It.IsAny<bool>()))
+            .ReturnsAsync(() => CreateStill(200, 100));
+        using var vm = new SnipWindowViewModel(Colors.Red, 2.0, capture.Object);
+        vm.Surface.UseHeadlessBackdropForTest();
+        vm.ViewportSize = new Size(100, 50);
+        vm.ScreenOffset = new PixelPoint(0, 0);
+        vm.VisualScaling = 2.0;
+        vm.SelectionRect = new Rect(10, 5, 30, 20);
+        var liveGrab = AvaloniaRenderer.Create(4, 4, static (_, _) => 0xFF000000u);
+        vm.AdoptDrawingModeSnapshot(liveGrab);
+        var mosaic = new Annotation { Type = AnnotationType.Mosaic, DrawingModeSnapshot = liveGrab };
+        vm.Annotations.Add(mosaic);
+
+        await vm.ToggleFreezeFrameLiveAsync();
+
+        Assert.True(vm.Surface.IsFrozen);
+        Bitmap? snapshot = vm.DrawingModeSnapshot;
+        Assert.NotNull(snapshot);
+        Assert.NotSame(liveGrab, snapshot);
+        Assert.Same(snapshot, mosaic.DrawingModeSnapshot);
+        // The selection at the still's scaling: 60x40 pixels from (20, 10).
+        Assert.Equal(new PixelSize(60, 40), snapshot!.PixelSize);
+        Assert.Equal(StillPixel(20, 10), AvaloniaRenderer.ReadPixels(snapshot)[0]);
+    }
+
     // Each pixel of the still as the word it is in BGRA memory: opaque, and no two alike within the crop.
     private static uint StillPixel(int x, int y) =>
         0xFF000000u | ((uint)x << 16) | ((uint)y << 8) | (uint)((x + y) % 256);

@@ -255,6 +255,35 @@ public partial class SnipWindowViewModel
     internal Task<Avalonia.Media.Imaging.Bitmap?> CaptureDrawingSourceForTestAsync() => CaptureDrawingSourceAsync();
 
     /// <summary>
+    /// Takes the selection's pixels again for the mosaics and blurs being drawn, as the overlay freezes or goes back to
+    /// live. They kept sampling the picture taken when drawing began: a live grab under an overlay frozen since, whose
+    /// export crops its still, or the still under one gone live, whose export grabs the screen; so the preview and the
+    /// saved picture could disagree. Nothing to do while none is kept.
+    /// </summary>
+    private async Task RetakeDrawingSnapshotAsync()
+    {
+        if (DrawingModeSnapshot == null && !IsDrawingMode && !IsSelectionSnapshotLocked)
+        {
+            return;
+        }
+
+        int captureVersion = ++_selectionSnapshotCaptureVersion;
+        Avalonia.Media.Imaging.Bitmap? snapshot = await CaptureDrawingSourceAsync();
+        if (snapshot == null)
+        {
+            return;
+        }
+
+        if (captureVersion != _selectionSnapshotCaptureVersion)
+        {
+            snapshot.Dispose();
+            return;
+        }
+
+        AdoptDrawingModeSnapshot(snapshot);
+    }
+
+    /// <summary>
     /// Makes <paramref name="snapshot"/> the selection's pixels, disposing the ones before, and has the mosaics and blurs
     /// already drawn take it too: a preview reads the picture again whenever it redraws, as when one is dragged.
     /// </summary>

@@ -30,6 +30,14 @@
   there, for up to 58 ms. The meter now reads on a thread of its own, tells the interface only when a level changes,
   and leaves the microphone alone when the recording does not take it.
 
+### 🛡️ Reliability
+
+- **A mosaic or blur shows what will be saved after the capture overlay is frozen or unfrozen while you draw.** Drawing
+  on a live overlay takes a picture of the selection for mosaics and blurs to sample. Freezing the overlay from its
+  toolbar then saves from the frozen picture, and going back to live from the screen, but what was being drawn kept
+  sampling the picture taken before, so the preview could show other pixels than the saved capture. It now takes the
+  selection again from what will be saved.
+
 ## v0.73.0 - 2026-11-05
 
 ### ⚡ Performance
