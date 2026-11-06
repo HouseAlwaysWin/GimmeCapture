@@ -50,6 +50,7 @@
     <!-- Open the main window, and a pin, in a real Win32 window. -->
     <Compile Remove="MainWindowOpenProbeTests.cs" />
     <Compile Remove="PinOpenProbeTests.cs" />
+    <Compile Remove="PinPlaybackProbeTests.cs" />
     <!-- Maps DLLs as images and copies them with robocopy. -->
     <Compile Remove="StartupPrefetchProbeTests.cs" />
   </ItemGroup>

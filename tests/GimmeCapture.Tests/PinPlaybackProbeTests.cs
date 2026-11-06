@@ -1,0 +1,125 @@
+using System.Diagnostics;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Platform;
+using Avalonia.Threading;
+using GimmeCapture.Services.Interop;
+using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.Views.Floating;
+using Xunit.Abstractions;
+
+namespace GimmeCapture.Tests;
+
+/// <summary>
+/// What a pinned recording costs while it plays, thread by thread, in a real Win32 window off screen: the pin of a
+/// recording the user made, shown pixel for pixel and muted, as the overlay opens one after a recording. On a 1450x900
+/// HEVC recording drawn on the GPU (2026-11-06): the process 1032-1055 M cycles/s, Avalonia's render thread 469-496, the
+/// decode thread 283-287, which converting NV12 through YUV420P (LibavBgraConverter) took to 188-212. Opt-in
+/// (PIN_PLAYBACK_PROBE=1, PIN_PLAYBACK_CLIP=a video file; PIN_PLAYBACK_RENDERER=software draws on the CPU): it sets up
+/// Avalonia on the real platform, which a process can do only once.
+/// </summary>
+public sealed class PinPlaybackProbeTests(ITestOutputHelper output) : IDisposable
+{
+    private readonly string _baseDir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_baseDir, true); } catch { /* best effort */ }
+    }
+
+    [OptInFact("PIN_PLAYBACK_PROBE=1", "PIN_PLAYBACK_CLIP")]
+    public void APinnedRecordingPlaying_ThreadByThread()
+    {
+        string clip = Environment.GetEnvironmentVariable("PIN_PLAYBACK_CLIP")!;
+        bool software = Environment.GetEnvironmentVariable("PIN_PLAYBACK_RENDERER") == "software";
+        AppBuilder.Configure<GimmeCapture.App>()
+            .UsePlatformDetect()
+            .With(GimmeCapture.Composition.StartupRenderer.Win32Options(software))
+            .WithInterFont()
+            .SetupWithoutStarting();
+        GimmeCapture.Composition.StartupRenderer.IsSoftware = software;
+
+        // As the app runs in the tray: its host window shown, so the renderer's own set-up is paid before the pin.
+        var host = new Window
+        {
+            Width = 1,
+            Height = 1,
+            Opacity = 0,
+            Background = Brushes.Transparent,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            CanResize = false,
+            WindowDecorations = WindowDecorations.None,
+            TransparencyLevelHint = [WindowTransparencyLevel.Transparent],
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Position = new PixelPoint(-32000, -32000),
+        };
+        host.Show();
+        PumpFor(TimeSpan.FromSeconds(2));
+
+        var (width, height) = ProbeSize(clip);
+        double scaling = host.RenderScaling;
+        var settings = new AppSettingsService(_baseDir);
+        var vm = new FloatingVideoViewModel(
+            clip, width, height, width / scaling, height / scaling, Colors.Red, 2.0, false, false,
+            Moq.Mock.Of<GimmeCapture.Services.Abstractions.IClipboardService>(), settings)
+        {
+            IsMuted = true,
+        };
+        var padding = vm.WindowPadding;
+        var window = new FloatingVideoWindow
+        {
+            DataContext = vm,
+            Width = (width / scaling) + padding.Left + padding.Right,
+            Height = (height / scaling) + padding.Top + padding.Bottom,
+            Position = new PixelPoint(-20000, -20000),
+            ShowActivated = false,
+        };
+        window.Show();
+        PumpFor(TimeSpan.FromSeconds(4));
+
+        uint ui = ThreadActivity.CurrentThreadId;
+        long before = ProcessCycles();
+        var watch = Stopwatch.StartNew();
+        var rows = ThreadActivity.Measure(() => PumpFor(TimeSpan.FromSeconds(10)));
+        double seconds = watch.Elapsed.TotalSeconds;
+        long process = ProcessCycles() - before;
+
+        output.WriteLine($"{(software ? "software" : "GPU")} rendering, {Path.GetFileName(clip)} {width}x{height} at scaling {scaling}: " +
+            $"process {process / 1e6 / seconds:0} M cycles/s ({process / 1e6 / seconds / 32:0.0}% of a 3.2 GHz core)");
+        foreach (var row in rows.OrderByDescending(r => r.MegaCycles).Take(8))
+        {
+            output.WriteLine($"  {row.MegaCycles,8:0.0} M cycles/s {row.Wakeups,7:0.0} wakeups/s  {(row.Thread == ui ? "UI thread" : ThreadActivity.Describe(row.Thread))}");
+        }
+
+        window.Close();
+        vm.Dispose();
+        PumpFor(TimeSpan.FromMilliseconds(500));
+    }
+
+    private static (int Width, int Height) ProbeSize(string clip)
+    {
+        GimmeCapture.Services.Core.Media.NativeFFmpeg.FFmpegRuntime.EnsureInitialized();
+        using var player = new GimmeCapture.Services.Core.Media.NativeFFmpeg.LibavVideoFramePlayer();
+        var size = player.ProbeVideoSizeAsync(clip).GetAwaiter().GetResult();
+        Assert.NotNull(size);
+        return size.Value;
+    }
+
+    private static void PumpFor(TimeSpan time)
+    {
+        using var cts = new CancellationTokenSource();
+        using var end = new Timer(_ => Dispatcher.UIThread.Post(cts.Cancel), null, time, Timeout.InfiniteTimeSpan);
+        Dispatcher.UIThread.MainLoop(cts.Token);
+    }
+
+    private static long ProcessCycles()
+    {
+        QueryProcessCycleTime(Process.GetCurrentProcess().Handle, out ulong cycles);
+        return (long)cycles;
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool QueryProcessCycleTime(IntPtr process, out ulong cycles);
+}

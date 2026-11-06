@@ -45,6 +45,11 @@
   clicks, keystrokes or the webcam draw on it), now goes to the encoder as it is: recording 1450x900 at 30 fps on NVENC
   took 210-214 M cycles a second instead of 263-265, and 601-604 instead of 621-632 where GDI grabs it. The file is the
   same: a keyframe every two seconds, the same colours and the same length.
+- **A pinned recording takes less processor while it plays.** A video decoded on the graphics card comes back in a
+  colour format (NV12) that the pin converted to its own by a slow general route: on a 1450x900 recording that
+  conversion was most of the work of the pin's decoding thread. It now takes a fast route, the same picture to the eye:
+  that thread took 188-212 M cycles a second instead of 286, and the whole app 975-1005 instead of 1055 while the pin
+  played, drawing on the graphics card.
 
 ### 🛡️ Reliability
 

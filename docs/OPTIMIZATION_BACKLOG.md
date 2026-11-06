@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 6 entries (2026-11-06).
+- Since v0.73.0, `## Unreleased` holds 7 entries (2026-11-06).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.73.0 (2026-11-05), updated by its own updater from
   0.72.1+d33e5172, a build copied in by hand like those since 2026-11-02, with the sign-in launcher its Run value
   starts. The user turned on software rendering ("Use less memory") the same evening.
@@ -963,6 +963,22 @@ tool.
   on the way: those opt-in colour tests failed twice reading (31, ...) where the window is SteelBlue; the browser in
   use was on top at the region (the check that now runs first said so), so `TargetWindow` paints and waits for a
   composition before it is used, and `EnsureOnTopAt` raises it again for up to a second or names what covers it.
+- Done since batch 1 (2026-11-06, "繼續優化"): **a playing pin's NV12 to BGRA conversion** (Pins). The user's log since
+  v0.73.0 shows overlays with OCR and no recordings yet; their recordings end in a pin that loops while it stays open.
+  `PinPlaybackProbeTests` (opt-in, the real Win32 platform, a pin of the user's 1450x900 HEVC recording `160036` off
+  screen and muted, 10 s after 4): drawing on the GPU, as the user's log says they do again, the process took 1032-1055
+  M cycles/s, about a third of a core: Avalonia's render thread (`DwmRenderTimerLoop`, 430-456 wakeups/s) 469-496, the
+  decode thread 283-287, an unnamed native thread 94-99, the UI thread 78-92; drawing on the CPU 1147, its render thread
+  646. The decode path by stage (a throwaway probe, D3D11VA, 300 frames of that recording): decode 0.54 M cycles a
+  frame, the download to NV12 2.01, swscale's NV12 to BGRA 5.68, which has no fast route; NV12 to YUV420P and then
+  swscale's fast YUV420P route 2.36 for both, so 247 against 162 M cycles/s at 30 fps. The bundled `scale_d3d11` puts out
+  only NV12 and P010, so no conversion on the GPU. The two routes on the same 120 frames: 21% of pixels apart, mostly by
+  1, 1.0% by more than 8, at most 62 on coloured edges (the fast route repeats each chroma sample over its 2x2 pixels),
+  PSNR 45.7 dB; an 8x crop of the block that differed most looked the same. `LibavBgraConverter` takes the YUV420P step
+  for NV12 shown at its own size (`GoesThroughPlanar`; the pin of a recording, not the editor's scaled frames), and the
+  player's loop uses it. The probe, interleaved: the decode thread 212, 188 against 286.5, 286.6 M cycles/s, the process
+  1005, 975 against 1055, 1055. `LibavBgraConverterTests` (the route; BT.709 and BT.601 tags honoured in the second step;
+  PSNR over 40 dB against the direct route on a striped picture; set up again for a frame of another size).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1366,9 +1382,16 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done
   (Status).
-- **Lower**: video pins decode at full size and copy each frame twice (`LatestFrameHandoff.cs:40`, then
-  `FloatingVideoViewModel.Media.cs:564`, 33 MB per frame at 4K) and keep decoding when covered; the translation layer
-  adds results one at a time, rebuilding its region per item (`FloatingTranslationWindow.axaml.cs:109-117`).
+- **A playing pin's drawing** (M-L). Drawing on the GPU, Avalonia's render thread took 469-496 of a playing pin's
+  975-1005 M cycles/s at 1450x900 (`PinPlaybackProbeTests`), uploading the pin's `WriteableBitmap` every frame and
+  waking 430-456 times a second; on the CPU it took 646. Find what it does per frame before acting: a paused pin as the
+  baseline, the toolbar's 15 fps playhead apart from the 30 fps frames. A frame the GPU could show as it decoded it
+  (Avalonia's GPU interop) would leave out the download, the conversion, both copies and the upload, at the cost of a
+  second way to draw a pin.
+- **Lower**: video pins copy each frame twice (`LatestFrameHandoff.cs:40`, then `FloatingVideoViewModel.Media.cs:564`,
+  about 50 M cycles/s each at 1450x900, 33 MB a frame at 4K) and keep decoding when covered; the conversion to BGRA is
+  done (Status). The translation layer adds results one at a time, rebuilding its region per item
+  (`FloatingTranslationWindow.axaml.cs:109-117`).
 
 ### Snip overlay
 

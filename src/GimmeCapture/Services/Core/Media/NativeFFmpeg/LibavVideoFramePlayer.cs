@@ -660,7 +660,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                 AVFormatContext* fmt = null;
                 AVCodecContext* decCtx = null;
                 AVBufferRef* hwDeviceCtx = null;
-                SwsContext* sws = null;
+                LibavBgraConverter? converter = null;
                 AVPacket* pkt = null;
                 AVFrame* decFrame = null;
                 AVFrame* swFrame = null;
@@ -761,12 +761,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     if (pkt == null || decFrame == null || swFrame == null || outFrame == null)
                         throw new OutOfMemoryException("alloc packet/frame");
 
-                    // sws is built lazily on the first decoded frame: under hw decode the source pixel format is
+                    // Its scalers are built on the first decoded frame: under hw decode the source pixel format is
                     // only known after the GPU→system download (NV12), not from decCtx->pix_fmt (D3D11).
-                    int swsSrcWidth = 0, swsSrcHeight = 0;
-                    AVPixelFormat swsSrcFormat = AVPixelFormat.AV_PIX_FMT_NONE;
-                    AVColorSpace swsSrcSpace = AVColorSpace.AVCOL_SPC_UNSPECIFIED;
-                    AVColorRange swsSrcRange = AVColorRange.AVCOL_RANGE_UNSPECIFIED;
+                    converter = new LibavBgraConverter();
 
                     outFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
                     outFrame->width = outputWidth;
@@ -967,41 +964,11 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                     srcFrame = swFrame;
                                 }
 
-                                // sws is built lazily and keyed on the true source format+size — only known here for
-                                // the hw path (post-download NV12), and rebuilt if a stream ever changes dimensions.
-                                // The colours are the decoded frame's: a download from the GPU carries none.
-                                if (sws == null || srcFrame->width != swsSrcWidth || srcFrame->height != swsSrcHeight ||
-                                    (AVPixelFormat)srcFrame->format != swsSrcFormat ||
-                                    decFrame->colorspace != swsSrcSpace || decFrame->color_range != swsSrcRange)
-                                {
-                                    if (sws != null)
-                                    {
-                                        ffmpeg.sws_freeContext(sws);
-                                    }
-
-                                    swsSrcWidth = srcFrame->width;
-                                    swsSrcHeight = srcFrame->height;
-                                    swsSrcFormat = (AVPixelFormat)srcFrame->format;
-                                    swsSrcSpace = decFrame->colorspace;
-                                    swsSrcRange = decFrame->color_range;
-                                    sws = ffmpeg.sws_getContext(
-                                        swsSrcWidth, swsSrcHeight, swsSrcFormat,
-                                        outputWidth, outputHeight, AVPixelFormat.AV_PIX_FMT_BGRA,
-                                        (int)SwsFlags.SWS_BILINEAR, null, null, null);
-                                    if (sws == null)
-                                        throw new InvalidOperationException("sws_getContext failed.");
-                                    LibavColorMatrix.ReadAs(sws, swsSrcSpace, swsSrcRange);
-                                }
-
+                                // Keyed on the true source format and size, only known here for the hw path (the
+                                // downloaded NV12), and set up again if a stream ever changes them. The colours are the
+                                // decoded frame's: a download from the GPU carries none.
                                 ThrowIfErr(ffmpeg.av_frame_make_writable(outFrame), "out_frame_writable");
-                                ffmpeg.sws_scale(
-                                    sws,
-                                    srcFrame->data,
-                                    srcFrame->linesize,
-                                    0,
-                                    srcFrame->height,
-                                    outFrame->data,
-                                    outFrame->linesize);
+                                converter.Convert(srcFrame, decFrame->colorspace, decFrame->color_range, outFrame);
 
                                 // outFrame's buffer was allocated with 1-byte alignment, so its rows are packed and the
                                 // scaler's output already is the frame: hand it over without copying it first.
@@ -1077,7 +1044,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     if (decFrame != null) ffmpeg.av_frame_free(&decFrame);
                     if (swFrame != null) ffmpeg.av_frame_free(&swFrame);
                     if (outFrame != null) ffmpeg.av_frame_free(&outFrame);
-                    if (sws != null) ffmpeg.sws_freeContext(sws);
+                    converter?.Dispose();
                     if (decCtx != null) ffmpeg.avcodec_free_context(&decCtx);
                     if (hwDeviceCtx != null) ffmpeg.av_buffer_unref(&hwDeviceCtx);
                     if (fmt != null) ffmpeg.avformat_close_input(&fmt);
