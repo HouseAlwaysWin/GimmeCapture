@@ -9,6 +9,19 @@
 
 ---
 
+## Unreleased
+
+### ⚡ Performance
+
+- **Starting with Windows from a hard disk is quick again, and quicker than before.** v0.74.0 read only the parts of
+  the app's files its last start had used, which halved what it read but made it slower: at sign-in other programs
+  read the same disk, each read waits behind theirs however small it is, and many small reads waited far longer than a
+  few whole files. At the first sign-in with it the launcher took 42.6 s for 87 MB, where whole files had taken 22.6 s
+  for 141 MB the day before. The launcher, like the app's own read-ahead, reads whole files again, now four at a time,
+  so the disk always has some of the app's reads to choose from. In tests on that disk with other reads going on, the
+  app's 133 MB took 4.1-4.8 s instead of 10.2-12.0 one file at a time, and 2 s instead of 3.5-4.0 with the disk to
+  itself.
+
 ## v0.74.0 - 2026-11-06
 
 ### ⚡ Performance

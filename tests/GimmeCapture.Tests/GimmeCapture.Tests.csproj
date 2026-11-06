@@ -53,6 +53,8 @@
     <Compile Remove="PinPlaybackProbeTests.cs" />
     <!-- Maps DLLs as images and copies them with robocopy. -->
     <Compile Remove="StartupPrefetchProbeTests.cs" />
+    <!-- Copies the installed app with robocopy and reads it past the cache through kernel32. -->
+    <Compile Remove="LauncherReadProbeTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

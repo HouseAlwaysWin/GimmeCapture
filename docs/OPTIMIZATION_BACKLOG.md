@@ -13,18 +13,20 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Released as v0.73.0 on 2026-11-05 (17 entries), after v0.72.1 on 2026-11-04 (2 entries: a pinned recording's
-  seamless loop and its frame rate), v0.72.0 the same day (17 entries) and v0.71.0 on 2026-11-03: `release.ps1` after
-  the `docs/catalog/releases.md` entry went
-  in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
-  until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
-  2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 13 entries (2026-11-06).
-- The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.72.1, the release build (`0.72.1+ed421b3d`), which its
-  updater put over 0.68.1 on 2026-11-05 at 17:19, with the sign-in launcher its Run value starts. It draws on the GPU:
-  its config's `SoftwareRendering` is false, last written at that update, and every start since logs
-  `Startup.Renderer: GPU` (an earlier line here said v0.73.0 and software rendering; neither held, checked
-  2026-11-06).
+- Released as v0.74.0 on 2026-11-06 (13 entries), after v0.73.0 on 2026-11-05 (17 entries), v0.72.1 on 2026-11-04
+  (2 entries: a pinned recording's seamless loop and its frame rate), v0.72.0 the same day (17 entries) and v0.71.0 on
+  2026-11-03: `release.ps1` after the `docs/catalog/releases.md` entry went in as its own commit; `## Unreleased`
+  starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
+  `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
+  under it.
+- Since v0.74.0, `## Unreleased` holds 1 entry (2026-11-06).
+- The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
+  backlog's sign-in figures come from) runs `0.73.0+b0a10013`, installed by hand late on 2026-11-05 over the release
+  v0.73.0 its updater had put there that evening, started at sign-in by the launcher its Run value names. It draws on
+  the CPU: `versions\0.73.0\config.json` has `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs
+  `Startup.Renderer: software` (checked 2026-11-06 19:10). A line here earlier the same day said v0.72.1 (`ed421b3d`,
+  updated over 0.68.1 on 2026-11-05 at 17:19) and the GPU: that matches neither this desktop's files nor its log, so it
+  was another machine's copy.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
   open of 135-260 ms instead of 80-100 ms on a run's first start, and `GraphicsCaptureSession.IsSupported()` 16 ms on
@@ -1558,8 +1560,21 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   joined where less than 256 KB apart; `name|offset+length,...`, a line without them still read whole), and the
   launcher and the app's own read-ahead read only those (`ReadAhead.Plan`, `ReadStretches`). `StartupPrefetchProbeTests`
   on that disk: faults after reading the stretches served from the cache, 18 ms against 1.3-1.9 s straight away and 12
-  ms after the whole files. Next: the list's size after a start of an installed build, then a sign-in's `launcher=`.
-  Moving the install to
+  ms after the whole files. That shipped in v0.74.0 and made the sign-in slower. Installed by hand as 0.73.0+b0a10013,
+  a window launch's list came to 87 MB of the files' 143 (2026-11-05 23:31), and the sign-in that read it (2026-11-06
+  18:31): `launcher=42583ms/87MB beforeMain=1995/62 hotkeysAt=1674 systemCpu=60%`, 46 s from the launcher's start
+  against 25.9 the day before: 2.0 MB/s against 6.2. `LauncherReadProbeTests` (opt-in) reproduced it on cold copies of
+  the installed files on that disk, threads of the probe reading 64 KB at random elsewhere on it: with eight of them
+  the stretches (70.1 MB in 134, a start to the tray) took 35.8 s against 10.2-12.0 for the whole files (133.5 MB),
+  with four 15.3-15.8 against 7.4-8.2, and with the disk to itself 3.9-4.0 s, no faster than the whole files' 3.5-4.0.
+  Read-ahead, one ReadFile a stretch, `PrefetchVirtualMemory` and stretches joined where less than 1 MB apart changed
+  nothing much: on a busy disk each read waits behind the others' however small it is, so the count of reads costs,
+  not the bytes. What did help was more reads of the launcher's at once: the whole files on four threads took 4.1-4.8
+  s with eight threads of load and 2.0-2.2 s with the disk to itself (two threads 5.4-6.3 and 2.5-2.8, eight 2.9-4.6
+  and 2.0-2.4 while taking more of the disk from the load). So the stretches went (`ImagePagesInUse`, the list's
+  `|offset+length` tails, which are still read past) and the launcher and the app's own read-ahead read whole files,
+  four at a time (`ReadAhead.ReadAll`, `ReadThreads`). Next: the sign-in after this build is installed (expect
+  `launcher=` near 133MB in well under the 22.6 s of 2026-11-05). Moving the install to
   the SSD would do the rest; the user declined. `hardFaults` stays high, as a fault on a file read through still
   counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
   was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files

@@ -61,24 +61,6 @@ public sealed class StartupPrefetchTests : IDisposable
     }
 
     [Fact]
-    public void ReadAll_ReadsEachFilesStretches_OrAllOfIt_AndSkipsOneThatIsMissing()
-    {
-        string big = Path.Combine(_app, "big.dll");
-        string small = Path.Combine(_app, "small.dll");
-        File.WriteAllBytes(big, new byte[(3 << 20) + 5]);
-        File.WriteAllBytes(small, new byte[10]);
-
-        long read = StartupPrefetch.ReadAll(
-        [
-            new StartupFile(big, [new FileRange(4096, 8192), new FileRange(2 << 20, 1 << 20)]),
-            new StartupFile(Path.Combine(_app, "gone.dll"), null),
-            new StartupFile(small, null),
-        ]);
-
-        Assert.Equal(8192 + (1 << 20) + 10, read);
-    }
-
-    [Fact]
     public void Format_SaysWhatTheStartRead()
     {
         Assert.Equal(" prefetch=1840ms/142MB", StartupPrefetch.Format(false, true, TimeSpan.FromMilliseconds(1840), 142L << 20));

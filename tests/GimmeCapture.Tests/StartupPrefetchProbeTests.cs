@@ -7,17 +7,12 @@ using Xunit.Abstractions;
 namespace GimmeCapture.Tests;
 
 /// <summary>
-/// What reading files first does for the page faults the loader takes on them, on the disk this test runs from. Cold
-/// copies of a few DLLs (written past the cache by robocopy /J) are each mapped as an image, the way the loader maps
-/// them, and 40% of their pages faulted in a scattered order: one set straight away, one after reading the files whole,
-/// one after reading only the stretches of them those pages lie in (<see cref="ImagePagesInUse.ToFileRanges"/>), as
-/// <see cref="StartupPrefetch.ReadAll"/> does. Opt-in (STARTUP_PREFETCH_PROBE=1): it writes copies beside the tests, and
-/// on an SSD all read about the same. On the user's hard disk on 2026-11-02, for four start-up DLLs of the installed app
-/// (72.7 MB): 2.5 s straight away, 22 ms after reading them through in 1 s. On 2026-11-05, five DLLs of the tests' build
-/// (39.9 MB mapped): 1.3-1.9 s straight away, 12 ms after reading them whole in 0.93-0.98 s, 18 ms after reading their
-/// stretches. 40% of the pages scattered over every file join into the whole files (41.8 MB either way), which then read
-/// as long: what a real start saves depends on how its pages cluster. Mapping a copy as an image before reading it reads
-/// much of it: the stretches once read in a quarter of the time that way, so they are worked out on another copy.
+/// What reading files through first does for the page faults the loader takes on them, on the disk this test runs from.
+/// Cold copies of a few DLLs (written past the cache by robocopy /J) are each mapped as an image, the way the loader maps
+/// them, and 40% of their pages faulted in a scattered order: one set straight away, one after reading them through one
+/// at a time (<see cref="ReadAhead.ReadAll"/>). Opt-in (STARTUP_PREFETCH_PROBE=1): it writes copies beside the tests, and
+/// on an SSD both read about the same. On the user's hard disk on 2026-11-02, for four start-up DLLs of the installed app
+/// (72.7 MB): 2.5 s straight away, 22 ms after reading them through in 1 s.
 /// </summary>
 public sealed class StartupPrefetchProbeTests
 {
@@ -35,39 +30,21 @@ public sealed class StartupPrefetchProbeTests
         string root = Path.Combine(source, "prefetch-probe-" + Guid.NewGuid().ToString("N"));
         try
         {
-            // The copy written last can still be in the drive's own cache: the one read straight away, which is slowest.
-            string stretchesFirst = ColdCopy(source, Path.Combine(root, "stretches-first"));
-            string readFirst = ColdCopy(source, Path.Combine(root, "read-first"));
             string straight = ColdCopy(source, Path.Combine(root, "straight"));
+            string readFirst = ColdCopy(source, Path.Combine(root, "read-first"));
             _output.WriteLine($"disk: {StartupWaitCounters.DriveKind(root) ?? "unknown"}");
 
             var (straightMs, megabytes) = FaultAll(straight);
 
             var watch = Stopwatch.StartNew();
-            long read = StartupPrefetch.ReadAll(Directory.GetFiles(readFirst, "*.dll").Select(f => new StartupFile(f, null)));
+            long read = ReadAhead.ReadAll(Directory.GetFiles(readFirst, "*.dll"), 1);
             double readMs = watch.Elapsed.TotalMilliseconds;
             var (afterReadMs, _) = FaultAll(readFirst);
 
-            // The stretches the faulted pages lie in, worked out on the copy already faulted, so this one is untouched.
-            var stretches = Directory.GetFiles(stretchesFirst, "*.dll").Order()
-                .Select(f =>
-                {
-                    string twin = Path.Combine(straight, Path.GetFileName(f));
-                    return new StartupFile(f, StretchesOf(twin, PagesToFault(twin)));
-                })
-                .ToList();
-            watch.Restart();
-            long stretchesRead = StartupPrefetch.ReadAll(stretches);
-            double stretchesMs = watch.Elapsed.TotalMilliseconds;
-            var (afterStretchesMs, _) = FaultAll(stretchesFirst);
-
             _output.WriteLine(
                 $"{Directory.GetFiles(straight).Length} DLLs, {megabytes:0.0} MB mapped: faulting 40% of their pages took " +
-                $"{straightMs:0} ms straight away, {afterReadMs:0} ms after reading them whole ({read / 1e6:0.0} MB) in " +
-                $"{readMs:0} ms, {afterStretchesMs:0} ms after reading their stretches ({stretchesRead / 1e6:0.0} MB) in " +
-                $"{stretchesMs:0} ms");
+                $"{straightMs:0} ms straight away, {afterReadMs:0} ms after reading them through in {readMs:0} ms");
             Assert.Equal(Directory.GetFiles(readFirst).Sum(f => new FileInfo(f).Length), read);
-            Assert.True(stretchesRead <= read, "The stretches read more than the files hold.");
         }
         finally
         {
@@ -97,71 +74,34 @@ public sealed class StartupPrefetchProbeTests
         long bytes = 0;
         foreach (string file in Directory.GetFiles(folder, "*.dll").Order())
         {
-            using var image = new MappedImage(file);
-            var pages = ReadablePages(image.View);
-            bytes += pages.Count * 4096L;
-            var toFault = Scattered(pages);
-            var watch = Stopwatch.StartNew();
-            int sum = 0;
-            foreach (int page in toFault)
+            IntPtr handle = CreateFileW(file, 0x80000000, 0x1 | 0x4, IntPtr.Zero, 3, 0, IntPtr.Zero);
+            IntPtr mapping = CreateFileMappingW(handle, IntPtr.Zero, 0x02 | 0x1000000, 0, 0, IntPtr.Zero);
+            IntPtr view = MapViewOfFile(mapping, 0x4, 0, 0, UIntPtr.Zero);
+            Assert.NotEqual(IntPtr.Zero, view);
+            try
             {
-                sum += Marshal.ReadByte(image.View, page * 4096);
-            }
+                var pages = ReadablePages(view);
+                bytes += pages.Count * 4096L;
+                new Random(11).Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(pages));
+                var watch = Stopwatch.StartNew();
+                int sum = 0;
+                for (int i = 0; i < pages.Count * 2 / 5; i++)
+                {
+                    sum += Marshal.ReadByte(view, pages[i] * 4096);
+                }
 
-            ms += watch.Elapsed.TotalMilliseconds;
-            GC.KeepAlive(sum);
+                ms += watch.Elapsed.TotalMilliseconds;
+                GC.KeepAlive(sum);
+            }
+            finally
+            {
+                UnmapViewOfFile(view);
+                CloseHandle(mapping);
+                CloseHandle(handle);
+            }
         }
 
         return (ms, bytes / (1024.0 * 1024.0));
-    }
-
-    // The pages FaultAll faults in a file, found without touching them: its mapping's readable pages, as it finds them.
-    private static List<int> PagesToFault(string file)
-    {
-        using var image = new MappedImage(file);
-        return Scattered(ReadablePages(image.View));
-    }
-
-    // 40% of the pages, the same ones each time, in a scattered order.
-    private static List<int> Scattered(List<int> pages)
-    {
-        new Random(11).Shuffle(CollectionsMarshal.AsSpan(pages));
-        return pages.Take(pages.Count * 2 / 5).ToList();
-    }
-
-    private static List<FileRange> StretchesOf(string file, IEnumerable<int> pages)
-    {
-        var headers = new byte[4096];
-        using (var stream = File.OpenRead(file))
-        {
-            stream.ReadExactly(headers);
-        }
-
-        return ImagePagesInUse.ToFileRanges(pages.Select(p => p * 4096L), ImageLayout.Parse(headers)!, ImagePagesInUse.JoinGap);
-    }
-
-    // A file mapped as an image, the way the loader maps it.
-    private sealed class MappedImage : IDisposable
-    {
-        private readonly IntPtr _file;
-        private readonly IntPtr _mapping;
-
-        public MappedImage(string path)
-        {
-            _file = CreateFileW(path, 0x80000000, 0x1 | 0x4, IntPtr.Zero, 3, 0, IntPtr.Zero);
-            _mapping = CreateFileMappingW(_file, IntPtr.Zero, 0x02 | 0x1000000, 0, 0, IntPtr.Zero);
-            View = MapViewOfFile(_mapping, 0x4, 0, 0, UIntPtr.Zero);
-            Assert.NotEqual(IntPtr.Zero, View);
-        }
-
-        public IntPtr View { get; }
-
-        public void Dispose()
-        {
-            UnmapViewOfFile(View);
-            CloseHandle(_mapping);
-            CloseHandle(_file);
-        }
     }
 
     // An image maps some of its pages as no-access: only committed, readable ones.

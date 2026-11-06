@@ -5,7 +5,6 @@ using System.Globalization;
 using System.IO;
 using System.Threading;
 using GimmeCapture.Launcher;
-using GimmeCapture.Services.Interop;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -15,11 +14,10 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// small random read at a time, while Steam and Everything read the same disk. A page the loader faults in from a file
 /// already in the cache takes microseconds instead: faulting 40% of four start-up DLLs from cold copies on that disk took
 /// 2.5 s, and 22 ms after one sequential read of them in 1 s (<c>StartupPrefetchProbeTests</c>). So each start writes
-/// down which of the app's files it mapped, those loaded before Main first, each with the stretches of it the start used
-/// (<see cref="ImagePagesInUse"/>), and the next start reads them on a thread of its own from the top of Main. At sign-in
-/// the launcher reads them before it starts the app (<c>ReadAhead.Plan</c>): read from here, alongside the start's own
-/// faults, they were not done by the time the hotkeys worked, and read whole by the launcher, 141 MB took 22.6 s.
-/// Windows only, where the app runs from a folder of files.
+/// down which of the app's files it mapped, those loaded before Main first, and the next start reads them, whole and
+/// several at a time (<c>ReadAhead.ReadAll</c>), from the top of Main. At sign-in the launcher reads them before it
+/// starts the app (<c>ReadAhead.Plan</c>): read from here, alongside the start's own faults, they were not done by the
+/// time the hotkeys worked. Windows only, where the app runs from a folder of files.
 /// </summary>
 internal static class StartupPrefetch
 {
@@ -56,10 +54,7 @@ internal static class StartupPrefetch
         }
     }
 
-    /// <summary>
-    /// Once the start is done: writes down the files it mapped, with the stretches of each the start used, for the next
-    /// start to read.
-    /// </summary>
+    /// <summary>Once the start is done: writes down the files it mapped, for the next start to read.</summary>
     internal static void Record()
     {
         if (_appDirectory is not { } appDirectory || _listPath is not { } listPath)
@@ -69,16 +64,8 @@ internal static class StartupPrefetch
 
         try
         {
-            var modules = LoadedModules(appDirectory);
-            var stretches = new Dictionary<string, List<FileRange>?>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (name, inUse) in modules)
-            {
-                stretches.TryAdd(name, inUse);
-            }
-
-            var files = Order(Volatile.Read(ref _loadedBeforeMain), modules.ConvertAll(m => m.Name), LoadedAssemblies(appDirectory));
-            var lines = files.ConvertAll(name => ReadAhead.FormatLine(name, stretches.GetValueOrDefault(name)));
-            string text = string.Join(Environment.NewLine, lines) + Environment.NewLine;
+            var files = Order(Volatile.Read(ref _loadedBeforeMain), LoadedModules(appDirectory), LoadedAssemblies(appDirectory));
+            string text = string.Join(Environment.NewLine, files) + Environment.NewLine;
             if (!File.Exists(listPath) || File.ReadAllText(listPath) != text)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(listPath)!);
@@ -154,22 +141,6 @@ internal static class StartupPrefetch
         return order;
     }
 
-    /// <summary>
-    /// Reads each file's stretches, or all of it, once, in order; one that cannot be read is skipped. The bytes read.
-    /// </summary>
-    internal static long ReadAll(IEnumerable<StartupFile> files)
-    {
-        // A megabyte at a time into this one buffer: the streams keep none of their own.
-        var buffer = new byte[1 << 20];
-        long total = 0;
-        foreach (var file in files)
-        {
-            total += ReadAhead.Read(file, buffer);
-        }
-
-        return total;
-    }
-
     private static void Run()
     {
         try
@@ -179,7 +150,9 @@ internal static class StartupPrefetch
             if (File.Exists(_listPath))
             {
                 Volatile.Write(ref _hadList, true);
-                Interlocked.Exchange(ref _bytesRead, ReadAll(ReadAhead.Listed(File.ReadAllLines(_listPath!), _appDirectory!)));
+                Interlocked.Exchange(
+                    ref _bytesRead,
+                    ReadAhead.ReadAll(ReadAhead.Resolve(File.ReadAllLines(_listPath!), _appDirectory!), ReadAhead.ReadThreads));
             }
         }
         catch (Exception)
@@ -207,19 +180,18 @@ internal static class StartupPrefetch
         return names;
     }
 
-    // The loader's modules from the app's folder, in load order, each with the stretches of its file the start used.
-    private static List<(string Name, List<FileRange>? InUse)> LoadedModules(string appDirectory)
+    private static List<string> LoadedModules(string appDirectory)
     {
-        var modules = new List<(string, List<FileRange>?)>();
+        var names = new List<string>();
         using var process = Process.GetCurrentProcess();
         foreach (ProcessModule module in process.Modules)
         {
             if (ReadAhead.RelativeToApp(appDirectory, module.FileName) is { } name)
             {
-                modules.Add((name, ImagePagesInUse.InUse(module.BaseAddress, module.ModuleMemorySize)));
+                names.Add(name);
             }
         }
 
-        return modules;
+        return names;
     }
 }
