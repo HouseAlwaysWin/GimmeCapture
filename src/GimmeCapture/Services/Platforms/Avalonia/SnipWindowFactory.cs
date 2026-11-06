@@ -270,8 +270,13 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
     /// <summary>
     /// The first overlay of a run used to pay for loading its own code — the window's XAML and the view model's JIT
     /// and reactive plumbing — about 0.45-0.65 s of UI thread before it appeared, against ~0.09 s for every later
-    /// one. Building both once while the app is idle, unseen and unwired, takes about half of that out of the first
-    /// capture. The rest is the first show of a real, bound window, which cannot be rehearsed without showing one.
+    /// one. Building both once while the app is idle, unseen, took about half of that out of the first capture. What
+    /// the first open still paid, in a published build, was mostly the window's wiring to its view model (63 ms against
+    /// 1), the bindings that follow (36 against 11) and the first layout (19 against 3): code ReadyToRun leaves to the
+    /// JIT, generic Rx and ReactiveUI pipelines over the app's own types first. So the unseen window is now also bound to
+    /// an unseen view model and laid out at a screen's size, then let go of (<see cref="RehearseOverlay"/>), and the
+    /// first overlay came up in 123-180 ms instead of 218-266. The first show itself, about 115 ms more before the UI
+    /// thread is free, cannot be rehearsed without showing a window.
     /// </summary>
     public void ScheduleWarmUp(object mainViewModel, TimeSpan delay)
     {
@@ -292,9 +297,11 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
 
     private void WarmUpOverlay()
     {
+        var stopwatch = Stopwatch.StartNew();
+        SnipWindow window;
         try
         {
-            new SnipWindow(_screenLayoutService, _windowLayerService) { IsWarmUp = true }.Close();
+            window = new SnipWindow(_screenLayoutService, _windowLayerService) { IsWarmUp = true };
         }
         catch (Exception ex)
         {
@@ -302,21 +309,89 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
             return;
         }
 
-        // Separately, so neither half holds the UI thread long. The parameterless view model has no main view
-        // model or services behind it, so it registers nothing; Dispose undoes what it set up.
-        Dispatcher.UIThread.Post(() =>
+        RehearseOverlay(window, () => _openedOnce, stopwatch.Elapsed.TotalMilliseconds);
+    }
+
+    /// <summary>
+    /// Binds the unseen <paramref name="window"/> to a view model of its own and lays it out at a screen's size, then
+    /// lets go of both: a step at a time, each posted at Background priority, so none holds the UI thread long. The
+    /// parameterless view model has no main view model or services behind it, so it registers nothing; Dispose undoes
+    /// what it set up. Ends early once <paramref name="realOverlayOpened"/> says a real overlay has opened. Logs how
+    /// long each step held the UI thread, the window's build (<paramref name="buildMs"/>) included.
+    /// </summary>
+    internal static void RehearseOverlay(SnipWindow window, Func<bool> realOverlayOpened, double buildMs = 0)
+    {
+        SnipWindowViewModel? viewModel = null;
+        // How long each step held the UI thread: the view model, the binding, the layout.
+        var stepMs = new double[3];
+
+        void Step(int step)
         {
-            try
+            Dispatcher.UIThread.Post(() =>
             {
-                using (new SnipWindowViewModel())
+                if (realOverlayOpened())
                 {
+                    EndWarmUp(window, viewModel);
+                    return;
                 }
-            }
-            catch (Exception ex)
-            {
-                AppLog.Warning("SnipWindowFactory.WarmUp", ex);
-            }
-        }, DispatcherPriority.Background);
+
+                var stopwatch = Stopwatch.StartNew();
+                try
+                {
+                    switch (step)
+                    {
+                        case 0:
+                            viewModel = new SnipWindowViewModel();
+                            break;
+                        case 1:
+                            window.DataContext = viewModel;
+                            break;
+                        default:
+                            var screen = window.Screens.Primary;
+                            var size = screen != null ? screen.Bounds.Size.ToSize(screen.Scaling) : new Size(1920, 1080);
+                            window.Measure(size);
+                            window.Arrange(new Rect(size));
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warning("SnipWindowFactory.WarmUp", ex);
+                    EndWarmUp(window, viewModel);
+                    return;
+                }
+
+                stepMs[step] = stopwatch.Elapsed.TotalMilliseconds;
+                if (step < stepMs.Length - 1)
+                {
+                    Step(step + 1);
+                    return;
+                }
+
+                EndWarmUp(window, viewModel);
+                AppLog.Information(
+                    "Overlay.WarmUp",
+                    $"build={buildMs:F0} viewModel={stepMs[0]:F0} bind={stepMs[1]:F0} layout={stepMs[2]:F0}ms");
+            }, DispatcherPriority.Background);
+        }
+
+        Step(0);
+    }
+
+    // Unbinds first, which ends the window's subscriptions to the view model, as a real overlay's close does.
+    private static void EndWarmUp(SnipWindow window, SnipWindowViewModel? viewModel)
+    {
+        try
+        {
+            window.DataContext = null;
+            window.Close();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("SnipWindowFactory.WarmUp", ex);
+        }
+
+        viewModel?.Dispose();
     }
 
     /// <summary>

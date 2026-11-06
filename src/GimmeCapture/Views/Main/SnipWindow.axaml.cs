@@ -80,9 +80,10 @@ public partial class SnipWindow : Window
     }
 
     /// <summary>
-    /// Built once at idle and closed unseen, only so the first real overlay finds its code already loaded (see
-    /// <c>SnipWindowFactory.ScheduleWarmUp</c>). Closing it must skip a real overlay's cleanup — including a repaint
-    /// of the whole desktop and a memory trim.
+    /// Built once at idle, bound to a view model of its own, laid out and closed unseen, only so the first real overlay
+    /// finds its code already loaded (see <c>SnipWindowFactory.ScheduleWarmUp</c>). It changes nothing of its native
+    /// window (capture affinity, region, styles), and closing it skips a real overlay's cleanup — including a repaint of
+    /// the whole desktop and a memory trim.
     /// </summary>
     internal bool IsWarmUp { get; init; }
 
@@ -695,7 +696,7 @@ public partial class SnipWindow : Window
     /// </summary>
     private void ApplyRecordingScreenCaptureAffinity(SnipWindowViewModel vm)
     {
-        if (!OperatingSystem.IsWindows()) return;
+        if (!OperatingSystem.IsWindows() || IsWarmUp) return;
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (hwnd == IntPtr.Zero) return;
 

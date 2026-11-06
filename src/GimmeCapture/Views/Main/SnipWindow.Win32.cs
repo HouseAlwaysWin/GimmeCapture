@@ -94,7 +94,7 @@ public partial class SnipWindow : Window
     /// </summary>
     private void SyncOverlayNoActivateExStyle()
     {
-        if (!OperatingSystem.IsWindows() || _viewModel == null) return;
+        if (!OperatingSystem.IsWindows() || _viewModel == null || IsWarmUp) return;
 
         bool want = _viewModel.ShouldAvoidStealingFocus && !_viewModel.IsEnteringText;
         if (want == _overlayNoActivateExStyleActive) return;

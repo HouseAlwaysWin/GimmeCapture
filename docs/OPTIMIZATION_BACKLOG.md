@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 11 entries (2026-11-06).
+- Since v0.73.0, `## Unreleased` holds 12 entries (2026-11-06).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.72.1, the release build (`0.72.1+ed421b3d`), which its
   updater put over 0.68.1 on 2026-11-05 at 17:19, with the sign-in launcher its Run value starts. It draws on the GPU:
   its config's `SoftwareRendering` is false, last written at that update, and every start since logs
@@ -1046,6 +1046,28 @@ tool.
   saved copy is what the next session builds from, with the same answer; a bad copy is deleted; a changed model is not
   served the old copy) and the runtime's `TheIdleUnload_SavesOptimizedCopies_…`, which fail on the old code. Left: the
   same for U2Net and SAM2 (smart selection's load was 2.7-2.8 s), off the user's usage so far.
+- Done since batch 1 (2026-11-06, the user's yes to overlays popping up while measuring): **the first overlay of a run**
+  (Snip overlay). The user's v0.72.1 log: the day's first capture `SnipOpen ... show=229 total=343ms` and a 340 ms
+  `UiStall`, later ones 70-85. Measured in win-x64 publishes (ReadyToRun), launched to the tray, the overlay opened at
+  25 s and 33 s through a temporary App hook, with temporary marks in `SnipWindowFactory.Open`, `OnDataContextChanged`,
+  the window's Measure/Arrange and OnOpened, two `RequestAnimationFrame` callbacks and posts at Default and Background
+  (patched in by a script around each publish and restored, so the tree stayed clean). The first open against the
+  second, five processes each: the window's wiring to its view model 63 ms against 1, the bindings after it 36 against
+  11, the first layout 19 against 3, the UI thread free again (the Background post) 382 against 128. All of it code
+  ReadyToRun leaves to the JIT, the generic Rx and ReactiveUI pipelines over the app's types first. The idle warm-up
+  (`SnipWindowFactory.RehearseOverlay`) now binds the unseen window to a parameterless view model and lays it out at the
+  primary screen's size, then unbinds (which ends its subscriptions) and closes it, a step at a time: in a publish, view
+  model 56-58 ms, binding 68-69, layout 16-19, after the window's build of 167-201 as before (`Overlay.WarmUp` logs
+  each). The unseen window changes nothing of its native window: capture affinity, region and `WS_EX_NOACTIVATE` skip it
+  (`IsWarmUp`), as an affinity set on a hidden overlay once showed it white (fixed in
+  `Win32Helpers.SetWindowCaptureVisibility`). ABBAABBAAB: `SnipOpen` total 218 ms (218-266) before, 152 (130-180) after;
+  the wiring 5, the bindings 18, the layout 10; free again at 315 (284-344) against 382; the second open 59 (52-79)
+  against 81 (74-86). Three later runs of the final, split warm-up: 123-130. `OverlayWarmUpTests` (opt-in, headless):
+  bound, laid out, unbound, closed, and window and view model both collected. Left: what the first show itself costs,
+  about 115 ms more between `Show` and the UI thread coming free (the window's first composition and frames, OnOpened's
+  posted work), which only a shown window rehearses; shown off screen on the GPU, the pin's warm-up kept 26-28 MB, so
+  not without the user's say. While the probe's overlays were up the user typed: two `Hotkey.HookLate` lines (156 ms),
+  one in each build, and the overlay may have taken some of those keys.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

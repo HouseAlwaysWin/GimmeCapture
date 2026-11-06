@@ -71,6 +71,11 @@
   after the first load, beside the model (it goes with the OCR module if you remove it), and loads that: the detector
   in about 73 ms instead of 106 in tests, the detector and the recognizer for copying text in 116 instead of 207, with
   the same boxes found.
+- **The first capture after the app starts opens sooner.** The capture overlay's first opening of a run ran code
+  nothing had run yet: in a published build it took 218-266 ms to come up, against 74-86 for later ones. Ten seconds
+  after it starts, the app already built an overlay out of sight to load its code; it now also connects that overlay
+  to its settings and lays it out, as an opening does, in steps of under 70 ms. The first overlay then came up in
+  123-180 ms, and later ones no slower than before.
 
 ### 🛡️ Reliability
 

@@ -467,6 +467,11 @@ public partial class SnipWindow : Window
     /// </summary>
     private void UpdateWindowRegion(Rect selectionRect, SnipState state, bool isDrawingMode)
     {
+        if (IsWarmUp)
+        {
+            return;
+        }
+
         if (!OperatingSystem.IsWindows())
         {
             UpdateInputShapeLinux(selectionRect, state, isDrawingMode);
