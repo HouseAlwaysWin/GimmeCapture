@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 1 entry (2026-11-06).
+- Since v0.74.0, `## Unreleased` holds 2 entries (2026-11-06).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.73.0+b0a10013`, installed by hand late on 2026-11-05 over the release
   v0.73.0 its updater had put there that evening, started at sign-in by the launcher its Run value names. It draws on
@@ -1085,6 +1085,18 @@ tool.
   `LibavGifTranscoderTests.DecodedAhead_TheGifIsTheSameByteForByte`; the cancellation, progress and fallback tests run
   through the new feed. Left: a cut GIF still goes through the intermediate (2.8 s of the long clip's 7.9); taking the
   cut's ranges straight into the GIF's passes would save that and a generation.
+- Done since batch 1, the user's choice (2026-11-06): **the OCR scan on two screens** (Snip overlay). The overlay's
+  scan read its whole viewport as one capture, which `PaddleOCREngine.DetectionInputSize` brings down to 1280 across:
+  the user's desktop (3968x1160 in every scan of the log, 10-31 to 11-05; its one display on 11-06 was 1920x1080, so
+  the other is about 2048x1160) was read at 1280x384, a third of each screen's pixels. `OcrScanScreensProbeTests` (opt-in, the installed OCR module, two screens
+  drawn with panels of UI text at 11-24 px, 226 lines): 194 boxes, 4% of the lines with a box of their own (IoU 0.5)
+  and 86% at least half inside one, detection 59-69 ms; screen by screen 62% and 100%, 288-320 ms; the cursor's screen
+  alone 68% and 100% of its lines in 143-156 ms, the other screen none. The user chose every screen read on its own:
+  the request carries the overlay's screens (`AllScreenBounds`), and `OcrScanTiles` reads each screen's part of the one
+  capture (`SKBitmap.ExtractSubset`, nothing copied) and moves its boxes back into place, with one screen read whole as
+  before; the log line says `2 screens read apart`. The same boxes as two separate screens in the probe.
+  `OcrScanTilesTests`, `AIScanSessionServiceTests`. Not checked on the user's screens: the second one was off when it
+  was built (one 1920x1080 display reported).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1503,12 +1515,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Snip overlay
 
-- **The OCR scan grabs every monitor** (S, the user's call: what a scan covers). The overlay spans every screen
-  (`SnipWindowFactory.ConfigureWindowBounds`) and the scan its whole viewport (`CreateAIScanSessionRequest`), so
-  two 1920x1080 screens side by side are read as one 3840x1080 grab detected at 1280x384, a third of each screen's
-  pixels. Only the screen under the cursor would be detected at 1280x736 for less work, but the other screens would
-  get no boxes until a rescan. The user has one 1920x1080 display (their log), so it does not touch them. The boxes
-  it finds are drawn by one control now (Status).
 - **A Save keeps a frozen overlay up through its encode** (S). The full-compression PNG, 0.35 s for a 1920x1080
   screen, which the user's own file should keep. A pin's (only a run's first was slow) and the copy's second encode
   are done (Status).

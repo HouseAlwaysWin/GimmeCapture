@@ -22,6 +22,14 @@
   app's 133 MB took 4.1-4.8 s instead of 10.2-12.0 one file at a time, and 2 s instead of 3.5-4.0 with the disk to
   itself.
 
+### 🔤 OCR
+
+- **With two screens, the capture overlay finds the text on each of them.** The overlay's scan read both screens as
+  one picture, which text detection shrinks to 1280 pixels across, so each screen was read at a third of its pixels:
+  on two screens of window text at 11 to 24 pixels, 4% of the lines got a box of their own and 86% were covered by one.
+  Each screen is now read on its own: 62% and 100%. The boxes take a little longer to appear, detection taking about
+  0.3 s instead of 0.07 in tests. With one screen nothing changes.
+
 ## v0.74.0 - 2026-11-06
 
 ### ⚡ Performance

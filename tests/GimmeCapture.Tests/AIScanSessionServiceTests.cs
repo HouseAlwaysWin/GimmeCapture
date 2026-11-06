@@ -116,6 +116,44 @@ public sealed class AIScanSessionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RunScanAsync_ReadsTwoScreensApart_AndPlacesTheirBoxesInTheOverlay()
+    {
+        // Read as one capture, two screens were detected at a third of their pixels (OcrScanTiles).
+        var settingsService = new AppSettingsService(_baseDir);
+        var pathService = new AIPathService(settingsService);
+        var aiResourceService = new Mock<AIResourceService>(settingsService, pathService, new Mock<AIModelDownloader>().Object);
+        var ocrRuntimeService = new OcrRuntimeService(aiResourceService.Object);
+        var ocrEngine = new FakeOcrEngine(new List<SKRectI> { new(10, 12, 40, 36) });
+        var ocrEngineFactory = new Mock<IOcrEngineFactory>();
+        aiResourceService
+            .Setup(service => service.EnsureOCRAsync(OCRLanguage.Japanese, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        ocrEngineFactory
+            .Setup(factory => factory.Create(aiResourceService.Object, settingsService, ocrRuntimeService))
+            .Returns(ocrEngine);
+        using var sut = new AIScanSessionService(
+            new Mock<IScreenCaptureService>().Object,
+            aiResourceService.Object,
+            new SAM2RuntimeService(pathService),
+            ocrRuntimeService,
+            settingsService,
+            ocrEngineFactory.Object);
+
+        // A 200x50 capture of a 100x25 overlay (200%) across two screens side by side.
+        var result = await sut.RunScanAsync(new AIScanSessionRequest(
+            new Rect(0, 0, 100, 25),
+            new PixelPoint(0, 0),
+            2.0,
+            OCRLanguage.Japanese,
+            PreCapturedFrame: CreateBitmap(200, 50, SKColors.White),
+            Screens: [new Rect(0, 0, 50, 25), new Rect(50, 0, 50, 25)]));
+
+        Assert.True(result.IsReady);
+        Assert.Equal(["EnsureDetectionLoaded", "DetectText", "DetectText"], ocrEngine.Calls);
+        Assert.Equal([new Rect(5, 6, 15, 12), new Rect(55, 6, 15, 12)], result.RawDetectedRects.OrderBy(r => r.X));
+    }
+
+    [Fact]
     public async Task PrepareScanAsync_LoadsTheDetector_AndRunsNothing()
     {
         // A run of its own on a blank capture set DirectML up for the scan's size; on the CPU it only held the scan up.

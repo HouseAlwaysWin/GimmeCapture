@@ -108,14 +108,18 @@ public sealed class AIScanSessionService : IAIScanSessionService
             await ocrEngine.EnsureDetectionLoadedAsync(request.SourceLanguage, ct);
             long loadMs = stopwatch.ElapsedMilliseconds;
             progress?.Report(AIScanStage.DetectingObjects);
-            var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap, ct), ct);
+            // Several screens are read one at a time, each at the size detection brings one screen to.
+            var tiles = OcrScanTiles.ForScreens(request.Screens, request.ViewportBounds, bitmap.Width, bitmap.Height);
+            var textBoxes = await Task.Run(() => OcrScanTiles.Detect(ocrEngine, bitmap, tiles, ct), ct);
             // Diagnostic (release-visible): distinguishes "capture failed" (0x0 bitmap) from "OCR found nothing"
             // (0 boxes on a real capture — e.g. a DirectML inference-correctness issue on some Win10 setups) from
             // "OCR works". Pair with OcrRuntime.SessionCreated (GPU vs CPU) to pinpoint a Win10-vs-Win11 discrepancy.
             // load is the wait for the detector, which an overlay starts loading as it opens (PrepareScanAsync).
             AppLog.Information(
                 "OcrScan.Detected",
-                $"{textBoxes.Count} text boxes from a {bitmap.Width}x{bitmap.Height} capture (lang={request.SourceLanguage}, frozen={frozen}), load={loadMs}ms detect={stopwatch.ElapsedMilliseconds - loadMs}ms.");
+                $"{textBoxes.Count} text boxes from a {bitmap.Width}x{bitmap.Height} capture" +
+                (tiles.Count > 1 ? $", {tiles.Count} screens read apart" : "") +
+                $" (lang={request.SourceLanguage}, frozen={frozen}), load={loadMs}ms detect={stopwatch.ElapsedMilliseconds - loadMs}ms.");
 
             double scaleX = bitmap.Width > 0 ? request.ViewportBounds.Width / bitmap.Width : 1;
             double scaleY = bitmap.Height > 0 ? request.ViewportBounds.Height / bitmap.Height : 1;

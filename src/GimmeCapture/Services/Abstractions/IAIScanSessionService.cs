@@ -25,7 +25,9 @@ public sealed record AIScanSessionRequest(
     // outlives the overlay that started it (Esc closes the window while inference is still running), and passing
     // the snip window's own frozen still meant the scan's continuation read an SKBitmap the closing window had
     // already disposed — a native access violation, not a catchable exception.
-    SkiaSharp.SKBitmap? PreCapturedFrame = null);
+    SkiaSharp.SKBitmap? PreCapturedFrame = null,
+    // The screens the viewport spans, in its coordinates: two or more are detected one at a time (OcrScanTiles).
+    IReadOnlyList<Rect>? Screens = null);
 
 public sealed record AIScanSessionResult(
     IReadOnlyList<Rect> RawDetectedRects,

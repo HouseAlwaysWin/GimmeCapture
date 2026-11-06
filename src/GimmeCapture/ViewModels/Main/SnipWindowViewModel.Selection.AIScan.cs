@@ -829,7 +829,26 @@ public partial class SnipWindowViewModel
             _services?.SettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese,
             // Freeze-frame: OCR the frozen still (the overlay is opaque, so a live grab would capture our own
             // frozen image + chrome). Null in the normal live path.
-            PreCapturedFrame: CopyFrozenFrameForScan(lease));
+            PreCapturedFrame: CopyFrozenFrameForScan(lease),
+            // Two screens read as one capture were detected at a third of their pixels: each is read on its own.
+            Screens: ScreensForScan());
+    }
+
+    // The screens the overlay spans, in its own coordinates.
+    private List<Rect>? ScreensForScan()
+    {
+        if (AllScreenBounds is not { Count: > 0 } screens)
+        {
+            return null;
+        }
+
+        var rects = new List<Rect>(screens.Count);
+        foreach (var screen in screens)
+        {
+            rects.Add(new Rect(screen.X, screen.Y, screen.W, screen.H));
+        }
+
+        return rects;
     }
 
     /// <summary>
