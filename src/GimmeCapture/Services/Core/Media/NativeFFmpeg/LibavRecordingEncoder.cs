@@ -82,6 +82,7 @@ internal static unsafe class LibavRecordingEncoder
         const int ProbeFps = 30;
         const int ProbeCrf = 23;
 
+        DisplayAdapterOrder.SettleBeforeCuda();
         foreach (string candidateName in HardwareAv1Encoders)
         {
             AVCodec* candidate = ffmpeg.avcodec_find_encoder_by_name(candidateName);
@@ -258,6 +259,10 @@ internal static unsafe class LibavRecordingEncoder
         out string? warningMessage)
     {
         string[] preferredNames = BuildEncoderLadder(codec, preferHardware);
+        if (Array.Exists(preferredNames, static name => name.EndsWith("_nvenc", StringComparison.Ordinal)))
+        {
+            DisplayAdapterOrder.SettleBeforeCuda();
+        }
 
         // The software anchor of whichever ladder we are on: always present in the bundled build, so failing to
         // find it means the build itself is wrong rather than the machine being incapable.

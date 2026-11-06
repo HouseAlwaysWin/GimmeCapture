@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 4 entries (2026-11-06).
+- Since v0.73.0, `## Unreleased` holds 5 entries (2026-11-06).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.73.0 (2026-11-05), updated by its own updater from
   0.72.1+d33e5172, a build copied in by hand like those since 2026-11-02, with the sign-in launcher its Run value
   starts. The user turned on software rendering ("Use less memory") the same evening.
@@ -917,6 +917,28 @@ tool.
   export grabbed the screen. The toggle now takes it again (`RetakeDrawingSnapshotAsync`, when one is kept; a newer
   capture still wins). `DrawingModeSnapshotTests.FreezingWhileDrawing_TakesTheSelectionFromTheStill_ForWhatIsAlreadyDrawn`
   (the live grab kept on the old code).
+- Done since batch 1 (2026-11-06, "Do it"): **gdigrab vs Desktop Duplication** (Recording). Measured on the laptop
+  (AMD Radeon chip with the 1920x1080 panel at 125%, RTX 3050 beside it): grabbing 1450x900 at 30 fps alone took 603 M
+  cycles/s through gdigrab and 110 through FFmpeg's `ddagrab` + `hwdownload`, both 29.9 fps, the same pixels but for a
+  caret (340 of 1.3 M) and the same alpha; a whole recording on `hevc_nvenc` took 640-647 against 245-264 at 1450x900
+  (304 frames each), 894 against 314 at 1920x1080, three rounds each. `RegionCaptureSource` takes
+  `LibavDesktopDuplicationSource` where one upright display holds the region (`DuplicationOutput.Holding`), else
+  `LibavScreenGrabSource` (gdigrab/x11grab, moved out of `LibavGdigrabMkvSession`); a duplication that fails mid-way
+  (DXGI_ERROR_ACCESS_LOST and the like come back as AVERROR_EXTERNAL) is opened again if it had given frames, else the
+  screen grab takes over, and the converter sets up again should the format or size change. What the measuring found:
+  making the Direct3D device took 55 ms every time, so `DxgiOutputs.TryCreateDuplicationDevice` makes it while the
+  encoder opens and the display is duplicated after (open alongside NVENC's start, `graph_config` failed every time);
+  the device is made on the adapter DXGI lists the display under and handed to FFmpeg (`DuplicationDevice.Adopt`), not
+  by number. And a process that starts CUDA before it first asks DXGI anything (`cuInit`, any NVENC open) is put on the
+  NVIDIA card for good: DXGI then lists it first with the panel under it, nothing under the AMD chip, and ddagrab says
+  "Selected output not supported". The app did that whenever Record mode's warm-up ran first, as it does with software
+  rendering on: `DisplayAdapterOrder.SettleBeforeCuda` (a DXGI factory, 36-40 ms cold) now runs before the warm-up's
+  `cuInit` and every NVENC open. gdigrab's GDI handles fail on another thread than the one that opened them (EIO), so
+  the screen grab opens on the worker. A recording's start: 263-373 ms against gdigrab's 241-272 in fresh processes.
+  The encoder now opens before the capture, so a start whose capture fails deletes the header-only segment it left
+  (the finalize took any non-empty file for a segment). `RegionCaptureSourceTests`, `DuplicationOutputTests`,
+  `LibavRecordingSessionTests` (gdigrab pinned; `DesktopDuplication_RecordsTheRegion_WhereItCanDuplicateTheDisplay`;
+  opt-in: `DesktopDuplication_LeavesOutAWindowExcludedFromCapture`, `DesktopDuplication_OnNvenc_KeepsTheColours_...`).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1207,6 +1229,14 @@ These were covered by unit tests only; check them in the real app before a relea
 - **Reading text**: Quick OCR and translate a light window and a dark one (a dark-themed editor, say). The text should
   come out as before, a little sooner. In Translate mode, the text search's boxes should land on the text as before,
   on each screen.
+- **Recording through Desktop Duplication**: record a region of a few seconds in Record mode, with the cursor in it,
+  then pause and resume, and stop. The log should show `Desktop Duplication: display 0 of adapter 0 (AMD Radeon(TM)
+  Graphics)` and `Capture source: ddagrab` for each part, and Task Manager about a third of the processor use a
+  recording took before. The file should look as before: the cursor drawn, the colours as on screen, no trace of the
+  overlay's frame or toolbar. A region across two displays, if there are two, should log `no single upright display
+  holds the region` and `Capture source: gdigrab`. Lock the computer (Win+L) mid-recording and come back: the log
+  should show `Desktop Duplication stopped`; whether the recording then carries on (through a fresh duplication or
+  gdigrab) or ends, as a gdigrab one did at a lock, no test has seen.
 - **Translating with the local model**: with Traditional Chinese as the target, translate an English window, then a
   Japanese one, within two minutes. Both should come out in Traditional characters (檔案, 設定, not 文件, 设置); the
   second press should take about half as long as the first used to, and its `Translation.Timings` line should say
@@ -1266,10 +1296,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   end, so after a pause every later part plays early by the video's overrun (45-105 ms on Windows). Give it a `Feed`,
   placing each packet by its arrival as on Windows, and the `PadToVideoLength` step; check a paused recording's file
   with `RecordingAvSyncTests`' file mode.
-- **gdigrab vs Desktop Duplication** (M; zero-copy L). `LibavGdigrabMkvSession.cs:140`: BitBlt with CAPTUREBLT, two CPU
-  copies and a CPU conversion, est. 20-50 ms per frame at 4K, so 4K30 likely drops frames unseen (gdigrab never counts
-  drops). FFmpeg's `ddagrab` + `hwdownload,format=bgra` into the existing converter gives monitor choice, crop, a GPU
-  cursor and HDR. Keep gdigrab for regions spanning monitors; re-check the overlay stays excluded.
+- **Desktop Duplication straight into the encoder** (L). A region recording reads the duplicated region back to the
+  CPU (`hwdownload`) for NVENC to upload again; where the display and the encoder share an adapter (a desktop's own
+  card), the D3D11 frame could go to the encoder as it is. On the laptop the panel hangs off the AMD chip and NVENC is
+  on the NVIDIA card, so the copy through memory stays there. HDR displays are duplicated as 8-bit BGRA, which Windows
+  converts; not checked on one.
 
 ### Compress and the editor
 

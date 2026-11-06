@@ -17,6 +17,7 @@ internal static unsafe class CudaDriver
     /// </summary>
     public static bool TryInitialize()
     {
+        DisplayAdapterOrder.SettleBeforeCuda();
         IntPtr library;
         bool loaded = OperatingSystem.IsWindows()
             // The driver installs it in System32, and only that copy is NVIDIA's.

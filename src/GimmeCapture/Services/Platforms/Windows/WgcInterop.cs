@@ -68,22 +68,17 @@ internal static class WgcInterop
     /// </summary>
     public static IDirect3DDevice CreateDirect3DDevice(out string adapterDescription)
     {
-        const uint D3D11_SDK_VERSION = 7;
-        const uint D3D11_CREATE_DEVICE_BGRA_SUPPORT = 0x20;
-        const uint D3D_DRIVER_TYPE_HARDWARE = 1;
-        const uint D3D_DRIVER_TYPE_WARP = 5;
-
         adapterDescription = "(unknown)";
 
-        int hr = D3D11CreateDevice(
-            IntPtr.Zero, D3D_DRIVER_TYPE_HARDWARE, IntPtr.Zero, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-            IntPtr.Zero, 0, D3D11_SDK_VERSION, out IntPtr d3dDevice, out _, out IntPtr context);
+        int hr = D3D11.D3D11CreateDevice(
+            IntPtr.Zero, D3D11.DriverTypeHardware, IntPtr.Zero, D3D11.CreateDeviceBgraSupport,
+            IntPtr.Zero, 0, D3D11.SdkVersion, out IntPtr d3dDevice, out _, out IntPtr context);
         if (hr < 0)
         {
             // No GPU / headless: fall back to the WARP software rasterizer.
-            hr = D3D11CreateDevice(
-                IntPtr.Zero, D3D_DRIVER_TYPE_WARP, IntPtr.Zero, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                IntPtr.Zero, 0, D3D11_SDK_VERSION, out d3dDevice, out _, out context);
+            hr = D3D11.D3D11CreateDevice(
+                IntPtr.Zero, D3D11.DriverTypeWarp, IntPtr.Zero, D3D11.CreateDeviceBgraSupport,
+                IntPtr.Zero, 0, D3D11.SdkVersion, out d3dDevice, out _, out context);
             Marshal.ThrowExceptionForHR(hr);
         }
 
@@ -192,12 +187,6 @@ internal static class WgcInterop
             return "(monitor lookup failed)";
         }
     }
-
-    [DllImport("d3d11.dll", ExactSpelling = true)]
-    private static extern int D3D11CreateDevice(
-        IntPtr pAdapter, uint driverType, IntPtr software, uint flags,
-        IntPtr pFeatureLevels, uint featureLevels, uint sdkVersion,
-        out IntPtr ppDevice, out uint pFeatureLevel, out IntPtr ppImmediateContext);
 
     [DllImport("d3d11.dll", ExactSpelling = true)]
     private static extern int CreateDirect3D11DeviceFromDXGIDevice(IntPtr dxgiDevice, out IntPtr graphicsDevice);

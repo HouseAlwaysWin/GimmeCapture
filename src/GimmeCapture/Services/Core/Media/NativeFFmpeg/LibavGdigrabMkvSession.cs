@@ -11,7 +11,8 @@ using SkiaSharp;
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 /// <summary>
-/// Captures screen via libavdevice gdigrab and writes H.264/x265-in-Matroska segment.
+/// Captures a screen region and writes an H.264/x265-in-Matroska segment. On Windows the region comes through Desktop
+/// Duplication where it can, gdigrab otherwise (<see cref="RegionCaptureSource"/>); on Linux through x11grab.
 /// </summary>
 internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
 {
@@ -59,6 +60,18 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
     /// </remarks>
     public bool UseWallClockPts { get; set; }
 
+    /// <summary>
+    /// Grab the region through Desktop Duplication where it can (Windows, a region on one display) rather than gdigrab.
+    /// On by default; off records through the screen grab alone.
+    /// </summary>
+    public bool UseDesktopDuplication { get; set; } = true;
+
+    /// <summary>
+    /// What grabbed the last recording's frames: "ddagrab", "gdigrab" or "x11grab" (the screen grab once a duplication
+    /// gave way to it); null before one has opened.
+    /// </summary>
+    public string? CaptureSourceName { get; private set; }
+
     protected override TimeSpan StartupGateTimeout => TimeSpan.FromSeconds(4);
 
     protected override TimeSpan DisposeWait => TimeSpan.FromSeconds(8);
@@ -91,15 +104,12 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         CancellationToken ct,
         TaskCompletionSource<bool> firstFrameTcs)
     {
-        AVFormatContext* inputFmt = null;
-        AVCodecContext* decCtx = null;
-        AVPacket* pkt = null;
-        AVFrame* decFrame = null;
-        AVDictionary* demuxOpts = null;
+        AVFrame* captured = null;
+        DuplicationDevice? duplication = null;
+        RegionCaptureSource? capture = null;
         RecordingSegmentWriter? writer = null;
         CapturedFrameConverter? converter = null;
-
-        int videoIn = -1;
+        CaptureSourceName = null;
 
         // Optional webcam picture-in-picture, composited per frame via a BGRA round-trip in the encode loop.
         WebcamPipCompositor? webcam = null;
@@ -130,67 +140,37 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             ? sk => { overlay?.Draw(sk); webcam?.Draw(sk); keystrokes?.Draw(sk); }
             : null;
 
-        pkt = ffmpeg.av_packet_alloc();
-        decFrame = ffmpeg.av_frame_alloc();
+        captured = ffmpeg.av_frame_alloc();
 
         try
         {
-            // Windows captures the screen via gdigrab; Linux/X11 via x11grab (same libavdevice API).
-            bool isWindows = OperatingSystem.IsWindows();
-            string grabber = isWindows ? "gdigrab" : "x11grab";
-            var ifmt = ffmpeg.av_find_input_format(grabber);
-            if (ifmt == null)
+            // Desktop Duplication's Direct3D device takes about as long to make as the encoder takes to open, so it is
+            // made on a thread of its own meanwhile; the display is duplicated once the encoder is open.
+            Task<DuplicationDevice?>? preparing = UseDesktopDuplication
+                ? Task.Factory.StartNew(
+                    () => PrepareDesktopDuplication(offsetX, offsetY, width, height),
+                    CancellationToken.None,
+                    TaskCreationOptions.LongRunning,
+                    TaskScheduler.Default)
+                : null;
+            try
             {
-                throw new InvalidOperationException($"{grabber} demuxer missing (need the avdevice native lib).");
+                writer = RecordingSegmentWriter.Open(
+                    outputPath, codec, PreferHardwareEncoder, width, height, fps, VideoCrf, VideoBitrate);
+            }
+            finally
+            {
+                // Waited for even when the encoder failed, so the device is let go of below.
+                duplication = preparing?.GetAwaiter().GetResult();
             }
 
-            ffmpeg.av_dict_set(&demuxOpts, "framerate", fps.ToString(), 0);
-            ffmpeg.av_dict_set(&demuxOpts, "video_size", $"{width}x{height}", 0);
-            ffmpeg.av_dict_set(&demuxOpts, "draw_mouse", drawMouse ? "1" : "0", 0);
-            ffmpeg.av_dict_set(&demuxOpts, "probesize", "32768", 0);
-            ffmpeg.av_dict_set(&demuxOpts, "analyzeduration", "0", 0);
-
-            string inputUrl;
-            if (isWindows)
-            {
-                // gdigrab: the capture-region offset is passed as options; the URL is "desktop".
-                ffmpeg.av_dict_set(&demuxOpts, "offset_x", offsetX.ToString(), 0);
-                ffmpeg.av_dict_set(&demuxOpts, "offset_y", offsetY.ToString(), 0);
-                inputUrl = "desktop";
-            }
-            else
-            {
-                // x11grab: the offset lives in the URL as :<display>+x,y (offset_x/y options are ignored).
-                string display = Environment.GetEnvironmentVariable("DISPLAY") ?? ":0";
-                inputUrl = $"{display}+{offsetX},{offsetY}";
-            }
-
-            ThrowIfErr(
-                ffmpeg.avformat_open_input(&inputFmt, inputUrl, ifmt, &demuxOpts),
-                "avformat_open_input");
-
-            // Skip avformat_find_stream_info for gdigrab live input.
-            // On some Windows systems it repeatedly logs probe warnings and delays startup.
-
-            videoIn = ffmpeg.av_find_best_stream(inputFmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
-            if (videoIn < 0)
-            {
-                throw new InvalidOperationException("No gdigrab video stream.");
-            }
-
-            AVCodecParameters* inPar = inputFmt->streams[videoIn]->codecpar;
-            AVCodec* dec = ffmpeg.avcodec_find_decoder(inPar->codec_id);
-            if (dec == null)
-            {
-                throw new InvalidOperationException($"No decoder for codec_id={inPar->codec_id}");
-            }
-
-            decCtx = ffmpeg.avcodec_alloc_context3(dec);
-            ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, inPar), "parameters_to_context(dec)");
-            ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "avcodec_open2(dec)");
-
-            writer = RecordingSegmentWriter.Open(
-                outputPath, codec, PreferHardwareEncoder, width, height, fps, VideoCrf, VideoBitrate);
+            // gdigrab is opened on this thread, which reads it: its GDI handles fail on another (EIO).
+            DuplicationDevice? device = duplication;
+            capture = new RegionCaptureSource(
+                () => device != null ? LibavDesktopDuplicationSource.TryOpen(device, offsetX, offsetY, width, height, fps, drawMouse) : null,
+                () => LibavScreenGrabSource.Open(offsetX, offsetY, width, height, fps, drawMouse));
+            CaptureSourceName = capture.Name;
+            LogNative($"Capture source: {capture.Name}");
 
             SelectedEncoderName = writer.EncoderName;
             EncoderOpenTime = writer.EncoderOpenTime;
@@ -201,49 +181,24 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             }
             LogNative($"Selected encoder: {writer.EncoderName}");
 
-            converter = new CapturedFrameConverter(decCtx, writer.Encoder, composite);
+            converter = new CapturedFrameConverter(width, height, writer.Encoder, composite);
             WallClockPts? wallClock = UseWallClockPts ? new WallClockPts(writer.Encoder->time_base) : null;
 
             if (PipelinedEncoding)
             {
-                RunPipelinedEncode(inputFmt, videoIn, pkt, decCtx, decFrame, writer, converter, wallClock, firstFrameTcs, ct);
+                RunPipelinedEncode(capture, captured, writer, converter, wallClock, firstFrameTcs, ct);
             }
             else
             {
-                while (!ct.IsCancellationRequested)
+                while (!ct.IsCancellationRequested && capture.TryRead(captured, ct))
                 {
-                    int rr = ffmpeg.av_read_frame(inputFmt, pkt);
-                    if (rr == ffmpeg.AVERROR_EOF)
-                    {
-                        break;
-                    }
-                    if (rr == ffmpeg.AVERROR(11))
-                    {
-                        // Live input can temporarily have no packet ready yet.
-                        Thread.Sleep(1);
-                        continue;
-                    }
-
-                    ThrowIfErr(rr, "av_read_frame");
-
-                    if (pkt->stream_index != videoIn)
-                    {
-                        ffmpeg.av_packet_unref(pkt);
-                        continue;
-                    }
-
-                    ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet(dec)");
-                    ffmpeg.av_packet_unref(pkt);
-
-                    DecodeEncodeLoop(decCtx, decFrame, writer, converter, wallClock, firstFrameTcs);
+                    EncodeCaptured(captured, writer, converter, wallClock, firstFrameTcs);
                 }
-
-                ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "flush_decoder");
-                DecodeEncodeLoop(decCtx, decFrame, writer, converter, wallClock, firstFrameTcs);
 
                 writer.Flush();
             }
 
+            CaptureSourceName = capture.Name;
             writer.WriteTrailer();
             VideoLength = writer.VideoLength;
 
@@ -273,54 +228,81 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             overlay?.Dispose();
             keystrokes?.Dispose();
 
+            // A segment that never got a frame holds the file's header alone, which the finalize would take for one:
+            // the encoder opens before the capture, so a capture that does not open left one behind.
+            bool wroteNothing = writer != null && writer.FrameCount == 0;
             writer?.Dispose();
-            SafeFreePkt(&pkt);
-            SafeFreeFrame(&decFrame);
+            if (wroteNothing)
+            {
+                TryDelete(outputPath);
+            }
+
+            capture?.Dispose();
+            duplication?.Dispose();
+            SafeFreeFrame(&captured);
             converter?.Dispose();
-
-            if (decCtx != null)
-            {
-                ffmpeg.avcodec_free_context(&decCtx);
-            }
-
-            if (inputFmt != null)
-            {
-                ffmpeg.avformat_close_input(&inputFmt);
-            }
-
-            if (demuxOpts != null)
-            {
-                ffmpeg.av_dict_free(&demuxOpts);
-            }
         }
     }
 
-    // Single-threaded encode loop: drain the decoder, converting each frame straight into the writer's frame and
-    // encoding it here.
-    private static unsafe void DecodeEncodeLoop(
-        AVCodecContext* decCtx,
-        AVFrame* decFrame,
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            System.IO.File.Delete(path);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            AppLog.Debug("RecordingNative", ex);
+        }
+    }
+
+    // The Direct3D device for duplicating the display that holds the region, or null where none does or no device is
+    // made, and the screen grab records it. Never throws.
+    private static DuplicationDevice? PrepareDesktopDuplication(int x, int y, int width, int height)
+    {
+#if WINDOWS
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                if (!LibavDesktopDuplicationSource.Available)
+                {
+                    LogNative("Desktop Duplication: this FFmpeg has no ddagrab filter.");
+                    return null;
+                }
+
+                return GimmeCapture.Services.Platforms.Windows.DxgiOutputs.TryCreateDuplicationDevice(x, y, width, height);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warning("RecordingNative.DesktopDuplication", ex);
+            }
+        }
+#endif
+        return null;
+    }
+
+    // Single-threaded encode step: converts the captured frame straight into the writer's frame and encodes it here.
+    private static unsafe void EncodeCaptured(
+        AVFrame* captured,
         RecordingSegmentWriter writer,
         CapturedFrameConverter converter,
         WallClockPts? wallClock,
         TaskCompletionSource<bool> firstFrameTcs)
     {
-        while (TryReceiveFrame(decCtx, decFrame, "receive_frame(dec)"))
+        AVFrame* encFrame = writer.FrameToFill();
+        converter.Convert(captured, encFrame);
+        long framePts = wallClock?.Next() ?? writer.FrameCount;
+
+        if (writer.FrameCount == 0)
         {
-            AVFrame* encFrame = writer.FrameToFill();
-            converter.Convert(decFrame, encFrame);
-            long framePts = wallClock?.Next() ?? writer.FrameCount;
-
-            if (writer.FrameCount == 0)
-            {
-                firstFrameTcs.TrySetResult(true);
-            }
-
-            writer.EncodeFrame(framePts);
+            firstFrameTcs.TrySetResult(true);
         }
+
+        writer.EncodeFrame(framePts);
     }
 
-    // Producer/consumer variant of the encode loop. This (the worker) thread reads + decodes + composites
+    // Producer/consumer variant of the encode loop. This (the worker) thread grabs + composites
     // each frame into a fresh encoder-format frame and hands it to a bounded queue; a dedicated encoder
     // thread drains the queue and muxes. Capture/composite and the (CPU-heavy) software encode overlap.
     // The writer (encoder + muxer) is used only by the consumer thread, until the producer writes the trailer after
@@ -328,11 +310,8 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
     // Under sustained back-pressure full-queue frames are dropped rather than stalling capture. Each queued frame is
     // owned by exactly one side (consumer after encode, producer on drop), so there is no double-free.
     private static unsafe void RunPipelinedEncode(
-        AVFormatContext* inputFmt,
-        int videoIn,
-        AVPacket* readPkt,
-        AVCodecContext* decCtx,
-        AVFrame* decFrame,
+        RegionCaptureSource capture,
+        AVFrame* captured,
         RecordingSegmentWriter writer,
         CapturedFrameConverter converter,
         WallClockPts? wallClock,
@@ -366,33 +345,10 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
 
         try
         {
-            while (!ct.IsCancellationRequested && consumerEx == null)
+            while (!ct.IsCancellationRequested && consumerEx == null && capture.TryRead(captured, ct))
             {
-                int rr = ffmpeg.av_read_frame(inputFmt, readPkt);
-                if (rr == ffmpeg.AVERROR_EOF)
-                {
-                    break;
-                }
-                if (rr == ffmpeg.AVERROR(11))
-                {
-                    Thread.Sleep(1);
-                    continue;
-                }
-                ThrowIfErr(rr, "av_read_frame(pipe)");
-
-                if (readPkt->stream_index != videoIn)
-                {
-                    ffmpeg.av_packet_unref(readPkt);
-                    continue;
-                }
-
-                ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, readPkt), "send_packet(dec,pipe)");
-                ffmpeg.av_packet_unref(readPkt);
-                DecodeComposeEnqueue(decCtx, decFrame, encCtx, converter, wallClock, queue, ref producedFrames, firstFrameTcs);
+                ComposeEnqueue(captured, encCtx, converter, wallClock, queue, ref producedFrames, firstFrameTcs);
             }
-
-            ffmpeg.avcodec_send_packet(decCtx, null);
-            DecodeComposeEnqueue(decCtx, decFrame, encCtx, converter, wallClock, queue, ref producedFrames, firstFrameTcs);
         }
         finally
         {
@@ -413,12 +369,11 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         }
     }
 
-    // Producer half of the pipeline: drain the decoder, convert each frame into a fresh encoder-format frame and
-    // enqueue it, dropping it if the queue is full. Its pts is stamped here, at arrival, and travels with it through
-    // the queue (the consumer only encodes), so wall-clock pacing is as correct pipelined as not.
-    private static unsafe void DecodeComposeEnqueue(
-        AVCodecContext* decCtx,
-        AVFrame* decFrame,
+    // Producer half of the pipeline: convert the captured frame into a fresh encoder-format frame and enqueue it,
+    // dropping it if the queue is full. Its pts is stamped here, at arrival, and travels with it through the queue
+    // (the consumer only encodes), so wall-clock pacing is as correct pipelined as not.
+    private static unsafe void ComposeEnqueue(
+        AVFrame* captured,
         AVCodecContext* encCtx,
         CapturedFrameConverter converter,
         WallClockPts? wallClock,
@@ -426,57 +381,32 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         ref long producedFrames,
         TaskCompletionSource<bool> firstFrameTcs)
     {
-        while (TryReceiveFrame(decCtx, decFrame, "receive_frame(dec,pipe)"))
+        AVFrame* encFrame = ffmpeg.av_frame_alloc();
+        try
         {
-            AVFrame* encFrame = ffmpeg.av_frame_alloc();
-            try
-            {
-                encFrame->format = (int)encCtx->pix_fmt;
-                encFrame->width = encCtx->width;
-                encFrame->height = encCtx->height;
-                ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "frame_get_buffer(enc,pipe)");
-                converter.Convert(decFrame, encFrame);
-            }
-            catch
-            {
-                ffmpeg.av_frame_free(&encFrame);
-                throw;
-            }
-
-            encFrame->pts = wallClock?.Next() ?? producedFrames;
-            producedFrames++;
-            if (producedFrames == 1)
-            {
-                firstFrameTcs.TrySetResult(true);
-            }
-
-            if (!queue.TryAdd((IntPtr)encFrame))
-            {
-                // Queue full — drop this frame rather than stall capture.
-                ffmpeg.av_frame_free(&encFrame);
-            }
+            encFrame->format = (int)encCtx->pix_fmt;
+            encFrame->width = encCtx->width;
+            encFrame->height = encCtx->height;
+            ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "frame_get_buffer(enc,pipe)");
+            converter.Convert(captured, encFrame);
         }
-    }
-
-    // Takes the decoder's next frame into decFrame; false once it needs another packet or has been drained.
-    private static unsafe bool TryReceiveFrame(AVCodecContext* decCtx, AVFrame* decFrame, string context)
-    {
-        ffmpeg.av_frame_unref(decFrame);
-        int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
-        if (gr == ffmpeg.AVERROR_EOF || gr == ffmpeg.AVERROR(11))
+        catch
         {
-            return false;
+            ffmpeg.av_frame_free(&encFrame);
+            throw;
         }
 
-        ThrowIfErr(gr, context);
-        return true;
-    }
-
-    private static unsafe void SafeFreePkt(AVPacket** pkt)
-    {
-        if (pkt != null && *pkt != null)
+        encFrame->pts = wallClock?.Next() ?? producedFrames;
+        producedFrames++;
+        if (producedFrames == 1)
         {
-            ffmpeg.av_packet_free(pkt);
+            firstFrameTcs.TrySetResult(true);
+        }
+
+        if (!queue.TryAdd((IntPtr)encFrame))
+        {
+            // Queue full — drop this frame rather than stall capture.
+            ffmpeg.av_frame_free(&encFrame);
         }
     }
 
@@ -499,11 +429,13 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
     /// <summary>
     /// Converts each captured frame into the encoder's pixel format and size. With overlays to burn in (cursor,
     /// clicks, webcam picture-in-picture, keystrokes) it goes through a BGRA frame they are drawn on; otherwise it
-    /// scales directly. The scalers and the BGRA frame are set up from the first frame and kept until disposed.
+    /// scales directly. The scalers and the BGRA frame are set up from the first frame and kept until the frames
+    /// change format or size (from a source that took over from another) or it is disposed.
     /// </summary>
     private sealed unsafe class CapturedFrameConverter : IDisposable
     {
-        private readonly AVCodecContext* _decoder;
+        private readonly int _captureWidth;
+        private readonly int _captureHeight;
         private readonly AVPixelFormat _targetFormat;
         private readonly AVColorSpace _targetSpace;
         private readonly AVColorRange _targetRange;
@@ -513,13 +445,18 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         private SwsContext* _toTarget;
         private SwsContext* _toBgra;
         private AVFrame* _bgra;
+        private AVPixelFormat _sourceFormat;
+        private int _sourceWidth;
+        private int _sourceHeight;
 
-        /// <param name="decoder">The capture decoder, whose size stands in for a frame that carries none.</param>
+        /// <param name="captureWidth">The region's width, standing in for a frame that carries none.</param>
+        /// <param name="captureHeight">The region's height, likewise.</param>
         /// <param name="encoder">The opened encoder, whose pixel format and size every frame is converted to.</param>
         /// <param name="overlays">Draws every overlay onto a BGRA frame, or null when there are none.</param>
-        public CapturedFrameConverter(AVCodecContext* decoder, AVCodecContext* encoder, Action<SKBitmap>? overlays)
+        public CapturedFrameConverter(int captureWidth, int captureHeight, AVCodecContext* encoder, Action<SKBitmap>? overlays)
         {
-            _decoder = decoder;
+            _captureWidth = captureWidth;
+            _captureHeight = captureHeight;
             _targetFormat = encoder->pix_fmt;
             _targetSpace = encoder->colorspace;
             _targetRange = encoder->color_range;
@@ -531,9 +468,13 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
         /// <summary>Converts <paramref name="captured"/> into <paramref name="target"/>, a frame in the encoder's format.</summary>
         public void Convert(AVFrame* captured, AVFrame* target)
         {
-            if (_toTarget == null)
+            var srcFmt = (AVPixelFormat)captured->format;
+            int srcW = captured->width > 0 ? captured->width : _captureWidth;
+            int srcH = captured->height > 0 ? captured->height : _captureHeight;
+            if (_toTarget == null || srcFmt != _sourceFormat || srcW != _sourceWidth || srcH != _sourceHeight)
             {
-                SetUp(captured);
+                Release();
+                SetUp(srcFmt, srcW, srcH);
             }
 
             if (_overlays != null)
@@ -558,11 +499,11 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             }
         }
 
-        private void SetUp(AVFrame* captured)
+        private void SetUp(AVPixelFormat srcFmt, int srcW, int srcH)
         {
-            var srcFmt = (AVPixelFormat)captured->format;
-            int srcW = captured->width > 0 ? captured->width : _decoder->width;
-            int srcH = captured->height > 0 ? captured->height : _decoder->height;
+            _sourceFormat = srcFmt;
+            _sourceWidth = srcW;
+            _sourceHeight = srcH;
 
             if (_overlays != null)
             {
@@ -602,7 +543,9 @@ internal sealed class LibavGdigrabMkvSession : LibavRecordingSession
             }
         }
 
-        public void Dispose()
+        public void Dispose() => Release();
+
+        private void Release()
         {
             if (_toTarget != null)
             {

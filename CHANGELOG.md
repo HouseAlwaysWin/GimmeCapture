@@ -29,6 +29,16 @@
   changed or not: in silence that thread woke 63 times a second, and as Record mode opened it set up the audio devices
   there, for up to 58 ms. The meter now reads on a thread of its own, tells the interface only when a level changes,
   and leaves the microphone alone when the recording does not take it.
+- **Recording a region takes 60-65% less processor.** Every frame was grabbed through GDI, which has Windows read the
+  screen back for it: recording 1450x900 at 30 fps on NVENC took 640-650 M cycles a second, and 1920x1080 took 890. A
+  region on one display is now grabbed through Desktop Duplication, which copies it out of the screen on the graphics
+  card and hands over only that: 245-265 and 315 M cycles a second, for the same frames, the same pixels and the same
+  colours, with the capture overlay left out as before. A region across two displays, on a turned display, or where
+  Desktop Duplication does not open is grabbed as before, and when Windows takes a duplication away mid-recording (a
+  display change, a UAC prompt) the recording carries on through a fresh one, or as before. On a laptop with an NVIDIA
+  card beside the chip the display hangs off, the app now asks Windows about its displays before it starts the NVIDIA
+  driver: started first, the driver had Windows put the whole app on the NVIDIA card, from which Desktop Duplication
+  cannot reach the display.
 
 ### 🛡️ Reliability
 

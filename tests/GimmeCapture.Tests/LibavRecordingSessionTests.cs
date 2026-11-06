@@ -4,6 +4,8 @@ using System.Windows.Forms;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
+using GimmeCapture.Services.Interop;
+using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.Tests;
 
@@ -11,8 +13,9 @@ namespace GimmeCapture.Tests;
 /// Records about a second and a half with each native recorder session and checks the Matroska segment it leaves: the
 /// encoder it picked, the frame size, a duration close to the time recorded, the frame rate, and a frame that decodes.
 /// They pin what a recording produces, so the encode-and-mux code the three sessions share can be moved under them.
-/// The gdigrab cases capture a corner of the desktop without showing anything and run with the other Windows tests;
-/// the WGC ones put small windows on screen to record, so they are opt-in (RECORDING_PROBE=1).
+/// The region cases capture a corner of the desktop without showing anything and run with the other Windows tests,
+/// through gdigrab and through Desktop Duplication; the WGC ones and the ones that look at what was recorded put small
+/// windows on screen, so they are opt-in (RECORDING_PROBE=1).
 /// </summary>
 public sealed class LibavRecordingSessionTests : IDisposable
 {
@@ -48,6 +51,7 @@ public sealed class LibavRecordingSessionTests : IDisposable
             PipelinedEncoding = pipelined,
             HighlightCursor = overlays,
             ShowKeystrokes = overlays,
+            UseDesktopDuplication = false,
         };
 
         await RecordAsync(
@@ -55,7 +59,42 @@ public sealed class LibavRecordingSessionTests : IDisposable
             session.StopAsync,
             () => session.LastErrorMessage);
 
+        Assert.Equal("gdigrab", session.CaptureSourceName);
         await AssertSegmentAsync(path, session.SelectedEncoderName, expectedSize: (320, 240));
+    }
+
+    // A region on one display goes through Desktop Duplication wherever this machine can duplicate it (the corner of
+    // the main display), and through gdigrab where it cannot, recording the same either way.
+    [Theory]
+    [InlineData(false, false)] // the loop RecordingService uses
+    [InlineData(true, true)]   // separate threads, cursor and keystroke overlays drawn on the duplicated BGRA
+    public async Task DesktopDuplication_RecordsTheRegion_WhereItCanDuplicateTheDisplay(bool pipelined, bool overlays)
+    {
+        string path = Path.Combine(_dir, "ddagrab.mkv");
+        using var session = new LibavGdigrabMkvSession
+        {
+            PreferHardwareEncoder = false,
+            UseWallClockPts = true,
+            PipelinedEncoding = pipelined,
+            HighlightCursor = overlays,
+            ShowKeystrokes = overlays,
+        };
+
+        await RecordAsync(
+            session.StartAsync(path, 0, 0, 320, 240, Fps, drawMouse: true, VideoCodec.H264),
+            session.StopAsync,
+            () => session.LastErrorMessage);
+
+        Assert.Equal(CanDuplicate(0, 0, 320, 240) ? "ddagrab" : "gdigrab", session.CaptureSourceName);
+        await AssertSegmentAsync(path, session.SelectedEncoderName, expectedSize: (320, 240));
+    }
+
+    // Desktop Duplication captures one display, so a region wider than any display is left to gdigrab, which takes the
+    // whole virtual screen.
+    [Fact]
+    public void DesktopDuplication_TakesNoRegionNoSingleDisplayHolds()
+    {
+        Assert.Null(DxgiOutputs.TryCreateDuplicationDevice(0, 0, 100_000, 240));
     }
 
     // The file says the BT.601 its pictures were converted with: unsaid, players took BT.709 for HD and shifted them.
@@ -63,7 +102,7 @@ public sealed class LibavRecordingSessionTests : IDisposable
     public async Task Gdigrab_SaysWhichColoursItsFileHolds()
     {
         string path = Path.Combine(_dir, "tagged.mkv");
-        using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = false, UseWallClockPts = true };
+        using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = false, UseWallClockPts = true, UseDesktopDuplication = false };
 
         await RecordAsync(
             session.StartAsync(path, 0, 0, 320, 240, Fps, drawMouse: false, VideoCodec.H264),
@@ -77,16 +116,19 @@ public sealed class LibavRecordingSessionTests : IDisposable
     // startup gate saw the worker's faulted first-frame signal finish before the worker itself, about half the time
     // on CI. Each failure case repeats so that race would show.
 
+    // It leaves no file: the encoder now opens before the capture, and a file holding only the header was taken for a
+    // segment by the finalize.
     [Fact]
     public async Task Gdigrab_ARegionOffTheScreen_FailsToStart()
     {
         for (int attempt = 0; attempt < 20; attempt++)
         {
             using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = false };
+            string path = Path.Combine(_dir, "offscreen.mkv");
 
-            Assert.False(await session.StartAsync(
-                Path.Combine(_dir, "offscreen.mkv"), 1_000_000, 1_000_000, 320, 240, Fps, drawMouse: false, VideoCodec.H264));
+            Assert.False(await session.StartAsync(path, 1_000_000, 1_000_000, 320, 240, Fps, drawMouse: false, VideoCodec.H264));
             Assert.False(string.IsNullOrEmpty(session.LastErrorMessage));
+            Assert.False(File.Exists(path), "a failed start left a segment file");
         }
     }
 
@@ -165,15 +207,45 @@ public sealed class LibavRecordingSessionTests : IDisposable
     }
 
     /// <summary>
-    /// A gdigrab recording on NVENC hands it the capture's BGRA: the colours come out as the CPU's conversion to 4:2:0
-    /// gave them (BT.601), and the file now says so. Opt-in: it needs an NVIDIA GPU with NVENC.
+    /// A region recording on NVENC hands it the capture's BGRA: the colours come out as the CPU's conversion to 4:2:0
+    /// gave them (BT.601), and the file says so, grabbed by gdigrab or by Desktop Duplication. Opt-in: it needs an
+    /// NVIDIA GPU with NVENC. On a laptop whose display hangs off the other chip, the duplication also needs DXGI asked
+    /// before NVENC starts CUDA (DisplayAdapterOrder): run alone, in a process of its own.
     /// </summary>
     [OptInFact("NVENC_PROBE=1")]
-    public async Task Gdigrab_OnNvenc_KeepsTheColours_AndSaysWhichTheyAre()
+    public Task Gdigrab_OnNvenc_KeepsTheColours_AndSaysWhichTheyAre() => RecordsSteelBlueOnNvenc(duplicate: false, "gdigrab");
+
+    [OptInFact("NVENC_PROBE=1")]
+    public Task DesktopDuplication_OnNvenc_KeepsTheColours_AndSaysWhichTheyAre() => RecordsSteelBlueOnNvenc(duplicate: true, "ddagrab");
+
+    /// <summary>
+    /// Desktop Duplication leaves out a window that asks to be left out of captures (WDA_EXCLUDEFROMCAPTURE), as gdigrab
+    /// does: that is how the capture overlay's frame and toolbar stay out of the region a recording takes. Opt-in
+    /// (RECORDING_PROBE=1): it puts two windows on screen.
+    /// </summary>
+    [OptInFact(ProbeSwitch)]
+    public async Task DesktopDuplication_LeavesOutAWindowExcludedFromCapture()
+    {
+        using var below = new TargetWindow(left: 200, width: 600, height: 400, Color.SteelBlue);
+        using var above = new TargetWindow(left: 260, width: 480, height: 280, Color.Crimson, excludedFromCapture: true);
+        string path = Path.Combine(_dir, "excluded.mkv");
+        using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = false, UseWallClockPts = true };
+
+        // Inside both windows: the crimson one is on top, on screen.
+        await RecordAsync(
+            session.StartAsync(path, 300, 250, 320, 160, Fps, drawMouse: false, VideoCodec.H264),
+            session.StopAsync,
+            () => session.LastErrorMessage);
+
+        Assert.Equal("ddagrab", session.CaptureSourceName);
+        AssertCentreIs(Color.SteelBlue, await LibavVideoFramePlayer.DecodeFrameAtAsync(path, 0.5, 320, 160), tolerance: 6);
+    }
+
+    private async Task RecordsSteelBlueOnNvenc(bool duplicate, string expectedSource)
     {
         using var window = new TargetWindow(left: 200, width: 600, height: 400, Color.SteelBlue);
         string path = Path.Combine(_dir, "nvenc.mkv");
-        using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = true, UseWallClockPts = true };
+        using var session = new LibavGdigrabMkvSession { PreferHardwareEncoder = true, UseWallClockPts = true, UseDesktopDuplication = duplicate };
 
         // Well inside the window, below its title bar.
         await RecordAsync(
@@ -182,14 +254,27 @@ public sealed class LibavRecordingSessionTests : IDisposable
             () => session.LastErrorMessage);
 
         Assert.Equal("hevc_nvenc", session.SelectedEncoderName);
+        Assert.Equal(expectedSource, session.CaptureSourceName);
         Assert.Equal(AVColorSpace.AVCOL_SPC_BT470BG, ReadColourSpace(path));
-        byte[]? bgra = await LibavVideoFramePlayer.DecodeFrameAtAsync(path, 0.5, 320, 160);
+        AssertCentreIs(Color.SteelBlue, await LibavVideoFramePlayer.DecodeFrameAtAsync(path, 0.5, 320, 160), tolerance: 3);
+    }
+
+    private static void AssertCentreIs(Color expected, byte[]? bgra, int tolerance)
+    {
         Assert.NotNull(bgra);
         int centre = ((80 * 320) + 160) * 4;
-        Color steelBlue = Color.SteelBlue;
-        Assert.InRange(bgra[centre + 2], steelBlue.R - 3, steelBlue.R + 3);
-        Assert.InRange(bgra[centre + 1], steelBlue.G - 3, steelBlue.G + 3);
-        Assert.InRange(bgra[centre], steelBlue.B - 3, steelBlue.B + 3);
+        Assert.InRange(bgra[centre + 2], expected.R - tolerance, expected.R + tolerance);
+        Assert.InRange(bgra[centre + 1], expected.G - tolerance, expected.G + tolerance);
+        Assert.InRange(bgra[centre], expected.B - tolerance, expected.B + tolerance);
+    }
+
+    // Whether Desktop Duplication opens on the region here and now: not on a machine without a display adapter that
+    // duplicates, such as a virtual one.
+    private static bool CanDuplicate(int x, int y, int width, int height)
+    {
+        using var device = DxgiOutputs.TryCreateDuplicationDevice(x, y, width, height);
+        using var source = device != null ? LibavDesktopDuplicationSource.TryOpen(device, x, y, width, height, Fps, drawMouse: false) : null;
+        return source != null;
     }
 
     private static unsafe AVColorSpace ReadColourSpace(string path)
@@ -245,7 +330,7 @@ public sealed class LibavRecordingSessionTests : IDisposable
         private readonly Thread _thread;
         private Form? _form;
 
-        public TargetWindow(int left, int width, int height, Color color)
+        public TargetWindow(int left, int width, int height, Color color, bool excludedFromCapture = false)
         {
             // Not disposed: after a timeout the window's thread could still set it.
             var shown = new ManualResetEventSlim();
@@ -264,6 +349,11 @@ public sealed class LibavRecordingSessionTests : IDisposable
                 _form.Shown += (_, _) =>
                 {
                     Handle = _form.Handle;
+                    if (excludedFromCapture)
+                    {
+                        Win32Helpers.SetWindowCaptureVisibility(Handle, visible: false);
+                    }
+
                     shown.Set();
                 };
                 Application.Run(_form);
