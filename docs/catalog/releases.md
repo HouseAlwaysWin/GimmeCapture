@@ -2,6 +2,22 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.74.0 - 2026-11-06
+
+- **Recording** — a region on one display is grabbed through Desktop Duplication and its frames go to the encoder as
+  they are: a 1450x900 recording at 30 fps on NVENC takes about a third of the processor it did; GDI stays for what
+  Desktop Duplication cannot reach. Record mode's sound meter no longer keeps the interface busy.
+- **Pinned recordings** — a playing pin takes less processor: a frame decoded on the graphics card is converted a
+  faster way, the toolbar's shadow is drawn the cheap way, and each frame goes into the picture from the decoding
+  thread.
+- **GIFs** — made about a third faster, the same byte for byte, as each pass decodes a few frames ahead; a cut pin's
+  GIF no longer makes sound for the copy it is made from.
+- **Capture overlay** — the first overlay after the app starts comes up in about 120-180 ms instead of 220-270, and
+  after a pause its text boxes come sooner, as OCR loads its models from copies saved already optimized.
+- **Start-up and the tray** — starting with Windows reads less of the app from a hard disk, the first pin after a
+  start opens sooner, and in the tray the app wakes the processor about a third as often.
+- **Reliability** — a mosaic or blur shows what will be saved after the overlay is frozen or unfrozen while drawing.
+
 ## v0.73.0 - 2026-11-05
 
 - **Pinned recordings** — a recording's pin shows it at its full resolution, pixel for pixel, sharp at 125% too; a
