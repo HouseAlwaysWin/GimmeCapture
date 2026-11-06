@@ -9,14 +9,16 @@ using SkiaSharp;
 namespace GimmeCapture.Views.Controls;
 
 /// <summary>
-/// Draws the glow around a frame, the box shadow <c>ColorToBoxShadowConverter</c> makes (the colour at half opacity,
-/// blurred 10 and spread 1), as <see cref="Border"/> draws its <c>BoxShadow</c>, but with Skia's mask blur. A border's
-/// box shadow blurs a layer as large as the border with an image filter every time it is drawn: drawn on the CPU ("Use
-/// less memory"), that and the checkerboard under the image (<see cref="TransparencyCheckerboard"/>) held a 1280x720 pin
-/// being resized to 19-20 frames a second, 29-46 once both were drawn this way. A mask blur works a blurred rectangle
-/// out along its edges, and comes within a few levels of the box shadow (<c>GlowDecoratorRenderTests</c>). Border seals
-/// its Render, so this decorator draws the glow around the border it holds, which lays itself out to fill it. The rest
-/// falls back to Avalonia's own box shadow: rounded corners, inset shadows, and drawing without Skia.
+/// Draws a box shadow around the border it holds, as <see cref="Border"/> draws its <c>BoxShadow</c>, but with Skia's mask
+/// blur: a frame's glow (the colour at half opacity, blurred 10 and spread 1, <c>ColorToBoxShadowConverter</c>), a
+/// toolbar's drop shadow. A border's box shadow blurs a layer as large as the border with an image filter every time it
+/// is drawn: drawn on the CPU ("Use less memory"), that and the checkerboard under the image
+/// (<see cref="TransparencyCheckerboard"/>) held a 1280x720 pin being resized to 19-20 frames a second, 29-46 once both
+/// were drawn this way. A playing video pin redraws its toolbar for every move of the playhead, 15 times a second, and on
+/// the GPU the toolbar's shadow cost Avalonia's render thread 150 M cycles a second of the pin's 990. A mask blur works a
+/// blurred rectangle, rounded or not, out along its edges, and comes within a few levels of the box shadow
+/// (<c>GlowDecoratorRenderTests</c>). Border seals its Render, so this decorator draws the shadow around the border it
+/// holds, which lays itself out to fill it. Inset shadows, and drawing without Skia, fall back to Avalonia's own.
 /// </summary>
 public class GlowDecorator : Decorator
 {
@@ -130,9 +132,7 @@ public class GlowDecorator : Decorator
 
         public void Render(ImmediateDrawingContext context)
         {
-            if (_shadow.IsInset
-                || _cornerRadius != default
-                || context.TryGetFeature<ISkiaSharpApiLeaseFeature>() is not { } skia)
+            if (_shadow.IsInset || context.TryGetFeature<ISkiaSharpApiLeaseFeature>() is not { } skia)
             {
                 context.DrawRectangle(
                     null, null, _rect, _cornerRadius.TopLeft, _cornerRadius.TopLeft, new BoxShadows(_shadow));
@@ -153,12 +153,37 @@ public class GlowDecorator : Decorator
 
             // As Avalonia draws an outer box shadow: clipped out of the rect, then spread and moved by its offset.
             var rect = new SKRect((float)_rect.X, (float)_rect.Y, (float)_rect.Right, (float)_rect.Bottom);
-            var shadowRect = rect;
-            shadowRect.Inflate((float)_shadow.Spread, (float)_shadow.Spread);
             int saved = canvas.Save();
-            canvas.ClipRect(rect, SKClipOperation.Difference);
-            canvas.Translate((float)_shadow.OffsetX, (float)_shadow.OffsetY);
-            canvas.DrawRect(shadowRect, paint);
+            if (_cornerRadius == default)
+            {
+                var shadowRect = rect;
+                shadowRect.Inflate((float)_shadow.Spread, (float)_shadow.Spread);
+                canvas.ClipRect(rect, SKClipOperation.Difference);
+                canvas.Translate((float)_shadow.OffsetX, (float)_shadow.OffsetY);
+                canvas.DrawRect(shadowRect, paint);
+            }
+            else
+            {
+                // Each corner's radius as RoundedRect gives it; Skia spreads the corners with the rect.
+                using var rounded = new SKRoundRect();
+                rounded.SetRectRadii(rect, new[]
+                {
+                    new SKPoint((float)_cornerRadius.TopLeft, (float)_cornerRadius.TopLeft),
+                    new SKPoint((float)_cornerRadius.TopRight, (float)_cornerRadius.TopRight),
+                    new SKPoint((float)_cornerRadius.BottomRight, (float)_cornerRadius.BottomRight),
+                    new SKPoint((float)_cornerRadius.BottomLeft, (float)_cornerRadius.BottomLeft),
+                });
+                using var shadowRect = new SKRoundRect(rounded);
+                if (_shadow.Spread != 0)
+                {
+                    shadowRect.Inflate((float)_shadow.Spread, (float)_shadow.Spread);
+                }
+
+                canvas.ClipRoundRect(rounded, SKClipOperation.Difference, true);
+                canvas.Translate((float)_shadow.OffsetX, (float)_shadow.OffsetY);
+                canvas.DrawRoundRect(shadowRect, paint);
+            }
+
             canvas.RestoreToCount(saved);
         }
 

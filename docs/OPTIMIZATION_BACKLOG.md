@@ -19,7 +19,7 @@ tool.
   in as its own commit; `## Unreleased` starts over, and the CHANGELOG has none
   until the next change adds it. A tag pushed by hand fails `verify-release-metadata`: v0.71.0's first one did, on
   2026-11-02, and was deleted, as nothing had been published under it.
-- Since v0.73.0, `## Unreleased` holds 7 entries (2026-11-06).
+- Since v0.73.0, `## Unreleased` holds 8 entries (2026-11-06).
 - The user's installed copy (`D:\GimmeCapture_win-x64`) runs v0.73.0 (2026-11-05), updated by its own updater from
   0.72.1+d33e5172, a build copied in by hand like those since 2026-11-02, with the sign-in launcher its Run value
   starts. The user turned on software rendering ("Use less memory") the same evening.
@@ -979,6 +979,17 @@ tool.
   player's loop uses it. The probe, interleaved: the decode thread 212, 188 against 286.5, 286.6 M cycles/s, the process
   1005, 975 against 1055, 1055. `LibavBgraConverterTests` (the route; BT.709 and BT.601 tags honoured in the second step;
   PSNR over 40 dB against the direct route on a striped picture; set up again for a frame of another size).
+- Done since batch 1 (2026-11-06, "繼續優化"): **a playing pin's toolbar shadow** (Pins). `PinPlaybackProbeTests`'
+  variants, drawing on the GPU, interleaved: the toolbar shown 990, 991 M cycles/s (Avalonia's render thread 490, 511,
+  an unnamed native thread 94, 108); hidden 744 (render thread 322); shown without its `BoxShadow="0 4 15 0
+  #D0000000"` 777 (348); shown with the playhead at 1 fps instead of 15 802, 773 (351, 349). So the playhead redrew the
+  toolbar 15 times a second, and every redraw blurred its box shadow again, which Avalonia does to a whole layer with an
+  image filter. `GlowDecorator`, whose mask blur the pin frame's glow already used, now draws rounded corners too
+  (`SKRoundRect`, clipped out and spread as Avalonia does) and holds the video pin's bottom toolbar: 814, 819, 823 (the
+  render thread 368-377). `GlowDecoratorRenderTests`' new toolbar case: 7 levels apart at most at 100%, 8 at 125%, 2 at
+  150% (0.02-0.19 on average), the same to the eye. `ToolbarShadowMarkupTests` (fails on the old markup). The probe also
+  caught the UI thread waking 1100-1400 times a second, for 190-240 M cycles/s, in 3 of about 20 runs: after a pause,
+  after hiding the toolbar, and once after neither (Pins, open).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1382,12 +1393,18 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done
   (Status).
-- **A playing pin's drawing** (M-L). Drawing on the GPU, Avalonia's render thread took 469-496 of a playing pin's
-  975-1005 M cycles/s at 1450x900 (`PinPlaybackProbeTests`), uploading the pin's `WriteableBitmap` every frame and
-  waking 430-456 times a second; on the CPU it took 646. Find what it does per frame before acting: a paused pin as the
-  baseline, the toolbar's 15 fps playhead apart from the 30 fps frames. A frame the GPU could show as it decoded it
-  (Avalonia's GPU interop) would leave out the download, the conversion, both copies and the upload, at the cost of a
-  second way to draw a pin.
+- **A playing pin's drawing** (M-L). Drawing on the GPU, Avalonia's render thread takes 368-377 of a playing pin's
+  814-823 M cycles/s at 1450x900 with the toolbar shown, 322-334 hidden (`PinPlaybackProbeTests`), uploading the pin's
+  `WriteableBitmap` every frame and waking 420-500 times a second; on the CPU it took 646. An RGBA bitmap instead of BGRA
+  changed nothing (487-489 against 483-494), and a paused pin's render thread is near idle, so it is the per-frame
+  upload. A frame the GPU could show as it decoded it (Avalonia's GPU interop) would leave out the download, the
+  conversion, both copies and the upload, at the cost of a second way to draw a pin. The toolbar's shadow is done
+  (Status).
+- **A pin's UI thread sometimes wakes 1100-1400 times a second** (S-M to find). In 3 of about 20 `PinPlaybackProbeTests`
+  runs it did, for 190-240 M cycles/s against 80-90, right after a pause, after hiding the toolbar, and once after
+  neither; the render thread woke more with it (538 a second). Not reproduced on demand: the same variants ran quiet
+  before and after. A `dotnet-trace` sampling resolved no managed frames (`?!?`), so catch it with the probe in a loop and
+  a trace taken while it lasts.
 - **Lower**: video pins copy each frame twice (`LatestFrameHandoff.cs:40`, then `FloatingVideoViewModel.Media.cs:564`,
   about 50 M cycles/s each at 1450x900, 33 MB a frame at 4K) and keep decoding when covered; the conversion to BGRA is
   done (Status). The translation layer adds results one at a time, rebuilding its region per item

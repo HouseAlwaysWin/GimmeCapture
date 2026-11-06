@@ -20,7 +20,7 @@ namespace GimmeCapture.Tests;
 /// Avalonia's own Skia renderer at the border widths, opacities and screen scales the app meets, every channel of the
 /// glow came within 3 levels at 100%, 5 at 125% and 7 at 150% (0.04-0.18 on average); the checkerboard was identical at
 /// 100% and 200%, and at 125% and 150% its squares' edges are smoothed rather than antialiased, at most 26 levels off
-/// (1.5-3.1 on average). Opt-in (GLOW_PROBE=1): it sets up Avalonia's headless platform, which a process can do only
+/// (1.5-3.1 on average). The video pin toolbar's rounded drop shadow is checked the same way. Opt-in (GLOW_PROBE=1): it sets up Avalonia's headless platform, which a process can do only
 /// once. GLOW_OUT names a folder for the pictures.
 /// </summary>
 public sealed class GlowDecoratorRenderTests
@@ -60,6 +60,18 @@ public sealed class GlowDecoratorRenderTests
                     Assert.True(max <= 8 && mean <= 0.25, $"{name}: {max} levels at most, {mean:0.000} on average.");
                 }
             }
+        }
+
+        // A video pin's toolbar: a rounded border with a soft drop shadow below it.
+        var dropShadow = BoxShadows.Parse("0 4 15 0 #D0000000");
+        foreach (double scale in new[] { 1.0, 1.25, 1.5 })
+        {
+            string name = $"toolbar_{scale:0.00}x";
+            var before = Render(Toolbar(dropShadow, decorator: false), scale, outDir, name + "_before");
+            var after = Render(Toolbar(dropShadow, decorator: true), scale, outDir, name + "_after");
+            var (max, mean, off) = Compare(before, after);
+            _output.WriteLine($"{name}: largest difference {max} levels, {mean:0.000} on average, {off} channels off by more than 2");
+            Assert.True(max <= 8 && mean <= 0.25, $"{name}: {max} levels at most, {mean:0.000} on average.");
         }
 
         foreach (double scale in new[] { 1.0, 1.25, 1.5, 2.0 })
@@ -102,6 +114,34 @@ public sealed class GlowDecoratorRenderTests
         frame.HorizontalAlignment = HorizontalAlignment.Center;
         frame.VerticalAlignment = VerticalAlignment.Center;
         return new Border { Background = new SolidColorBrush(Backdrop), Width = 320, Height = 220, Child = frame };
+    }
+
+    // The video pin's bottom toolbar, its corners rounded, over a frame of video for the shadow to fall on.
+    private static Control Toolbar(BoxShadows shadow, bool decorator)
+    {
+        var border = new Border
+        {
+            Background = new SolidColorBrush(Color.Parse("#1A1A1A")),
+            BorderBrush = new SolidColorBrush(Color.Parse("#333333")),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+        };
+        Control toolbar;
+        if (decorator)
+        {
+            toolbar = new GlowDecorator { Glow = shadow, Child = border };
+        }
+        else
+        {
+            border.BoxShadow = shadow;
+            toolbar = border;
+        }
+
+        toolbar.Width = 421;
+        toolbar.Height = 63;
+        toolbar.HorizontalAlignment = HorizontalAlignment.Center;
+        toolbar.VerticalAlignment = VerticalAlignment.Center;
+        return new Border { Background = new SolidColorBrush(Backdrop), Width = 480, Height = 140, Child = toolbar };
     }
 
     // The VisualBrush the pins and the capture overlay used before TransparencyCheckerboard.

@@ -15,9 +15,12 @@ namespace GimmeCapture.Tests;
 /// What a pinned recording costs while it plays, thread by thread, in a real Win32 window off screen: the pin of a
 /// recording the user made, shown pixel for pixel and muted, as the overlay opens one after a recording. On a 1450x900
 /// HEVC recording drawn on the GPU (2026-11-06): the process 1032-1055 M cycles/s, Avalonia's render thread 469-496, the
-/// decode thread 283-287, which converting NV12 through YUV420P (LibavBgraConverter) took to 188-212. Opt-in
-/// (PIN_PLAYBACK_PROBE=1, PIN_PLAYBACK_CLIP=a video file; PIN_PLAYBACK_RENDERER=software draws on the CPU): it sets up
-/// Avalonia on the real platform, which a process can do only once.
+/// decode thread 283-287, which converting NV12 through YUV420P (LibavBgraConverter) took to 188-212. The toolbar's
+/// drop shadow, redrawn for every move of the playhead, then cost the render thread 150 more than without it; drawn by a
+/// GlowDecorator, the process took 814-823. PIN_PLAYBACK_VARIANT=paused, paused-no-toolbar or no-toolbar measures those;
+/// PIN_TIMELINE_FPS sets the playhead's rate, PIN_PLAYBACK_SECONDS the length measured. Opt-in (PIN_PLAYBACK_PROBE=1,
+/// PIN_PLAYBACK_CLIP=a video file; PIN_PLAYBACK_RENDERER=software draws on the CPU): it sets up Avalonia on the real
+/// platform, which a process can do only once.
 /// </summary>
 public sealed class PinPlaybackProbeTests(ITestOutputHelper output) : IDisposable
 {
@@ -61,6 +64,11 @@ public sealed class PinPlaybackProbeTests(ITestOutputHelper output) : IDisposabl
         var (width, height) = ProbeSize(clip);
         double scaling = host.RenderScaling;
         var settings = new AppSettingsService(_baseDir);
+        if (Environment.GetEnvironmentVariable("PIN_TIMELINE_FPS") is { } timelineFps)
+        {
+            settings.Settings.PlaybackTimelineFps = int.Parse(timelineFps);
+        }
+
         var vm = new FloatingVideoViewModel(
             clip, width, height, width / scaling, height / scaling, Colors.Red, 2.0, false, false,
             Moq.Mock.Of<GimmeCapture.Services.Abstractions.IClipboardService>(), settings)
@@ -78,11 +86,30 @@ public sealed class PinPlaybackProbeTests(ITestOutputHelper output) : IDisposabl
         };
         window.Show();
         PumpFor(TimeSpan.FromSeconds(4));
+        string variant = Environment.GetEnvironmentVariable("PIN_PLAYBACK_VARIANT") ?? "playing";
+        if (variant.StartsWith("paused", StringComparison.Ordinal))
+        {
+            vm.TogglePlaybackCommand.Execute().Subscribe();
+            PumpFor(TimeSpan.FromSeconds(2));
+            Assert.False(vm.IsPlaying);
+            if (variant == "paused-no-toolbar")
+            {
+                vm.ShowToolbar = false;
+                PumpFor(TimeSpan.FromSeconds(1));
+            }
+        }
+        else if (variant == "no-toolbar")
+        {
+            vm.ShowToolbar = false;
+            PumpFor(TimeSpan.FromSeconds(1));
+        }
+
+        output.WriteLine($"variant {variant}, toolbar {vm.ShowToolbar}, playing {vm.IsPlaying}");
 
         uint ui = ThreadActivity.CurrentThreadId;
         long before = ProcessCycles();
         var watch = Stopwatch.StartNew();
-        var rows = ThreadActivity.Measure(() => PumpFor(TimeSpan.FromSeconds(10)));
+        var rows = ThreadActivity.Measure(() => PumpFor(TimeSpan.FromSeconds(double.Parse(Environment.GetEnvironmentVariable("PIN_PLAYBACK_SECONDS") ?? "10"))));
         double seconds = watch.Elapsed.TotalSeconds;
         long process = ProcessCycles() - before;
 

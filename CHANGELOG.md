@@ -50,6 +50,11 @@
   conversion was most of the work of the pin's decoding thread. It now takes a fast route, the same picture to the eye:
   that thread took 188-212 M cycles a second instead of 286, and the whole app 975-1005 instead of 1055 while the pin
   played, drawing on the graphics card.
+- **A playing pin with its toolbar showing takes about a sixth less processor again.** The toolbar is redrawn for
+  every move of the playhead, 15 times a second, and its soft shadow was blurred all over again each time: drawing on
+  the graphics card, that was about 170 M cycles a second of a 1450x900 recording's pin. The shadow is now drawn the
+  way the pin's coloured frame already is, the same to the eye, and the pin took 814-823 M cycles a second instead of
+  about 990.
 
 ### 🛡️ Reliability
 

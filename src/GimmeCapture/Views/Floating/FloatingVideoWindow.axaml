@@ -317,15 +317,17 @@
             </StackPanel>
         </Border>
 
-        <!-- Bottom Toolbar (Overlay positioned inside window padding) -->
-        <Border x:Name="ToolbarBorder" Classes="no-window-drag" IsVisible="{Binding ShowToolbar}"
-                Margin="{Binding ToolbarMargin}"
+        <!-- Bottom Toolbar (Overlay positioned inside window padding). Its drop shadow is the decorator's: drawn as a
+             Border's box shadow it was blurred again for every move of the playhead (GlowDecorator). -->
+        <controls:GlowDecorator IsVisible="{Binding ShowToolbar}"
+                                Margin="{Binding ToolbarMargin}"
+                                HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                Glow="0 4 15 0 #D0000000"
+                                ZIndex="20">
+        <Border x:Name="ToolbarBorder" Classes="no-window-drag"
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
                 CornerRadius="4" Padding="6,2"
-                HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                MinWidth="420"
-                BoxShadow="0 4 15 0 #D0000000"
-                ZIndex="20">
+                MinWidth="420">
             <Border.Styles>
                 <Style Selector="Border">
                     <Setter Property="Transitions">
@@ -477,6 +479,7 @@
                 </StackPanel>
             </StackPanel>
         </Border>
+        </controls:GlowDecorator>
 
          <Grid.ContextMenu>
             <ContextMenu>
