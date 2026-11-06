@@ -286,6 +286,18 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
             if (!_openedOnce)
             {
                 WarmUpOverlay();
+                // At sign-in the warm-up waited on the hard disk for files no start-up read had read: a start to the tray
+                // adds what it loaded to the start-up list, unless a real overlay opened meanwhile and loaded its own.
+                if (StartupTrace.IsTrayLaunch)
+                {
+                    DispatcherTimer.RunOnce(() =>
+                    {
+                        if (!_openedOnce)
+                        {
+                            _ = System.Threading.Tasks.Task.Run(StartupPrefetch.RecordWarmUp);
+                        }
+                    }, WarmUpRecordDelay, DispatcherPriority.Background);
+                }
             }
 
             if (mainViewModel is MainWindowViewModel vm)
@@ -294,6 +306,9 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
             }
         }, delay, DispatcherPriority.Background);
     }
+
+    // Long enough for the warm-up's steps, each posted at Background priority, to have run: 1.0 s at the 2026-11-06 sign-in.
+    private static readonly TimeSpan WarmUpRecordDelay = TimeSpan.FromSeconds(5);
 
     private void WarmUpOverlay()
     {

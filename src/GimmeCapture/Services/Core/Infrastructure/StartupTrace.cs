@@ -100,6 +100,18 @@ internal static class StartupTrace
     internal static string FormatLauncher(TimeSpan took, long bytesRead) =>
         string.Create(CultureInfo.InvariantCulture, $" launcher={took.TotalMilliseconds:F0}ms/{bytesRead / (1024.0 * 1024.0):F0}MB");
 
+    /// <summary>Whether this run started to the tray, as it does at sign-in through the launcher.</summary>
+    internal static bool IsTrayLaunch
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return _launch == "tray";
+            }
+        }
+    }
+
     /// <summary>A launch to the tray has no main window, so the line is written once the settings are applied.</summary>
     internal static void LaunchedToTray()
     {

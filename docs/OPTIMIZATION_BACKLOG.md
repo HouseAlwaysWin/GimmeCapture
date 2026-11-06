@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 2 entries (2026-11-06).
+- Since v0.74.0, `## Unreleased` holds 3 entries (2026-11-06).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.73.0+b0a10013`, installed by hand late on 2026-11-05 over the release
   v0.73.0 its updater had put there that evening, started at sign-in by the launcher its Run value names. It draws on
@@ -1579,8 +1579,16 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   s with eight threads of load and 2.0-2.2 s with the disk to itself (two threads 5.4-6.3 and 2.5-2.8, eight 2.9-4.6
   and 2.0-2.4 while taking more of the disk from the load). So the stretches went (`ImagePagesInUse`, the list's
   `|offset+length` tails, which are still read past) and the launcher and the app's own read-ahead read whole files,
-  four at a time (`ReadAhead.ReadAll`, `ReadThreads`). Next: the sign-in after this build is installed (expect
-  `launcher=` near 133MB in well under the 22.6 s of 2026-11-05). Moving the install to
+  four at a time (`ReadAhead.ReadAll`, `ReadThreads`). Installed as 0.74.0+55673b06, the sign-in after it (2026-11-06
+  22:02): `launcher=4015ms/136MB beforeMain=3185/78 hotkeysAt=1199 systemCpu=99%`, about 8.4 s from the launcher's
+  start to the hotkeys against 25.9 on 11-05 and 46 that evening, `beforeMain` long only because every processor was
+  busy. Eleven seconds in, the idle warm-up (`Overlay.WarmUp ... bind=739`) held the UI thread for 637 ms, 2% of it on
+  the CPU, 1,343 page faults: it loaded files the list, written at `hotkeysAt`, did not have (HarfBuzz, Avalonia.Markup,
+  UI Automation, 2.4 MB of the 19 files and 192 MB the running app later had beyond it; FFmpeg's 190 MB came with a
+  video list opened later). So a start to the tray now adds to the list what it loaded by 5 s after the warm-up began
+  (`StartupPrefetch.RecordWarmUp`, `WithWarmUp`), unless a real overlay opened meanwhile or the additions come to more
+  than 16 MB (`WarmUpLimit`). Next: the sign-in after that is installed (`launcher=` a few MB more, no `UiStall` at the
+  warm-up). Moving the install to
   the SSD would do the rest; the user declined. `hardFaults` stays high, as a fault on a file read through still
   counts though the cache serves it, so read the stage times. On a warm start `xaml` holds what `avalonia=` (~375 ms)
   was blamed on: the whole ColorPicker theme for one `ColorSpectrum` (`App.axaml:60-68`) and all three locale files

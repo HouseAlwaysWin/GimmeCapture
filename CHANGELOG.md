@@ -20,7 +20,14 @@
   for 141 MB the day before. The launcher, like the app's own read-ahead, reads whole files again, now four at a time,
   so the disk always has some of the app's reads to choose from. In tests on that disk with other reads going on, the
   app's 133 MB took 4.1-4.8 s instead of 10.2-12.0 one file at a time, and 2 s instead of 3.5-4.0 with the disk to
-  itself.
+  itself. At the first sign-in with it the launcher read the 136 MB in 4.0 s, and the hotkeys worked about 8.4 s after
+  it started, against 25.9 s the day before.
+- **Signing in also reads ahead what the app loads in its first idle seconds.** Ten seconds after it starts, the app
+  builds a capture overlay and a pin out of sight, so that the first real ones open sooner. At that sign-in this held
+  the interface up for 0.64 s while it read files from the hard disk that nothing had read ahead, and a capture hotkey
+  pressed then would have waited. A start to the tray now adds the files that warm-up loads (about 2.4 MB) to its
+  start-up list, which the next sign-in reads with the rest. Whatever loaded more meanwhile, such as a capture's text
+  recognition or a video's decoder, is left out, so as not to slow every later sign-in.
 
 ### 🔤 OCR
 

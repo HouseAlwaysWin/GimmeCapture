@@ -21,6 +21,13 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// </summary>
 internal static class StartupPrefetch
 {
+    /// <summary>
+    /// The most <see cref="RecordWarmUp"/> adds to a list. The warm-up at the 2026-11-06 sign-in loaded 2.4 MB the list
+    /// did not have; more than this was loaded by something else meanwhile, a capture's OCR or a video's FFmpeg (190 MB),
+    /// which every later sign-in would then read.
+    /// </summary>
+    internal const long WarmUpLimit = 16L << 20;
+
     private static string? _appDirectory;
     private static string? _listPath;
     private static IReadOnlyList<string> _loadedBeforeMain = Array.Empty<string>();
@@ -29,6 +36,7 @@ internal static class StartupPrefetch
     private static long _bytesRead;
     private static bool _hadList;
     private static bool _failed;
+    private static bool _recorded;
 
     /// <summary>From the top of Main, before the log exists: nothing here may log.</summary>
     internal static void Start()
@@ -72,11 +80,106 @@ internal static class StartupPrefetch
                 File.WriteAllText(listPath + ".tmp", text);
                 File.Move(listPath + ".tmp", listPath, overwrite: true);
             }
+
+            Volatile.Write(ref _recorded, true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception
             or InvalidOperationException)
         {
             AppLog.Debug("StartupPrefetch.Record", ex);
+        }
+    }
+
+    /// <summary>
+    /// After the idle warm-up of a start to the tray (<c>SnipWindowFactory.ScheduleWarmUp</c>): adds the files the app
+    /// has loaded since <see cref="Record"/> to the list it wrote, so the next sign-in's launcher reads them with the rest.
+    /// At the 2026-11-06 sign-in the warm-up, 11 s in, held the UI thread for 637 ms, 2% of it on the CPU and 1,343 page
+    /// faults, loading HarfBuzz, Avalonia.Markup and UI Automation's files, which no start-up read had read.
+    /// </summary>
+    internal static void RecordWarmUp()
+    {
+        if (!Volatile.Read(ref _recorded) || _appDirectory is not { } appDirectory || _listPath is not { } listPath)
+        {
+            return;
+        }
+
+        try
+        {
+            var loaded = Order(Array.Empty<string>(), LoadedModules(appDirectory), LoadedAssemblies(appDirectory));
+            var sizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            var lines = WithWarmUp(File.ReadAllLines(listPath), loaded, name => sizes[name] = FileSize(appDirectory, name), WarmUpLimit);
+            if (lines == null)
+            {
+                if (sizes.Count > 0)
+                {
+                    AppLog.Debug("StartupPrefetch.RecordWarmUp", $"left out {sizes.Count} files: more than a warm-up loads");
+                }
+
+                return;
+            }
+
+            File.WriteAllText(listPath + ".tmp", string.Join(Environment.NewLine, lines) + Environment.NewLine);
+            File.Move(listPath + ".tmp", listPath, overwrite: true);
+            long added = 0;
+            foreach (long size in sizes.Values)
+            {
+                added += size;
+            }
+
+            AppLog.Information(
+                "StartupPrefetch.WarmUp",
+                string.Create(CultureInfo.InvariantCulture, $"the start-up list gained {sizes.Count} files, {added / (1024.0 * 1024.0):F1} MB"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception
+            or InvalidOperationException)
+        {
+            AppLog.Debug("StartupPrefetch.RecordWarmUp", ex);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="list"/>, a start-up list's lines, with the files of <paramref name="loaded"/> it does not have
+    /// after them, in their order: null when there are none, or when they come to more than <paramref name="limit"/>
+    /// bytes (<paramref name="sizeOf"/> each).
+    /// </summary>
+    internal static List<string>? WithWarmUp(
+        IReadOnlyList<string> list, IEnumerable<string> loaded, Func<string, long> sizeOf, long limit)
+    {
+        var lines = new List<string>(list.Count);
+        var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string line in list)
+        {
+            string name = line.Trim();
+            if (name.Length > 0)
+            {
+                lines.Add(name);
+                listed.Add(name);
+            }
+        }
+
+        int count = lines.Count;
+        long bytes = 0;
+        foreach (string name in loaded)
+        {
+            if (listed.Add(name))
+            {
+                lines.Add(name);
+                bytes += sizeOf(name);
+            }
+        }
+
+        return lines.Count > count && bytes <= limit ? lines : null;
+    }
+
+    private static long FileSize(string appDirectory, string name)
+    {
+        try
+        {
+            return new FileInfo(Path.Combine(appDirectory, name)).Length;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 0;
         }
     }
 

@@ -61,6 +61,39 @@ public sealed class StartupPrefetchTests : IDisposable
     }
 
     [Fact]
+    public void WithWarmUp_AddsWhatTheWarmUpLoaded_AfterTheList_InItsOrder()
+    {
+        // The warm-up 11 s after a sign-in waited 637 ms on the hard disk for files the start-up list did not have.
+        var lines = StartupPrefetch.WithWarmUp(
+            ["coreclr.dll", " GimmeCapture.dll ", ""],
+            ["coreclr.dll", "libHarfBuzzSharp.DLL", "gimmecapture.dll", "Avalonia.Markup.dll"],
+            _ => 1 << 20,
+            StartupPrefetch.WarmUpLimit);
+
+        Assert.Equal(["coreclr.dll", "GimmeCapture.dll", "libHarfBuzzSharp.DLL", "Avalonia.Markup.dll"], lines);
+    }
+
+    [Fact]
+    public void WithWarmUp_ChangesNothing_WhenNothingNewWasLoaded()
+    {
+        Assert.Null(StartupPrefetch.WithWarmUp(["coreclr.dll", "GimmeCapture.dll"], ["CORECLR.dll"], _ => 1, StartupPrefetch.WarmUpLimit));
+    }
+
+    [Fact]
+    public void WithWarmUp_LeavesItAll_WhenSomethingElseLoadedMore()
+    {
+        // A capture's OCR or a video's FFmpeg, loaded meanwhile, would cost every later sign-in its read.
+        var sizes = new Dictionary<string, long>
+        {
+            ["libHarfBuzzSharp.DLL"] = 1_800_000,
+            [Path.Combine("ffmpeg-lib", "avcodec-62.dll")] = 118_000_000,
+        };
+
+        Assert.Null(StartupPrefetch.WithWarmUp(["coreclr.dll"], sizes.Keys, name => sizes[name], StartupPrefetch.WarmUpLimit));
+        Assert.NotNull(StartupPrefetch.WithWarmUp(["coreclr.dll"], ["libHarfBuzzSharp.DLL"], name => sizes[name], StartupPrefetch.WarmUpLimit));
+    }
+
+    [Fact]
     public void Format_SaysWhatTheStartRead()
     {
         Assert.Equal(" prefetch=1840ms/142MB", StartupPrefetch.Format(false, true, TimeSpan.FromMilliseconds(1840), 142L << 20));
