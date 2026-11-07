@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 19 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 20 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+78b42cd0`, installed by hand on 2026-11-07 at 20:30 over
   `0.74.0+fb63624a` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1235,6 +1235,15 @@ tool.
   window built ahead for about 3 MB: `PreparedWindow<T>` (`PreparedWindowTests`) builds one 3 s after an overlay
   closes and after the idle warm-up, never while an overlay is up, and `Open` takes it; the line then says
   `window=<ms> (ready)`.
+  Installed as 0d51bfe9, the user's next two captures (2026-11-07 23:20) opened with `window=6 (ready)` and
+  `window=1 (ready)`, the second in 79 ms.
+- Done since batch 1 (2026-11-07, same request): **smart selection let go of SAM2 the moment the tool was put down**
+  (Pins). The same evening the user used it twice 7 s apart: `Sam2Runtime.Loaded: Tiny on CPU in 2931 ms`, the tool
+  put down, then `in 3132 ms` again, and the picture's encoding (1.4-1.7 s) redone, since leaving the tool disposed
+  the pin's `SAM2Service` and released its lease, and the runtime unloads at its last lease (OCR keeps its model 2
+  minutes, `UnloadIdleDelay`). The pin now keeps both for `Sam2KeepAlive` (60 s) after the tool is put down
+  (`ReleaseSam2ResourcesSoon`): taken up again meanwhile, the service and its encoding are used as they are; a pin
+  that closes lets go at once. SAM2 holds about 174 MB more for that minute. `FloatingImageSmartSelectionTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

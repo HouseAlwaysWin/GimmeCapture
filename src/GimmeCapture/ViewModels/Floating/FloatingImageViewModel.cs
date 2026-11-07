@@ -175,8 +175,39 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     {
         _sam2LeaseId ??= _sam2RuntimeService.AcquireLease();
     }
+    // How long a pin keeps smart selection's model and its picture's encoding once the tool is put down. Loading SAM2
+    // takes 2.9-3.1 s and encoding the picture 1.4-1.7 s, and on 2026-11-07 the user came back to the tool 7 s after
+    // leaving it and paid both again. Kept, SAM2 holds about 174 MB more (212 in use against 38 unloaded).
+    internal static readonly TimeSpan Sam2KeepAlive = TimeSpan.FromSeconds(60);
+
+    private IDisposable? _sam2PendingRelease;
+
+    /// <summary>
+    /// Lets go of SAM2 <see cref="Sam2KeepAlive"/> after the tool is put down, unless it is picked up again meanwhile.
+    /// </summary>
+    private void ReleaseSam2ResourcesSoon()
+    {
+        _sam2PendingRelease?.Dispose();
+        _sam2PendingRelease = Avalonia.Threading.DispatcherTimer.RunOnce(
+            ReleaseSam2ResourcesIfStillPutDown, Sam2KeepAlive);
+    }
+
+    /// <summary>What the keep-alive does once it is over: nothing if the tool was picked up again.</summary>
+    internal void ReleaseSam2ResourcesIfStillPutDown()
+    {
+        _sam2PendingRelease = null;
+        if (!_disposed && CurrentTool != FloatingTool.PointRemoval)
+        {
+            ReleaseSam2Resources();
+        }
+    }
+
+    internal bool IsSam2ReleasePending => _sam2PendingRelease != null;
+
     internal void ReleaseSam2Resources(bool unloadRuntimeWhenIdle = true)
     {
+        _sam2PendingRelease?.Dispose();
+        _sam2PendingRelease = null;
         _sam2Service?.Dispose();
         _sam2Service = null;
         _sam2PreparedImage = null;
@@ -200,7 +231,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             if (base.CurrentTool == FloatingTool.PointRemoval)
             {
                 CancelInteractiveSession();
-                ReleaseSam2Resources();
+                // Not at once: coming back to the tool within the keep-alive finds the model and the encoding ready.
+                ReleaseSam2ResourcesSoon();
             }
             else if (base.CurrentTool == FloatingTool.Selection)
             {
@@ -222,6 +254,9 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             // Initialization for new tool
             if (value == FloatingTool.PointRemoval)
             {
+                // Picked up again within the keep-alive: what it kept is used as it is.
+                _sam2PendingRelease?.Dispose();
+                _sam2PendingRelease = null;
                 StartInteractiveRemovalAsync().Forget("FloatingImage.StartInteractiveRemoval");
             }
         }

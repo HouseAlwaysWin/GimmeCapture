@@ -85,6 +85,10 @@
   117 ms an overlay took to open. The app now builds the next one while it is idle, a few seconds after an overlay
   closes and after the warm-up that follows the start, and a capture shows that one: about 30-55 ms sooner. The window
   waiting unseen holds about 3 MB.
+- **Going back to smart selection within a minute is instant.** Putting the tool down let go of its model at once,
+  and taking it up again loaded the model (about 3 s) and read the picture (about 1.5 s) once more. A pin now keeps
+  both for a minute after the tool is put down, as text recognition keeps its model for two, and lets them go then,
+  or at once when it closes.
 
 ### 🔤 OCR
 

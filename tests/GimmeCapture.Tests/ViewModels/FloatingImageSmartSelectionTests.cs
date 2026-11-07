@@ -58,6 +58,54 @@ public sealed class FloatingImageSmartSelectionTests : IDisposable
         Directory.Delete(_directory, recursive: true);
     }
 
+    // Putting the tool down keeps SAM2 and the picture's encoding for a minute (Sam2KeepAlive): loading took 2.9-3.1 s
+    // and the encoding 1.4-1.7 s, both paid again when the user came back to the tool 7 s after leaving it.
+    [Fact(Timeout = TimeoutMs)]
+    public async Task TheToolPickedUpAgainWithinTheKeepAlive_FindsThePictureStillEncoded()
+    {
+        var (pin, sam2, _) = await OpenSmartSelectionAsync();
+        await pin.HandlePointClickAsync(10, 10);
+
+        pin.CurrentTool = FloatingTool.None;
+        Assert.True(pin.IsSam2ReleasePending);
+        Assert.Same(sam2, pin.CurrentSam2ServiceForTesting);
+
+        pin.CurrentTool = FloatingTool.PointRemoval;
+        Assert.False(pin.IsSam2ReleasePending);
+        await pin.HandlePointClickAsync(20, 30);
+
+        Assert.Equal(1, sam2.PrepareCount);
+        Assert.Equal(2, sam2.MaskRequests.Count);
+    }
+
+    [Fact(Timeout = TimeoutMs)]
+    public async Task OnceTheKeepAliveIsOver_ThePinLetsGoOfSam2_UnlessTheToolIsBackInHand()
+    {
+        var (pin, _, _) = await OpenSmartSelectionAsync();
+
+        pin.CurrentTool = FloatingTool.None;
+        pin.ReleaseSam2ResourcesIfStillPutDown();
+        Assert.Null(pin.CurrentSam2ServiceForTesting);
+
+        var (picked, sam2, _) = await OpenSmartSelectionAsync();
+        picked.CurrentTool = FloatingTool.None;
+        picked.CurrentTool = FloatingTool.PointRemoval;
+        picked.ReleaseSam2ResourcesIfStillPutDown();
+        Assert.Same(sam2, picked.CurrentSam2ServiceForTesting);
+    }
+
+    [Fact(Timeout = TimeoutMs)]
+    public async Task APinClosedDuringTheKeepAlive_LetsGoOfSam2AtOnce()
+    {
+        var (pin, _, _) = await OpenSmartSelectionAsync();
+        pin.CurrentTool = FloatingTool.None;
+
+        pin.Dispose();
+
+        Assert.False(pin.IsSam2ReleasePending);
+        Assert.Null(pin.CurrentSam2ServiceForTesting);
+    }
+
     [Fact(Timeout = TimeoutMs)]
     public async Task Clicks_OnAnUnchangedPin_HandItToSam2Once()
     {
