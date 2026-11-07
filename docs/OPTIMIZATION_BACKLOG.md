@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 18 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 19 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+78b42cd0`, installed by hand on 2026-11-07 at 20:30 over
   `0.74.0+fb63624a` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1226,6 +1226,15 @@ tool.
 - Seen 2026-11-07 18:32, not acted on: an overlay took 1227 ms to open (`services=509 viewModel=493`, the UI thread
   blocked at 5%, 13,174 page faults, a 345 ms gen2 GC), and the keyboard hook had got the key 171 ms late
   (`Hotkey.HookLate`): the whole machine was slow then, not the overlay's own work (61-117 ms at other opens that day).
+- Done since batch 1 (2026-11-07, the user's choice): **the overlay's window built ahead of the capture** (Snip
+  overlay). In the user's warm opens that day the `window=` stage of `SnipOpen.Timings` (`new SnipWindow` and its
+  bounds) took 32-57 ms of 61-117. `OverlayPrepareProbeTests` (OVERLAY_PREPARE_PROBE=1: the real Win32 platform,
+  software rendering, nothing shown) built one in 25-33 ms after three warm-ups, and each held 2.9-3.4 MB of private
+  bytes, unseen. Making parts of the window's XAML (644 lines, with SnipToolbar's 383 and DrawingToolbar's 279) build
+  only when used would save that on every capture without the memory, but touches every mode. The user chose the
+  window built ahead for about 3 MB: `PreparedWindow<T>` (`PreparedWindowTests`) builds one 3 s after an overlay
+  closes and after the idle warm-up, never while an overlay is up, and `Open` takes it; the line then says
+  `window=<ms> (ready)`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

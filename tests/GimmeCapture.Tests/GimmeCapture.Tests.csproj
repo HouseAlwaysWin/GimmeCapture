@@ -48,6 +48,7 @@
     <Compile Remove="ThreadActivity.cs" />
     <Compile Remove="UiStallMonitorIdleProbeTests.cs" />
     <Compile Remove="PinProcessingIdleProbeTests.cs" />
+    <Compile Remove="OverlayPrepareProbeTests.cs" />
     <Compile Remove="RecordMeterIdleProbeTests.cs" />
     <Compile Remove="TopLoadingBarIdleProbeTests.cs" />
     <!-- Open the main window, and a pin, in a real Win32 window. -->

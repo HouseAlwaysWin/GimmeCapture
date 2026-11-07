@@ -81,6 +81,10 @@
   loaded the web libraries the start no longer reads ahead, on the interface's thread: at that sign-in it held the
   interface 1.6 s while those files came off the hard disk. The check now sets itself up and asks in the background,
   as does the About tab's list of releases.
+- **A capture overlay opens sooner.** Each capture built its overlay window from scratch, about half of the 61 to
+  117 ms an overlay took to open. The app now builds the next one while it is idle, a few seconds after an overlay
+  closes and after the warm-up that follows the start, and a capture shows that one: about 30-55 ms sooner. The window
+  waiting unseen holds about 3 MB.
 
 ### 🔤 OCR
 

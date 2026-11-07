@@ -33,6 +33,11 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
     private IDisposable? _aiSwitchSubscription;
     private bool _openedOnce;
 
+    // The next overlay's window, built unseen while the app is idle (PreparedWindow): 3 s after an overlay closes, or
+    // after the idle warm-up, past the work both leave behind them on the UI thread.
+    private static readonly TimeSpan PrepareDelay = TimeSpan.FromSeconds(3);
+    private readonly PreparedWindow<SnipWindow> _preparedWindow;
+
     /// <param name="translationRuntime">
     /// The translation model and cache every overlay's session shares, which this factory owns for the run: it frees
     /// the model when AI is turned off and disposes it with itself.
@@ -53,6 +58,11 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
         _translationSessionServiceFactory = translationSessionServiceFactory ?? throw new ArgumentNullException(nameof(translationSessionServiceFactory));
         _translationRuntime = translationRuntime ?? throw new ArgumentNullException(nameof(translationRuntime));
         _windowDetectionService = windowDetectionService ?? throw new ArgumentNullException(nameof(windowDetectionService));
+        _preparedWindow = new PreparedWindow<SnipWindow>(
+            () => new SnipWindow(_screenLayoutService, _windowLayerService),
+            () => _windowManager.FindWindowOfType<SnipWindow>() != null,
+            static (action, delay) => DispatcherTimer.RunOnce(action, delay, DispatcherPriority.Background),
+            PrepareDelay);
     }
 
     public void Open(object mainViewModel, CaptureMode mode)
@@ -100,7 +110,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
             && (mode == CaptureMode.Normal || mode == CaptureMode.Copy || mode == CaptureMode.TextCopy || mode == CaptureMode.Pin);
         var earlyGrab = freezeRequested ? StartDesktopGrab() : null;
 
-        var snip = new SnipWindow(_screenLayoutService, _windowLayerService);
+        var prepared = _preparedWindow.Take();
+        var snip = prepared ?? new SnipWindow(_screenLayoutService, _windowLayerService);
         ConfigureWindowBounds(snip);
         double afterWindowMs = openStopwatch.Elapsed.TotalMilliseconds;
         // One detector for the whole snip session, shared by translate mode and quick OCR: the auto-language probe
@@ -241,11 +252,13 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
 
         snip.DataContext = snipVm;
         snip.Show();
+        // The next capture's window, once this one is done with and the app is idle again.
+        snip.Closed += (_, _) => _preparedWindow.PrepareSoon();
 
         AppLog.Information(
             $"SnipOpen.Timings mode={mode} "
             + $"waitedForUiThread={(waitedForUiThreadMs is { } waited ? waited.ToString("F0") : "n/a")} "
-            + $"window={afterWindowMs:F0} "
+            + $"window={afterWindowMs:F0}{(prepared != null ? " (ready)" : string.Empty)} "
             + $"services={afterServicesMs - afterWindowMs:F0} "
             + $"viewModel={afterViewModelMs - afterServicesMs:F0} "
             + $"freezeGrab={afterFreezeGrabMs - afterViewModelMs:F0} "
@@ -286,6 +299,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
             if (!_openedOnce)
             {
                 WarmUpOverlay();
+                // Then the first capture's own window, unseen, so that it too skips the build.
+                _preparedWindow.PrepareSoon();
                 // At sign-in the warm-up waited on the hard disk for files no start-up read had read: a start to the tray
                 // adds what it loaded to the start-up list, unless a real overlay opened meanwhile and loaded its own.
                 if (StartupTrace.IsTrayLaunch)
