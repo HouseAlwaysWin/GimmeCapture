@@ -1,5 +1,9 @@
+using System;
+using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
 using GimmeCapture.Services.Platforms.Linux;
+using SkiaSharp;
 
 namespace GimmeCapture.Tests;
 
@@ -26,6 +30,30 @@ public class LinuxScreenCaptureServiceTests
         Assert.Equal(
             (expectedX, expectedY, expectedWidth, expectedHeight),
             LinuxScreenCaptureService.ClampToRoot(x, y, width, height, 1920, 1080));
+    }
+
+    [Fact]
+    public async Task SaveToFileAsync_OverALargerFile_LeavesOnlyTheNewPicture()
+    {
+        // The file was opened with OpenWrite, which keeps an existing file's length: a PNG saved over a larger file
+        // kept that file's tail.
+        string path = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N") + ".png");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        try
+        {
+            File.WriteAllBytes(path, new byte[1 << 16]);
+            using var picture = new SKBitmap(16, 16);
+            picture.Erase(SKColors.Red);
+            using var expected = picture.Encode(SKEncodedImageFormat.Png, 100);
+
+            await new LinuxScreenCaptureService().SaveToFileAsync(picture, path);
+
+            Assert.Equal(expected.ToArray(), File.ReadAllBytes(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     // XGetImage outside the root raises an X protocol error, which Xlib's default handler answers by ending the

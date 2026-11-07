@@ -400,57 +400,86 @@ public partial class SnipWindowViewModel
 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
+            Task? write = null;
             await RunCaptureCommitAsync("StatusSaving", async bitmap =>
             {
-                string? savedPath = null;
-
-                if (_settings != null && _settings.AutoSave)
+                string? path = await ChooseSavePathAsync();
+                if (string.IsNullOrEmpty(path))
                 {
-                    var dir = _settings.SaveDirectory;
-                    if (string.IsNullOrEmpty(dir))
-                    {
-                        dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), "GimmeCapture");
-                    }
-                    FileLocationService.EnsureDirectory(dir, "SnipCapture.EnsureSaveDirectory");
-
-                    var fileName = CaptureFileNameService.BuildFileName("png", _settings.FileNameTemplate);
-                    var path = System.IO.Path.Combine(dir, fileName);
-                    await _captureService.SaveToFileAsync(bitmap, path);
-                    savedPath = path;
-                    _host.SetStatus("StatusSaved");
-                    AppLog.Debug("SnipWindowViewModel.Capture", $"Auto-saved to {path}");
-                }
-                else if (PickSaveFileAction != null)
-                {
-                    var path = await PickSaveFileAction.Invoke();
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        await _captureService.SaveToFileAsync(bitmap, path);
-                        savedPath = path;
-                        _host.SetStatus("StatusSaved");
-                    }
-                    AppLog.Debug("SnipWindowViewModel.Capture", $"Saved to {path}");
-                }
-                else
-                {
-                    // Fallback
-                    var fileName = CaptureFileNameService.BuildFileName("png", _settings?.FileNameTemplate);
-                    var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), fileName);
-                    await _captureService.SaveToFileAsync(bitmap, path);
-                    savedPath = path;
+                    return;
                 }
 
-                if (!string.IsNullOrWhiteSpace(savedPath))
+                // The overlay closes as soon as the file has a name, and the file is written after: its encode, a PNG at
+                // full compression (0.35 s for a 1920x1080 screen), held a frozen overlay up. The write gets a copy of the
+                // picture, as the overlay's close disposes the one it hands out.
+                SKBitmap? picture = bitmap.Copy();
+                if (picture == null)
                 {
-                    _services?.CaptureHistory.AddImageAsync(savedPath).Forget("CaptureHistory.AddImage");
-                    if (_settings?.RevealAfterSave ?? true)
-                    {
-                        FileLocationService.RevealInFileExplorer(savedPath);
-                    }
+                    await WriteSavedCaptureAsync(bitmap, path);
+                    return;
                 }
+
+                write = WriteSavedCaptureAsync(picture, path, disposePicture: true);
             });
+
+            if (write != null)
+            {
+                await write;
+            }
         }
     }
+
+    // Where a Save writes: the save folder under a generated name with AutoSave on, otherwise the file the user picks
+    // (null when they cancel), and the Pictures folder when there is no one to ask.
+    private async Task<string?> ChooseSavePathAsync()
+    {
+        if (_settings != null && _settings.AutoSave)
+        {
+            var dir = _settings.SaveDirectory;
+            if (string.IsNullOrEmpty(dir))
+            {
+                dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), "GimmeCapture");
+            }
+            FileLocationService.EnsureDirectory(dir, "SnipCapture.EnsureSaveDirectory");
+
+            return System.IO.Path.Combine(dir, CaptureFileNameService.BuildFileName("png", _settings.FileNameTemplate));
+        }
+
+        if (PickSaveFileAction != null)
+        {
+            return await PickSaveFileAction.Invoke();
+        }
+
+        var fileName = CaptureFileNameService.BuildFileName("png", _settings?.FileNameTemplate);
+        return System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), fileName);
+    }
+
+    // Writes a Save's file, then says so, adds it to the history and shows it in its folder.
+    private async Task WriteSavedCaptureAsync(SKBitmap picture, string path, bool disposePicture = false)
+    {
+        try
+        {
+            await _captureService.SaveToFileAsync(picture, path);
+        }
+        finally
+        {
+            if (disposePicture)
+            {
+                picture.Dispose();
+            }
+        }
+
+        _host.SetStatus("StatusSaved");
+        AppLog.Debug("SnipWindowViewModel.Capture", $"Saved to {path}");
+        _services?.CaptureHistory.AddImageAsync(path).Forget("CaptureHistory.AddImage");
+        if (_settings?.RevealAfterSave ?? true)
+        {
+            FileLocationService.RevealInFileExplorer(path);
+        }
+    }
+
+    // Test hook: drives the private Save flow directly, as RunCopyCaptureForTestAsync does the copy's.
+    internal Task RunSaveCaptureForTestAsync() => ExecuteSaveAsync();
 
     private async Task ExecutePinAsync(bool runAI = false, bool initialInteractive = false)
     {

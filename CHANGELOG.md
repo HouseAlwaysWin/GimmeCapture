@@ -34,6 +34,9 @@
   0.2 s at other times. The launcher now starts the app above normal priority, and the app goes back to normal as soon
   as its hotkeys work. In a test with every processor kept busy, a .NET program reached its code in 0.38 s instead of
   0.82, and did its work at almost the speed of an idle machine.
+- **Saving a capture closes the overlay at once.** A frozen capture's overlay stayed on screen while the picture was
+  encoded, a PNG at full compression that takes about 0.35 s for a 1920x1080 screen. It now closes as soon as the file
+  has its name, and the file is written after it, still at full compression.
 
 ### 🔤 OCR
 
@@ -46,6 +49,11 @@
   (Traditional and Simplified Chinese, Japanese, Korean and English), and counts as installed only with all of them,
   since detecting the language can only tell apart the ones it has. With some of them its card said "Not Installed",
   which read as broken while OCR was reading those: it now says "Installed 2/5", and Install fetches only the rest.
+
+### 🛡️ Reliability
+
+- **A capture saved over a larger file no longer keeps that file's end.** Saving onto an existing file wrote the new
+  PNG over its start and left the rest in place, so the file kept its old size and the old data after the picture.
 
 ## v0.74.0 - 2026-11-06
 

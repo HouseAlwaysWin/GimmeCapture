@@ -692,6 +692,50 @@ public class SnipWindowViewModelTests
         Assert.Equal(new[] { "pin", "render turn", "close" }, steps);
     }
 
+    [Fact]
+    public async Task SaveCapture_ClosesTheFrozenOverlayBeforeItsFileIsWritten()
+    {
+        // The overlay stayed up through the Save's encode, a PNG at full compression (0.35 s for a 1920x1080 screen).
+        // It now closes once the file has a name, and the write works on a picture of its own, which the overlay's
+        // close does not dispose.
+        var steps = new List<string>();
+        var writeMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool pictureAliveWhenWritten = false;
+        var capture = new Mock<IScreenCaptureService>();
+        capture
+            .Setup(c => c.SaveToFileAsync(It.IsAny<SKBitmap>(), "capture.png"))
+            .Returns(async (SKBitmap picture, string _) =>
+            {
+                steps.Add("write");
+                await writeMayFinish.Task;
+                pictureAliveWhenWritten = picture.Handle != IntPtr.Zero && picture.Width > 0;
+            });
+
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask;
+        mainVm.AutoSave = false;
+        mainVm.RevealAfterSave = false; // a test must not open a folder on screen
+
+        using var vm = new SnipWindowViewModel(Colors.Red, 2.0, capture.Object, host: mainVm, settings: mainVm);
+        vm.Surface.UseHeadlessBackdropForTest();
+        vm.Surface.FreezeFromPreOverlayGrab(new SKBitmap(800, 600), 1.0);
+        vm.SelectionRect = new Rect(10, 10, 40, 30);
+        vm.PickSaveFileAction = () => Task.FromResult<string?>("capture.png");
+        vm.CloseAction = () => steps.Add("close");
+
+        Task save = vm.RunSaveCaptureForTestAsync();
+        await WaitUntilAsync(() => steps.Contains("close"), TimeSpan.FromSeconds(20));
+
+        Assert.Equal(new[] { "write", "close" }, steps);
+        Assert.False(save.IsCompleted);
+
+        writeMayFinish.SetResult();
+        await save;
+
+        Assert.True(pictureAliveWhenWritten);
+        Assert.Equal(LocalizationService.Instance["StatusSaved"], mainVm.StatusText);
+    }
+
     [Theory]
     [InlineData(true, "StatusCopied")]
     [InlineData(false, "StatusCopyFailed")]

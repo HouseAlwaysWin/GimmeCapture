@@ -41,6 +41,8 @@
     <Compile Remove="FreezeGrabProbeTests.cs" />
     <!-- Grabs the real screen and decodes PNGs through GDI+, as the overlay's copy does. -->
     <Compile Remove="SnipCopyProbeTests.cs" />
+    <!-- Saves a file through WindowsScreenCaptureService. -->
+    <Compile Remove="WindowsScreenCaptureServiceTests.cs" />
     <!-- Count thread wakeups while Avalonia's real Win32 loop sits idle. -->
     <Compile Remove="ThreadActivity.cs" />
     <Compile Remove="UiStallMonitorIdleProbeTests.cs" />

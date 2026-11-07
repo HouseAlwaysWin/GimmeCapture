@@ -641,7 +641,8 @@ public class WindowsScreenCaptureService : IScreenCaptureService
     {
         await Task.Run(() =>
         {
-            using var fs = File.OpenWrite(path);
+            // Create, not OpenWrite, which keeps the old file's length: saved over a larger file, the PNG kept its tail.
+            using var fs = File.Create(path);
             bitmap.Encode(fs, SKEncodedImageFormat.Png, 100);
         });
     }

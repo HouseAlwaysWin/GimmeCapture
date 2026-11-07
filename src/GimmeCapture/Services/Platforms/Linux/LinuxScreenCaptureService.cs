@@ -190,7 +190,8 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
         // OS-agnostic (SkiaSharp).
         return Task.Run(() =>
         {
-            using var stream = System.IO.File.OpenWrite(path);
+            // Create, not OpenWrite, which keeps the old file's length: saved over a larger file, the PNG kept its tail.
+            using var stream = System.IO.File.Create(path);
             bitmap.Encode(stream, SKEncodedImageFormat.Png, 100);
         });
     }

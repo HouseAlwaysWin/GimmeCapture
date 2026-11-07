@@ -19,14 +19,11 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 4 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 7 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.73.0+b0a10013`, installed by hand late on 2026-11-05 over the release
-  v0.73.0 its updater had put there that evening, started at sign-in by the launcher its Run value names. It draws on
-  the CPU: `versions\0.73.0\config.json` has `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs
-  `Startup.Renderer: software` (checked 2026-11-06 19:10). A line here earlier the same day said v0.72.1 (`ed421b3d`,
-  updated over 0.68.1 on 2026-11-05 at 17:19) and the GPU: that matches neither this desktop's files nor its log, so it
-  was another machine's copy.
+  backlog's sign-in figures come from) runs `0.74.0+7a64a2aa`, installed by hand on 2026-11-07 over `0.74.0+55673b06`
+  (by hand, 2026-11-06), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
   open of 135-260 ms instead of 80-100 ms on a run's first start, and `GraphicsCaptureSession.IsSupported()` 16 ms on
@@ -1097,6 +1094,16 @@ tool.
   before; the log line says `2 screens read apart`. The same boxes as two separate screens in the probe.
   `OcrScanTilesTests`, `AIScanSessionServiceTests`. Not checked on the user's screens: the second one was off when it
   was built (one 1920x1080 display reported).
+- Done since batch 1 (2026-11-07, "keep optimizing to the end"): **a Save kept a frozen overlay up through its encode**
+  (Snip overlay). The overlay's Save wrote its PNG at full compression, about 0.35 s for a 1920x1080 screen
+  (`SnipCopyProbeTests`), inside the capture ritual, so a frozen overlay (the user's) and its spinner stayed on screen
+  through it, after the save dialog where AutoSave is off (the user's). The overlay now closes once the file has its name
+  (`ChooseSavePathAsync`), and `WriteSavedCaptureAsync` writes a copy of the picture after it (the ritual disposes the
+  one it hands out; a 1920x1080 copy is an 8 MB memcpy), then sets the status, adds the file to the history and shows
+  it in its folder, as before. The file is the same, at full compression. On the way: `SaveToFileAsync` opened the file
+  with `File.OpenWrite`, which keeps an existing file's length, so a capture saved over a larger file kept that file's
+  tail; both capture services use `File.Create` now. `SnipWindowViewModelTests.SaveCapture_ClosesTheFrozenOverlay...`,
+  `WindowsScreenCaptureServiceTests`, `LinuxScreenCaptureServiceTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1515,9 +1522,6 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Snip overlay
 
-- **A Save keeps a frozen overlay up through its encode** (S). The full-compression PNG, 0.35 s for a 1920x1080
-  screen, which the user's own file should keep. A pin's (only a run's first was slow) and the copy's second encode
-  are done (Status).
 - **A manual scroll keeps grabbing when nothing scrolls** (S). The producer grabs region frames back to back
   (`ScrollingManual.cs` `ManualProducerLoopAsync`) and the consumer aligns every one; the signatures are pooled now
   (Status). Skipping a frame identical to the last, or pacing the grabs while nothing moves, would idle it, at the risk
