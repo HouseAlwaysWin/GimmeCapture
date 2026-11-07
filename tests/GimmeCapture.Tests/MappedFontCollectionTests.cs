@@ -85,6 +85,7 @@ public sealed class MappedFontCollectionTests
         Draw(new FontFamily("avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel"));
         long before = PrivateBytes();
 
+        // The font loads here, the first time its family is asked for: the Cinzel text above loads neither font.
         var family = new FontFamily(LocalizationService.ChineseSource);
         Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(family), out var glyphTypeface));
         long loaded = PrivateBytes();
@@ -102,12 +103,15 @@ public sealed class MappedFontCollectionTests
         int differing = inPlace.Zip(copied, (a, b) => a != b).Count(d => d);
 
         _output.WriteLine(
-            $"{glyphTypeface.FamilyName}: private bytes +{Megabytes(loaded - before)} MB loaded, " +
-            $"+{Megabytes(drawn - before)} MB once drawn in the app's three weights; {differing} of {inPlace.Length} " +
-            "bytes differ from the font read through a stream.");
+            $"{glyphTypeface.FamilyName}: private bytes +{Megabytes(loaded - before)} MB to load it, " +
+            $"+{Megabytes(drawn - loaded)} MB more to draw it in the app's three weights; " +
+            $"{differing} of {inPlace.Length} bytes differ from the font read through a stream.");
         Assert.StartsWith("Noto Serif TC", glyphTypeface.FamilyName, StringComparison.Ordinal);
         Assert.True(loaded - before < 4 * 1024 * 1024, $"Loading the font took {Megabytes(loaded - before)} MB.");
-        Assert.True(drawn - before < 4 * 1024 * 1024, $"Drawing it took {Megabytes(drawn - before)} MB.");
+        // The drawing from the load on. The bound was set for the drawing alone (0.4-1.8 MB) when the font was built at
+        // registration, before the first figure; loaded at first use, the font's 0.9-1.5 MB moved after it, and
+        // drawn - before came to 2.1-4.0 MB, failing at random. A copy costs 17 MB in either step.
+        Assert.True(drawn - loaded < 4 * 1024 * 1024, $"Drawing it took {Megabytes(drawn - loaded)} MB.");
         Assert.Equal(copied.Length, inPlace.Length);
         Assert.Equal(0, differing);
     }

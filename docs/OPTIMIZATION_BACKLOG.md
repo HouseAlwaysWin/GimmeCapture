@@ -21,8 +21,8 @@ tool.
   under it.
 - Since v0.74.0, `## Unreleased` holds 9 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+7a64a2aa`, installed by hand on 2026-11-07 over `0.74.0+55673b06`
-  (by hand, 2026-11-06), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+f76f68fe`, installed by hand on 2026-11-07 over `0.74.0+7a64a2aa`
+  (by hand, that morning), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1118,7 +1118,9 @@ tool.
   lives in `VideoDecodeSettings` now. The probe on the published build again: neither loads. Left as they are: the HTTP
   stack (`AIModelDownloader` takes the shared client as it is built, but the update check needs it seconds later),
   `System.Security.Cryptography` (the instance key's SHA-256, then TLS) and the ColorPicker theme (the overlay's
-  toolbar, which the warm-up builds). Check on the user's next start: a list without those two files.
+  toolbar, which the warm-up builds). Installed as f76f68fe, its first start (a window launch, 2026-11-07 14:21) wrote a
+  list of 81 files without either. WinForms now loads at the first clipboard copy, on the clipboard's own STA thread
+  (`StaClipboard.RunAsync`), so the UI does not wait for it.
 - Done since batch 1 (2026-11-07, same request): **the CJK fonts read before every start's hotkeys** (Idle, start-up and
   memory). Of `GimmeCapture.dll`'s 39.9 MB, 29.7 were Noto Serif TC and JP, manifest resources the launcher read whole
   with the rest before starting the app, and `MappedFontCollection.Register` built both typefaces in `App.Initialize`
@@ -1131,10 +1133,13 @@ tool.
   from Main does too at a start through the launcher, and `StartupPrefetch.ReadAfterStart` reads it on a thread of its
   own once `Startup.Timings` is complete, logging `StartupPrefetch.AfterStart: <MB> in <ms>`; `RecordWarmUp` neither adds
   it nor counts it against `WarmUpLimit`, which its size would have broken for every other file. A window launch still
-  reads it with the rest, from Main. `FONT_PROBE=1` (headless Skia): the lazy font loads, +0.1-1.2 MB of private bytes,
-  draws the same pixels as the font read through a stream (0 of 512,000 bytes differ). With the WinForms change the
-  launcher's read at sign-in comes to about 91 MiB (136 before both). Check at the user's next sign-ins: `launcher=` near
-  91 MB, an `AfterStart` line, the warm-up without a stall.
+  reads it with the rest, from Main. `FONT_PROBE=1` (headless Skia): the lazy font loads in +0.9-1.5 MB of private
+  bytes and draws in +0.8-2.3 MB more, the same pixels as the font read through a stream (0 of 512,000 bytes differ).
+  The probe first held the two together to the 4 MB set for the drawing alone, which they reached at random (2.1-4.0
+  MB): each step has its own bound now. The installed copy's first start of f76f68fe (a window launch, 2026-11-07
+  14:21) logged `fonts=4/0` and wrote a list of 121.4 MiB, 28.3 of it the fonts, so the launcher's read at sign-in comes
+  to about 93 MiB (136 before both changes; 91 was an estimate that took the fonts' size in MB from MiB). Check at the
+  user's next sign-ins: `launcher=` near 93 MB, an `AfterStart` line, the warm-up without a stall.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
