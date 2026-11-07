@@ -114,7 +114,9 @@ class Program
             .UsePlatformDetect()
             // The GPU or the CPU (StartupRenderer), asked for only as the Win32 platform starts.
             .With<Win32PlatformOptions>(StartupRenderer.Win32Options)
-            .WithInterFont()
+            // Inter, the Fluent theme's font, read the first time something draws in it (DeferredInterFontCollection).
+            .ConfigureFonts(fontManager =>
+                fontManager.AddFontCollection(new Services.Platforms.Avalonia.DeferredInterFontCollection()))
             .LogToTrace()
             // Ahead of UseReactiveUI's, so Startup.Timings has Avalonia's text, rendering and windowing set-up on its own.
             .AfterPlatformServicesSetup(_ => StartupTrace.Mark("platform"))

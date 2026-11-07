@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 9 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 10 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+f76f68fe`, installed by hand on 2026-11-07 over `0.74.0+7a64a2aa`
   (by hand, that morning), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has

@@ -172,7 +172,8 @@ internal static class StartupTrace
                 AppLog.Information("Startup.Timings", Format(complete) + FormatWaits(
                     StartupWaitCounters.ReadPageFaults(),
                     StartupWaitCounters.DriveKind(AppContext.BaseDirectory),
-                    StartupWaitCounters.LoweredPriority()) + StartupPrefetch.Describe() + _launcher);
+                    StartupWaitCounters.LoweredPriority())
+                    + StartupPrefetch.Describe() + AppLog.DescribeBuild() + _launcher);
                 StartupPrefetch.Record();
                 StartupPrefetch.ReadAfterStart();
             });

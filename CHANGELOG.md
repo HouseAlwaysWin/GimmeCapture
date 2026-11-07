@@ -46,6 +46,12 @@
   its hotkeys work. They are a file of their own now, which the sign-in reads in the background once the hotkeys work,
   well before the first window or capture needs it: what it reads first comes to about 93 MB instead of 121. Each font
   also loads only when something first draws with it, which takes 23-34 ms off a start to the tray, as at sign-in.
+- **A start sets up only what it uses.** The log was set up first thing, before anything else could start: 61-96 ms
+  of each recent start, most of it Serilog compiling the pattern of its daily file names. It is now set up alongside
+  the rest of the start, and what is logged meanwhile is written once it is ready, in order and with the time it was
+  logged at. Avalonia's own font, Inter, read in all six weights at every start (13 ms and 3 MB), now loads only if
+  something draws with it, which only a few small windows do. The interface text is read for the language in use
+  only, without the general JSON reader's set-up: 1.2 ms instead of about 7.
 
 ### 🔤 OCR
 

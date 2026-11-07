@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading;
 using Avalonia.Media;
 using Avalonia.Platform;
 using GimmeCapture.Services.Abstractions;
@@ -67,42 +67,89 @@ namespace GimmeCapture.Services.Core.Infrastructure;
         private readonly FontFamily _fontChinese = new FontFamily(ChineseSource);
         private readonly FontFamily _fontJapanese = new FontFamily(JapaneseSource);
 
-        private readonly Dictionary<Language, Dictionary<string, string>> _translations = new();
+        // Each language's strings, by Language, read the first time one of them is looked up: a run uses one language,
+        // and reading all three took about 7 ms of the start's UI thread, most of it System.Text.Json setting itself
+        // up for a dictionary (a probe, its serializer warmed on another thread by a settings-like class, as the
+        // app's is).
+        private static readonly string[] FileNames = ["en-US", "zh-TW", "ja-JP"];
+        private readonly Dictionary<string, string>?[] _translations = new Dictionary<string, string>?[3];
 
         private LocalizationService()
         {
             _currentFontFamily = _fontEnglish;
             _currentButtonFontFamily = FontFamily.Parse(ButtonFontSources(Language.English));
-            LoadAllTranslations();
             UpdateFont(Language.English);
         }
 
-        private void LoadAllTranslations()
+        private Dictionary<string, string> TranslationsFor(Language lang)
         {
-            LoadTranslation(Language.English, "en-US");
-            LoadTranslation(Language.Chinese, "zh-TW");
-            LoadTranslation(Language.Japanese, "ja-JP");
+            int index = (int)lang;
+            if (Volatile.Read(ref _translations[index]) is { } loaded)
+            {
+                return loaded;
+            }
+
+            // Strings are looked up from more than one thread; whichever is first reads the file, the rest wait for it.
+            lock (_translations)
+            {
+                return _translations[index] ??= LoadTranslation(FileNames[index]);
+            }
         }
 
-        private void LoadTranslation(Language lang, string fileName)
+        private static Dictionary<string, string> LoadTranslation(string fileName)
         {
             try
             {
                 var uri = new Uri($"avares://GimmeCapture/Assets/Localization/{fileName}.json");
                 using var stream = AssetLoader.Open(uri);
-                using var reader = new StreamReader(stream);
-                var json = reader.ReadToEnd();
-                var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
-                if (dict != null)
-                {
-                    _translations[lang] = dict;
-                }
+                byte[] json = new byte[stream.Length];
+                stream.ReadExactly(json);
+                return ReadTranslations(json);
             }
             catch (Exception ex)
             {
                 AppLog.Warning("Localization.Load", ex);
-                _translations[lang] = new Dictionary<string, string>();
+                return new Dictionary<string, string>();
             }
+        }
+
+        /// <summary>
+        /// A locale file's strings: one JSON object of string values, read with <see cref="Utf8JsonReader"/>. The
+        /// serializer's first dictionary of a run cost 5-7 ms against the reader's 1.2-1.4 (a probe, its serializer
+        /// already used for a settings-like class); the strings come out the same.
+        /// </summary>
+        internal static Dictionary<string, string> ReadTranslations(ReadOnlySpan<byte> utf8Json)
+        {
+            ReadOnlySpan<byte> bom = [0xEF, 0xBB, 0xBF];
+            if (utf8Json.StartsWith(bom))
+            {
+                utf8Json = utf8Json[bom.Length..];
+            }
+
+            var reader = new Utf8JsonReader(utf8Json);
+            var translations = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            {
+                throw new JsonException("A locale file holds one object.");
+            }
+
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                string key = reader.GetString()!;
+                if (!reader.Read() || reader.TokenType != JsonTokenType.String)
+                {
+                    throw new JsonException($"The value of {key} is not a string.");
+                }
+
+                translations[key] = reader.GetString()!;
+            }
+
+            if (reader.TokenType != JsonTokenType.EndObject || reader.Read())
+            {
+                throw new JsonException("A locale file holds one object of strings.");
+            }
+
+            return translations;
         }
 
         /// <summary>The font sources behind <see cref="CurrentButtonFontFamily"/>, first choice first.</summary>
@@ -134,15 +181,13 @@ namespace GimmeCapture.Services.Core.Infrastructure;
         {
             get
             {
-                if (_translations.TryGetValue(_currentLanguage, out var dict) && dict.TryGetValue(key, out var val))
+                if (TranslationsFor(_currentLanguage).TryGetValue(key, out var val))
                 {
                     return val;
                 }
                 return key; // Fallback
             }
         }
-
-        public Dictionary<string, string> CurrentTranslations => _translations[_currentLanguage];
 
         public void CycleLanguage()
         {
