@@ -19,10 +19,10 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 16 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 18 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+fb63624a`, installed by hand on 2026-11-07 evening over
-  `0.74.0+f76f68fe` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+78b42cd0`, installed by hand on 2026-11-07 at 20:30 over
+  `0.74.0+fb63624a` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1207,6 +1207,25 @@ tool.
   depends on it: dates only through numeric patterns (`yyyy-MM-dd HH:mm`, `yyyyMMdd_HHmmss`), numbers only as plain
   numbers and percentages, and no text sorted or compared by the culture (every sort compares numbers). The Linux
   head keeps ICU. Check in the running app: no `icu.dll` among its modules.
+  Installed as 78b42cd0, its first start (a window launch, 20:35) had no `icu*.dll` among its 147 modules, and
+  `guard=6`: the 28 ms of fb63624a's first start had been ICU loading at the main thread's first text operation, which
+  Serilog's set-up on Main used to do first. Total 831 ms, `hotkeysAt=538`.
+- Done since batch 1 (2026-11-07, same request): **what the first sign-in on the new start showed** (Idle, start-up
+  and memory). The sign-in at 20:13 ran fb63624a: `launcher=3686ms/86MB` (134-136 MB in 4.0-6.6 s before),
+  `beforeMain=1761/94` at `systemCpu=97%`, `xaml=789/172`, total 1284 ms, `hotkeysAt=1380`, ` logger=221ms`. Two stalls
+  were the new start's own doing. Right after the timings line, 2.7 s at 10% of a processor (266 ms of it): the
+  priority went back to normal at the hotkeys (`StartupPriority.Restore` in `StartupTrace.Mark`), before the tray
+  icon, the start's last work on the UI thread, and the fonts' read (`StartupPrefetch.AfterStart: 28.3 MB in 2757 ms`)
+  began then too, on the same disk. Both now wait for `StartupSettled`: the timings complete and a Background-priority
+  job posted after `TrayController.Install` (`SettleLatch`, `StartupSettledTests`). And 30 s in, 1.6 s at 2%: the
+  automatic update check made the update service, so the shared `HttpClient` and the web libraries, on the UI thread,
+  reading them off the busy disk since a28e6305 took them out of the start-up list. `GetUpdateServiceAsync` makes it on
+  the thread pool, and the check's and the About tab's requests run there too
+  (`MainWindowViewModelUpdateCheckThreadTests`; their first request sets up the network on the calling thread). Next
+  sign-in: no stall after the timings line, none at 30 s, `beforeMain` still long at a busy `systemCpu`.
+- Seen 2026-11-07 18:32, not acted on: an overlay took 1227 ms to open (`services=509 viewModel=493`, the UI thread
+  blocked at 5%, 13,174 page faults, a 345 ms gen2 GC), and the keyboard hook had got the key 171 ms late
+  (`Hotkey.HookLate`): the whole machine was slow then, not the overlay's own work (61-117 ms at other opens that day).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

@@ -92,10 +92,11 @@ internal static class StartupPrefetch
     }
 
     /// <summary>
-    /// Once a start through the sign-in launcher is done: reads <c>ReadAhead.AfterStart</c>'s files, which the launcher and
-    /// this start's own read left out, on a thread of its own, so that the first window or capture overlay finds the CJK
-    /// fonts in memory. The overlay's idle warm-up comes 10 s after the start; at the 2026-11-06 sign-in it stalled the UI
-    /// for 637 ms on 2.4 MB of files nothing had read, and the fonts are 29.7 MB.
+    /// Once a start through the sign-in launcher has settled (<see cref="StartupSettled"/>): reads
+    /// <c>ReadAhead.AfterStart</c>'s files, which the launcher and this start's own read left out, on a thread of its
+    /// own, so that the first window or capture overlay finds the CJK fonts in memory. The overlay's idle warm-up comes
+    /// 10 s after the start; at the 2026-11-06 sign-in it stalled the UI for 637 ms on 2.4 MB of files nothing had read,
+    /// and the fonts are 29.7 MB.
     /// </summary>
     internal static void ReadAfterStart()
     {

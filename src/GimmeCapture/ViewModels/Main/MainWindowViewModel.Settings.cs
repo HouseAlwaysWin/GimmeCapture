@@ -947,7 +947,7 @@ public partial class MainWindowViewModel
             if (AutoCheckUpdates)
             {
                 Avalonia.Threading.DispatcherTimer.RunOnce(
-                    () => CheckForUpdates(true).Forget("Update.AutoCheck"),
+                    () => CheckForUpdatesQuietly().Forget("Update.AutoCheck"),
                     AutoUpdateCheckDelay,
                     Avalonia.Threading.DispatcherPriority.Background);
             }

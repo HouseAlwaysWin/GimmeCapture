@@ -303,6 +303,22 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
         }
     }
 
+    /// <summary>
+    /// <see cref="UpdateService"/>, made on the thread pool when it is not made yet. Making it builds the shared HTTP
+    /// client, which loads the web libraries, and no start reads those ahead any more: made on the UI thread, 30 s
+    /// after the 2026-11-07 20:13 sign-in, the automatic check held that thread 1.6 s while they came off a busy hard
+    /// disk. The subscriptions the property makes are made back on the caller's thread.
+    /// </summary>
+    private async Task<UpdateService> GetUpdateServiceAsync()
+    {
+        if (!_updateService.IsValueCreated)
+        {
+            await Task.Run(() => _ = _updateService.Value);
+        }
+
+        return UpdateService;
+    }
+
     public AIResourceService AIResourceService
     {
         get

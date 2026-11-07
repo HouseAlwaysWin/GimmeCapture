@@ -105,6 +105,9 @@ public partial class App : Application
 
             // The first capture of a run used to load the overlay's code on the spot, on the UI thread.
             _bootstrapper.ScheduleCaptureOverlayWarmUp();
+            // Behind the start's own work on this thread: from then on the app has no reason to stay ahead of other
+            // programs, and the fonts' file can be read without its disk reads getting in the way.
+            Dispatcher.UIThread.Post(StartupSettled.UiWorkDone, DispatcherPriority.Background);
 
             // Once the app settles into idle, do a FULL trim (GC to collect startup/JIT garbage + working-set
             // reclaim). Decoupled from the window-shown activity so it isn't immediately cancelled; the scheduler

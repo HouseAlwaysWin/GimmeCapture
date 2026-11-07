@@ -169,10 +169,15 @@ public partial class MainWindowViewModel
 
     public async Task CheckForUpdates() => await CheckForUpdates(false);
 
+    /// <summary>The automatic check: says nothing unless it finds an update.</summary>
+    internal Task CheckForUpdatesQuietly() => CheckForUpdates(true);
+
     private async Task CheckForUpdates(bool silent)
     {
         if (!silent) SetStatus("CheckingUpdate");
-        var release = await UpdateService.CheckForUpdateAsync();
+        // The request on the thread pool too: its first one sets up the network and TLS on the calling thread.
+        UpdateService service = await GetUpdateServiceAsync();
+        var release = await Task.Run(service.CheckForUpdateAsync);
         
         if (release != null)
         {

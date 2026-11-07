@@ -73,6 +73,14 @@
   language's rules, 20 ms for the first search, and 1.5 MB of memory kept. It now uses Windows' own (NLS), as .NET
   Framework programs do: 3.5 ms for all of it, and nothing kept. The app writes dates as numbers and sorts no text by
   the language's rules, so nothing it shows changes. The Linux version keeps ICU.
+- **At sign-in the app keeps its head start until its tray icon is up.** The app went back to normal priority as soon
+  as its hotkeys worked, and its last start-up work, the tray icon, then took 2.7 s at a sign-in with every processor
+  97% busy, while the fonts were being read from the same hard disk. It now keeps the higher priority, and starts
+  reading the fonts, only once that work is done too.
+- **The automatic update check no longer holds up the interface.** Now that it runs half a minute after the start, it
+  loaded the web libraries the start no longer reads ahead, on the interface's thread: at that sign-in it held the
+  interface 1.6 s while those files came off the hard disk. The check now sets itself up and asks in the background,
+  as does the About tab's list of releases.
 
 ### 🔤 OCR
 

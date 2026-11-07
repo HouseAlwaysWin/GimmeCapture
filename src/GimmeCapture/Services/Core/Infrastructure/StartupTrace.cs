@@ -163,8 +163,9 @@ internal static class StartupTrace
 
         if (timings is { } complete)
         {
-            // The start is done: what follows is no reason to stay ahead of other programs.
-            StartupPriority.Restore();
+            // The start is done: what follows is no reason to stay ahead of other programs, once the UI thread's own
+            // start-up work after the hotkeys (the tray icon) is done too (StartupSettled).
+            StartupSettled.TimingsComplete();
             // The page faults come from a snapshot of every process on the machine, 5-7 ms: not on the thread that
             // marked the last stage, usually the UI thread.
             _ = Task.Run(() =>
@@ -175,7 +176,6 @@ internal static class StartupTrace
                     StartupWaitCounters.LoweredPriority())
                     + StartupPrefetch.Describe() + AppLog.DescribeBuild() + _launcher);
                 StartupPrefetch.Record();
-                StartupPrefetch.ReadAfterStart();
             });
         }
     }

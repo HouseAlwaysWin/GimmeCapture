@@ -8,7 +8,8 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// <summary>
 /// The sign-in launcher starts the app above normal priority (<see cref="ReadAhead.StartPriority"/>), so that its start
 /// is not left waiting for a processor behind the sign-in's other programs; this puts it back to normal once the start
-/// is done, when the hotkeys work, or a minute after Main should the start never finish.
+/// has settled (<see cref="StartupSettled"/>: the hotkeys work and the tray icon is up), or a minute after Main should
+/// the start never finish.
 /// </summary>
 internal static class StartupPriority
 {

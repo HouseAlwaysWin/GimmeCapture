@@ -122,7 +122,8 @@ public partial class MainWindowViewModel
             ReleaseLoadError = string.Empty;
             this.RaisePropertyChanged(nameof(HasReleaseLoadError));
 
-            var releases = await UpdateService.GetAvailableReleasesAsync();
+            UpdateService service = await GetUpdateServiceAsync();
+            var releases = await Task.Run(service.GetAvailableReleasesAsync);
             AvailableReleases.Clear();
             foreach (var release in releases)
             {
