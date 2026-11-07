@@ -19,10 +19,10 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 20 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 21 entries (2026-11-08).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+78b42cd0`, installed by hand on 2026-11-07 at 20:30 over
-  `0.74.0+fb63624a` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+dfb0185e`, installed by hand on 2026-11-07 at 23:45 over
+  `0.74.0+0d51bfe9` (by hand, at 23:15), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1236,7 +1236,8 @@ tool.
   closes and after the idle warm-up, never while an overlay is up, and `Open` takes it; the line then says
   `window=<ms> (ready)`.
   Installed as 0d51bfe9, the user's next two captures (2026-11-07 23:20) opened with `window=6 (ready)` and
-  `window=1 (ready)`, the second in 79 ms.
+  `window=1 (ready)`, the second in 79 ms; every capture of the night after (dfb0185e) had `window=1-6 (ready)` and
+  opened in 91-101 ms, the frozen grab (`freezeGrab=62-71`) now most of it.
 - Done since batch 1 (2026-11-07, same request): **smart selection let go of SAM2 the moment the tool was put down**
   (Pins). The same evening the user used it twice 7 s apart: `Sam2Runtime.Loaded: Tiny on CPU in 2931 ms`, the tool
   put down, then `in 3132 ms` again, and the picture's encoding (1.4-1.7 s) redone, since leaving the tool disposed
@@ -1244,6 +1245,11 @@ tool.
   minutes, `UnloadIdleDelay`). The pin now keeps both for `Sam2KeepAlive` (60 s) after the tool is put down
   (`ReleaseSam2ResourcesSoon`): taken up again meanwhile, the service and its encoding are used as they are; a pin
   that closes lets go at once. SAM2 holds about 174 MB more for that minute. `FloatingImageSmartSelectionTests`.
+- Found 2026-11-08 by a verification run, not an optimisation: **`CompressPipelineSegmentedTests` failed at random**
+  (twice in two days: `clip_avio_open: No such file or directory`). `CompressSegmentStore.PruneOrphans`, which the
+  Compress tab's first open runs, removed any segment dir without `state.json`, and `Save` writes it with an atomic
+  replace, so a fresh dir is without one for a moment; tests that open the tab ran alongside. A dir without state is
+  now removed only once nothing has been written in it for `StatelessGrace` (an hour). `CompressSegmentStoreTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1570,6 +1576,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   matters with several OCR languages installed, as the user has (Auto, with Simplified and Traditional Chinese). The
   detector keeps its verdict for one overlay on purpose: kept app-wide, a capture in the other script (a Simplified
   Chinese page after Traditional ones) would be read with the wrong model until something re-probes.
+- **The overlay scan's two screens, one after the other** (measured 2026-11-08: left). Both screens resize to
+  1280x736; with the installed detector, two runs took 297-307 ms and one batch of the two 360-366 ms (padded to the
+  same size, 20% slower), and `DetectText` of both 324 ms: the time is the model's own, about 150 ms a screen, the
+  resize, tensor and boxes about 10. Only a smaller input would be quicker, which reads small text worse: the user
+  chose each screen read whole (2026-11-06).
 - **Two resizes per OCR search** (S). The search copies the grab to 1600 px (Mitchell, now on the pool: Status), then
   `DetectText` resizes again to 1280. One would do, but it changes what the detector sees: compare the boxes found on
   real captures first. Left (2026-11-07): it is the translation's search, and the installed copy has no translation

@@ -106,6 +106,10 @@
 
 - **A capture saved over a larger file no longer keeps that file's end.** Saving onto an existing file wrote the new
   PNG over its start and left the rest in place, so the file kept its old size and the old data after the picture.
+- **A compress that starts as the Compress tab first opens keeps its work folder.** Opening the tab clears out the
+  pieces of compresses abandoned long ago, and took any folder without its progress file for one, though a compress
+  just starting has none for a moment: its first piece then failed to write. A folder without one now goes only once
+  nothing has been written in it for an hour.
 
 ### 💾 Storage
 

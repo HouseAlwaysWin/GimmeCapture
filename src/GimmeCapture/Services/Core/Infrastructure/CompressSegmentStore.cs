@@ -39,6 +39,12 @@ internal static class CompressSegmentStore
     // Orphaned segment dirs (crashed/abandoned runs) older than this are pruned on startup.
     private static readonly TimeSpan OrphanMaxAge = TimeSpan.FromDays(7);
 
+    // A dir with no state.json is one a compress is setting up (Save writes the state with an atomic replace, so for a
+    // moment only its temporary file is there) or one it never got that far with: removed only once nothing has been
+    // written in it for this long. Removed at once, a compress starting while the Compress tab first opened lost its
+    // dir before its first chunk (clip_avio_open: No such file or directory, CompressPipelineSegmentedTests at random).
+    internal static readonly TimeSpan StatelessGrace = TimeSpan.FromHours(1);
+
     private static string RootDir =>
         Path.Combine(AppStoragePaths.GetRootDirectory(), "CompressSegments");
 
@@ -99,7 +105,10 @@ internal static class CompressSegmentStore
         }
     }
 
-    /// <summary>Removes abandoned segment dirs (no state.json, or older than <see cref="OrphanMaxAge"/>).</summary>
+    /// <summary>
+    /// Removes abandoned segment dirs: a state.json older than <see cref="OrphanMaxAge"/>, or none and nothing written
+    /// in the dir for <see cref="StatelessGrace"/>.
+    /// </summary>
     public static void PruneOrphans()
     {
         try
@@ -113,7 +122,9 @@ internal static class CompressSegmentStore
             foreach (string dir in Directory.GetDirectories(RootDir))
             {
                 string state = Path.Combine(dir, "state.json");
-                bool stale = !File.Exists(state) || File.GetLastWriteTimeUtc(state) < cutoff;
+                bool stale = File.Exists(state)
+                    ? File.GetLastWriteTimeUtc(state) < cutoff
+                    : Directory.GetLastWriteTimeUtc(dir) < DateTime.UtcNow - StatelessGrace;
                 if (stale)
                 {
                     try { Directory.Delete(dir, true); } catch { /* best effort */ }
