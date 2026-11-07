@@ -63,6 +63,11 @@
 - **Dragging a translation's box no longer reshapes its window at every mouse move.** The translation layer worked out
   which parts of its window take clicks again for every result added or translated and at every mouse move while a box
   was dragged, before the box had moved on screen. As pins already do, it now does so once a frame, after the layout.
+- **The first letter key pressed in a capture overlay no longer holds up typing.** The overlay's keyboard hook, which
+  every key typed anywhere waits for, wrote each letter key's name in capitals the way the interface language does it.
+  For a letter that already is a capital that changes nothing, but the first time in a run it made .NET load that
+  language's case rules, 162 ms in a test with Traditional Chinese, while the key and every other one waited. It now
+  takes the letter as it is, and saving a recording names its file type without the language's rules too.
 
 ### 🔤 OCR
 

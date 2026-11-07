@@ -470,9 +470,12 @@ public partial class SnipWindow : Window
         return keyStr == "Shift" || keyStr == "Ctrl" || keyStr == "Alt";
     }
 
-    private string GetKeyStringFromVirtualKey(int vkCode)
+    // On the hook thread, which holds every key typed anywhere until it returns. The codes of A-Z are the capital
+    // letters themselves: a culture's ToUpper() here, a no-op, set up ICU's casing for the UI language on the first
+    // letter key of a run, 162 ms for zh-TW in a fresh process (NoCultureCasingTests).
+    internal static string GetKeyStringFromVirtualKey(int vkCode)
     {
-        if (vkCode >= 0x41 && vkCode <= 0x5A) return ((char)vkCode).ToString().ToUpper(); // A-Z
+        if (vkCode >= 0x41 && vkCode <= 0x5A) return ((char)vkCode).ToString(); // A-Z
         if (vkCode >= 0x30 && vkCode <= 0x39) return ((char)vkCode).ToString(); // 0-9
         if (vkCode >= 0x70 && vkCode <= 0x87) return "F" + (vkCode - 0x70 + 1); // F1-F24
         

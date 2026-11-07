@@ -19,10 +19,10 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 14 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 15 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+f76f68fe`, installed by hand on 2026-11-07 over `0.74.0+7a64a2aa`
-  (by hand, that morning), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+fb63624a`, installed by hand on 2026-11-07 evening over
+  `0.74.0+f76f68fe` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1164,8 +1164,13 @@ tool.
   (the same digest, `Sha256DigestTests`), so the probe's start loads none of them, nor Avalonia.Fonts.Inter: about
   7 MB less in the start-up list. Left as they are: the ColorPicker theme (2.3-2.8 ms in the probe, and the
   overlay's warm-up loads it anyway, so the list keeps it), System.ComponentModel.TypeConverter, Avalonia.Dialogs and
-  DiagnosticSource (`App.axaml`'s Fluent theme). Check at the next start: `log=` near 0, a `logger=` figure, a list
-  without those files.
+  DiagnosticSource (`App.axaml`'s Fluent theme). The installed copy's first start of fb63624a (a window launch,
+  2026-11-07 18:23) against f76f68fe's that afternoon: `log=16` (61), `guard=28` (3), `afterSetup=1` (17, Inter's
+  set-up was there), `xaml=50` (60), `viewModel=67` (80), total 864 ms (934), `hotkeysAt=555` (623), ` logger=44ms`;
+  the list 75 files, 86.2 MiB without the fonts' file (93.1), none of those assemblies in it but
+  System.Diagnostics.Tracing (0.02 MB). The guard's 25 ms more, one sample: its own work is the same and the hash
+  is precompiled (0.62 ms, nothing jitted, checked on the installed dll), so most likely the logger's build on its
+  thread, alongside it; log and guard together 44 ms against 64. Watch it at the next starts.
 - Done since batch 1 (2026-11-07, same request): **the data root's own Temp was never swept** (disk). The user's
   `%LOCALAPPDATA%\GimmeCapture\Temp` held 628 MB from February to May: 32 `Recordings_<guid>` session folders (the
   largest 283 MB) and 3 `GimmeCapture_<guid>.mp4`, from versions that recorded there before the per-install folders.
@@ -1188,6 +1193,17 @@ tool.
   queued (the 31 rebuilds a frame of a pin's drag-resize). It is queued the same way now, once a frame at Loaded
   priority (`QueueWindowRegionRefresh`). Not measured: the installed copy has no translation model, and the pins' probe
   showed what the same queueing does.
+- Done since batch 1 (2026-11-07, same request): **culture casing on the overlay's keyboard hook** (Snip overlay). The
+  running app had loaded Windows' `icu.dll`: .NET uses ICU for the culture's rules. In a fresh process with the user's
+  zh-TW culture, the first culture-sensitive `ToUpper()`/`ToLower()` of a run took 162-163 ms, even of "ABC", the first
+  culture-sensitive `IndexOf` 19-20 ms, all three with a sort 186-188 ms and +1.5 MB of private bytes (+3.3 MB working
+  set); with `DOTNET_SYSTEM_GLOBALIZATION_USENLS=1` (Windows' own NLS) 3.4-3.6 ms and nothing. The app's only such calls
+  were `GetKeyStringFromVirtualKey`, on the overlay's hook thread, which every key typed anywhere waits for (`.ToUpper()`
+  of the capital letters A-Z, a no-op) and the save dialog's file type name for a recording. Both are culture-free now,
+  and `NoCultureCasingTests` fails on a culture `ToUpper()`/`ToLower()` anywhere in the app. Not measured in the app:
+  whether something before the first letter key had already set ICU's casing up. Left, the user's call: the whole app
+  on NLS (`System.Globalization.UseNls` in the runtime config, Windows only), which takes ICU out entirely; sorting,
+  casing and the culture's date and number formats would then come from Windows, as in .NET Framework, not from CLDR.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

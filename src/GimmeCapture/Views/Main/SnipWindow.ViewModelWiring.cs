@@ -529,7 +529,7 @@ public partial class SnipWindow : Window
              
              bool isRecording = _viewModel.IsRecordingMode;
              string defaultExt = isRecording ? _viewModel.RecordFormat : "png";
-             string fileTypeName = isRecording ? $"{defaultExt.ToUpper()} Video" : "PNG Image";
+             string fileTypeName = isRecording ? $"{defaultExt.ToUpperInvariant()} Video" : "PNG Image";
              string pattern = $"*.{defaultExt}";
              
              var fileChoices = new System.Collections.Generic.List<Avalonia.Platform.Storage.FilePickerFileType>();
