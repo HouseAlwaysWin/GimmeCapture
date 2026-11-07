@@ -60,6 +60,9 @@
 - **Dragging a Compress slider no longer saves at every step.** Each change of a Compress setting rewrote its settings
   file on the interface's thread, 4-10 ms each time and up to 40 with the computer busy, at every step of a slider
   being dragged. The settings are now written once they stop changing, in the background, and when the app closes.
+- **Dragging a translation's box no longer reshapes its window at every mouse move.** The translation layer worked out
+  which parts of its window take clicks again for every result added or translated and at every mouse move while a box
+  was dragged, before the box had moved on screen. As pins already do, it now does so once a frame, after the layout.
 
 ### 🔤 OCR
 

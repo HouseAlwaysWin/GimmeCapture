@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 13 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 14 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+f76f68fe`, installed by hand on 2026-11-07 over `0.74.0+7a64a2aa`
   (by hand, that morning), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1182,6 +1182,12 @@ tool.
   9-20, at most 41 on this desktop's C: drive (200 writes, twice, with a verification run going). The item states'
   background writer became `CoalescingWriter<T>`, and the session goes through one too (300 ms, written off the UI
   thread, flushed at the process exit and before a load). `CompressSessionWriterTests`, `CompressItemStateWriterTests`.
+- Done since batch 1 (2026-11-07, same request): **the translation layer rebuilt its region at every change** (Pins'
+  "lower"). Each result added, translated or measured, and every pointer move while a result's box was dragged, rebuilt
+  the window region from every box at once, before the layout had caught up, as the pins' region did until it was
+  queued (the 31 rebuilds a frame of a pin's drag-resize). It is queued the same way now, once a frame at Loaded
+  priority (`QueueWindowRegionRefresh`). Not measured: the installed copy has no translation model, and the pins' probe
+  showed what the same queueing does.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1597,8 +1603,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **Lower**: a video pin still copies each frame once on the decode thread, from the player's frame into its bitmap
   (about 50 M cycles/s at 1450x900); converting straight into the locked bitmap would need the player to ask for a
   destination before it converts, and the pin's per-frame checks (the trim end, the sound's start) to run before it.
-  Pins keep decoding when covered. The conversion to BGRA and the UI thread's copy are done (Status). The translation layer adds results one at a time, rebuilding its region per item
-  (`FloatingTranslationWindow.axaml.cs:109-117`).
+  Pins keep decoding when covered (Windows tells a window nothing of being covered; left). The conversion to BGRA and
+  the UI thread's copy are done (Status). The translation layer's region per item is done (Status).
 
 ### Snip overlay
 

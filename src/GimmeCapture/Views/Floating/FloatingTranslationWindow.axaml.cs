@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Interop;
@@ -90,8 +91,10 @@ public partial class FloatingTranslationWindow : Window
 
         _viewModel.Items.CollectionChanged += OnItemsCollectionChanged;
         SubscribeToItems();
-        this.GetObservable(BoundsProperty).Subscribe(_ => RefreshWindowRegion()).DisposeWith(_viewSubscriptions);
-        _viewModel.WhenAnyValue(x => x.ViewportSize).Subscribe(_ => RefreshWindowRegion()).DisposeWith(_viewSubscriptions);
+        this.GetObservable(BoundsProperty).Subscribe(_ => QueueWindowRegionRefresh()).DisposeWith(_viewSubscriptions);
+        _viewModel.WhenAnyValue(x => x.ViewportSize)
+            .Subscribe(_ => QueueWindowRegionRefresh())
+            .DisposeWith(_viewSubscriptions);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -113,7 +116,7 @@ public partial class FloatingTranslationWindow : Window
         {
             Hide();
         }
-        RefreshWindowRegion();
+        QueueWindowRegionRefresh();
     }
 
     private void SubscribeToItems()
@@ -137,8 +140,33 @@ public partial class FloatingTranslationWindow : Window
             or nameof(TranslationResultItem.IsTranslated)
             or nameof(TranslationResultItem.EstimatedTextHeight))
         {
-            RefreshWindowRegion();
+            QueueWindowRegionRefresh();
         }
+    }
+
+    private bool _windowRegionRefreshQueued;
+
+    /// <summary>
+    /// Rebuilds the window region once the frame's layout is done. Every result added, translated or measured asked
+    /// for it, and dragging a result's box asked at every pointer move, each rebuilding the region from every box at
+    /// once, before the layout had caught up: the pins' region did the same, 31 times a frame in a drag-resize, until
+    /// it was queued like this (FloatingImageWindow).
+    /// </summary>
+    private void QueueWindowRegionRefresh()
+    {
+        if (_windowRegionRefreshQueued)
+        {
+            return;
+        }
+
+        _windowRegionRefreshQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _windowRegionRefreshQueued = false;
+                RefreshWindowRegion();
+            },
+            DispatcherPriority.Loaded);
     }
 
     private void RefreshWindowRegion()
