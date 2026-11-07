@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -14,6 +15,10 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// </summary>
 public static class PlatformErrorDialog
 {
+    // Never inlined: inlined into App.OnFrameworkInitializationCompleted, the ReadyToRun code of every start went through
+    // WinForms (the MessageBox's DialogResult), so every start loaded System.Windows.Forms.dll, 13 MB that sign-in read
+    // from the disk ahead of the app, though no start shows this dialog.
+    [MethodImpl(MethodImplOptions.NoInlining)]
     public static void ShowError(string message, string title)
     {
 #if WINDOWS

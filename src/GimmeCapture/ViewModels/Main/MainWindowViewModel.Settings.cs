@@ -823,8 +823,9 @@ public partial class MainWindowViewModel
         set
         {
             this.RaiseAndSetIfChanged(ref _hardwareDecodeEnabled, value);
-            // Drive the decoder's process-wide switch so the choice takes effect on the next playback open.
-            Services.Core.Media.NativeFFmpeg.LibavVideoFramePlayer.HardwareDecodeEnabled = value;
+            // Drive the decoder's process-wide switch so the choice takes effect on the next playback open. Not through
+            // LibavVideoFramePlayer, whose static constructor would load FFmpeg's bindings at every start.
+            Services.Core.Media.VideoDecodeSettings.HardwareDecodeEnabled = value;
         }
     }
 

@@ -37,6 +37,10 @@
 - **Saving a capture closes the overlay at once.** A frozen capture's overlay stayed on screen while the picture was
   encoded, a PNG at full compression that takes about 0.35 s for a 1920x1080 screen. It now closes as soon as the file
   has its name, and the file is written after it, still at full compression.
+- **Starting with Windows reads 14 MB less of the app.** Every start loaded WinForms' 13 MB library, which only an error
+  message no start shows uses (the message had been compiled into the start-up code), and FFmpeg's bindings (1.1 MB)
+  as the video-decoding setting was applied. The start-up files sign-in reads ahead from the disk come to about 121 MB
+  instead of 136.
 
 ### 🔤 OCR
 

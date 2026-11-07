@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 7 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 8 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+7a64a2aa`, installed by hand on 2026-11-07 over `0.74.0+55673b06`
   (by hand, 2026-11-06), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1104,6 +1104,21 @@ tool.
   with `File.OpenWrite`, which keeps an existing file's length, so a capture saved over a larger file kept that file's
   tail; both capture services use `File.Create` now. `SnipWindowViewModelTests.SaveCapture_ClosesTheFrozenOverlay...`,
   `WindowsScreenCaptureServiceTests`, `LinuxScreenCaptureServiceTests`.
+- Done since batch 1 (2026-11-07, same request): **every start loaded WinForms and FFmpeg's bindings** (Idle, start-up
+  and memory). The installed copy's start-up list (a window launch's: 83 files, 135.6 MiB) held
+  `System.Windows.Forms.dll` (13.1 MB, 0.2 of it ever in memory) and `FFmpeg.AutoGen.dll` (1.1). A throwaway console
+  probe referencing the app (its data folder redirected; nothing shown, no hotkey, tray icon or Run key) logged the
+  managed stack of each assembly load while it ran the start's steps in a fresh process: the Avalonia set-up with
+  `App.axaml`, the update checks, `AppBootstrapper`'s constructor, the tray host, the platform services and the main
+  view model with its settings. On a Debug or Release build nothing loaded WinForms; with the published ReadyToRun
+  `GimmeCapture.dll` in place, preparing `App.OnFrameworkInitializationCompleted` without running it did: crossgen had
+  inlined `PlatformErrorDialog.ShowError`, whose `MessageBox.Show` put WinForms among the method's fixups. `ShowError`
+  is `NoInlining` now (`PlatformErrorDialogTests`). FFmpeg.AutoGen came from applying `HardwareDecodeEnabled`, whose
+  setter wrote a static of `LibavVideoFramePlayer` and so ran its static constructor (FFmpeg-typed fields); the flag
+  lives in `VideoDecodeSettings` now. The probe on the published build again: neither loads. Left as they are: the HTTP
+  stack (`AIModelDownloader` takes the shared client as it is built, but the update check needs it seconds later),
+  `System.Security.Cryptography` (the instance key's SHA-256, then TLS) and the ColorPicker theme (the overlay's
+  toolbar, which the warm-up builds). Check on the user's next start: a list without those two files.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1432,7 +1447,8 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   Chinese page after Traditional ones) would be read with the wrong model until something re-probes.
 - **Two resizes per OCR search** (S). The search copies the grab to 1600 px (Mitchell, now on the pool: Status), then
   `DetectText` resizes again to 1280. One would do, but it changes what the detector sees: compare the boxes found on
-  real captures first.
+  real captures first. Left (2026-11-07): it is the translation's search, and the installed copy has no translation
+  model (its `llm\models` folder is empty), so the user does not run it.
 
 ### Recording
 
@@ -1506,7 +1522,7 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done
-  (Status).
+  (Status). Left (2026-11-07): the user's Temp folder held none.
 - **A playing pin's drawing** (M-L). Drawing on the GPU, Avalonia's render thread takes 368-377 of a playing pin's
   814-823 M cycles/s at 1450x900 with the toolbar shown, 322-334 hidden (`PinPlaybackProbeTests`), uploading the pin's
   `WriteableBitmap` every frame and waking 420-500 times a second; on the CPU it took 646. An RGBA bitmap instead of BGRA
@@ -1533,6 +1549,9 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   done: Status). Since the CJK fonts are read in place, that fallback costs no copy either.
 - **The raw-input sink duplicates the keyboard hook** (S). `WindowsGlobalHotkeyService.cs:488,537-577`: about four
   hotkey-thread wakeups per keystroke typed elsewhere. Register the sink only when the hook fails or stops counting.
+  Left (2026-11-07): Windows drops a slow hook without a sign, and the sink is then what keeps a combo another app
+  holds working; it costs a second wakeup on a processor already awake for the key, microseconds. Measuring it would
+  mean typing keys into the user's desktop.
 - **A launch at sign-in waits on the hard disk** (the user's pick on 2026-11-01; the app stays on D:, the user does not
   want it taking space on C:). Three sign-ins on 0.70.0 (2026-10-30 and -31) took 67-77 s until the hotkeys worked,
   other launches 0.5-7 s. The first sign-in on a build that says why (2026-11-02, 4f0d37fb, `launch=tray`):

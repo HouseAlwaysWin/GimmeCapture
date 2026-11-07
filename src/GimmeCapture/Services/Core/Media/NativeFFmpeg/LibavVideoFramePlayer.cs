@@ -31,12 +31,15 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     private const int MaxFilesReportedSlowToOpen = 256;
 
     /// <summary>
-    /// Global opt-out for GPU (D3D11VA) hardware decode. Default on; the composition root sets it from
-    /// <c>AppSettings.HardwareDecodeEnabled</c> so a user with a flaky GPU driver can force software decode.
-    /// When a file's codec has no D3D11VA config, or hw bring-up/transfer fails, we transparently fall back
-    /// to software regardless of this flag.
+    /// Global opt-out for GPU (D3D11VA) hardware decode: <see cref="VideoDecodeSettings.HardwareDecodeEnabled"/>, which
+    /// the settings set. When a file's codec has no D3D11VA config, or hw bring-up/transfer fails, we transparently
+    /// fall back to software regardless of this flag.
     /// </summary>
-    public static volatile bool HardwareDecodeEnabled = true;
+    public static bool HardwareDecodeEnabled
+    {
+        get => VideoDecodeSettings.HardwareDecodeEnabled;
+        set => VideoDecodeSettings.HardwareDecodeEnabled = value;
+    }
 
     /// <summary>
     /// The threads a video decoder gets: libavcodec's own count (0, one a core, frame and slice threads) on the CPU,
