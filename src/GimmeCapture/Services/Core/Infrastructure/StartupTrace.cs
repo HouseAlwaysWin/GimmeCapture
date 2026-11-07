@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Launcher;
 using GimmeCapture.Services.Interop;
@@ -45,6 +46,7 @@ internal static class StartupTrace
     private static bool _expectFirstFrame = true;
     private static string _launch = "window";
     private static string _launcher = "";
+    private static bool _cameThroughLauncher;
     private static bool _written;
 
     /// <summary>The end of a stage, and the process's CPU time by then.</summary>
@@ -90,6 +92,7 @@ internal static class StartupTrace
         }
 
         Environment.SetEnvironmentVariable(ReadAhead.HandOffVariable, null);
+        Volatile.Write(ref _cameThroughLauncher, true);
         // The launcher started this process above normal priority, for its start only.
         StartupPriority.Raised();
         if (ReadAhead.TryParseHandOff(handOff, out DateTime launcherStartedUtc, out long bytesRead))
@@ -97,6 +100,12 @@ internal static class StartupTrace
             _launcher = FormatLauncher(processStartedUtc - launcherStartedUtc, bytesRead);
         }
     }
+
+    /// <summary>
+    /// Whether the sign-in launcher started this process, having read the start's files ahead of it but for
+    /// <c>ReadAhead.AfterStart</c>'s. Known from the top of Main on.
+    /// </summary>
+    internal static bool CameThroughLauncher => Volatile.Read(ref _cameThroughLauncher);
 
     /// <summary>The sign-in launcher's part: from its start to the app's, and what it read meanwhile.</summary>
     internal static string FormatLauncher(TimeSpan took, long bytesRead) =>
@@ -165,6 +174,7 @@ internal static class StartupTrace
                     StartupWaitCounters.DriveKind(AppContext.BaseDirectory),
                     StartupWaitCounters.LoweredPriority()) + StartupPrefetch.Describe() + _launcher);
                 StartupPrefetch.Record();
+                StartupPrefetch.ReadAfterStart();
             });
         }
     }

@@ -528,6 +528,9 @@
         "type": "Transitive",
         "resolved": "0.94.1",
         "contentHash": "11YMr7FnAbL83bQmVxlhbIKHvSLxjO81D12Ej0QMSGXMDTxNA9MTOa4MQxx43nv5el/efuPHwzyrj6a5ha2gug=="
+      },
+      "gimmecapture.fonts": {
+        "type": "Project"
       }
     },
     "net10.0/linux-x64": {
@@ -1162,6 +1165,9 @@
         "type": "Transitive",
         "resolved": "0.94.1",
         "contentHash": "11YMr7FnAbL83bQmVxlhbIKHvSLxjO81D12Ej0QMSGXMDTxNA9MTOa4MQxx43nv5el/efuPHwzyrj6a5ha2gug=="
+      },
+      "gimmecapture.fonts": {
+        "type": "Project"
       }
     },
     "net10.0-windows10.0.19041/linux-x64": {

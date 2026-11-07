@@ -94,6 +94,23 @@ public sealed class StartupPrefetchTests : IDisposable
     }
 
     [Fact]
+    public void WithWarmUp_NeitherAddsNorCountsTheFilesReadAfterTheStart()
+    {
+        // The warm-up draws with the CJK fonts, 29.7 MB, which would leave everything else it loaded out of the list.
+        var sizes = new Dictionary<string, long>
+        {
+            ["GimmeCapture.Fonts.dll"] = 31_200_000,
+            ["libHarfBuzzSharp.DLL"] = 1_800_000,
+        };
+
+        var lines = StartupPrefetch.WithWarmUp(["coreclr.dll"], sizes.Keys, name => sizes[name], StartupPrefetch.WarmUpLimit);
+
+        Assert.Equal(["coreclr.dll", "libHarfBuzzSharp.DLL"], lines);
+        Assert.Null(StartupPrefetch.WithWarmUp(
+            ["coreclr.dll"], ["GimmeCapture.Fonts.dll"], name => sizes[name], StartupPrefetch.WarmUpLimit));
+    }
+
+    [Fact]
     public void Format_SaysWhatTheStartRead()
     {
         Assert.Equal(" prefetch=1840ms/142MB", StartupPrefetch.Format(false, true, TimeSpan.FromMilliseconds(1840), 142L << 20));

@@ -41,6 +41,11 @@
   message no start shows uses (the message had been compiled into the start-up code), and FFmpeg's bindings (1.1 MB)
   as the video-decoding setting was applied. The start-up files sign-in reads ahead from the disk come to about 121 MB
   instead of 136.
+- **Signing in reads the fonts once the hotkeys work.** The Chinese and Japanese fonts the app draws with, 30 MB, were
+  part of its main file, which the sign-in read whole before starting the app, though no start draws a character before
+  its hotkeys work. They are a file of their own now, which the sign-in reads in the background once the hotkeys work,
+  well before the first window or capture needs it: what it reads first comes to about 91 MB instead of 121. Each font
+  also loads only when something first draws with it, which takes 23-34 ms off a start to the tray, as at sign-in.
 
 ### 🔤 OCR
 

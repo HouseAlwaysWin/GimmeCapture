@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 8 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 9 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+7a64a2aa`, installed by hand on 2026-11-07 over `0.74.0+55673b06`
   (by hand, 2026-11-06), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1119,6 +1119,22 @@ tool.
   stack (`AIModelDownloader` takes the shared client as it is built, but the update check needs it seconds later),
   `System.Security.Cryptography` (the instance key's SHA-256, then TLS) and the ColorPicker theme (the overlay's
   toolbar, which the warm-up builds). Check on the user's next start: a list without those two files.
+- Done since batch 1 (2026-11-07, same request): **the CJK fonts read before every start's hotkeys** (Idle, start-up and
+  memory). Of `GimmeCapture.dll`'s 39.9 MB, 29.7 were Noto Serif TC and JP, manifest resources the launcher read whole
+  with the rest before starting the app, and `MappedFontCollection.Register` built both typefaces in `App.Initialize`
+  (the `fonts` stage, 23-34 ms), though nothing draws before the hotkeys work: a start to the tray draws nothing at all
+  until the overlay's warm-up 10 s in. The fonts are the resources of an assembly of their own now,
+  `src/GimmeCapture.Fonts` (no code: `Assembly.Load` by name, so no ReadyToRun fix-up of the app's names it), and the
+  collection loads a family the first time Avalonia asks for it (`TryGetGlyphTypeface`, `TryGetFamilyTypefaces`,
+  `TryMatchCharacter`; `ResourcesToLoad`: an unknown family or a character from any of them loads every font not yet
+  loaded). `ReadAhead.AfterStart` names `GimmeCapture.Fonts.dll`: the launcher's plan leaves it out, the app's own read
+  from Main does too at a start through the launcher, and `StartupPrefetch.ReadAfterStart` reads it on a thread of its
+  own once `Startup.Timings` is complete, logging `StartupPrefetch.AfterStart: <MB> in <ms>`; `RecordWarmUp` neither adds
+  it nor counts it against `WarmUpLimit`, which its size would have broken for every other file. A window launch still
+  reads it with the rest, from Main. `FONT_PROBE=1` (headless Skia): the lazy font loads, +0.1-1.2 MB of private bytes,
+  draws the same pixels as the font read through a stream (0 of 512,000 bytes differ). With the WinForms change the
+  launcher's read at sign-in comes to about 91 MiB (136 before both). Check at the user's next sign-ins: `launcher=` near
+  91 MB, an `AfterStart` line, the warm-up without a stall.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

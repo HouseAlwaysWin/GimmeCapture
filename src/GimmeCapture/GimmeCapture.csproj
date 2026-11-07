@@ -38,10 +38,10 @@
     <Compile Remove="bin\**\*.cs;obj\**\*.cs;bin-*\**\*.cs;obj-*\**\*.cs" />
     <EmbeddedResource Remove="bin\**;obj\**;bin-*\**;obj-*\**" />
     <None Remove="bin\**;obj\**;bin-*\**;obj-*\**" />
-    <!-- The CJK fonts are plain manifest resources, read in place from the assembly's image (MappedFontCollection):
-         through avares:// SkiaSharp copied each whole file into native memory, 16.8 MB for Chinese. -->
+    <!-- The CJK fonts are plain manifest resources of GimmeCapture.Fonts, read in place from that assembly's image
+         (MappedFontCollection): through avares:// SkiaSharp copied each whole file into native memory, 16.8 MB for
+         Chinese. -->
     <AvaloniaResource Include="Assets\**" Exclude="Assets\Fonts\Noto_Serif_*\*.ttf" />
-    <EmbeddedResource Include="Assets\Fonts\Noto_Serif_*\*.ttf" LogicalName="GimmeCapture.Fonts.%(Filename)%(Extension)" />
     <None Update="config.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
@@ -140,6 +140,12 @@
   <!-- The names and the hand-off the sign-in launcher shares with the app. -->
   <ItemGroup>
     <Compile Include="..\GimmeCapture.Launcher\ReadAhead.cs" Link="Services\Core\Infrastructure\ReadAhead.cs" />
+  </ItemGroup>
+
+  <!-- The CJK fonts, in an assembly of their own (src/GimmeCapture.Fonts) that no code here names: MappedFontCollection
+       loads it by name the first time a font is asked for, so no start loads it before it draws. -->
+  <ItemGroup>
+    <ProjectReference Include="..\GimmeCapture.Fonts\GimmeCapture.Fonts.csproj" />
   </ItemGroup>
 
   <!-- The sign-in launcher (src/GimmeCapture.Launcher), built here and shipped beside the exe in the Windows publish,

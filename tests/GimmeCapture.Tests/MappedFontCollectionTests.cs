@@ -11,10 +11,10 @@ using Xunit.Abstractions;
 namespace GimmeCapture.Tests;
 
 /// <summary>
-/// The CJK fonts are read in place from the assembly (<see cref="MappedFontCollection"/>): through avares:// SkiaSharp
+/// The CJK fonts are read in place from their assembly (<see cref="MappedFontCollection"/>): through avares:// SkiaSharp
 /// copied each whole file into native memory, 16.9-17.2 MB of private bytes for Noto Serif TC before a character was
-/// drawn (headless with Skia, two runs). The first two tests guard what the collection relies on and run everywhere; the
-/// last measures, opt-in (FONT_PROBE=1), as it sets up Avalonia, which a process can do only once.
+/// drawn (headless with Skia, two runs). The other tests guard what the collection relies on and run everywhere; the
+/// probe measures, opt-in (FONT_PROBE=1), as it sets up Avalonia, which a process can do only once.
 /// </summary>
 public sealed class MappedFontCollectionTests
 {
@@ -28,12 +28,44 @@ public sealed class MappedFontCollectionTests
     [InlineData(MappedFontCollection.JapaneseResource)]
     public unsafe void EachFont_IsAResourceAlreadyInMemory(string resource)
     {
-        using var stream = typeof(GimmeCapture.App).Assembly.GetManifestResourceStream(resource);
+        using var stream = FontsAssembly().GetManifestResourceStream(resource);
 
         var memory = Assert.IsAssignableFrom<UnmanagedMemoryStream>(stream);
         Assert.True(memory.PositionPointer != null);
         Assert.True(memory.Length > 10 * 1024 * 1024, $"{resource} is only {memory.Length} bytes.");
     }
+
+    [Fact]
+    public void TheFonts_AreNotInTheAppsOwnAssembly()
+    {
+        // In it they made a 40 MB file that every start read whole, though no start draws before its hotkeys work. And
+        // nothing in it may name the fonts' assembly, which it loads by name: ReadyToRun fix-ups of such a name would load
+        // it at start-up, as an inlined error message box once loaded WinForms at every start.
+        var app = typeof(GimmeCapture.App).Assembly;
+        string[] resources = app.GetManifestResourceNames();
+
+        Assert.DoesNotContain(MappedFontCollection.ChineseResource, resources);
+        Assert.DoesNotContain(MappedFontCollection.JapaneseResource, resources);
+        Assert.DoesNotContain(
+            app.GetReferencedAssemblies(), reference => reference.Name == MappedFontCollection.FontsAssemblyName);
+    }
+
+    [Theory]
+    [InlineData(MappedFontCollection.ChineseFamily, new string[0], new[] { MappedFontCollection.ChineseResource })]
+    [InlineData("noto serif jp", new[] { MappedFontCollection.ChineseResource }, new[] { MappedFontCollection.JapaneseResource })]
+    [InlineData(MappedFontCollection.ChineseFamily, new[] { MappedFontCollection.ChineseResource }, new string[0])]
+    // A character matched in any of them, or a family the collection does not know: every font not loaded yet.
+    [InlineData(null, new[] { MappedFontCollection.ChineseResource }, new[] { MappedFontCollection.JapaneseResource })]
+    [InlineData("Noto Serif TC ExtraLight", new string[0], new[] { MappedFontCollection.ChineseResource, MappedFontCollection.JapaneseResource })]
+    [InlineData(null, new[] { MappedFontCollection.ChineseResource, MappedFontCollection.JapaneseResource }, new string[0])]
+    public void EachFont_LoadsWhenItsFamilyIsFirstAskedFor(string? family, string[] loaded, string[] expected)
+    {
+        // Loaded at registration, the two fonts took 23-34 ms of every start before any window drew.
+        Assert.Equal(expected, MappedFontCollection.ResourcesToLoad(family, new HashSet<string>(loaded)));
+    }
+
+    private static System.Reflection.Assembly FontsAssembly() =>
+        System.Reflection.Assembly.Load(MappedFontCollection.FontsAssemblyName);
 
     [Fact]
     public void AvaloniaSkia_StillWrapsATypefaceTheWayTheCollectionBuildsIt()
@@ -60,7 +92,7 @@ public sealed class MappedFontCollectionTests
         long drawn = PrivateBytes();
 
         // The same font read the way avares:// read it, through a stream, with Avalonia's own synthetic bold.
-        using (var stream = typeof(GimmeCapture.App).Assembly.GetManifestResourceStream(MappedFontCollection.ChineseResource)!)
+        using (var stream = FontsAssembly().GetManifestResourceStream(MappedFontCollection.ChineseResource)!)
         {
             FontManager.Current.AddFontCollection(new CopyingFontCollection(stream));
         }

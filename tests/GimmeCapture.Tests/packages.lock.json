@@ -647,6 +647,7 @@
           "Avalonia.Fonts.Inter": "[12.1.4, )",
           "Avalonia.Themes.Fluent": "[12.1.4, )",
           "FFmpeg.AutoGen": "[8.0.0.1, )",
+          "GimmeCapture.Fonts": "[1.0.0, )",
           "LLamaSharp": "[0.30.0, )",
           "LLamaSharp.Backend.Cpu": "[0.30.0, )",
           "Microsoft.ML.OnnxRuntime": "[1.24.4, )",
@@ -658,6 +659,9 @@
           "System.Reactive": "[7.0.0, )",
           "ZLinq": "[1.5.6, )"
         }
+      },
+      "gimmecapture.fonts": {
+        "type": "Project"
       }
     },
     "net10.0/linux-x64": {
@@ -1419,6 +1423,7 @@
           "Avalonia.Fonts.Inter": "[12.1.4, )",
           "Avalonia.Themes.Fluent": "[12.1.4, )",
           "FFmpeg.AutoGen": "[8.0.0.1, )",
+          "GimmeCapture.Fonts": "[1.0.0, )",
           "LLamaSharp": "[0.30.0, )",
           "LLamaSharp.Backend.Cpu": "[0.30.0, )",
           "Microsoft.ML.OnnxRuntime": "[1.24.4, )",
@@ -1430,6 +1435,9 @@
           "System.Reactive": "[7.0.0, )",
           "ZLinq": "[1.5.6, )"
         }
+      },
+      "gimmecapture.fonts": {
+        "type": "Project"
       }
     },
     "net10.0-windows10.0.19041/linux-x64": {

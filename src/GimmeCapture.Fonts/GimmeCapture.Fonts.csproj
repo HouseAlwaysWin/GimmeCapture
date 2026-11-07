@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The app's CJK fonts, Noto Serif TC and JP (29.7 MB), as manifest resources of an assembly of their own, which
+       MappedFontCollection loads by name and reads in place the first time a family is asked for. In GimmeCapture.dll
+       they made a 40 MB file that every start read whole: at sign-in the launcher reads the start's files from the disk
+       before it starts the app, and no start draws a character before its hotkeys work. The launcher leaves this file
+       out and the app reads it after (ReadAhead.AfterStart). Resources only: no code, so nothing loads it but the fonts. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Both shipped runtimes, as the app's net10.0 head has them: Directory.Build.props sets them by TargetFramework,
+         which a single-target project has not set yet when that file is read, and the Linux release publishes with
+         no-restore after a locked restore. -->
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+    <Nullable>enable</Nullable>
+    <AssemblyName>GimmeCapture.Fonts</AssemblyName>
+    <RootNamespace>GimmeCapture.Fonts</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The files stay with the app's other fonts and their licences (THIRD-PARTY-NOTICES.md). -->
+    <EmbeddedResource Include="..\GimmeCapture\Assets\Fonts\Noto_Serif_*\*.ttf"
+                      LogicalName="GimmeCapture.Fonts.%(Filename)%(Extension)"
+                      Link="Fonts\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

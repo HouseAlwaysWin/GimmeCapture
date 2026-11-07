@@ -133,6 +133,23 @@ public sealed class ReadAheadTests
             plan);
     }
 
+    [Fact]
+    public void Plan_LeavesOutTheFilesReadAfterTheStart()
+    {
+        // The CJK fonts' 29.7 MB, which a window launch's list holds: no start draws a character before its hotkeys work.
+        string app = Path.Combine(Path.GetTempPath(), "GimmeCapture-list", "App");
+
+        var plan = ReadAhead.Plan(["Serilog.dll", "GimmeCapture.Fonts.dll", "gimmecapture.fonts.DLL", "Avalonia.Base.dll"], app);
+
+        Assert.DoesNotContain(plan, ReadAhead.IsAfterStart);
+        Assert.Equal(
+            ReadAhead.BeforeMain.Select(name => Path.Combine(app, name))
+                .Concat([Path.Combine(app, "Serilog.dll"), Path.Combine(app, "Avalonia.Base.dll")]),
+            plan);
+        Assert.True(ReadAhead.IsAfterStart(Path.Combine(app, "GimmeCapture.Fonts.dll")));
+        Assert.False(ReadAhead.IsAfterStart(Path.Combine(app, "GimmeCapture.dll")));
+    }
+
     [Theory]
     [InlineData("Avalonia.Base.dll|0+4096,1310720+262144")]
     [InlineData("Avalonia.Base.dll|")]

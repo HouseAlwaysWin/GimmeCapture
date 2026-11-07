@@ -37,6 +37,7 @@ internal static class StartupPrefetch
     private static bool _hadList;
     private static bool _failed;
     private static bool _recorded;
+    private static int _readAfterStart;
 
     /// <summary>From the top of Main, before the log exists: nothing here may log.</summary>
     internal static void Start()
@@ -91,6 +92,48 @@ internal static class StartupPrefetch
     }
 
     /// <summary>
+    /// Once a start through the sign-in launcher is done: reads <c>ReadAhead.AfterStart</c>'s files, which the launcher and
+    /// this start's own read left out, on a thread of its own, so that the first window or capture overlay finds the CJK
+    /// fonts in memory. The overlay's idle warm-up comes 10 s after the start; at the 2026-11-06 sign-in it stalled the UI
+    /// for 637 ms on 2.4 MB of files nothing had read, and the fonts are 29.7 MB.
+    /// </summary>
+    internal static void ReadAfterStart()
+    {
+        if (!StartupTrace.CameThroughLauncher || _appDirectory is not { } appDirectory
+            || Interlocked.Exchange(ref _readAfterStart, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            new Thread(() =>
+            {
+                try
+                {
+                    long started = Stopwatch.GetTimestamp();
+                    long bytes = ReadAhead.ReadAll(ReadAhead.Resolve(ReadAhead.AfterStart, appDirectory), 1);
+                    AppLog.Information(
+                        "StartupPrefetch.AfterStart",
+                        string.Create(
+                            CultureInfo.InvariantCulture,
+                            $"{bytes / (1024.0 * 1024.0):F1} MB in {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0} ms"));
+                }
+                catch (Exception ex)
+                {
+                    // Any failure at all: an exception left on this thread would end the process.
+                    AppLog.Debug("StartupPrefetch.AfterStart", ex);
+                }
+            })
+            { IsBackground = true, Name = "Read-ahead after start" }.Start();
+        }
+        catch (OutOfMemoryException ex)
+        {
+            AppLog.Debug("StartupPrefetch.AfterStart", ex);
+        }
+    }
+
+    /// <summary>
     /// After the idle warm-up of a start to the tray (<c>SnipWindowFactory.ScheduleWarmUp</c>): adds the files the app
     /// has loaded since <see cref="Record"/> to the list it wrote, so the next sign-in's launcher reads them with the rest.
     /// At the 2026-11-06 sign-in the warm-up, 11 s in, held the UI thread for 637 ms, 2% of it on the CPU and 1,343 page
@@ -140,7 +183,8 @@ internal static class StartupPrefetch
     /// <summary>
     /// <paramref name="list"/>, a start-up list's lines, with the files of <paramref name="loaded"/> it does not have
     /// after them, in their order: null when there are none, or when they come to more than <paramref name="limit"/>
-    /// bytes (<paramref name="sizeOf"/> each).
+    /// bytes (<paramref name="sizeOf"/> each). <c>ReadAhead.AfterStart</c>'s files, read after the start instead, are
+    /// neither added nor counted: the warm-up draws with the fonts, whose 29.7 MB would leave everything else out.
     /// </summary>
     internal static List<string>? WithWarmUp(
         IReadOnlyList<string> list, IEnumerable<string> loaded, Func<string, long> sizeOf, long limit)
@@ -161,7 +205,7 @@ internal static class StartupPrefetch
         long bytes = 0;
         foreach (string name in loaded)
         {
-            if (listed.Add(name))
+            if (!ReadAhead.IsAfterStart(name) && listed.Add(name))
             {
                 lines.Add(name);
                 bytes += sizeOf(name);
@@ -253,9 +297,15 @@ internal static class StartupPrefetch
             if (File.Exists(_listPath))
             {
                 Volatile.Write(ref _hadList, true);
-                Interlocked.Exchange(
-                    ref _bytesRead,
-                    ReadAhead.ReadAll(ReadAhead.Resolve(File.ReadAllLines(_listPath!), _appDirectory!), ReadAhead.ReadThreads));
+                var files = ReadAhead.Resolve(File.ReadAllLines(_listPath!), _appDirectory!);
+                if (StartupTrace.CameThroughLauncher)
+                {
+                    // Left for after the start (ReadAfterStart), as the launcher left them: read now, they would compete
+                    // with the start for the disk.
+                    files.RemoveAll(ReadAhead.IsAfterStart);
+                }
+
+                Interlocked.Exchange(ref _bytesRead, ReadAhead.ReadAll(files, ReadAhead.ReadThreads));
             }
         }
         catch (Exception)

@@ -23,6 +23,13 @@ internal static class ReadAhead
     internal const string AppAssemblyFileName = "GimmeCapture.dll";
 
     /// <summary>
+    /// Files no start needs before its hotkeys work, which the launcher leaves out and the app reads once they do
+    /// (<c>StartupPrefetch.ReadAfterStart</c>): the CJK fonts' assembly, 29.7 MB, which the first window or capture overlay
+    /// draws with. In the app's own assembly they made it a 40 MB file the launcher read whole at every sign-in.
+    /// </summary>
+    internal static readonly string[] AfterStart = { "GimmeCapture.Fonts.dll" };
+
+    /// <summary>
     /// What the app writes down after each start, in its version's data folder: the files of its own folder that the
     /// start mapped, in the order it loaded them (<c>StartupPrefetch</c>).
     /// </summary>
@@ -77,9 +84,10 @@ internal static class ReadAhead
     };
 
     /// <summary>
-    /// What the launcher reads after <see cref="BeforeMain"/>: the start-up list's files, in the list's order, each once
-    /// and none of BeforeMain's again. At sign-in the app still waited 10.7 s on the disk after Main, at 1.2 s of CPU,
-    /// with its own read of this list not done by then: it read while the start faulted in pages elsewhere on the disk.
+    /// What the launcher reads after <see cref="BeforeMain"/>: the start-up list's files, in the list's order, each once,
+    /// none of BeforeMain's again and none of <see cref="AfterStart"/>. At sign-in the app still waited 10.7 s on the disk
+    /// after Main, at 1.2 s of CPU, with its own read of this list not done by then: it read while the start faulted in
+    /// pages elsewhere on the disk.
     /// </summary>
     internal static List<string> FromList(IEnumerable<string> lines, string appDirectory)
     {
@@ -87,13 +95,28 @@ internal static class ReadAhead
         var files = new List<string>();
         foreach (string file in Resolve(lines, appDirectory))
         {
-            if (read.Add(file))
+            if (!IsAfterStart(file) && read.Add(file))
             {
                 files.Add(file);
             }
         }
 
         return files;
+    }
+
+    /// <summary>Whether <paramref name="path"/> is one of <see cref="AfterStart"/>'s files.</summary>
+    internal static bool IsAfterStart(string path)
+    {
+        string name = Path.GetFileName(path);
+        foreach (string file in AfterStart)
+        {
+            if (string.Equals(name, file, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>What the launcher reads: <see cref="BeforeMain"/>, then the start-up list's other files in its order.</summary>
