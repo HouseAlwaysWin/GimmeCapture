@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
@@ -10,17 +11,28 @@ namespace GimmeCapture.Services.Core.AI;
 
 public class AIModelDownloader : ReactiveObject
 {
-    private readonly IArtifactDownloader _artifactDownloader;
+    private readonly Lazy<IArtifactDownloader> _artifactDownloader;
 
+    /// <summary>
+    /// Downloads through the shared HTTP client, which is built when the first download starts. Built with this, as
+    /// the main window's dependencies are made at start-up, it loaded the HTTP stack (System.Net.Http, Net.Security,
+    /// Net.Primitives and DiagnosticSource: 3 MB of files the launcher then read at sign-in) for a download that may
+    /// never come.
+    /// </summary>
     public AIModelDownloader()
-        : this(new ArtifactDownloader(SharedHttpClient.Instance))
     {
+        _artifactDownloader = new Lazy<IArtifactDownloader>(CreateSharedDownloader);
     }
 
     public AIModelDownloader(IArtifactDownloader artifactDownloader)
     {
-        _artifactDownloader = artifactDownloader ?? throw new ArgumentNullException(nameof(artifactDownloader));
+        ArgumentNullException.ThrowIfNull(artifactDownloader);
+        _artifactDownloader = new Lazy<IArtifactDownloader>(() => artifactDownloader);
     }
+
+    // Not inlined into the constructor, where the client's type would load its assembly at start-up.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static IArtifactDownloader CreateSharedDownloader() => new ArtifactDownloader(SharedHttpClient.Instance);
 
     private double _downloadProgress;
     public double DownloadProgress
@@ -66,7 +78,7 @@ public class AIModelDownloader : ReactiveObject
             DownloadProgress = progressOffset + (value.Percentage / 100 * progressWeight);
         });
 
-        await _artifactDownloader
+        await _artifactDownloader.Value
             .DownloadAsync(destinationDescriptor, destinationDirectory, progress, cancellationToken)
             .ConfigureAwait(false);
     }

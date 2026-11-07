@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 10 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 11 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+f76f68fe`, installed by hand on 2026-11-07 over `0.74.0+7a64a2aa`
   (by hand, that morning), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1140,6 +1140,32 @@ tool.
   14:21) logged `fonts=4/0` and wrote a list of 121.4 MiB, 28.3 of it the fonts, so the launcher's read at sign-in comes
   to about 93 MiB (136 before both changes; 91 was an estimate that took the fonts' size in MB from MiB). Check at the
   user's next sign-ins: `launcher=` near 93 MB, an `AfterStart` line, the warm-up without a stall.
+- Done since batch 1 (2026-11-07, "optimize until nothing is left"): **what a start set up without using it** (Idle,
+  start-up and memory). Measured with throwaway probes, then checked with a console probe that runs the start's steps
+  (Avalonia set-up through `App.axaml`, `AppBootstrapper`, the design `MainWindowViewModel`, 8 s of dispatcher) on the
+  published ReadyToRun dlls and prints each assembly load with its stack. The log: Serilog's set-up in a ReadyToRun
+  probe took 42 ms, 23 to build and 19 for the first line, against 25.5 for a plain file sink, the difference the
+  daily sink's `PathRoller` compiling its file-name `Regex` (`RegexOptions.Compiled`: Regex and Reflection.Emit at
+  every start); `AppLog.Initialize` now builds the logger on a thread of its own (`AppLog.Build`), what is logged
+  meanwhile waits in `PendingLogEvents` and is written with its own time and order, a crash or `Shutdown` waits for
+  the build (10 s at most), and `Startup.Timings` ends ` logger=<ms>`. Inter: `WithInterFont` read all six faces
+  (1.9 MB) as Avalonia was set up, 82-83 ms of set-up against 63-64.5 with `DeferredInterFontCollection` (76.5-78
+  against 89-90 with the font manager's own set-up) and 2.9-3.6 MB of private bytes against none, though only the
+  processing, countdown and scroll-hint windows and the translation layer draw in the Fluent theme's font; it loads at
+  the first request now, the same faces (`INTER_FONT_PROBE`), and the app names no type of Avalonia.Fonts.Inter. The
+  locale files: all three parsed through System.Text.Json, 5-7 ms for the first dictionary even with the serializer
+  warmed by a settings-like class on another thread, 1-1.4 for the others; now only the language in use, at its first
+  lookup, with `Utf8JsonReader` (1.2-1.4 ms). The web stack: `InitializeAboutCommands` made the update service at
+  every start (its cancel command and download-state subscription), and the service the shared `HttpClient`, which
+  loaded System.Net.Http, Net.Security, Net.Primitives and the crypto library; the automatic update check then ran
+  within a second. Now the update service is made when something uses it (`SubscribeToUpdateDownloadState` follows
+  it), `AIModelDownloader` builds its downloader at the first download, the check runs 30 s after the settings load
+  (`AutoUpdateCheckDelay`, after the warm-up's list recording), and the instance key's SHA-256 is `Sha256Digest`
+  (the same digest, `Sha256DigestTests`), so the probe's start loads none of them, nor Avalonia.Fonts.Inter: about
+  7 MB less in the start-up list. Left as they are: the ColorPicker theme (2.3-2.8 ms in the probe, and the
+  overlay's warm-up loads it anyway, so the list keeps it), System.ComponentModel.TypeConverter, Avalonia.Dialogs and
+  DiagnosticSource (`App.axaml`'s Fluent theme). Check at the next start: `log=` near 0, a `logger=` figure, a list
+  without those files.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

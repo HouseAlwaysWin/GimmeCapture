@@ -621,10 +621,14 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
             return;
         }
 
-        _updateProcessingSubscription = _updateService.Value
+        UpdateService updateService = _updateService.Value;
+        _updateProcessingSubscription = updateService
             .WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
             .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ => RecomputeProcessingState());
+        // After the one above is set: this one's first notification reads UpdateService again, which then returns at
+        // once. For the view model's life, as the service's own.
+        _ = SubscribeToUpdateDownloadState(updateService);
 
         RecomputeProcessingState();
     }

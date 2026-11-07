@@ -52,6 +52,11 @@
   logged at. Avalonia's own font, Inter, read in all six weights at every start (13 ms and 3 MB), now loads only if
   something draws with it, which only a few small windows do. The interface text is read for the language in use
   only, without the general JSON reader's set-up: 1.2 ms instead of about 7.
+- **Signing in reads about 7 MB less of the app.** The update check ran within a second of every start, and with it
+  came the web, TLS and encryption libraries, which the start-up list then had the sign-in read ahead from the disk.
+  It now runs 30 seconds after the start, the update service is built only when something uses it, and the install's
+  own key, worked out at every start, no longer needs the encryption library. An update found at sign-in is announced
+  half a minute later than before.
 
 ### 🔤 OCR
 

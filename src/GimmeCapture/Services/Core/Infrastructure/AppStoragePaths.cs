@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
@@ -126,7 +125,8 @@ internal static class AppStoragePaths
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
             .ToUpperInvariant();
 
-        byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+        // Not .NET's SHA256, whose assembly no other part of a start needs (Sha256Digest).
+        byte[] bytes = Sha256Digest.HashData(Encoding.UTF8.GetBytes(normalized));
         return Convert.ToHexString(bytes[..8]).ToLowerInvariant();
     }
 

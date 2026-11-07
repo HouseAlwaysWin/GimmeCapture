@@ -74,8 +74,18 @@ public partial class MainWindowViewModel
         RefreshReleaseCatalogCommand = ReactiveCommand.CreateFromTask(() => LoadAvailableReleasesAsync(true));
         InstallSelectedReleaseCommand = ReactiveCommand.CreateFromTask(InstallSelectedReleaseAsync);
         CopyDiagnosticsCommand = ReactiveCommand.CreateFromTask(CopyDiagnosticsAsync);
-        CancelUpdateDownloadCommand = ReactiveCommand.Create(UpdateService.CancelDownload);
-        UpdateService.WhenAnyValue(x => x.DownloadStage, x => x.IsDownloading)
+        // Through the property, when pressed: named here, the update service, and the shared HTTP client with it, was
+        // built as the view model was, at every start (SubscribeToUpdateDownloadState).
+        CancelUpdateDownloadCommand = ReactiveCommand.Create(() => UpdateService.CancelDownload());
+    }
+
+    /// <summary>
+    /// The About tab's download state, from the update service once something has made it: nothing can change that
+    /// state before then. Subscribed with the service rather than as the view model is built, which made the service
+    /// at every start and loaded the HTTP stack and the crypto library (5 MB of files) for it.
+    /// </summary>
+    private IDisposable SubscribeToUpdateDownloadState(UpdateService updateService) =>
+        updateService.WhenAnyValue(x => x.DownloadStage, x => x.IsDownloading)
             .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ =>
             {
@@ -83,7 +93,6 @@ public partial class MainWindowViewModel
                 this.RaisePropertyChanged(nameof(HasUpdateDownloadError));
                 this.RaisePropertyChanged(nameof(CanInstallSelectedRelease));
             });
-    }
 
     private async Task CopyDiagnosticsAsync()
     {

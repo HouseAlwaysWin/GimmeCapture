@@ -939,16 +939,24 @@ public partial class MainWindowViewModel
                 EnableAI = true;
             }
 
-            // Behind start-up's own work: this load now usually finishes while the view model is built, before any
-            // window, and the check's set-up (the update service, its first request) can wait until the window is up.
+            // Once start-up has settled: this load now usually finishes while the view model is built, before any
+            // window. Run straight after it, the check loaded the HTTP and TLS stack (System.Net.Http, Net.Security,
+            // the crypto library and the rest, 5-6 MB of files) within a second of every start, so they were in the
+            // start-up list the launcher reads at sign-in, and its request and handshake ran while the sign-in kept
+            // every processor busy.
             if (AutoCheckUpdates)
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(
+                Avalonia.Threading.DispatcherTimer.RunOnce(
                     () => CheckForUpdates(true).Forget("Update.AutoCheck"),
+                    AutoUpdateCheckDelay,
                     Avalonia.Threading.DispatcherPriority.Background);
             }
         }
     }
+
+    // After the capture overlay's warm-up (ten seconds in) and the five seconds a start to the tray then takes to add
+    // what it loaded to the start-up list, so the check's files stay out of that list.
+    internal static readonly TimeSpan AutoUpdateCheckDelay = TimeSpan.FromSeconds(30);
 
     private async Task ApplyHardwareProbeWhenDoneAsync(Task<HardwareCapabilityCache.Capabilities?> hardwareProbe)
     {
