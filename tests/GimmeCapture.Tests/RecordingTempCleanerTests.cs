@@ -16,6 +16,7 @@ public sealed class RecordingTempCleanerTests : IDisposable
     private string OldTemp => Path.Combine(Versions, "0.44.0", "Temp");
     private string AppTemp => Path.Combine(_root, "app", "Temp");
     private string PickedTemp => Path.Combine(_root, "picked");
+    private string LegacyTemp => Path.Combine(_root, "Temp");
 
     public void Dispose()
     {
@@ -48,7 +49,7 @@ public sealed class RecordingTempCleanerTests : IDisposable
 
     private RecordingTempCleaner.SweepResult Sweep(TimeSpan later, string? pickedTemp = null) =>
         RecordingTempCleaner.Sweep(
-            new RecordingTempCleaner.Layout(Versions, CurrentTemp, AppTemp, pickedTemp),
+            new RecordingTempCleaner.Layout(Versions, CurrentTemp, AppTemp, pickedTemp, LegacyTemp),
             DateTime.UtcNow + later);
 
     [Fact]
@@ -70,6 +71,29 @@ public sealed class RecordingTempCleanerTests : IDisposable
             new[] { current, old, firstVersions }.Select(Path.GetFullPath).Order(),
             result.RecordingsRemoved.Select(Path.GetFullPath).Order());
         Assert.Equal(12, result.BytesFreed);
+    }
+
+    [Fact]
+    public void TheDataRootsOwnTemp_IsSweptByTheSameRules()
+    {
+        // Where versions from before the per-install folders recorded, and nothing records now: on the owner's machine
+        // 628 MB from February to May, never swept.
+        string recording = Recording(LegacyTemp);
+        string session = Session(LegacyTemp);
+        string other = Write(Path.Combine(LegacyTemp, "notes.txt"));
+        string otherFolder = Path.Combine(LegacyTemp, "AudioTranscription");
+        Directory.CreateDirectory(otherFolder);
+
+        var early = Sweep(TimeSpan.FromDays(3));
+        Assert.False(File.Exists(recording));
+        Assert.True(Directory.Exists(session));
+        Assert.Single(early.RecordingsRemoved);
+
+        var later = Sweep(TimeSpan.FromDays(8));
+        Assert.False(Directory.Exists(session));
+        Assert.Equal(1, later.SessionsRemoved);
+        Assert.True(File.Exists(other));
+        Assert.True(Directory.Exists(otherFolder));
     }
 
     [Fact]

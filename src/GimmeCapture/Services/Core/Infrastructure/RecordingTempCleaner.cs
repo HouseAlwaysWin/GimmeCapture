@@ -10,7 +10,9 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 /// there while it is pinned, and <see cref="UnsavedRecording"/> deletes it when the pin closes. Nothing removed the
 /// rest: a recording copied to the clipboard, one a crash or a kill left, and the raw segments a failed save keeps for
 /// recovery. Each update also moved the folder (versions\&lt;version&gt;\Temp) and left the previous one behind whole:
-/// about 100 MB of recordings on one machine, the oldest from June.
+/// about 100 MB of recordings on one machine, the oldest from June. Versions from before the per-install folders
+/// recorded into the data root's Temp (%LOCALAPPDATA%\GimmeCapture\Temp), which nothing swept either: 628 MB on the
+/// owner's machine in November, 32 recordings' raw segments and 3 recordings, from February to May.
 /// <para>Only what is named the way the app names it (<see cref="RecordingTempDirectory"/>) is touched, so a temp folder
 /// the user picked keeps everything else. A recording goes once it is a day old, raw segments once they are a week
 /// old.</para>
@@ -31,7 +33,9 @@ public static class RecordingTempCleaner
         // The Temp folder beside the executable, where the first versions recorded.
         string AppTempDirectory,
         // The TempDirectory setting, if set: a folder the user picked, so recordings only, never a session folder.
-        string? UserTempDirectory);
+        string? UserTempDirectory,
+        // The data root's Temp, where versions from before the per-install folders recorded. Nothing records there now.
+        string? LegacyTempDirectory = null);
 
     internal sealed record SweepResult(IReadOnlyList<string> RecordingsRemoved, int SessionsRemoved, long BytesFreed);
 
@@ -47,7 +51,8 @@ public static class RecordingTempCleaner
                     Path.Combine(AppStoragePaths.GetInstallInstanceDirectory(appDirectory), "versions"),
                     RecordingTempDirectory.For(dataDirectory),
                     RecordingTempDirectory.For(appDirectory),
-                    string.IsNullOrWhiteSpace(userTempDirectory) ? null : userTempDirectory),
+                    string.IsNullOrWhiteSpace(userTempDirectory) ? null : userTempDirectory,
+                    RecordingTempDirectory.For(AppStoragePaths.GetRootDirectory())),
                 DateTime.UtcNow);
             if (result.RecordingsRemoved.Count > 0 || result.SessionsRemoved > 0)
             {
@@ -81,9 +86,10 @@ public static class RecordingTempCleaner
             }
         }
 
-        foreach (string temp in new[] { layout.CurrentTempDirectory, layout.AppTempDirectory })
+        string?[] ownTemps = [layout.CurrentTempDirectory, layout.AppTempDirectory, layout.LegacyTempDirectory];
+        foreach (string? temp in ownTemps)
         {
-            if (swept.Add(Normalize(temp)))
+            if (temp != null && swept.Add(Normalize(temp)))
             {
                 RemoveRecordingsAndSessions(temp, nowUtc, removed);
             }

@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 11 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 12 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+f76f68fe`, installed by hand on 2026-11-07 over `0.74.0+7a64a2aa`
   (by hand, that morning), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1166,6 +1166,16 @@ tool.
   overlay's warm-up loads it anyway, so the list keeps it), System.ComponentModel.TypeConverter, Avalonia.Dialogs and
   DiagnosticSource (`App.axaml`'s Fluent theme). Check at the next start: `log=` near 0, a `logger=` figure, a list
   without those files.
+- Done since batch 1 (2026-11-07, same request): **the data root's own Temp was never swept** (disk). The user's
+  `%LOCALAPPDATA%\GimmeCapture\Temp` held 628 MB from February to May: 32 `Recordings_<guid>` session folders (the
+  largest 283 MB) and 3 `GimmeCapture_<guid>.mp4`, from versions that recorded there before the per-install folders.
+  `RecordingTempCleaner` swept every version's Temp, the current one and the one beside the executable, not that one;
+  now it does (`Layout.LegacyTempDirectory`), by the same names and ages. Nothing records there now (the data folder
+  is the versioned one, the executable's or one given explicitly). Freed at the installed copy's next start.
+- Seen on the way (2026-11-07), not acted on: a few of the Compress queue's probes waited 13-44 s in
+  `avformat_open_input` (most took 0.2-1.7 s), two at a time as `_probeSlots` allows, and two batches each ended in an
+  `FFmpegNativeException`. The log names only the file, not the drive, and the user's paths were not looked into: a
+  sleeping or busy disk is the likely reason, not the app.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

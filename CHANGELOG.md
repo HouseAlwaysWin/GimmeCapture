@@ -75,6 +75,15 @@
 - **A capture saved over a larger file no longer keeps that file's end.** Saving onto an existing file wrote the new
   PNG over its start and left the rest in place, so the file kept its old size and the old data after the picture.
 
+### 💾 Storage
+
+- **Recordings that early versions left behind are cleared away.** Versions from before the per-install folders
+  recorded into `%LOCALAPPDATA%\GimmeCapture\Temp`, and the sweep at start-up that removes leftover recordings
+  only looked in the folders recordings go to now: on one machine 628 MB stayed there, the raw pieces of 32
+  recordings and 3 recordings, from February to May. That folder is now swept by the same rules as the others: a
+  recording goes once it is a day old, the pieces of one that failed to save a week after their last write, and
+  nothing else in it is touched.
+
 ## v0.74.0 - 2026-11-06
 
 ### ⚡ Performance
