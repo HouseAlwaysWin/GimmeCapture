@@ -56,10 +56,10 @@ public sealed class ModuleInstallCoordinator
 
     public bool IsSam2Installed(SAM2Variant variant) => Orchestrator.IsSAM2Ready(variant);
 
-    // Reports the whole language set, not just the current source language: auto-detect compares recognisers
+    // Counts the whole language set, not just the current source language: auto-detect compares recognisers
     // against each other, so a green tick earned by having only Chinese installed would be a lie about what
     // OCR can read.
-    public bool IsOcrInstalled() => Orchestrator.IsAllOcrReady();
+    public (int Installed, int Total) CountOcrLanguagesInstalled() => Orchestrator.CountOcrLanguagesReady();
 
     public bool IsLlamaInstalled(string modelId) => Orchestrator.IsLlamaPresetInstalled(modelId);
 

@@ -74,11 +74,11 @@ public partial class MainWindowViewModel
         // PaddleOCR v5 Module
         var ocr = new ModuleItem("PaddleOCR v5", "ModuleOCRDescription")
         {
-            IsInstalled = _moduleInstallCoordinator.IsOcrInstalled(),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("OCR")),
             CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("OCR")),
             RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("OCR"))
         };
+        ShowOcrLanguagesInstalled(ocr);
 
         _moduleInstallCoordinator.ObserveStatus("OCR")
             .ObserveOn(RxSchedulers.MainThreadScheduler)
@@ -90,7 +90,7 @@ public partial class MainWindowViewModel
                 ocr.HasError = snapshot.Status == ResourceQueueStatus.Failed;
                 ocr.Progress = snapshot.Progress;
                 if (snapshot.Status == ResourceQueueStatus.Failed) ocr.ErrorMessage = snapshot.ErrorMessage ?? _moduleInstallCoordinator.LastErrorMessage;
-                if (snapshot.Status == ResourceQueueStatus.Completed) ocr.IsInstalled = _moduleInstallCoordinator.IsOcrInstalled();
+                if (snapshot.Status == ResourceQueueStatus.Completed) ShowOcrLanguagesInstalled(ocr);
             });
 
         _moduleInstallCoordinator.ObserveStatus("SAM2")
@@ -218,6 +218,12 @@ public partial class MainWindowViewModel
         }
     }
 
+    private void ShowOcrLanguagesInstalled(ModuleItem ocr)
+    {
+        var (installed, total) = _moduleInstallCoordinator.CountOcrLanguagesInstalled();
+        ocr.SetInstalledParts(installed, total);
+    }
+
     public async Task InstallModuleAsync(string type)
     {
         foreach (var m in Modules)
@@ -280,7 +286,7 @@ public partial class MainWindowViewModel
             {
                 if (m.Name == "ONNX Runtime & U2Net") m.IsInstalled = _moduleInstallCoordinator.IsAICoreInstalled();
                 if (m.Name == "SAM2 Model") m.IsInstalled = _moduleInstallCoordinator.IsSam2Installed(_settingsService.Settings.SelectedSAM2Variant);
-                if (m.Name == "PaddleOCR v5") m.IsInstalled = _moduleInstallCoordinator.IsOcrInstalled();
+                if (m.Name == "PaddleOCR v5") ShowOcrLanguagesInstalled(m);
                 if (m.Name == "Llama Models") m.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(m.SelectedVariant);
             }
 
@@ -412,6 +418,21 @@ public partial class MainWindowViewModel
         public ICommand CancelCommand { get; set; } = null!;
         public ICommand RemoveCommand { get; init; } = null!;
 
+        // Of a module installed in parts (OCR's languages), how many parts are on disk, of how many. 0 of 0 for the rest.
+        private int _partsInstalled;
+        private int _partCount;
+
+        /// <summary>
+        /// For a module installed in parts, such as OCR's languages: it counts as installed only with every part, and
+        /// short of that its badge says how many it has ("Installed 2/5"), not "Not Installed".
+        /// </summary>
+        public void SetInstalledParts(int installed, int total)
+        {
+            _partsInstalled = installed;
+            _partCount = total;
+            IsInstalled = total > 0 && installed >= total;
+        }
+
         private ICommand _mainActionCommand = null!;
         public ICommand MainActionCommand
         {
@@ -426,7 +447,12 @@ public partial class MainWindowViewModel
             set => this.RaiseAndSetIfChanged(ref _actionButtonText, value);
         }
 
-        public ModuleItem(string name, string descriptionKey)
+        /// <param name="localization">The UI strings; the app's own when null (a test hands in a stand-in).</param>
+        public ModuleItem(
+            string name,
+            string descriptionKey,
+            GimmeCapture.Services.Abstractions.ILocalizationService? localization = null)
+            : base(localization)
         {
             Name = name;
             DescriptionKey = descriptionKey;
@@ -469,9 +495,11 @@ public partial class MainWindowViewModel
             }
             else
             {
-                StatusText = IsInstalled 
-                    ? Localization["Installed"] 
-                    : Localization["NotInstalled"];
+                StatusText = IsInstalled
+                    ? Localization["Installed"]
+                    : _partsInstalled > 0
+                        ? string.Format(Localization["ModulePartlyInstalled"], _partsInstalled, _partCount)
+                        : Localization["NotInstalled"];
             }
             
             if (IsProcessing || IsPending)

@@ -271,6 +271,7 @@
   "ModuleOCRDescription": "PaddleOCR v5 models for real-time text detection and recognition. Installs all five languages (~68 MB) so auto-detect can tell them apart.",
   "Installed": "Installed",
   "NotInstalled": "Not Installed",
+  "ModulePartlyInstalled": "Installed {0}/{1}",
   "Install": "Install",
   "Remove": "Remove",
   "Pending": "Pending...",

@@ -264,6 +264,7 @@
   "TabModules": "モジュール管理",
   "Installed": "インストール済み",
   "NotInstalled": "未インストール",
+  "ModulePartlyInstalled": "インストール済み {0}/{1}",
   "Install": "インストール",
   "Remove": "削除",
   "Pending": "待機中...",

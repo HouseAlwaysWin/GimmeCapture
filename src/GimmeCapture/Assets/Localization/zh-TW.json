@@ -271,6 +271,7 @@
   "ModuleOCRDescription": "PaddleOCR v5 模型，用於即時文字偵測與識別。會安裝全部五種語言（約 68 MB），自動偵測才分得出語言。",
   "Installed": "已安裝",
   "NotInstalled": "未安裝",
+  "ModulePartlyInstalled": "已安裝 {0}/{1}",
   "Install": "安裝",
   "Remove": "移除",
   "Pending": "等待中...",

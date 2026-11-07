@@ -137,12 +137,15 @@ public sealed class AIResourceOrchestrator
     }
 
     /// <summary>
-    /// Whether every installable language is present. This is what the Modules tab reports, because auto-detect can
-    /// only distinguish languages whose recognisers exist — a per-current-language check would show "installed"
-    /// while Auto was still structurally unable to read Japanese.
+    /// How many of the languages the OCR module installs have all their models on disk, and how many it installs. The
+    /// Modules tab counts the module installed only with every one, because auto-detect can only distinguish languages
+    /// whose recognisers exist — a per-current-language check would show "installed" while Auto was still structurally
+    /// unable to read Japanese. Short of that it shows how many are: "not installed" read as broken to a user whose OCR
+    /// was reading the languages it had.
     /// </summary>
-    public bool IsAllOcrReady() =>
-        OcrLanguageResolver.AllReady(OcrLanguageResolver.InstallableLanguages, IsOCRReady);
+    public (int Ready, int Total) CountOcrLanguagesReady() =>
+        (OcrLanguageResolver.WhereReady(OcrLanguageResolver.InstallableLanguages, IsOCRReady).Count,
+            OcrLanguageResolver.InstallableLanguages.Count);
 
     public bool AreResourcesReady()
     {

@@ -42,6 +42,10 @@
   on two screens of window text at 11 to 24 pixels, 4% of the lines got a box of their own and 86% were covered by one.
   Each screen is now read on its own: 62% and 100%. The boxes take a little longer to appear, detection taking about
   0.3 s instead of 0.07 in tests. With one screen nothing changes.
+- **The Modules tab says how many of OCR's languages are installed.** The OCR module installs five languages
+  (Traditional and Simplified Chinese, Japanese, Korean and English), and counts as installed only with all of them,
+  since detecting the language can only tell apart the ones it has. With some of them its card said "Not Installed",
+  which read as broken while OCR was reading those: it now says "Installed 2/5", and Install fetches only the rest.
 
 ## v0.74.0 - 2026-11-06
 
