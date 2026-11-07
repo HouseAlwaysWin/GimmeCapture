@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 15 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 16 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+fb63624a`, installed by hand on 2026-11-07 evening over
   `0.74.0+f76f68fe` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1201,9 +1201,12 @@ tool.
   were `GetKeyStringFromVirtualKey`, on the overlay's hook thread, which every key typed anywhere waits for (`.ToUpper()`
   of the capital letters A-Z, a no-op) and the save dialog's file type name for a recording. Both are culture-free now,
   and `NoCultureCasingTests` fails on a culture `ToUpper()`/`ToLower()` anywhere in the app. Not measured in the app:
-  whether something before the first letter key had already set ICU's casing up. Left, the user's call: the whole app
-  on NLS (`System.Globalization.UseNls` in the runtime config, Windows only), which takes ICU out entirely; sorting,
-  casing and the culture's date and number formats would then come from Windows, as in .NET Framework, not from CLDR.
+  whether something before the first letter key had already set ICU's casing up. Then the user chose the whole app on
+  NLS (2026-11-07): `System.Globalization.UseNls` in the Windows head's runtime config (`GimmeCapture.csproj`,
+  `GlobalizationModeTests`), which takes ICU out of the Windows build. Checked first that nothing the app shows
+  depends on it: dates only through numeric patterns (`yyyy-MM-dd HH:mm`, `yyyyMMdd_HHmmss`), numbers only as plain
+  numbers and percentages, and no text sorted or compared by the culture (every sort compares numbers). The Linux
+  head keeps ICU. Check in the running app: no `icu.dll` among its modules.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

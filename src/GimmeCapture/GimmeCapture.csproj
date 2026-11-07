@@ -34,6 +34,15 @@
     <PublishReadyToRun Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</PublishReadyToRun>
   </PropertyGroup>
 
+  <!-- The culture's rules from Windows itself (NLS), as .NET Framework had them, not from ICU. With ICU, which .NET loads
+       on Windows by default, the first culture-sensitive ToUpper/ToLower of a run took 162 ms for zh-TW in a fresh
+       process, a first culture IndexOf 20 ms, and the three with a sort 186-188 ms and 1.5 MB of private bytes; with
+       NLS 3.4-3.6 ms and nothing. The app formats dates with numeric patterns and sorts no text by the culture, so
+       what it shows is the same. GlobalizationModeTests. Linux has no NLS and keeps ICU. -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <RuntimeHostConfigurationOption Include="System.Globalization.UseNls" Value="true" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Remove="bin\**\*.cs;obj\**\*.cs;bin-*\**\*.cs;obj-*\**\*.cs" />
     <EmbeddedResource Remove="bin\**;obj\**;bin-*\**;obj-*\**" />

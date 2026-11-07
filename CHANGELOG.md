@@ -68,6 +68,11 @@
   For a letter that already is a capital that changes nothing, but the first time in a run it made .NET load that
   language's case rules, 162 ms in a test with Traditional Chinese, while the key and every other one waited. It now
   takes the letter as it is, and saving a recording names its file type without the language's rules too.
+- **The Windows version takes the language's text rules from Windows itself.** Since .NET 5 the app had used ICU for
+  them, whose first use in a run is slow for Chinese: in tests, 162 ms the first time text was put in capitals by the
+  language's rules, 20 ms for the first search, and 1.5 MB of memory kept. It now uses Windows' own (NLS), as .NET
+  Framework programs do: 3.5 ms for all of it, and nothing kept. The app writes dates as numbers and sorts no text by
+  the language's rules, so nothing it shows changes. The Linux version keeps ICU.
 
 ### 🔤 OCR
 

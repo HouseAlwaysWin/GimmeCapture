@@ -18,6 +18,7 @@
        the shared WindowCandidateHitTester instead of the real WindowDetectionService. -->
   <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
     <Compile Remove="HotkeyServiceTests.cs" />
+    <Compile Remove="GlobalizationModeTests.cs" />
     <Compile Remove="Win32HotkeyThreadTests.cs" />
     <Compile Remove="WindowDetectionServiceTests.cs" />
     <Compile Remove="ViewModels\MainWindowViewModelConstructionTests.cs" />
