@@ -160,25 +160,15 @@ internal static class CompressItemStateService
 }
 
 /// <summary>
-/// Writes the per-file Compress state map off the caller's thread. Every edit to a queue item persists the whole map,
-/// and it used to rewrite the indented JSON on the UI thread each time, several times over when the editor's edits
-/// were applied. <see cref="Save"/> now keeps only the newest map: the first save starts a short wait, saves during
-/// it replace the map waiting, and one write follows. Writes never overlap and never put an older map over a newer
-/// one. <see cref="Flush"/> writes whatever is still waiting, at once.
+/// Writes the per-file Compress state map off the caller's thread (<see cref="CoalescingWriter{T}"/>). Every edit to
+/// a queue item persists the whole map, and it used to rewrite the indented JSON on the UI thread each time, several
+/// times over when the editor's edits were applied.
 /// </summary>
-internal sealed class CompressItemStateWriter
+internal sealed class CompressItemStateWriter : CoalescingWriter<IReadOnlyDictionary<string, CompressItemState>>
 {
-    private readonly Action<IReadOnlyDictionary<string, CompressItemState>> _write;
-    private readonly TimeSpan _coalesceDelay;
-    private readonly object _pendingLock = new();
-    private readonly object _writeLock = new(); // held through a write: one at a time, each taking the newest map
-    private Dictionary<string, CompressItemState>? _pending;
-    private bool _writeScheduled;
-
     public CompressItemStateWriter(Action<IReadOnlyDictionary<string, CompressItemState>> write, TimeSpan coalesceDelay)
+        : base(write, coalesceDelay)
     {
-        _write = write;
-        _coalesceDelay = coalesceDelay;
     }
 
     /// <summary>Keeps a copy of <paramref name="states"/> to write shortly; returns without waiting for any write.</summary>
@@ -186,46 +176,6 @@ internal sealed class CompressItemStateWriter
     {
         // Copied on the caller's thread, which goes on changing its map. The states in it are replaced on an edit,
         // never changed, so a shallow copy holds still while it is written.
-        var snapshot = new Dictionary<string, CompressItemState>(states);
-        lock (_pendingLock)
-        {
-            _pending = snapshot;
-            if (_writeScheduled)
-            {
-                return;
-            }
-
-            _writeScheduled = true;
-        }
-
-        Task.Run(WriteAfterDelayAsync).Forget("CompressItemState.Save");
-    }
-
-    /// <summary>Writes the map still waiting, if any, on the calling thread, after a write already under way.</summary>
-    public void Flush() => WritePending();
-
-    private async Task WriteAfterDelayAsync()
-    {
-        await Task.Delay(_coalesceDelay).ConfigureAwait(false);
-        WritePending();
-    }
-
-    private void WritePending()
-    {
-        lock (_writeLock)
-        {
-            Dictionary<string, CompressItemState>? states;
-            lock (_pendingLock)
-            {
-                states = _pending;
-                _pending = null;
-                _writeScheduled = false; // a save from here on needs a write of its own
-            }
-
-            if (states != null)
-            {
-                _write(states);
-            }
-        }
+        SaveValue(new Dictionary<string, CompressItemState>(states), "CompressItemState.Save");
     }
 }

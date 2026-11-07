@@ -57,6 +57,9 @@
   It now runs 30 seconds after the start, the update service is built only when something uses it, and the install's
   own key, worked out at every start, no longer needs the encryption library. An update found at sign-in is announced
   half a minute later than before.
+- **Dragging a Compress slider no longer saves at every step.** Each change of a Compress setting rewrote its settings
+  file on the interface's thread, 4-10 ms each time and up to 40 with the computer busy, at every step of a slider
+  being dragged. The settings are now written once they stop changing, in the background, and when the app closes.
 
 ### 🔤 OCR
 

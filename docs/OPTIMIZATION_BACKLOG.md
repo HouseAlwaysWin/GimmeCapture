@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 12 entries (2026-11-07).
+- Since v0.74.0, `## Unreleased` holds 13 entries (2026-11-07).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+f76f68fe`, installed by hand on 2026-11-07 over `0.74.0+7a64a2aa`
   (by hand, that morning), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1176,6 +1176,12 @@ tool.
   `avformat_open_input` (most took 0.2-1.7 s), two at a time as `_probeSlots` allows, and two batches each ended in an
   `FFmpegNativeException`. The log names only the file, not the drive, and the user's paths were not looked into: a
   sleeping or busy disk is the likely reason, not the app.
+- Done since batch 1 (2026-11-07, same request): **every Compress setting change saved the session on the UI thread**
+  (Compress, the "small ones"). `CompressSessionService.Save` rewrote `compress-session.json` with `AtomicFile` (a
+  temp file and `File.Replace`) at each change, every step of a slider being dragged: 3.8-9.8 ms at the median, p95
+  9-20, at most 41 on this desktop's C: drive (200 writes, twice, with a verification run going). The item states'
+  background writer became `CoalescingWriter<T>`, and the session goes through one too (300 ms, written off the UI
+  thread, flushed at the process exit and before a load). `CompressSessionWriterTests`, `CompressItemStateWriterTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1563,10 +1569,11 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 - **Annotations take every frame through BGRA** (S-M). `LibavClipExporter.cs`: an export with something drawn on it
   converts each frame to BGRA at decode size, draws, turns it there if it is turned, and converts back. Render static
   annotations once and blend them in YUV, or draw at the output size. Rotation without annotations is done (Status).
-- **Small ones**: every CRF-slider tick saves `compress-session.json` on the UI thread
-  (`MainWindowViewModel.VideoCompress.cs:552-559`; a small file, written without a flush, and a delayed save could lose
-  the last change at exit: measure before changing it); preview frames are decoded on the GPU, downloaded at full size
-  and scaled on the CPU.
+- **Small one**: preview frames are decoded on the GPU, downloaded at full size and scaled on the CPU. The CRF slider's
+  save at every tick is done (Status).
+- **A target size at or above the source's size**, above, left (2026-11-07): a stream copy would have to match the
+  codec, height, frame rate, filters and audio asked for, or it would silently leave them out, and the user compresses
+  with CRF presets. The user's logs of the last 7 days hold no compress run at all, only queue probes.
 
 ### Pins
 
