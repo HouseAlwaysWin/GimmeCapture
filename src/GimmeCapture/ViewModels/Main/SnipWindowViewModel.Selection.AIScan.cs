@@ -58,8 +58,16 @@ public partial class SnipWindowViewModel
     /// </summary>
     public bool IsAiScanCandidateLayerVisible =>
         _settings?.ShowAIScanBox == true &&
-        ((CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation)
+        ((CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation && OffersTextCandidates)
          || (CurrentMode == SnipMode.Translation && ShowOcrResult));
+
+    /// <summary>
+    /// Whether the overlay offers the text the OCR scan finds (its lines and paragraphs) to pick. A scrolling capture
+    /// does not: it picks the area that scrolls, a window or a pane. There a text line under the pointer won the hover
+    /// over the chat around it, so a click started the capture on that one line, and each opening loaded the detector
+    /// (~0.2 s) and read both screens (~0.4 s) for boxes nobody wanted.
+    /// </summary>
+    internal bool OffersTextCandidates => AutoActionMode != SnipAutoAction.ScrollingCapture;
 
     /// <summary>
     /// Win32 window/control snap candidate boxes. Always false in translation mode.
@@ -516,7 +524,9 @@ public partial class SnipWindowViewModel
         _hoverAnimationController.PointerMoved();
 
         var windowCandidate = _detectionService.GetCandidateAtPoint(mousePos, _windowCandidates, _currentHoverCandidate);
-        var ocrCandidate = OcrCandidateHitTester.SelectCandidate(mousePos, _ocrParagraphCandidates, _ocrLineCandidates, _currentHoverOcrCandidate);
+        var ocrCandidate = OffersTextCandidates
+            ? OcrCandidateHitTester.SelectCandidate(mousePos, _ocrParagraphCandidates, _ocrLineCandidates, _currentHoverOcrCandidate)
+            : null;
         var selected = SelectBestHoverCandidate(windowCandidate, ocrCandidate);
         if (selected == null)
         {
@@ -749,6 +759,12 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        if (!OffersTextCandidates)
+        {
+            AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Abort: a scrolling capture picks a window, not text");
+            return;
+        }
+
         if (_aiScanSessionService == null)
         {
             AppLog.Debug("SnipWindowViewModel.Selection.AIScan", "[AI Scan][OCR] Abort: AI scan session service is null");
@@ -952,11 +968,29 @@ public partial class SnipWindowViewModel
 
     /// <summary>
     /// Whether the OCR auto-scan should run in the current "ready to select" state: AI scan enabled, not in
-    /// translation mode, and at least one screen is known. Shared by the state controller (which scans on
-    /// entering Detecting) and the Esc-clear path (which returns to the manual draw state).
+    /// translation mode or a scrolling capture, and at least one screen is known. Shared by the state controller (which
+    /// scans on entering Detecting) and the Esc-clear path (which returns to the manual draw state).
     /// </summary>
     internal bool ShouldTriggerAutoScan() =>
-        EnableAIScan && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0;
+        EnableAIScan && CurrentMode != SnipMode.Translation && OffersTextCandidates && AllScreenBounds?.Count > 0;
+
+    // The overlay was switched into or out of a scrolling capture while open (a capture hotkey pressed with it up): the
+    // text boxes found so far hide or show again. Into one, a scan still running stops and a text box the pointer rests
+    // on is let go, so a click picks the window under it; out of one, the snip hotkey's re-entry scans again.
+    private void OnTextCandidatesOfferedChanged()
+    {
+        this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
+        if (OffersTextCandidates)
+        {
+            return;
+        }
+
+        _scanCts?.Cancel();
+        if (_currentHoverOcrCandidate != null)
+        {
+            DismissWindowSnapHoverPreview(preserveTargetRect: false);
+        }
+    }
 
     /// <summary>
     /// Runs the OCR auto-scan for "just entered / re-entered the draw-ready overlay" — both the window-open path
@@ -1012,6 +1046,7 @@ public partial class SnipWindowViewModel
     // the state the overlay opens in.
     internal bool WillScanOnEntry() =>
         CurrentMode != SnipMode.Translation
+        && OffersTextCandidates
         && RecState == RecordingState.Idle
         && _settings is { EnableAI: true, EnableAIScan: true, ShowAIScanBox: true }
         && _aiScanSessionService != null;

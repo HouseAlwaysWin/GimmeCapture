@@ -19,10 +19,10 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 29 entries (2026-11-08).
+- Since v0.74.0, `## Unreleased` holds 30 entries (2026-11-08).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+eba19e6c`, installed by hand on 2026-11-08 at 10:11 over
-  `0.74.0+1a89f37b` (by hand, the same day at 08:20), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+4821c550`, installed by hand on 2026-11-08 at about 11:00 over
+  `0.74.0+eba19e6c` (by hand, the same day at 10:11), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1288,7 +1288,12 @@ tool.
   reproduced the wrong lock: a LINE-like chat (`ScrollCaptureSimulation.Line`) scrolled up under a 170-row title bar and
   the floating date, where the old way found no match down the frame and a sideways one 489 of 545 columns over, and
   locked sideways at the first frame; with a message box too it never locked. The new one locks down at the second
-  frame in both, and sideways scrolls still lock sideways. `ManualScrollAxisDetectorTests`.
+  frame in both, and sideways scrolls still lock sideways. `ManualScrollAxisDetectorTests`. On 4821c550 (2026-11-08
+  12:44 and 12:51) both of the user's Auto captures locked down and placed every frame (534 and 256), one a 540x729
+  region like the 545x731 one that had locked sideways. Their log also showed the overlay running a snip's text scan
+  as it opened (the detector loaded in 157-186 ms, both screens read in 354-384 ms), and a text line under the pointer
+  wins the hover over the window around it: a scrolling capture's overlay now offers windows only
+  (`OffersTextCandidates`; the user's choice, as it changes what the overlay shows). `SnipWindowViewModelTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

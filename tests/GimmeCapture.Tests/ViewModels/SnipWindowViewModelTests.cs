@@ -230,6 +230,7 @@ public class SnipWindowViewModelTests
     [InlineData("AI off")]
     [InlineData("OCR scan off")]
     [InlineData("scan box hidden")]
+    [InlineData("scrolling capture")]
     public void NoDetectorIsLoadedEarly_WhenTheOverlayWillNotScanOnOpening(string reason)
     {
         var settings = OcrScanSettings();
@@ -247,10 +248,73 @@ public class SnipWindowViewModelTests
         {
             vm.CurrentMode = SnipMode.Translation;
         }
+        else if (reason == "scrolling capture")
+        {
+            vm.AutoActionMode = SnipAutoAction.ScrollingCapture; // as SnipWindowFactory sets it before the prepare
+        }
 
         Assert.False(vm.WillScanOnEntry());
         vm.PrepareOcrAutoScan();
         scan.Verify(s => s.PrepareScanAsync(It.IsAny<OCRLanguage>()), Times.Never);
+    }
+
+    // A scrolling capture picks the area that scrolls, so its overlay reads no text: on 2026-11-08 each one opened
+    // loaded the detector (~0.2 s) and read both screens (~0.4 s) for boxes nobody wanted.
+    [Fact]
+    public void AScrollingCaptureOverlay_NeverScansForText()
+    {
+        var (vm, scan) = OverlayScanningForText();
+        using (vm)
+        {
+            vm.AutoActionMode = SnipAutoAction.ScrollingCapture;
+
+            vm.RequestOcrAutoScanOnEntry("Open");
+            vm.CurrentState = SnipState.Selecting;
+            vm.HandleRightClick(); // back to the ready state, which scans in a snip
+            vm.ShowAIScanBox = true;
+
+            Assert.Equal(SnipState.Detecting, vm.CurrentState);
+            Assert.Equal(0, ScanCount(scan));
+        }
+    }
+
+    // In a snip a text line under the pointer wins the hover over the window around it. A scrolling capture wants the
+    // window (a chat, say): with the line winning, a click there started the capture on that one line.
+    [Fact]
+    public void AScrollingCapture_PicksTheWindowUnderThePointer_NotATextLine()
+    {
+        var window = new WindowCandidate(new Rect(0, 0, 300, 200), new IntPtr(1), IntPtr.Zero, new IntPtr(1), 0, WindowCandidateKind.TopLevel);
+        var line = new Rect(20, 20, 120, 16);
+        using var vm = new SnipWindowViewModel(
+            Colors.Red,
+            2.0,
+            new Mock<IScreenCaptureService>().Object,
+            detectionService: new FakeWindowDetectionService([window]),
+            aiScanSessionService: new Mock<IAIScanSessionService>().Object,
+            settings: OcrScanSettings().Object);
+        vm.ScreenOffset = default;
+        vm.VisualScaling = 1;
+        vm.RefreshWindowRects();
+        vm.StoreOcrScanResult(new([line], [new OcrCandidate(line, OcrCandidateKind.Line, groupId: 0)]), still: null);
+
+        vm.UpdateWindowHover(new Point(60, 28));
+        Assert.Equal(line, vm.HoverTargetRect);
+        Assert.True(vm.IsAiScanCandidateLayerVisible);
+
+        // The scrolling capture's hotkey pressed with the snip overlay open.
+        vm.AutoActionMode = SnipAutoAction.ScrollingCapture;
+        Assert.Equal(default(Rect), vm.HoverTargetRect); // the line let go before the pointer moves again
+        vm.UpdateWindowHover(new Point(61, 28));
+
+        Assert.Equal(window.Bounds, vm.HoverTargetRect);
+        Assert.False(vm.IsAiScanCandidateLayerVisible);
+
+        // And back to a snip: the boxes found before show again and the line wins once more.
+        vm.AutoActionMode = SnipAutoAction.None;
+        vm.UpdateWindowHover(new Point(60, 28));
+
+        Assert.Equal(line, vm.HoverTargetRect);
+        Assert.True(vm.IsAiScanCandidateLayerVisible);
     }
 
     [Fact]

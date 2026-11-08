@@ -306,7 +306,13 @@ public partial class SnipWindowViewModel
         get => _autoActionMode;
         set
         {
+            bool offeredText = OffersTextCandidates;
             this.RaiseAndSetIfChanged(ref _autoActionMode, value);
+            if (OffersTextCandidates != offeredText)
+            {
+                OnTextCandidatesOfferedChanged();
+            }
+
             if (value != SnipAutoAction.None && CurrentState == SnipState.Selected)
             {
                 TriggerAutoAction();

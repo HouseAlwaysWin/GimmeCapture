@@ -140,6 +140,11 @@
   far the content moved each way over the middle of the frame, takes the way that matched clearly better, and locks
   once two frames in a row agree. In simulated LINE captures the old way locked sideways or never locked; now down,
   one frame later than before (40 ms).
+- **Picking where to scroll-capture picks the window under the pointer, not a line of its text.** Its overlay showed
+  the text boxes a snip's does, and over a chat the pointer highlighted the line of text under it rather than the chat,
+  so a click started the capture on that one line. It now offers windows only, and no longer loads the text detector
+  and reads both screens each time it opens, about 0.2 s and 0.4 s of work for boxes it had no use for. Snips, copy and
+  text copy keep their text boxes.
 - **A long screenshot's pin can be scrolled by dragging its scroll bar.** The handle for resizing the pin along its
   right edge (its bottom edge, for a capture scrolled sideways) lay over the scroll bar, so the pointer there resized the
   window, and the bar never widened under it to be taken hold of. On that edge the handle now sits just outside the
