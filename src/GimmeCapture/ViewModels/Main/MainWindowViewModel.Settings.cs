@@ -954,8 +954,8 @@ public partial class MainWindowViewModel
         }
     }
 
-    // After the capture overlay's warm-up (ten seconds in) and the five seconds a start to the tray then takes to add
-    // what it loaded to the start-up list, so the check's files stay out of that list.
+    // After the capture overlay's warm-up (ten seconds into a start to the tray) and the five seconds it then takes to
+    // add what it loaded to the start-up list, so the check's files stay out of that list.
     internal static readonly TimeSpan AutoUpdateCheckDelay = TimeSpan.FromSeconds(30);
 
     private async Task ApplyHardwareProbeWhenDoneAsync(Task<HardwareCapabilityCache.Capabilities?> hardwareProbe)

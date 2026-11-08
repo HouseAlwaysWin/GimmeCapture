@@ -207,10 +207,20 @@ public sealed class AppBootstrapper : IAsyncDisposable
 
     /// <summary>
     /// Loads the capture overlay's code, and a pin's, while the app is idle (<see cref="ISnipWindowFactory.ScheduleWarmUp"/>),
-    /// ten seconds in so it stays clear of startup's own work.
+    /// after <see cref="CaptureOverlayWarmUpDelay"/>.
     /// </summary>
     public void ScheduleCaptureOverlayWarmUp() =>
-        _snipWindowFactory.Value.ScheduleWarmUp(_mainWindowViewModel.Value, TimeSpan.FromSeconds(10));
+        _snipWindowFactory.Value.ScheduleWarmUp(
+            _mainWindowViewModel.Value, CaptureOverlayWarmUpDelay(StartupTrace.IsTrayLaunch));
+
+    /// <summary>
+    /// Ten seconds in at a start to the tray, the sign-in's, so the warm-up stays clear of the start's own work and of
+    /// the sign-in's other programs. Three at a window launch, which the user started, the start's work done at its
+    /// first frame (about 0.9 s): the user's first capture after one came 5 and 8 s in (2026-11-07 and -08) and found
+    /// the overlay's code not loaded yet, 297-304 ms to open against about 95 once it was.
+    /// </summary>
+    internal static TimeSpan CaptureOverlayWarmUpDelay(bool trayLaunch) =>
+        trayLaunch ? TimeSpan.FromSeconds(10) : TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// A window nobody sees (1×1, transparent, off-screen) that gives the app a visible top level while the main window is

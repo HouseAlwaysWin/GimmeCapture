@@ -85,6 +85,10 @@
   117 ms an overlay took to open. The app now builds the next one while it is idle, a few seconds after an overlay
   closes and after the warm-up that follows the start, and a capture shows that one: about 30-55 ms sooner. The window
   waiting unseen holds about 3 MB.
+- **A capture soon after opening the app yourself opens as quickly as later ones.** The app prepares the capture
+  overlay ten seconds after it starts, to stay out of the way of a sign-in's busy start, and a capture before that
+  opened in about 0.3 s instead of 0.1. Opened by hand, which is often followed by a capture within seconds, it now
+  prepares the overlay after three; at sign-in it still waits ten.
 - **Going back to smart selection within a minute is instant.** Putting the tool down let go of its model at once,
   and taking it up again loaded the model (about 3 s) and read the picture (about 1.5 s) once more. A pin now keeps
   both for a minute after the tool is put down, as text recognition keeps its model for two, and lets them go then,

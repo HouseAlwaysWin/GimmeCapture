@@ -19,10 +19,10 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 21 entries (2026-11-08).
+- Since v0.74.0, `## Unreleased` holds 22 entries (2026-11-08).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+dfb0185e`, installed by hand on 2026-11-07 at 23:45 over
-  `0.74.0+0d51bfe9` (by hand, at 23:15), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+1a89f37b`, installed by hand on 2026-11-08 at 08:20 over
+  `0.74.0+dfb0185e` (by hand, 2026-11-07 23:45), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1250,6 +1250,12 @@ tool.
   Compress tab's first open runs, removed any segment dir without `state.json`, and `Save` writes it with an atomic
   replace, so a fresh dir is without one for a moment; tests that open the tab ran alongside. A dir without state is
   now removed only once nothing has been written in it for `StatelessGrace` (an hour). `CompressSegmentStoreTests`.
+- Done since batch 1 (2026-11-08): **the first capture after a window launch** (Snip overlay). Each time the user
+  started the app by hand they took a capture within seconds, before the overlay's warm-up at 10 s: 8 s in on 11-07
+  (304 ms to open: `window=115 viewModel=75 show=111`) and 5 s in on 11-08 (297 ms), against about 95 ms once warm.
+  The warm-up's delay is `CaptureOverlayWarmUpDelay`: still 10 s at a start to the tray, which is the sign-in's and
+  whose start-up list the warm-up's files join, and 3 s at a window launch, whose start is done at its first frame
+  (about 0.9 s); the window built ahead (`PreparedWindow`) follows 3 s after the warm-up. Not yet seen in the log.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
