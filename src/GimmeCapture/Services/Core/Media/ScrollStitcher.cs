@@ -58,6 +58,12 @@ internal static class ScrollStitcher
     private const int CoarseTargetRows = 256;
     private const int MaxRowStep = 8;
 
+    // FindFixedBands: a band of rows that stayed put while the content scrolled counts as an app's fixed bar only with
+    // at least this many rows in it that have an edge (a row's average B/G/R step from the row above, at least
+    // MinBandEvidenceWeight) and did not move with the content. Featureless rows match anything, so they prove nothing.
+    private const int MinBandEvidenceRows = 2;
+    private const double MinBandEvidenceWeight = 4.0;
+
     /// <summary>
     /// The signed vertical motion of the content between two frames.
     /// <list type="bullet">
@@ -84,12 +90,19 @@ internal static class ScrollStitcher
     /// Fraction of overlap rows allowed to be "changed" and still accept the alignment
     /// (0 = every row must match). Tolerates a static header/footer or a few re-rendered rows.
     /// </param>
+    /// <param name="expectedShift">
+    /// The shift the scrolling suggests (the last one measured: frames ~40 ms apart scroll at about the same speed).
+    /// When content repeated within the frames (the same sticker twice, lines of the same reply) makes several shifts
+    /// match about as well, the one nearest this is taken, if it is within <see cref="ExpectedShiftReach"/> of it,
+    /// instead of none.
+    /// </param>
     public static VerticalShift FindVerticalShift(
         SKBitmap previous,
         SKBitmap next,
         int minOverlapRows = 8,
         int ignoreRightColumns = 0,
-        double maxRowMismatchRatio = 0.0)
+        double maxRowMismatchRatio = 0.0,
+        int? expectedShift = null)
     {
         ArgumentNullException.ThrowIfNull(previous);
         ArgumentNullException.ThrowIfNull(next);
@@ -112,7 +125,7 @@ internal static class ScrollStitcher
         byte[] nextSig = RentRowSignatures(next, ignoreRightColumns, out _);
         try
         {
-            return FindVerticalShift(prevSig, nextSig, height, sampleCount, effectiveMin, clampedRatio);
+            return FindVerticalShift(prevSig, nextSig, height, sampleCount, effectiveMin, clampedRatio, expectedShift);
         }
         finally
         {
@@ -121,8 +134,13 @@ internal static class ScrollStitcher
         }
     }
 
+    private static bool AtRangeEnd(int shift, int maxShift) => maxShift >= ShiftSeparationRows && Math.Abs(shift) > maxShift - ShiftSeparationRows;
+
+    /// <summary>How far from the expected shift a shift picked among equals may be (see <c>expectedShift</c>).</summary>
+    internal static int ExpectedShiftReach(int expectedShift) => Math.Max(48, Math.Abs(expectedShift));
+
     private static VerticalShift FindVerticalShift(
-        byte[] prevSig, byte[] nextSig, int height, int sampleCount, int effectiveMin, double clampedRatio)
+        byte[] prevSig, byte[] nextSig, int height, int sampleCount, int effectiveMin, double clampedRatio, int? expectedShift)
     {
         if (sampleCount == 0)
         {
@@ -205,8 +223,10 @@ internal static class ScrollStitcher
             }
         }
 
-        if (!found || bestScore > MaxMatchSampleDiffRatio)
+        if (!found || bestScore > MaxMatchSampleDiffRatio || AtRangeEnd(bestShift, maxShift))
         {
+            // At the end of the range, the best may only be the slope toward a bigger shift than two frames this tall
+            // overlap enough to measure: a guess a few rows off would be stitched as it is.
             return new VerticalShift(0, false);
         }
 
@@ -227,12 +247,48 @@ internal static class ScrollStitcher
             }
         }
 
-        if (rivalScore != double.MaxValue && rivalScore - bestScore < AmbiguityMargin)
+        // As for a placement: an essentially exact overlap is trusted against a smaller margin.
+        double margin = bestScore < NearPerfectScore ? NearPerfectAmbiguityMargin : AmbiguityMargin;
+        if (rivalScore != double.MaxValue && rivalScore - bestScore < margin)
+        {
+            return expectedShift is int expected
+                ? PickNearExpected(scores, maxShift, bestScore, margin, expected)
+                : new VerticalShift(0, false);
+        }
+
+        return new VerticalShift(bestShift, true);
+    }
+
+    // Among the shifts scoring within `margin` of the best, the one nearest `expected`, settled on the lowest score
+    // right around it (a minimum is a few rows wide); not found when even that one is out of reach of the expectation.
+    private static VerticalShift PickNearExpected(double[] scores, int maxShift, double bestScore, double margin, int expected)
+    {
+        int nearest = int.MinValue;
+        for (int d = -maxShift; d <= maxShift; d++)
+        {
+            double score = scores[d + maxShift];
+            if (score != double.MaxValue && score - bestScore < margin
+                && (nearest == int.MinValue || Math.Abs(d - expected) < Math.Abs(nearest - expected)))
+            {
+                nearest = d;
+            }
+        }
+
+        if (nearest == int.MinValue || Math.Abs(nearest - expected) > ExpectedShiftReach(expected) || AtRangeEnd(nearest, maxShift))
         {
             return new VerticalShift(0, false);
         }
 
-        return new VerticalShift(bestShift, true);
+        int chosen = nearest;
+        for (int d = Math.Max(-maxShift, nearest - (ShiftSeparationRows - 1)); d <= Math.Min(maxShift, nearest + (ShiftSeparationRows - 1)); d++)
+        {
+            if (scores[d + maxShift] < scores[chosen + maxShift])
+            {
+                chosen = d;
+            }
+        }
+
+        return new VerticalShift(chosen, true);
     }
 
     /// <summary>
@@ -255,6 +311,89 @@ internal static class ScrollStitcher
         }
 
         return previous.Height - shift.Rows;
+    }
+
+    /// <summary>
+    /// The rows at the top and at the bottom of a frame that stay put while its content scrolls: an app's header bar,
+    /// its message box, a banner. Found from two frames between which the content moved <paramref name="shift"/> rows
+    /// (as <see cref="FindVerticalShift(SKBitmap,SKBitmap,int,int,double,int?)"/> reports it): a band runs from the edge
+    /// over the rows that are the same in both frames, and counts only if some of them have an edge and did not move
+    /// with the content. It may take in featureless rows of the content next to the bar, which costs nothing: such
+    /// rows look the same wherever they are, and the stitcher keeps the band's rows of the frames at the strip's two
+    /// ends. Each band is at most <paramref name="maxBandRows"/> rows.
+    /// </summary>
+    internal static (int Top, int Bottom) FindFixedBands(
+        SKBitmap previous, SKBitmap next, int shift, int ignoreRightColumns, int maxBandRows)
+    {
+        ArgumentNullException.ThrowIfNull(previous);
+        ArgumentNullException.ThrowIfNull(next);
+
+        int height = previous.Height;
+        if (shift == 0 || previous.Width != next.Width || height != next.Height || height <= 0 || maxBandRows <= 0)
+        {
+            return (0, 0);
+        }
+
+        byte[] prevSig = RentRowSignatures(previous, ignoreRightColumns, out int sampleCount);
+        byte[] nextSig = RentRowSignatures(next, ignoreRightColumns, out _);
+        try
+        {
+            if (sampleCount == 0)
+            {
+                return (0, 0);
+            }
+
+            double[] prevWeights = ComputeRowWeights(prevSig, height, sampleCount);
+            double[] nextWeights = ComputeRowWeights(nextSig, height, sampleCount);
+            int allowed = (int)(sampleCount * RowPixelMismatchTolerance);
+            int stride = sampleCount * 4;
+
+            // A bar is drawn the same in both frames: a row of it may differ in at most one sample of 32 (a caret).
+            // Rows of sparse text a scroll apart can differ in only a few, which the tolerance for content allows.
+            int allowedStill = sampleCount / 32;
+            bool Still(int row) =>
+                RowSampleDiffs(prevSig, row * stride, nextSig, row * stride, sampleCount) <= allowedStill;
+
+            bool Same(int prevRow, int nextRow) =>
+                RowSampleDiffs(prevSig, prevRow * stride, nextSig, nextRow * stride, sampleCount) <= allowed;
+
+            // A row that stayed put proves a fixed bar only if it has an edge and is not also where the content that
+            // scrolled would be: the previous frame's row `shift` further on (out of the frame = new content).
+            bool Fixed(int row)
+            {
+                if (Math.Max(prevWeights[row], nextWeights[row]) < MinBandEvidenceWeight)
+                {
+                    return false;
+                }
+
+                int scrolledFrom = row + shift;
+                return scrolledFrom < 0 || scrolledFrom >= height || !Same(scrolledFrom, row);
+            }
+
+            int Band(int edge, int step)
+            {
+                int rows = 0;
+                int evidence = 0;
+                for (int row = edge; rows < maxBandRows && row >= 0 && row < height && Still(row); row += step)
+                {
+                    if (Fixed(row))
+                    {
+                        evidence++;
+                    }
+
+                    rows++;
+                }
+
+                return evidence >= MinBandEvidenceRows ? rows : 0;
+            }
+
+            return (Band(0, 1), Band(height - 1, -1));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(prevSig);
+            ArrayPool<byte>.Shared.Return(nextSig);
+        }
     }
 
     /// <summary>The placement of a frame against the accumulated strip (see <see cref="AlignFrameToStrip"/>).</summary>
@@ -355,7 +494,8 @@ internal static class ScrollStitcher
         int minOverlapRows,
         int ignoreRightColumns,
         double maxRowMismatchRatio,
-        int searchMargin)
+        int searchMargin,
+        double maxScore = MaxMatchSampleDiffRatio)
     {
         bestScoreOut = double.MaxValue;
         ambiguityGapOut = double.MaxValue;
@@ -376,7 +516,109 @@ internal static class ScrollStitcher
             sampleCountOut = sampleCount;
             return AlignCore(
                 stripSig, stripFirstRowByteOffset, stripHeight, stripSampleCount, frameSig, frameH, sampleCount,
-                out bestScoreOut, out ambiguityGapOut, effectiveMin, clampedRatio, searchMargin);
+                out bestScoreOut, out ambiguityGapOut, effectiveMin, clampedRatio, searchMargin, maxScore);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(frameSig);
+        }
+    }
+
+    /// <summary>
+    /// Places <paramref name="frame"/> against the strip (signatures as for <see cref="AlignCore(byte[],int,int,int,SKBitmap,out double,out double,out int,int,int,double,int,double)"/>)
+    /// at the best offset within <paramref name="window"/> rows of <paramref name="predictedOffset"/>: where the motion
+    /// measured frame to frame says the frame must be. Nothing farther off is scored, so content repeated elsewhere in
+    /// the strip — a phrase, a sticker, a row of a list — cannot pull the frame there. Among offsets that score within
+    /// the ambiguity margin of the best, the one nearest the prediction wins: content that repeats within the window
+    /// (lines of the same phrase) is placed where the motion says rather than skipped. Not found when the best scores
+    /// worse than <paramref name="maxScore"/>, or when no offset in the window overlaps the strip by
+    /// <paramref name="minOverlapRows"/> (<paramref name="inReach"/> is then false: the view is past the strip's edge).
+    /// </summary>
+    internal static FrameAlignment AlignNear(
+        byte[] stripSig,
+        int stripFirstRowByteOffset,
+        int stripHeight,
+        int stripSampleCount,
+        SKBitmap frame,
+        int predictedOffset,
+        int window,
+        out double bestScoreOut,
+        out bool inReach,
+        int minOverlapRows,
+        int ignoreRightColumns,
+        double maxRowMismatchRatio,
+        double maxScore)
+    {
+        bestScoreOut = double.MaxValue;
+        inReach = false;
+
+        int frameH = frame.Height;
+        if (frameH <= 0 || stripHeight <= 0 || frame.Width <= 0)
+        {
+            return new FrameAlignment(0, false);
+        }
+
+        int effectiveMin = Math.Clamp(minOverlapRows, 1, Math.Min(frameH, stripHeight));
+        int lo = -(frameH - effectiveMin);
+        int hi = stripHeight - effectiveMin;
+        if (predictedOffset < lo || predictedOffset > hi)
+        {
+            return new FrameAlignment(0, false); // the view is past the strip's edge: nothing to meet it there
+        }
+
+        window = Math.Max(0, window);
+        int from = Math.Max(predictedOffset - window, lo);
+        int to = Math.Min(predictedOffset + window, hi);
+        inReach = true;
+        byte[] frameSig = RentRowSignatures(frame, ignoreRightColumns, out int sampleCount);
+        try
+        {
+            if (sampleCount == 0 || sampleCount != stripSampleCount)
+            {
+                return new FrameAlignment(0, false);
+            }
+
+            List<(int Offset, double Score)> scored = ScoreOffsets(
+                stripSig, stripFirstRowByteOffset, stripHeight, frameSig, frameH, sampleCount,
+                effectiveMin, Math.Clamp(maxRowMismatchRatio, 0.0, 1.0), from, to);
+
+            double bestScore = double.MaxValue;
+            foreach ((_, double score) in scored)
+            {
+                bestScore = Math.Min(bestScore, score);
+            }
+
+            bestScoreOut = bestScore;
+            if (bestScore == double.MaxValue || bestScore > maxScore)
+            {
+                return new FrameAlignment(0, false);
+            }
+
+            // A best score on an end of the range that the strip's edge cut short may only be the slope down to a
+            // better placement past that edge, one the frame does not overlap enough to score.
+            foreach ((int offset, double score) in scored)
+            {
+                if (score == bestScore
+                    && ((offset == from && from > predictedOffset - window) || (offset == to && to < predictedOffset + window)))
+                {
+                    return new FrameAlignment(0, false);
+                }
+            }
+
+            double margin = bestScore < NearPerfectScore ? NearPerfectAmbiguityMargin : AmbiguityMargin;
+            int chosen = 0;
+            int chosenDistance = int.MaxValue;
+            foreach ((int offset, double score) in scored)
+            {
+                int distance = Math.Abs(offset - predictedOffset);
+                if (score - bestScore < margin && distance < chosenDistance)
+                {
+                    chosen = offset;
+                    chosenDistance = distance;
+                }
+            }
+
+            return new FrameAlignment(chosen, true);
         }
         finally
         {
@@ -396,7 +638,8 @@ internal static class ScrollStitcher
         out double ambiguityGapOut,
         int effectiveMin,
         double clampedRatio,
-        int searchMargin)
+        int searchMargin,
+        double maxScore)
     {
         bestScoreOut = double.MaxValue;
         ambiguityGapOut = double.MaxValue;
@@ -404,15 +647,6 @@ internal static class ScrollStitcher
         {
             return new FrameAlignment(0, false);
         }
-
-        double[] frameWeights = ComputeRowWeights(frameSig, frameH, sampleCount);
-        int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
-        int stride = sampleCount * 4;
-
-        // Score on every rowStep-th row so the per-frame cost stays bounded on tall regions
-        // (~O(frameH^2 / rowStep)). Offsets are still searched at full pixel resolution, so the
-        // chosen placement — and therefore the stitch seam — remains pixel-accurate.
-        int rowStep = Math.Clamp(frameH / CoarseTargetRows, 1, MaxRowStep);
 
         int lo = -(frameH - effectiveMin); // frame overhangs the top
         int hi = stripHeight - effectiveMin; // frame overhangs the bottom
@@ -426,68 +660,21 @@ internal static class ScrollStitcher
             ? fullRange
             : Math.Max(searchMargin, (fullRange + 1) / 2);
 
-        // The scored offsets are the two edge windows { o - lo <= margin } ∪ { hi - o <= margin }.
-        // Collected in ascending-offset order so the winner/rival selection below matches the old
-        // ascending scan exactly (strict "<" => first wins on ties).
-        var scored = new List<(int Offset, double Score)>();
-
-        void ScoreRange(int from, int to)
-        {
-            for (int o = from; o <= to; o++)
-            {
-                int startR = Math.Max(0, -o);
-                int endR = Math.Min(frameH, stripHeight - o);
-                int overlap = endR - startR;
-                if (overlap < effectiveMin)
-                {
-                    continue;
-                }
-
-                int sampledRows = (overlap + rowStep - 1) / rowStep;
-                int allowedRowMismatches = (int)(sampledRows * clampedRatio);
-                double weightedDiff = 0;
-                double weightSum = 0;
-                int rowMismatches = 0;
-                bool gated = false;
-                for (int r = startR; r < endR; r += rowStep)
-                {
-                    int diffs = RowSampleDiffs(
-                        frameSig, r * stride,
-                        stripSig, stripFirstRowByteOffset + ((o + r) * stride),
-                        sampleCount);
-
-                    double w = frameWeights[r];
-                    weightedDiff += diffs * w;
-                    weightSum += w;
-
-                    if (diffs > allowedRowSampleDiffs)
-                    {
-                        rowMismatches++;
-                        if (rowMismatches > allowedRowMismatches)
-                        {
-                            gated = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (!gated && weightSum > 1e-9)
-                {
-                    scored.Add((o, weightedDiff / (weightSum * sampleCount)));
-                }
-            }
-        }
-
+        // The scored offsets are the two edge windows { o - lo <= margin } ∪ { hi - o <= margin }, collected in
+        // ascending-offset order so the winner/rival selection below matches the old ascending scan exactly (strict
+        // "<" => first wins on ties).
+        List<(int Offset, double Score)> scored;
         int topWindowHi = Math.Min(lo + margin, hi);
         int bottomWindowLo = Math.Max(hi - margin, lo);
         if (bottomWindowLo <= topWindowHi + 1)
         {
-            ScoreRange(lo, hi); // windows meet/overlap → one contiguous range
+            // windows meet/overlap → one contiguous range
+            scored = ScoreOffsets(stripSig, stripFirstRowByteOffset, stripHeight, frameSig, frameH, sampleCount, effectiveMin, clampedRatio, lo, hi);
         }
         else
         {
-            ScoreRange(lo, topWindowHi);
-            ScoreRange(bottomWindowLo, hi);
+            scored = ScoreOffsets(stripSig, stripFirstRowByteOffset, stripHeight, frameSig, frameH, sampleCount, effectiveMin, clampedRatio, lo, topWindowHi);
+            scored.AddRange(ScoreOffsets(stripSig, stripFirstRowByteOffset, stripHeight, frameSig, frameH, sampleCount, effectiveMin, clampedRatio, bottomWindowLo, hi));
         }
 
         double bestScore = double.MaxValue;
@@ -505,7 +692,7 @@ internal static class ScrollStitcher
 
         bestScoreOut = bestScore;
 
-        if (!found || bestScore > MaxMatchSampleDiffRatio)
+        if (!found || bestScore > maxScore)
         {
             return new FrameAlignment(0, false);
         }
@@ -538,6 +725,81 @@ internal static class ScrollStitcher
         }
 
         return new FrameAlignment(bestOffset, true);
+    }
+
+    /// <summary>
+    /// Scores each offset in [<paramref name="from"/>, <paramref name="to"/>] at which the frame overlaps the strip by at
+    /// least <paramref name="effectiveMin"/> rows: the weighted share of sampled pixels that differ (lower is better),
+    /// in ascending offset order. Offsets whose overlap has more changed rows than <paramref name="clampedRatio"/>
+    /// allows, or no textured row at all, are left out.
+    /// </summary>
+    private static List<(int Offset, double Score)> ScoreOffsets(
+        byte[] stripSig,
+        int stripFirstRowByteOffset,
+        int stripHeight,
+        byte[] frameSig,
+        int frameH,
+        int sampleCount,
+        int effectiveMin,
+        double clampedRatio,
+        int from,
+        int to)
+    {
+        var scored = new List<(int Offset, double Score)>(Math.Max(0, to - from + 1));
+        double[] frameWeights = ComputeRowWeights(frameSig, frameH, sampleCount);
+        int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
+        int stride = sampleCount * 4;
+
+        // Score on every rowStep-th row so the per-frame cost stays bounded on tall regions
+        // (~O(frameH^2 / rowStep)). Offsets are still searched at full pixel resolution, so the
+        // chosen placement — and therefore the stitch seam — remains pixel-accurate.
+        int rowStep = Math.Clamp(frameH / CoarseTargetRows, 1, MaxRowStep);
+
+        for (int o = from; o <= to; o++)
+        {
+            int startR = Math.Max(0, -o);
+            int endR = Math.Min(frameH, stripHeight - o);
+            int overlap = endR - startR;
+            if (overlap < effectiveMin)
+            {
+                continue;
+            }
+
+            int sampledRows = (overlap + rowStep - 1) / rowStep;
+            int allowedRowMismatches = (int)(sampledRows * clampedRatio);
+            double weightedDiff = 0;
+            double weightSum = 0;
+            int rowMismatches = 0;
+            bool gated = false;
+            for (int r = startR; r < endR; r += rowStep)
+            {
+                int diffs = RowSampleDiffs(
+                    frameSig, r * stride,
+                    stripSig, stripFirstRowByteOffset + ((o + r) * stride),
+                    sampleCount);
+
+                double w = frameWeights[r];
+                weightedDiff += diffs * w;
+                weightSum += w;
+
+                if (diffs > allowedRowSampleDiffs)
+                {
+                    rowMismatches++;
+                    if (rowMismatches > allowedRowMismatches)
+                    {
+                        gated = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!gated && weightSum > 1e-9)
+            {
+                scored.Add((o, weightedDiff / (weightSum * sampleCount)));
+            }
+        }
+
+        return scored;
     }
 
     /// <summary>

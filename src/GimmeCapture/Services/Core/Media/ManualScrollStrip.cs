@@ -85,6 +85,39 @@ internal sealed class ManualScrollStrip : IDisposable
             out bestScore, out ambiguityGap, out sampleCount,
             minOverlapRows, _ignoreRight, maxRowMismatchRatio, searchMargin);
 
+    /// <summary>
+    /// <see cref="Align(SKBitmap,int,double,int,out double,out double,out int)"/> accepting only a best score of at most
+    /// <paramref name="maxScore"/>.
+    /// </summary>
+    public ScrollStitcher.FrameAlignment Align(
+        SKBitmap frame,
+        int minOverlapRows,
+        double maxRowMismatchRatio,
+        double maxScore,
+        out double bestScore,
+        out double ambiguityGap)
+        => ScrollStitcher.AlignCore(
+            _sig, _top * _stride, _height, _sampleCount, frame,
+            out bestScore, out ambiguityGap, out _,
+            minOverlapRows, _ignoreRight, maxRowMismatchRatio, searchMargin: 0, maxScore);
+
+    /// <summary>
+    /// Places <paramref name="frame"/> within <paramref name="window"/> rows of <paramref name="predictedOffset"/> only
+    /// (see <see cref="ScrollStitcher.AlignNear"/>), in the same strip coordinates as <see cref="Align(SKBitmap,int,double,int,out double,out double,out int)"/>.
+    /// </summary>
+    public ScrollStitcher.FrameAlignment AlignNear(
+        SKBitmap frame,
+        int predictedOffset,
+        int window,
+        int minOverlapRows,
+        double maxRowMismatchRatio,
+        double maxScore,
+        out double bestScore,
+        out bool inReach)
+        => ScrollStitcher.AlignNear(
+            _sig, _top * _stride, _height, _sampleCount, frame, predictedOffset, window,
+            out bestScore, out inReach, minOverlapRows, _ignoreRight, maxRowMismatchRatio, maxScore);
+
     /// <summary>Appends the bottom <paramref name="newRows"/> rows of <paramref name="frame"/> (new content below).</summary>
     public void Append(SKBitmap frame, int newRows)
     {
@@ -121,6 +154,21 @@ internal sealed class ManualScrollStrip : IDisposable
         _height += newRows;
     }
 
+    /// <summary>Takes <paramref name="rows"/> rows back off the top (at least one row stays).</summary>
+    public void TrimTop(int rows)
+    {
+        rows = Math.Clamp(rows, 0, Math.Max(0, _height - 1));
+        _top += rows;
+        _height -= rows;
+    }
+
+    /// <summary>Takes <paramref name="rows"/> rows back off the bottom (at least one row stays).</summary>
+    public void TrimBottom(int rows)
+    {
+        rows = Math.Clamp(rows, 0, Math.Max(0, _height - 1));
+        _height -= rows;
+    }
+
     /// <summary>Produces the final strip as a fresh, exactly logical-height bitmap (one crop-copy).</summary>
     public SKBitmap ToLogicalBitmap()
     {
@@ -131,10 +179,22 @@ internal sealed class ManualScrollStrip : IDisposable
         }
 
         using var canvas = new SKCanvas(output);
-        var src = new SKRect(0, _top, _width, _top + _height);
-        var dst = new SKRect(0, 0, _width, _height);
-        canvas.DrawBitmap(_buffer, src, dst);
+        DrawInto(canvas, 0);
         return output;
+    }
+
+    /// <summary>Draws the strip at its own size onto <paramref name="canvas"/>, its first row at <paramref name="top"/>.</summary>
+    public void DrawInto(SKCanvas canvas, int top)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        if (_height <= 0 || _width <= 0)
+        {
+            return;
+        }
+
+        var src = new SKRect(0, _top, _width, _top + _height);
+        var dst = new SKRect(0, top, _width, top + _height);
+        canvas.DrawBitmap(_buffer, src, dst);
     }
 
     /// <summary>

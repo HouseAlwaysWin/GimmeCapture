@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 22 entries (2026-11-08).
+- Since v0.74.0, `## Unreleased` holds 27 entries (2026-11-08).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+1a89f37b`, installed by hand on 2026-11-08 at 08:20 over
   `0.74.0+dfb0185e` (by hand, 2026-11-07 23:45), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1256,6 +1256,26 @@ tool.
   The warm-up's delay is `CaptureOverlayWarmUpDelay`: still 10 s at a start to the tray, which is the sign-in's and
   whose start-up list the warm-up's files join, and 3 s at a window launch, whose start is done at its first frame
   (about 0.9 s); the window built ahead (`PreparedWindow`) follows 3 s after the warm-up. Not yet seen in the log.
+- Done since batch 1 (2026-11-08, the user: scrolling captures still often come out with parts repeated): **manual
+  scrolling capture's stitching** (Snip overlay). The last week of logs holds no scrolling capture, so a simulation
+  stands in for one: `ScrollCaptureSimulation` draws a chat page (messages, repeated replies and stickers, images),
+  scrolls a 500-row view over it the way smooth wheel scrolling moves, and draws what apps keep in place over the
+  content (a header bar, a message box, one that appears partway, LINE's floating date, a hovered message, re-render
+  noise); every row the stitcher keeps is traced back to its page row. `ScrollCaptureSimulationProbeTests` (`SCROLL_SIM=old`
+  runs the old stitching beside it): the old one stopped growing under a fixed bar (535 to 1,248 of 4,900 rows),
+  repeated a message box (188 rows of bars for 80), stopped at 732 rows scrolling up under the date pill, and kept 22
+  rows twice after a flick past the end and back. `ManualScrollStitcher` replaces `ApplyStitchFrame`'s logic and
+  `ManualScrollMotionGate`: each frame is looked for only near where the shift measured from the frame before puts it
+  (`ScrollStitcher.AlignNear`); the rows that stay put at the top and bottom are found from frames that moved
+  (`FindFixedBands`, also mid-capture, taking back what the frame before added under a bar that just appeared) and kept
+  out of the strip with 48 logical pixels of edge guard, the result showing them once from the frames at the strip's
+  ends; a match found by searching the whole strip is used once the frame before (by the shift back) or after agrees;
+  an ambiguous shift between frames is settled by the last one (scrolling keeps its speed for 40 ms). All 25
+  scenarios now keep every row once; 440 and 700 rows a frame, past what the window can follow, keep only the first
+  frame (the old one kept up with 440, its window the whole frame, and stitched 700 out of place). Each frame scores a
+  few dozen placements instead of the whole strip: runs took 17-21% of the old time. A capture now ends with
+  `ManualScroll.Finish frames= placed= unguided= tentative= bands=top/bottom bandChanges=`. Not yet seen on a real
+  Discord or LINE capture.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
@@ -1682,9 +1702,10 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 ### Snip overlay
 
 - **A manual scroll keeps grabbing when nothing scrolls** (S). The producer grabs region frames back to back
-  (`ScrollingManual.cs` `ManualProducerLoopAsync`) and the consumer aligns every one; the signatures are pooled now
-  (Status). Skipping a frame identical to the last, or pacing the grabs while nothing moves, would idle it, at the risk
-  of a fast scroll's first frames; the user's logs show no scrolling capture.
+  (`ScrollingManual.cs` `ManualProducerLoopAsync`) and the consumer aligns every one; the signatures are pooled and a
+  frame is now matched only near where the motion puts it (Status). Skipping a frame identical to the last, or pacing
+  the grabs while nothing moves, would idle it, at the risk of a fast scroll's first frames. The user does take
+  scrolling captures (2026-11-08), though the last week's logs hold none.
 
 ### Idle, start-up and memory
 

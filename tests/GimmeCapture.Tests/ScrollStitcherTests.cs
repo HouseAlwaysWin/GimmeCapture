@@ -474,6 +474,148 @@ public class ScrollStitcherTests
         Assert.Equal(ColorForRow(12), result.GetPixel(12, 5));  // interior column preserved
     }
 
+    // A frame of unique rows from sourceOffset, with `bar` rows of a textured, fixed bar drawn over its top or bottom: what
+    // a window with a header bar or a message box shows while its content scrolls.
+    private static SKBitmap MakeFrameWithBar(int width, int height, int sourceOffset, int bar, bool atTop)
+    {
+        SKBitmap bmp = MakeUniqueFrame(width, height, sourceOffset);
+        int first = atTop ? 0 : height - bar;
+        for (int y = first; y < first + bar; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                // Slanted marks: every row has edges and differs from the bar's other rows (they repeat every 11
+                // rows), the same in every frame.
+                bool dark = ((x * 7) + ((y - first) * 13)) % 11 < 4;
+                byte v = dark ? (byte)40 : (byte)200;
+                bmp.SetPixel(x, y, new SKColor(v, v, (byte)(255 - v), 255));
+            }
+        }
+
+        return bmp;
+    }
+
+    [Fact]
+    public void FindFixedBands_FindsABarAtTheTop_ThatStaysPutWhileTheContentScrolls()
+    {
+        using var previous = MakeFrameWithBar(64, 200, sourceOffset: 0, bar: 30, atTop: true);
+        using var next = MakeFrameWithBar(64, 200, sourceOffset: 20, bar: 30, atTop: true);
+
+        (int top, int bottom) = ScrollStitcher.FindFixedBands(previous, next, shift: 20, ignoreRightColumns: 0, maxBandRows: 60);
+
+        Assert.Equal(30, top);
+        Assert.Equal(0, bottom);
+    }
+
+    [Fact]
+    public void FindFixedBands_FindsABarAtTheBottom_ScrollingEitherWay()
+    {
+        using var lower = MakeFrameWithBar(64, 200, sourceOffset: 40, bar: 24, atTop: false);
+        using var upper = MakeFrameWithBar(64, 200, sourceOffset: 10, bar: 24, atTop: false);
+
+        Assert.Equal((0, 24), ScrollStitcher.FindFixedBands(upper, lower, shift: 30, ignoreRightColumns: 0, maxBandRows: 60));
+        Assert.Equal((0, 24), ScrollStitcher.FindFixedBands(lower, upper, shift: -30, ignoreRightColumns: 0, maxBandRows: 60));
+    }
+
+    [Fact]
+    public void FindFixedBands_FindsNothing_WhenEverythingScrolls()
+    {
+        using var previous = MakeUniqueFrame(64, 200, sourceOffset: 0);
+        using var next = MakeUniqueFrame(64, 200, sourceOffset: 20);
+
+        Assert.Equal((0, 0), ScrollStitcher.FindFixedBands(previous, next, shift: 20, ignoreRightColumns: 0, maxBandRows: 60));
+    }
+
+    // Featureless rows look the same before and after any scroll, so on their own they prove no bar is there.
+    [Fact]
+    public void FindFixedBands_TakesNoBand_FromFeaturelessRowsAlone()
+    {
+        using var previous = MakeUniqueFrame(64, 200, sourceOffset: 0);
+        using var next = MakeUniqueFrame(64, 200, sourceOffset: 20);
+        foreach (SKBitmap frame in new[] { previous, next })
+        {
+            for (int y = 0; y < 40; y++)
+            {
+                for (int x = 0; x < 64; x++)
+                {
+                    frame.SetPixel(x, y, new SKColor(30, 30, 30, 255));
+                }
+            }
+        }
+
+        Assert.Equal((0, 0), ScrollStitcher.FindFixedBands(previous, next, shift: 20, ignoreRightColumns: 0, maxBandRows: 60));
+    }
+
+    [Fact]
+    public void FindFixedBands_KeepsABandWithinItsLimit()
+    {
+        using var previous = MakeFrameWithBar(64, 200, sourceOffset: 0, bar: 90, atTop: true);
+        using var next = MakeFrameWithBar(64, 200, sourceOffset: 20, bar: 90, atTop: true);
+
+        Assert.Equal(60, ScrollStitcher.FindFixedBands(previous, next, shift: 20, ignoreRightColumns: 0, maxBandRows: 60).Top);
+    }
+
+    // A strip whose rows 300-399 repeat rows 50-149: a frame showing those rows matches both places exactly.
+    private static SKBitmap MakeStripWithRepeat()
+    {
+        var bmp = new SKBitmap(new SKImageInfo(64, 400, SKColorType.Bgra8888, SKAlphaType.Premul));
+        for (int y = 0; y < 400; y++)
+        {
+            SKColor color = UniqueColorForRow(y >= 300 ? y - 250 : y);
+            for (int x = 0; x < 64; x++)
+            {
+                bmp.SetPixel(x, y, color);
+            }
+        }
+
+        return bmp;
+    }
+
+    [Fact]
+    public void AlignNear_PlacesAFrameWhereThePredictionIs_ThoughTheSameContentMatchesElsewhere()
+    {
+        using SKBitmap stripBitmap = MakeStripWithRepeat();
+        using var strip = new ManualScrollStrip(stripBitmap, ignoreRightColumns: 0);
+        using var frame = MakeUniqueFrame(64, 100, sourceOffset: 50);
+
+        // Searching the whole strip cannot tell the two places apart and gives up.
+        Assert.False(strip.Align(frame, 8, 0.35, maxScore: 0.5, out _, out _).Found);
+
+        ScrollStitcher.FrameAlignment nearRepeat = strip.AlignNear(frame, 302, 10, 8, 0.35, 0.5, out _, out bool inReach);
+        ScrollStitcher.FrameAlignment nearFirst = strip.AlignNear(frame, 47, 10, 8, 0.35, 0.5, out _, out _);
+
+        Assert.True(inReach);
+        Assert.Equal((300, true), (nearRepeat.Offset, nearRepeat.Found));
+        Assert.Equal((50, true), (nearFirst.Offset, nearFirst.Found));
+    }
+
+    [Fact]
+    public void AlignNear_DoesNotPlaceAFrame_WhereItDoesNotMatch()
+    {
+        using var stripBitmap = MakeUniqueFrame(64, 400, sourceOffset: 0);
+        using var strip = new ManualScrollStrip(stripBitmap, ignoreRightColumns: 0);
+        using var frame = MakeUniqueFrame(64, 100, sourceOffset: 150);
+
+        ScrollStitcher.FrameAlignment wrong = strip.AlignNear(frame, 60, 10, 8, 0.35, 0.5, out _, out bool inReach);
+
+        Assert.True(inReach);
+        Assert.False(wrong.Found);
+    }
+
+    // Past the strip's edge there is nothing to meet: not found, and not in reach (the view has run ahead of the strip).
+    [Fact]
+    public void AlignNear_PastTheStripsEdge_IsOutOfReach()
+    {
+        using var stripBitmap = MakeUniqueFrame(64, 400, sourceOffset: 0);
+        using var strip = new ManualScrollStrip(stripBitmap, ignoreRightColumns: 0);
+        using var frame = MakeUniqueFrame(64, 100, sourceOffset: 600);
+
+        ScrollStitcher.FrameAlignment beyond = strip.AlignNear(frame, 600, 10, 8, 0.35, 0.5, out _, out bool inReach);
+
+        Assert.False(beyond.Found);
+        Assert.False(inReach);
+    }
+
     // A bounded search scores offsets near each edge. Once the strip grows past ~2x the frame height
     // those two windows stop meeting, and an alignment landing between them used to be scored by
     // NOTHING — reported as "no match" even though it was the correct placement. A real scrolling

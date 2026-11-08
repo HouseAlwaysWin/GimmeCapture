@@ -19,12 +19,13 @@ namespace GimmeCapture.ViewModels.Main;
 // long pin); Esc cancels.
 public partial class SnipWindowViewModel
 {
-    // The seed / detection-phase strip (a plain bitmap) BEFORE any frame has stitched. Axis detection and
-    // its 90° rotations run on this. On the first stitch it is promoted into _manualStrip (below) and nulled.
+    // The seed (a plain bitmap) BEFORE any frame has stitched. Axis detection and its 90° rotations run on
+    // this. On the first stitch it is handed to _manualStitcher (below) and nulled.
     private SKBitmap? _manualAccumulated;
-    // The growing accumulated strip once stitching starts — keeps a long capture O(n) (cached signatures +
-    // geometric-capacity growth) instead of the old O(n²) per-frame full-strip resample + copy.
-    private ManualScrollStrip? _manualStrip;
+    // Places each frame and grows the strip once the axis is known (ManualScrollStitcher: follows the motion
+    // frame to frame and keeps an app's fixed bars out of the strip).
+    private ManualScrollStitcher? _manualStitcher;
+    // The last frame while the axis is still being detected; the stitcher keeps its own after that.
     private SKBitmap? _manualPrevFrame;
     private bool _manualScrollActive;
     private bool _manualFinishing;
@@ -43,6 +44,10 @@ public partial class SnipWindowViewModel
     private int _manualMaxHeightV, _manualMaxHeightH;
     private int _manualMinOverlapV, _manualMinOverlapH;
     private int _manualIgnoreRightV, _manualIgnoreRightH;
+
+    // Rows next to each edge (physical px, either axis) kept out of the strip until the content has scrolled past
+    // them: where apps float a date pill or a "jump to present" bar (ManualScrollStitcher.EdgeGuardRows).
+    private int _manualEdgeGuard;
 
     // null = scroll axis not yet detected; false = vertical; true = horizontal. While null, each
     // frame is tested against both hypotheses and the axis locks to whichever first shows real
@@ -91,14 +96,6 @@ public partial class SnipWindowViewModel
     private int _manualAlignFailStreak;
     private bool _manualStallSignaled;
 
-    // Motion-consistency state (see ManualScrollMotionGate): frame-to-frame shift accumulated since the last
-    // accepted placement, whether every shift in that run was measurable, the strip offset of the last
-    // accepted frame (current strip coords), and how many candidates in a row the gate has vetoed.
-    private long _manualMotionAccum;
-    private bool _manualMotionValid;
-    private int _manualMotionVetoStreak;
-    private int _manualLastStripOffset;
-
     /// <summary>
     /// Publishes the latest downscaled thumbnail of the growing strip to the live preview window. Posted
     /// from the consumer thread (throttled) so the user can watch stitching progress and catch a
@@ -123,7 +120,7 @@ public partial class SnipWindowViewModel
     // copy with no UI-thread affinity, so only the final assignment is marshalled onto the UI thread.
     private void PublishManualScrollPreview()
     {
-        ManualScrollStrip? strip = _manualStrip;
+        ManualScrollStitcher? strip = _manualStitcher;
         if (strip == null || UpdateScrollingPreviewAction == null)
         {
             return;
@@ -174,6 +171,7 @@ public partial class SnipWindowViewModel
         int physW = (int)(SelectionRect.Width * scaling);
         int ignoreBand = (int)(180 * scaling);
         int ignoreMin = (int)(24 * scaling);
+        _manualEdgeGuard = (int)(48 * scaling);
 
         // Vertical hypothesis: scroll axis = height, cross-axis (right-edge exclusion) = width.
         // The exclusion drops the dynamic right-side region (Discord's hover reaction toolbar,
@@ -255,10 +253,6 @@ public partial class SnipWindowViewModel
         SyncSurfaceActivity();
         _manualAlignFailStreak = 0;
         _manualStallSignaled = false;
-        _manualMotionAccum = 0;
-        _manualMotionValid = true;
-        _manualMotionVetoStreak = 0;
-        _manualLastStripOffset = 0; // the seed frame sits at strip offset 0
         _manualPreviewThrottle.Reset(); // not started => the first grow publishes a thumbnail immediately
 
         // DIAGNOSTIC (temporary): records the resolved direction, region/strip dims and the active
@@ -351,9 +345,9 @@ public partial class SnipWindowViewModel
             {
                 try
                 {
-                    // Valid state = an anchor plus a strip: the seed bitmap before the first stitch, or the
-                    // promoted _manualStrip after it (ApplyStitchFrame nulls _manualAccumulated on promotion).
-                    if (_manualPrevFrame == null || (_manualAccumulated == null && _manualStrip == null))
+                    // Valid state = the stitcher, or before the first stitch the seed bitmap plus an anchor
+                    // (ApplyStitchFrame hands both over on the first stitch).
+                    if (_manualStitcher == null && (_manualPrevFrame == null || _manualAccumulated == null))
                     {
                         frame.Dispose();
                         continue;
@@ -368,7 +362,7 @@ public partial class SnipWindowViewModel
 
                     if (grew)
                     {
-                        int newHeight = _manualStrip!.Height; // grew => the strip has been promoted
+                        int newHeight = _manualStitcher!.Height; // grew => the stitcher has started
                         Dispatcher.UIThread.Post(() => UpdateScrollingHintAction?.Invoke(newHeight));
                         PublishManualScrollPreview();
 
@@ -382,7 +376,7 @@ public partial class SnipWindowViewModel
                 catch (Exception ex)
                 {
                     AppLog.Warning("ManualScroll.Stitch", ex);
-                    if (!ReferenceEquals(frame, _manualPrevFrame))
+                    if (!ReferenceEquals(frame, _manualPrevFrame) && _manualStitcher?.Holds(frame) != true)
                     {
                         frame.Dispose();
                     }
@@ -406,83 +400,32 @@ public partial class SnipWindowViewModel
         }
     }
 
-    // Aligns a stitch-space frame against the real edges of the accumulated strip and only ever
-    // extends by the validated overlap. We NEVER append content that doesn't overlap the strip, so
-    // the same content can never be appended twice (no duplication, no runaway jumps). A frame that
-    // doesn't overlap (a fast flick past, or a transient mismatch) is simply skipped; the anchor
-    // still advances, so capture resumes as soon as the view overlaps the strip edge again. The
-    // frame's ownership always moves into _manualPrevFrame. Returns whether the strip grew.
+    // Hands a stitch-space frame to the stitcher, which places it where the motion followed frame to frame
+    // says it is and grows the strip by what it adds (ManualScrollStitcher). A frame that cannot be placed (a
+    // fast flick past the strip's edge, a transient mismatch) is skipped; the motion keeps following the view,
+    // so capture resumes as soon as it meets the strip again. The frame's ownership moves into the stitcher.
+    // Returns whether the strip grew.
     private bool ApplyStitchFrame(SKBitmap stitchFrame)
     {
-        // Promote the seed bitmap into the growable strip on the first stitch. Axis detection + its 90°
-        // rotations run before this on the plain _manualAccumulated bitmap; from here the strip owns the pixels.
-        if (_manualStrip == null)
+        // Start the stitcher on the first stitch. Axis detection + its 90° rotations run before this on the
+        // plain _manualAccumulated bitmap and _manualPrevFrame; from here the stitcher keeps its own.
+        if (_manualStitcher == null)
         {
-            _manualStrip = new ManualScrollStrip(_manualAccumulated!, _manualIgnoreRight);
+            _manualStitcher = new ManualScrollStitcher(
+                _manualAccumulated!, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, _manualEdgeGuard);
             _manualAccumulated!.Dispose();
             _manualAccumulated = null;
+            _manualPrevFrame?.Dispose();
+            _manualPrevFrame = null;
         }
 
-        bool grew = false;
-        int height = stitchFrame.Height;
+        ManualScrollStitcher stitcher = _manualStitcher;
+        int frameWidth = stitchFrame.Width;
+        int frameHeight = stitchFrame.Height;
+        ManualScrollStep step = stitcher.Add(stitchFrame);
 
-        // Motion tracking: consecutive frames (40 ms apart) overlap almost entirely, so their relative shift
-        // is cheap and nearly unambiguous. Accumulated since the last ACCEPTED placement, it predicts where
-        // the next placement must land — the veto below uses it to reject "excellent-looking" strip matches
-        // at physically impossible positions (repeated page content matching far away; see
-        // ManualScrollMotionGate). An unmeasurable shift invalidates the prediction until the next accept.
-        ScrollStitcher.VerticalShift frameShift = ScrollStitcher.FindVerticalShift(
-            _manualPrevFrame!, stitchFrame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
-        if (frameShift.Found)
+        if (step.Placed)
         {
-            _manualMotionAccum += frameShift.Rows;
-        }
-        else
-        {
-            _manualMotionValid = false;
-        }
-
-        ScrollStitcher.FrameAlignment align = _manualStrip.Align(
-            stitchFrame, _manualMinOverlap, ManualRowMismatchTolerance, height,
-            out double diagBestScore, out double diagAmbiguityGap, out int diagSampleCount);
-
-        bool motionVetoed = false;
-        if (align.Found && ManualScrollMotionGate.ShouldVeto(
-                _manualMotionValid, _manualMotionAccum, _manualLastStripOffset, align.Offset, height))
-        {
-            // Self-heal: if the prediction keeps vetoing real matches (its own drift), stop trusting it
-            // rather than locking the capture out; the strip matcher then decides alone, as before.
-            motionVetoed = true;
-            _manualMotionVetoStreak++;
-            if (_manualMotionVetoStreak >= ManualScrollMotionGate.MaxConsecutiveVetoes)
-            {
-                _manualMotionValid = false;
-            }
-        }
-
-        if (align.Found && !motionVetoed)
-        {
-            int stripH = _manualStrip.Height;
-            if (align.Offset < 0)
-            {
-                // Frame overhangs the top: prepend the new head rows.
-                _manualStrip.Prepend(stitchFrame, -align.Offset);
-                grew = true;
-            }
-            else if (align.Offset + height > stripH)
-            {
-                // Frame overhangs the bottom: append the frame rows past the strip's bottom.
-                _manualStrip.Append(stitchFrame, align.Offset + height - stripH);
-                grew = true;
-            }
-            // else: frame lies fully inside the strip (scrolled back) — nothing new.
-
-            // A prepend rebases strip coordinates: the just-placed frame is now at offset 0.
-            _manualLastStripOffset = align.Offset < 0 ? 0 : align.Offset;
-            _manualMotionAccum = 0;
-            _manualMotionValid = true;
-            _manualMotionVetoStreak = 0;
-
             _manualAlignFailStreak = 0;
             if (_manualStallSignaled)
             {
@@ -501,26 +444,26 @@ public partial class SnipWindowViewModel
                 _manualStallSignaled = true;
                 AppLog.Information(
                     $"ManualScroll.Stalled after {_manualAlignFailStreak} consecutive misses " +
-                    $"(strip={_manualStrip.Width}x{_manualStrip.Height})");
+                    $"(strip={stitcher.Width}x{stitcher.Height})");
                 Dispatcher.UIThread.Post(() => UpdateScrollingStallAction?.Invoke(true));
             }
         }
 
-        // Per-frame alignment outcome + WHY it was rejected, for chasing a bad stitch.
-        // best=MAX => no offset scored (weight-starved / uniform frames); best>0.5 => frames don't
-        // overlap well; small ambGap (<0.035) => rejected as ambiguous. A debug line, so with debug logging off nothing
-        // in it is evaluated: as an information line it took the log file's lock and a flush about 25 times a second.
+        // Per-frame placement + WHY a frame was not placed, for chasing a bad stitch. guided = looked for only
+        // where the motion says (near=<predicted offset>); tentative = found by searching the whole strip, waiting
+        // for the next frame to vouch for it; best=MAX => nothing scored there (weight-starved /
+        // uniform frames, or past the strip's edge); best above 0.5 guided or 0.2 unguided => no real overlap;
+        // small ambGap (<0.035, unguided only) => rejected as ambiguous. bands = the fixed rows kept out of the
+        // strip at the top/bottom. A debug line, so with debug logging off nothing in it is evaluated: as an
+        // information line it took the log file's lock and a flush about 25 times a second.
         AppLog.Debug(
             "ManualScroll.Align",
-            $"horiz={_manualHorizontal} strip={_manualStrip.Width}x{_manualStrip.Height} " +
-            $"frame={stitchFrame.Width}x{stitchFrame.Height} found={align.Found} off={align.Offset} grew={grew} " +
-            $"best={DiagnosticScore(diagBestScore, "MAX")} ambGap={DiagnosticScore(diagAmbiguityGap, "none")} " +
-            $"motion={(_manualMotionValid ? _manualMotionAccum.ToString() : "off")} veto={motionVetoed} " +
-            $"samples={diagSampleCount}");
+            $"horiz={_manualHorizontal} strip={stitcher.Width}x{stitcher.Height} frame={frameWidth}x{frameHeight} " +
+            $"found={step.Placed} tentative={step.Tentative} off={step.Offset} grew={step.Grew} guided={step.Guided} near={step.Predicted} " +
+            $"best={DiagnosticScore(step.BestScore, "MAX")} ambGap={DiagnosticScore(step.AmbiguityGap, "none")} " +
+            $"bands={stitcher.TopBand}/{stitcher.BottomBand}");
 
-        _manualPrevFrame!.Dispose();
-        _manualPrevFrame = stitchFrame; // anchor always advances; ownership moves into prev
-        return grew;
+        return step.Grew;
     }
 
     // An alignment score for the trace above, or `none` when nothing scored.
@@ -670,12 +613,16 @@ public partial class SnipWindowViewModel
                 }
             }
 
-            // Assemble the final strip: from the growable strip once stitching started, else the seed bitmap
-            // (session ended before any frame stitched). ToLogicalBitmap returns a fresh, owned bitmap.
-            ManualScrollStrip? strip = _manualStrip;
-            SKBitmap? result = strip != null ? strip.ToLogicalBitmap() : _manualAccumulated;
+            // Assemble the final strip: from the stitcher once stitching started, else the seed bitmap
+            // (session ended before any frame stitched). ToBitmap returns a fresh, owned bitmap.
+            ManualScrollStitcher? strip = _manualStitcher;
+            SKBitmap? result = strip != null ? strip.ToBitmap() : _manualAccumulated;
             SKBitmap? prev = _manualPrevFrame;
-            _manualStrip = null;
+            // Once a capture: how its stitching went, for chasing a bad one without debug logging.
+            AppLog.Information(
+                $"ManualScroll.Finish cancelled={cancelled} horiz={_manualHorizontal} " +
+                $"{strip?.Describe() ?? "stitcher=none"} result={result?.Width ?? 0}x{result?.Height ?? 0}");
+            _manualStitcher = null;
             _manualAccumulated = null;
             _manualPrevFrame = null;
 

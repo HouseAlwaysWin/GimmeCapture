@@ -106,6 +106,36 @@
   since detecting the language can only tell apart the ones it has. With some of them its card said "Not Installed",
   which read as broken while OCR was reading those: it now says "Installed 2/5", and Install fetches only the rest.
 
+### 📜 Scrolling capture
+
+- **A scrolling capture no longer repeats a window's header bar or message box, or stops growing under them.** The rows
+  at the top and bottom of a window that stay put while its content scrolls (a chat's title bar and message box, a
+  page's sticky header or cookie bar) were stitched in with the content: scrolling down added the message box again
+  with every step and left out the messages behind it, scrolling up did the same with the header, and with a bar in
+  the picture the capture often stopped growing altogether. Those rows are now found from the first frames that move,
+  also when a bar appears partway through, kept out of the stitching, and shown once at the top and bottom of the
+  result, as they were on screen. In simulated captures of a chat 500 pixels tall, scrolled 4,400 pixels with a
+  56-pixel header or an 80-pixel message box, the result had 535 to 1,248 of its 4,900 rows and repeated the box (188
+  rows of it instead of 80); it now has all 4,900 rows, each bar once.
+- **Repeated messages and stickers no longer pull a frame to the wrong place.** Each frame is now looked for where the
+  scrolling measured from the frame before puts it, instead of anywhere in what has been captured, so the same sticker
+  or reply higher up can no longer be taken for it. A frame found without that measure, after scrolling faster than
+  frames are taken, is used only once the frame before or after it agrees: scrolled too fast to follow, the capture now
+  waits for you to scroll back instead of adding a piece out of place. In a simulated flick past the end and back, 22
+  rows were kept twice and 1,607 lost; now none.
+- **A date or a button floating at the edge is no longer stamped all down the capture.** LINE shows the date over the
+  top of a chat while it scrolls, and Discord its "new messages" and "jump to present" bars: content scrolling in under
+  them was kept with them, the same pill again every few rows, and scrolling up under the date the simulated capture
+  stopped at 732 of 4,900 rows. Rows within 48 pixels (at 100% scaling) of the top and bottom edges are now kept only
+  once the content has scrolled past them, so the pill shows once, where it was.
+- **Stitching each frame takes a fraction of the work.** Looking for a frame only where the scrolling puts it scores a
+  few dozen placements instead of every row of the capture so far, which grew with the capture; in the simulations a
+  capture took a fifth to under half the time, which leaves room for more frames a second to follow a fast scroll.
+  Scrolling faster than about 400 pixels a frame (a 500-pixel region), which the old stitching sometimes kept up with
+  and sometimes stitched out of place, now waits for you to scroll back.
+- **The log says how each scrolling capture went.** One line at its end gives the frames seen and placed, how many were
+  found without the scrolling's measure, and the bars kept out, to tell what went wrong in one that came out badly.
+
 ### 🛡️ Reliability
 
 - **A capture saved over a larger file no longer keeps that file's end.** Saving onto an existing file wrote the new
