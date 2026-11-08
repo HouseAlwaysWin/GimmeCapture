@@ -91,6 +91,17 @@ public partial class SnipWindowViewModel
     private int _manualAlignFailStreak;
     private bool _manualStallSignaled;
 
+    // For the capture's closing log line: how often the stall warning came up, how long each frame took to grab and to
+    // stitch, how long the grabbing waited for room in the queue, and when the capture started. A capture that falls
+    // behind takes fewer frames a second, so the content jumps further between them; these tell that from one that
+    // lost track of the content. The producer adds to the grab and queue tallies, the consumer to the stitch one, and
+    // Finish reads them once both have stopped.
+    private int _manualStalls;
+    private DurationTally _manualGrabTimes;
+    private DurationTally _manualStitchTimes;
+    private DurationTally _manualQueueWaits;
+    private long _manualStartedAt;
+
     /// <summary>
     /// Publishes the latest downscaled thumbnail of the growing strip to the live preview window. Posted
     /// from the consumer thread (throttled) so the user can watch stitching progress and catch a
@@ -251,6 +262,11 @@ public partial class SnipWindowViewModel
         SyncSurfaceActivity();
         _manualAlignFailStreak = 0;
         _manualStallSignaled = false;
+        _manualStalls = 0;
+        _manualGrabTimes = default;
+        _manualStitchTimes = default;
+        _manualQueueWaits = default;
+        _manualStartedAt = Stopwatch.GetTimestamp();
         _manualPreviewThrottle.Reset(); // not started => the first grow publishes a thumbnail immediately
 
         // DIAGNOSTIC (temporary): records the resolved direction, region/strip dims and the active
@@ -297,6 +313,7 @@ public partial class SnipWindowViewModel
             while (!token.IsCancellationRequested)
             {
                 SKBitmap frame;
+                long grabStarted = Stopwatch.GetTimestamp();
                 try
                 {
                     frame = await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, false);
@@ -311,9 +328,12 @@ public partial class SnipWindowViewModel
                     continue;
                 }
 
+                _manualGrabTimes.Add(Stopwatch.GetElapsedTime(grabStarted));
+                long queuedAt = Stopwatch.GetTimestamp();
                 try
                 {
                     await _manualFrameChannel!.Writer.WriteAsync(frame, token);
+                    _manualQueueWaits.Add(Stopwatch.GetElapsedTime(queuedAt));
                 }
                 catch (OperationCanceledException)
                 {
@@ -342,6 +362,7 @@ public partial class SnipWindowViewModel
         {
             await foreach (SKBitmap frame in _manualFrameChannel!.Reader.ReadAllAsync(token))
             {
+                long stitchStarted = Stopwatch.GetTimestamp();
                 try
                 {
                     // Valid state = the stitcher, or before the first stitch the seed bitmap plus an anchor
@@ -379,6 +400,10 @@ public partial class SnipWindowViewModel
                     {
                         frame.Dispose();
                     }
+                }
+                finally
+                {
+                    _manualStitchTimes.Add(Stopwatch.GetElapsedTime(stitchStarted));
                 }
             }
         }
@@ -441,6 +466,7 @@ public partial class SnipWindowViewModel
             if (!_manualStallSignaled && _manualAlignFailStreak >= ManualStallSignalFrames)
             {
                 _manualStallSignaled = true;
+                _manualStalls++;
                 AppLog.Information(
                     "ManualScroll.Stalled",
                     $"after {_manualAlignFailStreak} consecutive misses (strip={stitcher.Width}x{stitcher.Height})");
@@ -581,7 +607,10 @@ public partial class SnipWindowViewModel
             AppLog.Information(
                 "ManualScroll.Finish",
                 $"cancelled={cancelled} horiz={_manualHorizontal} " +
-                $"{strip?.Describe() ?? "stitcher=none"} result={result?.Width ?? 0}x{result?.Height ?? 0}");
+                $"{strip?.Describe() ?? "stitcher=none"} stalls={_manualStalls} " +
+                $"seconds={Stopwatch.GetElapsedTime(_manualStartedAt).TotalSeconds:F1} grabbed={_manualGrabTimes.Count} " +
+                $"grab={_manualGrabTimes} stitch={_manualStitchTimes} queueFull={_manualQueueWaits.Total.TotalSeconds:F1}s " +
+                $"result={result?.Width ?? 0}x{result?.Height ?? 0}");
             _manualStitcher = null;
             _manualAccumulated = null;
             _manualPrevFrame = null;

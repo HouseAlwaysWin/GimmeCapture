@@ -42,6 +42,45 @@ internal readonly record struct ManualScrollStep(
 }
 
 /// <summary>
+/// How a capture's stitching went, for its closing log line (<see cref="ManualScrollStitcher.Describe"/>). Every frame
+/// is counted once: <c>Frames = Placed + Waited + Tentative + MissedNear + MissedBeyond + MissedLost</c>.
+/// </summary>
+/// <param name="Frames">Frames handed to the stitcher.</param>
+/// <param name="Placed">Frames placed on the strip.</param>
+/// <param name="Waited">Frames before the strip started that had not moved far enough from the first to start it.</param>
+/// <param name="Unguided">Placements found by searching the whole strip, tentative ones included.</param>
+/// <param name="Tentative">Frames found by searching the whole strip that waited for the next frame to vouch for them.</param>
+/// <param name="MissedNear">
+/// Frames not placed though the strip was where the motion put them: they did not match there (an animation, content
+/// that changed, a shift measured wrong).
+/// </param>
+/// <param name="MissedBeyond">Frames the motion put past the strip's edge: the view had scrolled on past what was kept.</param>
+/// <param name="MissedLost">
+/// Frames not placed with nothing to say where they were, after a shift that could not be measured, and the whole strip
+/// held no clear match for them; also a frame of another size.
+/// </param>
+/// <param name="ShiftsLost">Frames whose shift from the frame before could not be measured (too far to overlap, or changed).</param>
+/// <param name="LargestShift">The largest shift measured between two frames, in rows.</param>
+/// <param name="LongestMissRun">The most frames in a row not placed (the capture warns the user after 30).</param>
+/// <param name="WindowRows">
+/// The rows of each frame matched against the strip, between the bands (0 before the strip starts). A frame that moved
+/// further than this from the one before cannot meet the strip where the motion puts it.
+/// </param>
+internal readonly record struct ManualScrollStats(
+    int Frames,
+    int Placed,
+    int Waited,
+    int Unguided,
+    int Tentative,
+    int MissedNear,
+    int MissedBeyond,
+    int MissedLost,
+    int ShiftsLost,
+    int LargestShift,
+    int LongestMissRun,
+    int WindowRows);
+
+/// <summary>
 /// Stitches a manual scrolling capture once its axis is known (frames in stitch space, so the content scrolls along
 /// the rows). Pure — no UI, no threads — so a whole capture can be replayed in a test; the capture's consumer owns it
 /// on one thread.
@@ -120,11 +159,19 @@ internal sealed class ManualScrollStitcher : IDisposable
     private int _previousPrepended;
     private int _previousAppended;
 
-    // For the capture's closing log line.
+    // For the capture's closing log line (ManualScrollStats says what each counts).
     private int _frames;
     private int _placed;
+    private int _waited;
     private int _unguided;
     private int _tentatives;
+    private int _missedNear;
+    private int _missedBeyond;
+    private int _missedLost;
+    private int _shiftsLost;
+    private int _largestShift;
+    private int _missRun;
+    private int _longestMissRun;
     private int _bandChanges;
 
     /// <param name="seed">The first frame, copied.</param>
@@ -171,22 +218,42 @@ internal sealed class ManualScrollStitcher : IDisposable
     {
         ArgumentNullException.ThrowIfNull(frame);
         _frames++;
+        ManualScrollStep step;
         if (frame.Width != _width || frame.Height != _frameHeight)
         {
             frame.Dispose();
-            return Missed(guided: false);
+            _missedLost++;
+            step = Missed(guided: false);
+        }
+        else
+        {
+            step = _strip == null ? Calibrate(frame) : Place(frame);
         }
 
-        return _strip == null ? Calibrate(frame) : Place(frame);
+        _missRun = step.Placed ? 0 : _missRun + 1;
+        _longestMissRun = Math.Max(_longestMissRun, _missRun);
+        return step;
     }
+
+    /// <summary>How the capture's stitching has gone so far (see <see cref="ManualScrollStats"/>).</summary>
+    internal ManualScrollStats Stats => new(
+        _frames, _placed, _waited, _unguided, _tentatives, _missedNear, _missedBeyond, _missedLost,
+        _shiftsLost, _largestShift, _longestMissRun, _strip == null ? 0 : _frameHeight - _topBand - _bottomBand);
 
     /// <summary>
     /// How the capture went, for its closing log line: frames seen and placed, placements found by searching the whole
-    /// strip (and how many of those waited for the next frame), the bands kept out of the strip and how often they grew.
+    /// strip (and how many of those waited for the next frame), the frames not placed by why (missed where the motion
+    /// put them, past the strip's edge, or with the motion lost), shifts that could not be measured, the largest that
+    /// was, the longest run of frames not placed, the rows matched per frame, and the bands kept out of the strip.
     /// </summary>
-    internal string Describe() =>
-        $"frames={_frames} placed={_placed} unguided={_unguided} tentative={_tentatives} " +
-        $"bands={_topBand}/{_bottomBand} bandChanges={_bandChanges} started={Started}";
+    internal string Describe()
+    {
+        ManualScrollStats s = Stats;
+        return $"frames={s.Frames} placed={s.Placed} waited={s.Waited} unguided={s.Unguided} tentative={s.Tentative} " +
+            $"missed=near:{s.MissedNear},beyond:{s.MissedBeyond},lost:{s.MissedLost} shiftLost={s.ShiftsLost} " +
+            $"maxShift={s.LargestShift} longestMiss={s.LongestMissRun} window={s.WindowRows} " +
+            $"bands={_topBand}/{_bottomBand} bandChanges={_bandChanges} started={Started}";
+    }
 
     /// <summary>Whether <paramref name="frame"/> is one the stitcher keeps (the caller must not dispose it).</summary>
     internal bool Holds(SKBitmap frame) => ReferenceEquals(frame, _previous) || ReferenceEquals(frame, _seed);
@@ -296,9 +363,15 @@ internal sealed class ManualScrollStitcher : IDisposable
         if (!shift.Found || Math.Abs(shift.Rows) < CalibrationShiftRows)
         {
             KeepAsPrevious(frame);
-            return shift.Found
-                ? new ManualScrollStep(true, 0, 0, 0, false, 0, double.MaxValue, double.MaxValue)
-                : Missed(guided: false);
+            if (!shift.Found)
+            {
+                _shiftsLost++;
+                _missedLost++;
+                return Missed(guided: false);
+            }
+
+            _waited++;
+            return new ManualScrollStep(true, 0, 0, 0, false, 0, double.MaxValue, double.MaxValue);
         }
 
         (_fixedTop, _fixedBottom) = ScrollStitcher.FindFixedBands(seed, frame, shift.Rows, _ignoreRight, _frameHeight * 3 / 10);
@@ -365,6 +438,7 @@ internal sealed class ManualScrollStitcher : IDisposable
         {
             _motion += shift.Rows;
             _lastShift = shift.Rows;
+            _largestShift = Math.Max(_largestShift, Math.Abs(shift.Rows));
             if (Math.Abs(shift.Rows) >= CalibrationShiftRows)
             {
                 (trimmedTop, trimmedBottom) = GrowBands(frame, shift.Rows);
@@ -373,6 +447,7 @@ internal sealed class ManualScrollStitcher : IDisposable
         else
         {
             _motionValid = false;
+            _shiftsLost++;
         }
 
         int windowHeight = _frameHeight - _topBand - _bottomBand;
@@ -408,6 +483,18 @@ internal sealed class ManualScrollStitcher : IDisposable
         if (align.Found)
         {
             _unguided += guided ? 0 : 1;
+        }
+        else if (!guided)
+        {
+            _missedLost++;
+        }
+        else if (inReach)
+        {
+            _missedNear++;
+        }
+        else
+        {
+            _missedBeyond++;
         }
 
         bool tentative = align.Found && !guided

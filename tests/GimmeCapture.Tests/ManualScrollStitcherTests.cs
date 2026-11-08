@@ -189,6 +189,9 @@ public class ManualScrollStitcherTests
         Assert.Equal(FrameHeight, stitcher.Height);
         using SKBitmap result = stitcher.ToBitmap();
         Assert.Equal(seed.GetPixel(100, 150), result.GetPixel(100, 150));
+        Assert.Equal(2, stitcher.Stats.Waited);
+        Assert.Equal(0, stitcher.Stats.LongestMissRun);
+        AssertEveryFrameCountedOnce(stitcher.Stats);
     }
 
     [Fact]
@@ -203,6 +206,68 @@ public class ManualScrollStitcherTests
         Assert.False(step.Placed);
         Assert.False(step.Grew);
         Assert.Equal(FrameHeight, stitcher.Height);
+        Assert.Equal(1, stitcher.Stats.MissedLost);
+        AssertEveryFrameCountedOnce(stitcher.Stats);
+    }
+
+    // The capture's closing log line says why frames were not placed, to tell a scroll too fast for the window of rows
+    // matched from content that changed under it. A steady scroll the window follows misses none.
+    [Fact]
+    public void ASteadyScroll_MissesNoFrame_AndTheLogLineSaysSo()
+    {
+        using Page page = Chat(Width, 2600, seed: 15);
+        List<int> path = SteadyPath(0, 2000, 40);
+
+        (ManualScrollStats stats, string line) = StatsOf(page, path, new Overlays());
+
+        AssertEveryFrameCountedOnce(stats);
+        Assert.Equal(path.Count - 1, stats.Placed);
+        Assert.Equal(0, stats.MissedNear + stats.MissedBeyond + stats.MissedLost);
+        Assert.Equal(0, stats.ShiftsLost);
+        Assert.Equal(0, stats.LongestMissRun);
+        Assert.Equal(40, stats.LargestShift);
+        // The frame less its edge guards, and any blank rows at its edges the band finder takes for fixed ones.
+        Assert.InRange(stats.WindowRows, FrameHeight / 2, FrameHeight - (2 * EdgeGuard));
+        Assert.Contains("missed=near:0,beyond:0,lost:0 shiftLost=0 maxShift=40 longestMiss=0", line);
+        Assert.Contains($"window={stats.WindowRows} ", line);
+    }
+
+    // Scrolled further between two frames than the window of rows matched, a frame cannot meet the strip where the
+    // motion puts it: the line counts it past the strip's edge, with the shift that took it there.
+    [Fact]
+    public void AScrollFasterThanTheWindow_IsCountedAsPastTheStripsEdge()
+    {
+        using Page page = Chat(Width, 2600, seed: 16);
+        List<int> path = SteadyPath(0, 2000, 230);
+
+        (ManualScrollStats stats, string line) = StatsOf(page, path, new Overlays());
+
+        AssertEveryFrameCountedOnce(stats);
+        Assert.Equal(0, stats.Placed);
+        Assert.Equal(stats.Frames, stats.MissedBeyond);
+        Assert.Equal(stats.Frames, stats.LongestMissRun);
+        Assert.Equal(230, stats.LargestShift);
+        Assert.True(stats.LargestShift > stats.WindowRows, line);
+    }
+
+    // A flick too fast for two frames to overlap loses the motion: the line counts the shifts that could not be
+    // measured, and the frames that met nothing in the strip until the view came back over it.
+    [Fact]
+    public void AFlickTooFastToMeasure_IsCountedAsLostFrames()
+    {
+        using Page page = Chat(Width, 2600, seed: 9);
+        List<int> path = WheelPath(0, 500, seed: 6, notchesPerFrame: 0.6);
+        path.AddRange(SteadyPath(500, 1500, FrameHeight + 100).Skip(1));
+        path.AddRange(WheelPath(1500, 600, seed: 7, notchesPerFrame: 0.6).Skip(1));
+        path.AddRange(WheelPath(600, 2000, seed: 8, notchesPerFrame: 0.6).Skip(1));
+
+        (ManualScrollStats stats, string line) = StatsOf(page, path, new Overlays());
+
+        AssertEveryFrameCountedOnce(stats);
+        Assert.True(stats.ShiftsLost > 0, line);
+        Assert.True(stats.MissedLost > 0, line);
+        Assert.True(stats.LongestMissRun > 1, line);
+        Assert.True(stats.Placed > 0, line);
     }
 
     [Fact]
@@ -212,6 +277,23 @@ public class ManualScrollStitcherTests
         Assert.Equal(30, ManualScrollStitcher.EdgeGuardRows(100, fixedRows: 0, wanted: 48));
         Assert.Equal(10, ManualScrollStitcher.EdgeGuardRows(500, fixedRows: 280, wanted: 48));
         Assert.Equal(0, ManualScrollStitcher.EdgeGuardRows(500, fixedRows: 300, wanted: 48));
+    }
+
+    // Each frame handed over is counted once, by what became of it.
+    private static void AssertEveryFrameCountedOnce(ManualScrollStats s) =>
+        Assert.Equal(s.Frames, s.Placed + s.Waited + s.Tentative + s.MissedNear + s.MissedBeyond + s.MissedLost);
+
+    // Runs a path through the stitcher: how it went, as the capture's closing log line counts it.
+    private static (ManualScrollStats Stats, string Line) StatsOf(Page page, List<int> tops, Overlays overlays)
+    {
+        using SKBitmap seed = Frame(page, tops[0], FrameHeight, overlays);
+        using var stitcher = new ManualScrollStitcher(seed, MinOverlap, IgnoreRight, Tolerance, EdgeGuard);
+        for (int i = 1; i < tops.Count; i++)
+        {
+            stitcher.Add(Frame(page, tops[i], FrameHeight, overlays, i));
+        }
+
+        return (stitcher.Stats, stitcher.Describe());
     }
 
     private static void AssertKeptOnce(RowTrace trace, List<int> path)

@@ -150,8 +150,11 @@
   window, and the bar never widened under it to be taken hold of. On that edge the handle now sits just outside the
   picture, and the bar widens to 20 pixels a tenth of a second after the pointer reaches it.
 - **The log says how each scrolling capture went.** One line at its end gives the frames seen and placed, how many were
-  found without the scrolling's measure, the bars kept out and the result's size, to tell what went wrong in one that
-  came out badly.
+  found without the scrolling's measure, the frames left out and why (they did not match where the scrolling put
+  them, the scrolling had carried them past what was kept, or it could not be followed), the largest jump between two
+  frames against the rows each frame is matched on, how often the "scroll back" warning came up, how long each frame
+  took to grab and to stitch, the bars kept out and the result's size: enough to tell a scroll too fast to follow from
+  content that changed under it, in a capture that came out badly.
 
 ### 🛡️ Reliability
 

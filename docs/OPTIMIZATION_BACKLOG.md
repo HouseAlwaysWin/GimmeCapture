@@ -21,8 +21,8 @@ tool.
   under it.
 - Since v0.74.0, `## Unreleased` holds 31 entries (2026-11-08).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+eec14971`, installed by hand on 2026-11-08 in the afternoon over
-  `0.74.0+4821c550` (by hand, the same day at about 11:00), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+495a66ea`, installed by hand on 2026-11-08 in the afternoon over
+  `0.74.0+eec14971` (by hand, earlier that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1295,6 +1295,13 @@ tool.
   as it opened (the detector loaded in 157-186 ms, both screens read in 354-384 ms), and a text line under the pointer
   wins the hover over the window around it: a scrolling capture's overlay now offers windows only
   (`OffersTextCandidates`; the user's choice, as it changes what the overlay shows). `SnipWindowViewModelTests`.
+  The next two captures left frames out: 14:10 placed 105 of 137 (3 found by searching the whole strip) at 26 frames
+  a second, and 15:06 placed 290 of 364 with one "scroll back" warning, 4.6 s in, while the strip had grown only about
+  470 px a second (559x536 region, 282 rows matched once the bars and edge guards were out). Why could not be told,
+  so the closing line now says (the user's choice): `missed=near:,beyond:,lost:` (did not match where the motion put
+  it / past the strip's edge / the motion lost), `shiftLost=`, `maxShift=` against `window=`, `longestMiss=`,
+  `stalls=`, `seconds=`, `grabbed=`, `grab=` and `stitch=` (average/longest ms a frame) and `queueFull=` (the
+  grabbing waiting for the stitching). `ManualScrollStats`, `DurationTally`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
