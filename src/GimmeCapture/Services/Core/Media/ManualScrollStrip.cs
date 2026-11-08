@@ -113,10 +113,11 @@ internal sealed class ManualScrollStrip : IDisposable
         double maxRowMismatchRatio,
         double maxScore,
         out double bestScore,
-        out bool inReach)
+        out bool inReach,
+        bool rejectAmbiguous = false)
         => ScrollStitcher.AlignNear(
             _sig, _top * _stride, _height, _sampleCount, frame, predictedOffset, window,
-            out bestScore, out inReach, minOverlapRows, _ignoreRight, maxRowMismatchRatio, maxScore);
+            out bestScore, out inReach, minOverlapRows, _ignoreRight, maxRowMismatchRatio, maxScore, rejectAmbiguous);
 
     /// <summary>Appends the bottom <paramref name="newRows"/> rows of <paramref name="frame"/> (new content below).</summary>
     public void Append(SKBitmap frame, int newRows)

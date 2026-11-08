@@ -279,6 +279,73 @@ public class ManualScrollStitcherTests
         Assert.Equal(0, ManualScrollStitcher.EdgeGuardRows(500, fixedRows: 300, wanted: 48));
     }
 
+    // A frame whose shift cannot be measured used to cost the motion: only a search of the whole strip was left, which a
+    // stretch with little in it does not answer. It is looked for around where the motion had it, and nothing is kept
+    // twice or left out for it. (A LINE-like chat at the size of the region that lost track on 2026-11-08.)
+    [Fact]
+    public void AFrameWhoseShiftCannotBeMeasured_IsFoundWhereTheMotionHadIt()
+    {
+        const int width = 548;
+        const int height = 610;
+        using Page page = Line(width, 5000, seed: 6);
+        List<int> path = WheelPath(3600, 400, seed: 16, notchesPerFrame: 0.1, notchRows: 140);
+        var overlays = new Overlays(HeaderRows: 180, FooterRows: 65, DatePill: true);
+        int minOverlap = System.Math.Max(8, height / 10);
+        int ignoreRight = System.Math.Clamp(180, 24, System.Math.Max(24, width * 35 / 100));
+        using SKBitmap seed = Frame(page, path[0], height, overlays);
+        using var stitcher = new ManualScrollStitcher(seed, minOverlap, ignoreRight, Tolerance, EdgeGuard);
+        var trace = new RowTrace(height, overlays);
+
+        for (int i = 1; i < path.Count; i++)
+        {
+            ManualScrollStep step = stitcher.Add(Frame(page, path[i], height, overlays, i));
+            if (!trace.Started && stitcher.Started)
+            {
+                trace.Start(path[0], step.TopBand, step.BottomBand);
+            }
+
+            if (trace.Started)
+            {
+                trace.Apply(step, path[i], i, path[i - 1], i - 1);
+            }
+        }
+
+        ManualScrollStats stats = stitcher.Stats;
+        AssertEveryFrameCountedOnce(stats);
+        Assert.True(stats.Rescued > 0, stitcher.Describe());
+        Assert.True(stats.ShiftsLost > 0, stitcher.Describe());
+        AssertKeptOnce(trace, path);
+    }
+
+    // The line of a stall warning lists the shifts before it, to tell one wild jump from a scroll that was too fast.
+    [Fact]
+    public void TheRecentShifts_AreListedOldestFirst_AndGoBackSixtyFourFrames()
+    {
+        using Page page = Chat(Width, 2600, seed: 17);
+        List<int> path = SteadyPath(0, 2000, 20);
+        using SKBitmap seed = Frame(page, path[0], FrameHeight, new Overlays());
+        using var stitcher = new ManualScrollStitcher(seed, MinOverlap, IgnoreRight, Tolerance, EdgeGuard);
+
+        for (int i = 1; i <= 3; i++)
+        {
+            stitcher.Add(Frame(page, path[i], FrameHeight, new Overlays(), i));
+        }
+
+        Assert.Equal("20,20,20", stitcher.DescribeRecent());
+
+        stitcher.Add(new SKBitmap(Width, FrameHeight - 1)); // not placed, and no shift to report
+        Assert.Equal("20,20,20,x!", stitcher.DescribeRecent());
+
+        for (int i = 4; i < path.Count; i++)
+        {
+            stitcher.Add(Frame(page, path[i], FrameHeight, new Overlays(), i));
+        }
+
+        string[] listed = stitcher.DescribeRecent().Split(',');
+        Assert.Equal(ManualScrollStitcher.RecentFrames, listed.Length);
+        Assert.All(listed, entry => Assert.Equal("20", entry));
+    }
+
     // Each frame handed over is counted once, by what became of it.
     private static void AssertEveryFrameCountedOnce(ManualScrollStats s) =>
         Assert.Equal(s.Frames, s.Placed + s.Waited + s.Tentative + s.MissedNear + s.MissedBeyond + s.MissedLost);

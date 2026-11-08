@@ -23,6 +23,7 @@ namespace GimmeCapture.Services.Core.Media;
 /// The frame was found by searching the whole strip and nothing yet vouches for the place: it is not counted as placed,
 /// and adds nothing, until the next frame is placed where the motion from it says.
 /// </param>
+/// <param name="Shift">The shift measured from the frame before (rows), or null when it could not be measured.</param>
 internal readonly record struct ManualScrollStep(
     bool Placed,
     int Offset,
@@ -36,7 +37,8 @@ internal readonly record struct ManualScrollStep(
     int BottomBand = 0,
     int TrimmedTop = 0,
     int TrimmedBottom = 0,
-    bool Tentative = false)
+    bool Tentative = false,
+    int? Shift = null)
 {
     public bool Grew => Prepended > 0 || Appended > 0;
 }
@@ -66,6 +68,10 @@ internal readonly record struct ManualScrollStep(
 /// The rows of each frame matched against the strip, between the bands (0 before the strip starts). A frame that moved
 /// further than this from the one before cannot meet the strip where the motion puts it.
 /// </param>
+/// <param name="Rescued">
+/// Placed frames whose shift could not be measured, or was too far for the frame to meet the strip, found on the strip
+/// around where the motion had them: the shift was not believed.
+/// </param>
 internal readonly record struct ManualScrollStats(
     int Frames,
     int Placed,
@@ -78,7 +84,8 @@ internal readonly record struct ManualScrollStats(
     int ShiftsLost,
     int LargestShift,
     int LongestMissRun,
-    int WindowRows);
+    int WindowRows,
+    int Rescued);
 
 /// <summary>
 /// Stitches a manual scrolling capture once its axis is known (frames in stitch space, so the content scrolls along
@@ -165,6 +172,7 @@ internal sealed class ManualScrollStitcher : IDisposable
     private int _waited;
     private int _unguided;
     private int _tentatives;
+    private int _rescued;
     private int _missedNear;
     private int _missedBeyond;
     private int _missedLost;
@@ -173,6 +181,12 @@ internal sealed class ManualScrollStitcher : IDisposable
     private int _missRun;
     private int _longestMissRun;
     private int _bandChanges;
+
+    /// <summary>How many frames <see cref="DescribeRecent"/> goes back.</summary>
+    internal const int RecentFrames = 64;
+
+    private readonly (int? Shift, bool Placed)[] _recent = new (int?, bool)[RecentFrames];
+    private int _recentCount;
 
     /// <param name="seed">The first frame, copied.</param>
     /// <param name="minOverlapRows">The least overlap of a frame with the strip that places it.</param>
@@ -232,13 +246,41 @@ internal sealed class ManualScrollStitcher : IDisposable
 
         _missRun = step.Placed ? 0 : _missRun + 1;
         _longestMissRun = Math.Max(_longestMissRun, _missRun);
+        _recent[_recentCount++ % RecentFrames] = (step.Shift, step.Placed);
         return step;
+    }
+
+    /// <summary>
+    /// The shifts of the last <see cref="RecentFrames"/> frames, oldest first, for the log line of a stall warning: rows
+    /// (<c>x</c> when it could not be measured), with <c>!</c> on a frame not placed. It shows what the closing line's totals
+    /// cannot: whether a single wild jump lost the capture, and how the scrolling went around it.
+    /// </summary>
+    internal string DescribeRecent()
+    {
+        int count = Math.Min(_recentCount, RecentFrames);
+        var text = new System.Text.StringBuilder(count * 5);
+        for (int i = _recentCount - count; i < _recentCount; i++)
+        {
+            (int? shift, bool placed) = _recent[i % RecentFrames];
+            if (text.Length > 0)
+            {
+                text.Append(',');
+            }
+
+            text.Append(shift is int rows ? rows.ToString(System.Globalization.CultureInfo.InvariantCulture) : "x");
+            if (!placed)
+            {
+                text.Append('!');
+            }
+        }
+
+        return text.ToString();
     }
 
     /// <summary>How the capture's stitching has gone so far (see <see cref="ManualScrollStats"/>).</summary>
     internal ManualScrollStats Stats => new(
         _frames, _placed, _waited, _unguided, _tentatives, _missedNear, _missedBeyond, _missedLost,
-        _shiftsLost, _largestShift, _longestMissRun, _strip == null ? 0 : _frameHeight - _topBand - _bottomBand);
+        _shiftsLost, _largestShift, _longestMissRun, _strip == null ? 0 : _frameHeight - _topBand - _bottomBand, _rescued);
 
     /// <summary>
     /// How the capture went, for its closing log line: frames seen and placed, placements found by searching the whole
@@ -250,7 +292,7 @@ internal sealed class ManualScrollStitcher : IDisposable
     {
         ManualScrollStats s = Stats;
         return $"frames={s.Frames} placed={s.Placed} waited={s.Waited} unguided={s.Unguided} tentative={s.Tentative} " +
-            $"missed=near:{s.MissedNear},beyond:{s.MissedBeyond},lost:{s.MissedLost} shiftLost={s.ShiftsLost} " +
+            $"rescued={s.Rescued} missed=near:{s.MissedNear},beyond:{s.MissedBeyond},lost:{s.MissedLost} shiftLost={s.ShiftsLost} " +
             $"maxShift={s.LargestShift} longestMiss={s.LongestMissRun} window={s.WindowRows} " +
             $"bands={_topBand}/{_bottomBand} bandChanges={_bandChanges} started={Started}";
     }
@@ -371,7 +413,7 @@ internal sealed class ManualScrollStitcher : IDisposable
             }
 
             _waited++;
-            return new ManualScrollStep(true, 0, 0, 0, false, 0, double.MaxValue, double.MaxValue);
+            return new ManualScrollStep(true, 0, 0, 0, false, 0, double.MaxValue, double.MaxValue, Shift: shift.Rows);
         }
 
         (_fixedTop, _fixedBottom) = ScrollStitcher.FindFixedBands(seed, frame, shift.Rows, _ignoreRight, _frameHeight * 3 / 10);
@@ -432,9 +474,20 @@ internal sealed class ManualScrollStitcher : IDisposable
                 expectedShift: _lastShift);
         }
 
+        ScrollStitcher.FrameAlignment? rescued = LookWhereTheMotionWas(frame, shift, out double rescueScore);
         int trimmedTop = 0;
         int trimmedBottom = 0;
-        if (shift.Found)
+        if (rescued is { } placedBack)
+        {
+            // The strip says where the frame is: that is the shift, whatever was measured.
+            int actual = (int)(placedBack.Offset - _lastOffset - _motion);
+            _motion += actual;
+            _lastShift = actual;
+            _largestShift = Math.Max(_largestShift, Math.Abs(actual));
+            _rescued++;
+            _shiftsLost += shift.Found ? 0 : 1;
+        }
+        else if (shift.Found)
         {
             _motion += shift.Rows;
             _lastShift = shift.Rows;
@@ -464,7 +517,13 @@ internal sealed class ManualScrollStitcher : IDisposable
         double bestScore;
         double ambiguityGap = double.MaxValue;
         ScrollStitcher.FrameAlignment align;
-        if (guided)
+        if (rescued is { } found)
+        {
+            predicted = found.Offset;
+            align = found;
+            bestScore = rescueScore;
+        }
+        else if (guided)
         {
             predicted = (int)Math.Clamp(_lastOffset + _motion, int.MinValue / 2, int.MaxValue / 2);
             align = strip.AlignNear(
@@ -555,7 +614,33 @@ internal sealed class ManualScrollStitcher : IDisposable
         KeepAsPrevious(frame);
         return new ManualScrollStep(
             align.Found && !tentative, align.Offset, prepended, appended, guided, predicted, bestScore, ambiguityGap,
-            _topBand, _bottomBand, trimmedTop, trimmedBottom, tentative);
+            _topBand, _bottomBand, trimmedTop, trimmedBottom, tentative, shift.Found ? shift.Rows : null);
+    }
+
+    // A shift that could not be measured, or one too far for the frame to meet the strip, is checked against the strip
+    // before it is believed. A stretch with little in it can measure a long way off (456 rows for a scroll of 13 in the
+    // simulation, 365 in a user's capture): followed, the motion puts every later frame past the strip's edge, and the
+    // capture waits for the view to come back from where it never went. And one frame that cannot be measured cost the
+    // motion, leaving only a search of the whole strip, which a stretch like that does not answer clearly. The frame is
+    // looked for around where the motion had it, with the stricter score of a search nothing vouches for; a frame that
+    // really jumped is not there, and goes on as before.
+    private ScrollStitcher.FrameAlignment? LookWhereTheMotionWas(SKBitmap frame, ScrollStitcher.VerticalShift shift, out double score)
+    {
+        score = double.MaxValue;
+        int windowHeight = _frameHeight - _topBand - _bottomBand;
+        int guidedMinOverlap = Math.Clamp(Math.Max(8, _minOverlap / 3), 1, windowHeight);
+        bool tooFar = shift.Found && Math.Abs(shift.Rows) > windowHeight - guidedMinOverlap;
+        if ((shift.Found && !tooFar) || !_motionValid || _tentative)
+        {
+            return null;
+        }
+
+        int predicted = (int)Math.Clamp(_lastOffset + _motion + _lastShift, int.MinValue / 2, int.MaxValue / 2);
+        int reach = Math.Min(NearWindow(windowHeight, _framesSinceAccepted + 1) + Math.Max(48, Math.Abs(_lastShift)), windowHeight / 2);
+        using SKBitmap window = Window(frame);
+        ScrollStitcher.FrameAlignment align = _strip!.AlignNear(
+            window, predicted, reach, guidedMinOverlap, _rowTolerance, UnguidedMaxScore, out score, out _, rejectAmbiguous: true);
+        return align.Found ? align : null;
     }
 
     // Whether the previous frame sits on the strip at `offset` (within a few rows): what makes a frame found by searching

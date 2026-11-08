@@ -19,10 +19,10 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 31 entries (2026-11-08).
+- Since v0.74.0, `## Unreleased` holds 32 entries (2026-11-08).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+495a66ea`, installed by hand on 2026-11-08 in the afternoon over
-  `0.74.0+eec14971` (by hand, earlier that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+36c839ad`, installed by hand on 2026-11-08 in the afternoon over
+  `0.74.0+495a66ea` (by hand, earlier that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1301,7 +1301,21 @@ tool.
   so the closing line now says (the user's choice): `missed=near:,beyond:,lost:` (did not match where the motion put
   it / past the strip's edge / the motion lost), `shiftLost=`, `maxShift=` against `window=`, `longestMiss=`,
   `stalls=`, `seconds=`, `grabbed=`, `grab=` and `stitch=` (average/longest ms a frame) and `queueFull=` (the
-  grabbing waiting for the stitching). `ManualScrollStats`, `DurationTally`.
+  grabbing waiting for the stitching). `ManualScrollStats`, `DurationTally`. The first capture with it (17:13, scrolled up
+  until older messages load) placed 622 of 1035 frames: `missed=near:22,beyond:189,lost:201 shiftLost=3 maxShift=365
+  longestMiss=197 window=269 stalls=3`, at 47 frames a second and 18.8 ms a frame. Not slowness and not content changing:
+  the motion was lost. `LineReport` (opt-in, `SCROLL_SIM`) ran a LINE-like chat at that size, 72 runs: with the title bar
+  not told from the content, a scroll of 13 rows measured as 456 and one of 44 as 445 (the bar's rows stay put, so they
+  score the true shift worse than a far one whose small overlap misses them), and the view then waits past the strip's
+  edge, as in the capture. A frame whose shift could not be measured, or was too far for it to meet the strip, is now
+  looked for around where the motion had it and taken only on a clear match (`LookWhereTheMotionWas`, `rescued=`), and two
+  frames with every row the same have not moved. In the simulation that changed little: 9 frames rescued in 72 runs,
+  `beyond` 311 to 290, duplicated rows 1470 to 1289, breaks 24 to 23, the 25 standard scenarios as before: the stretches
+  that lose track match about equally in many places, which a clear match cannot settle. Tried and dropped: scoring
+  shifts without the rows that stayed put (at small shifts most rows look still: wrong shifts up to 102, and duplicated rows
+  in scenarios that had none), and the check without the clear-match rule (`beyond` down to 107, but breaks up to 33). Each
+  stall warning now lists the last 64 shifts (`shifts=`, `!` on a frame not placed, `x` where none was measured): the next
+  real one tells a wild jump from a scroll too fast to follow.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

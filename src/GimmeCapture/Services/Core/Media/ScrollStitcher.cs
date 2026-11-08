@@ -202,6 +202,22 @@ internal static class ScrollStitcher
 
         int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
 
+        // Every row the same in both frames: nothing moved, whatever the rows hold. Two frames of a stretch with little
+        // in it have no shift that stands out, and "no shift found" for a view at rest cost a capture its place.
+        int stride = sampleCount * 4;
+        int allowedStill = sampleCount / 32;
+        bool allStill = true;
+        for (int r = 0; r < height && allStill; r++)
+        {
+            allStill = RowSampleDiffs(prevSig, r * stride, nextSig, r * stride, sampleCount) <= allowedStill;
+        }
+
+        if (allStill)
+        {
+            bestScoreOut = 0;
+            return new VerticalShift(0, true);
+        }
+
         // Per-row "distinctiveness" weight from the established frame: how much each row
         // differs from the one above it (a content edge / text line). Uniform bands (blank
         // gaps, flat backgrounds) get ~0 weight so they don't dilute the match — only the
@@ -587,6 +603,9 @@ internal static class ScrollStitcher
     /// (lines of the same phrase) is placed where the motion says rather than skipped. Not found when the best scores
     /// worse than <paramref name="maxScore"/>, or when no offset in the window overlaps the strip by
     /// <paramref name="minOverlapRows"/> (<paramref name="inReach"/> is then false: the view is past the strip's edge).
+    /// With <paramref name="rejectAmbiguous"/>, for a search the motion does not vouch for, not found either when an
+    /// offset some rows from the best scores within the ambiguity margin of it: a stretch with little in it matches
+    /// about as well in many places, and only one of them is right.
     /// </summary>
     internal static FrameAlignment AlignNear(
         byte[] stripSig,
@@ -601,7 +620,8 @@ internal static class ScrollStitcher
         int minOverlapRows,
         int ignoreRightColumns,
         double maxRowMismatchRatio,
-        double maxScore)
+        double maxScore,
+        bool rejectAmbiguous = false)
     {
         bestScoreOut = double.MaxValue;
         inReach = false;
@@ -660,6 +680,27 @@ internal static class ScrollStitcher
             }
 
             double margin = bestScore < NearPerfectScore ? NearPerfectAmbiguityMargin : AmbiguityMargin;
+            if (rejectAmbiguous)
+            {
+                int bestOffset = 0;
+                foreach ((int offset, double score) in scored)
+                {
+                    if (score == bestScore)
+                    {
+                        bestOffset = offset;
+                        break;
+                    }
+                }
+
+                foreach ((int offset, double score) in scored)
+                {
+                    if (Math.Abs(offset - bestOffset) >= ShiftSeparationRows && score - bestScore < margin)
+                    {
+                        return new FrameAlignment(0, false);
+                    }
+                }
+            }
+
             int chosen = 0;
             int chosenDistance = int.MaxValue;
             foreach ((int offset, double score) in scored)

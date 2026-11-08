@@ -149,12 +149,18 @@
   right edge (its bottom edge, for a capture scrolled sideways) lay over the scroll bar, so the pointer there resized the
   window, and the bar never widened under it to be taken hold of. On that edge the handle now sits just outside the
   picture, and the bar widens to 20 pixels a tenth of a second after the pointer reaches it.
+- **A frame that seems to have jumped is checked against what was captured before it is believed.** On a chat with
+  little in it, two frames can seem hundreds of pixels apart when they moved a few, or not be measurable at all. Believed,
+  such a jump made every later frame look past the end of the capture, and the "scroll back" warning came up though
+  nothing had gone wrong. A frame like that is now looked for around where the scrolling had it, and taken only if it
+  clearly matches there. A view at rest on an empty stretch now counts as not having moved.
 - **The log says how each scrolling capture went.** One line at its end gives the frames seen and placed, how many were
   found without the scrolling's measure, the frames left out and why (they did not match where the scrolling put
   them, the scrolling had carried them past what was kept, or it could not be followed), the largest jump between two
   frames against the rows each frame is matched on, how often the "scroll back" warning came up, how long each frame
   took to grab and to stitch, the bars kept out and the result's size: enough to tell a scroll too fast to follow from
-  content that changed under it, in a capture that came out badly.
+  content that changed under it, in a capture that came out badly. Each warning also lists the movement of the 64 frames
+  before it.
 
 ### 🛡️ Reliability
 

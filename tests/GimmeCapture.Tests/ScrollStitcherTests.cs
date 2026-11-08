@@ -141,6 +141,22 @@ public class ScrollStitcherTests
         Assert.Equal(-5, shift.Rows);
     }
 
+    // Frames with nothing in them have no shift that stands out from the others. Every row being the same in both, the
+    // view has not moved: "no shift found" for a view at rest lost a capture its place.
+    [Fact]
+    public void FindVerticalShift_FramesWithNothingInThem_HaveNotMoved()
+    {
+        using var previous = new SKBitmap(new SKImageInfo(120, 90, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using var next = new SKBitmap(new SKImageInfo(120, 90, SKColorType.Bgra8888, SKAlphaType.Premul));
+        previous.Erase(new SKColor(34, 34, 34));
+        next.Erase(new SKColor(34, 34, 34));
+
+        var shift = ScrollStitcher.FindVerticalShift(previous, next, minOverlapRows: 8);
+
+        Assert.True(shift.Found);
+        Assert.Equal(0, shift.Rows);
+    }
+
     [Fact]
     public void FindVerticalShift_DisjointFrames_NotFound()
     {

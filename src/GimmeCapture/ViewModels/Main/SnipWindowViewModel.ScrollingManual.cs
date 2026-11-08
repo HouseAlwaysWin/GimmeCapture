@@ -469,7 +469,8 @@ public partial class SnipWindowViewModel
                 _manualStalls++;
                 AppLog.Information(
                     "ManualScroll.Stalled",
-                    $"after {_manualAlignFailStreak} consecutive misses (strip={stitcher.Width}x{stitcher.Height})");
+                    $"after {_manualAlignFailStreak} consecutive misses (strip={stitcher.Width}x{stitcher.Height}) " +
+                    $"shifts={stitcher.DescribeRecent()}");
                 Dispatcher.UIThread.Post(() => UpdateScrollingStallAction?.Invoke(true));
             }
         }
@@ -485,6 +486,7 @@ public partial class SnipWindowViewModel
             "ManualScroll.Align",
             $"horiz={_manualHorizontal} strip={stitcher.Width}x{stitcher.Height} frame={frameWidth}x{frameHeight} " +
             $"found={step.Placed} tentative={step.Tentative} off={step.Offset} grew={step.Grew} guided={step.Guided} near={step.Predicted} " +
+            $"shift={step.Shift?.ToString() ?? "x"} " +
             $"best={DiagnosticScore(step.BestScore, "MAX")} ambGap={DiagnosticScore(step.AmbiguityGap, "none")} " +
             $"bands={stitcher.TopBand}/{stitcher.BottomBand}");
 

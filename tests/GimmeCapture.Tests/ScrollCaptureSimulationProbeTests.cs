@@ -148,6 +148,110 @@ public sealed class ScrollCaptureSimulationProbeTests(ITestOutputHelper output)
         }
     }
 
+    // SCROLL_SIM=1 too: LINE-like chats at the size of the user's region that lost track three times on 2026-11-08
+    // (548x610, a 180-row title bar, a 65-row message box, the floating date). How far each measured shift was from the
+    // real one, and what became of the frames. SCROLL_SIM_SEEDS=4,5,6 picks the pages (72 runs in about 3 minutes). The
+    // title bar drawn here has less in it than LINE's, and in the runs without the date it is not told from the content.
+    [OptInFact("SCROLL_SIM")]
+    public void LineReport()
+    {
+        const int width = 548;
+        const int height = 610;
+        var overlays = new[]
+        {
+            ("bars", new Overlays(HeaderRows: 180, FooterRows: 65)),
+            ("bars+pill", new Overlays(HeaderRows: 180, FooterRows: 65, DatePill: true)),
+        };
+        output.WriteLine($"{"scenario",-34} wrong  worst(measured/real)    dup  lost breaks  stats");
+        int[] seeds = (Environment.GetEnvironmentVariable("SCROLL_SIM_SEEDS") ?? "3,4,5,6,7,8").Split(',').Select(int.Parse).ToArray();
+        foreach (int pageSeed in seeds)
+        {
+            using Page page = Line(width, 5000, pageSeed);
+            foreach ((string overlayName, Overlays overlay) in overlays)
+            {
+                foreach ((string pathName, List<int> path) in LinePaths(pageSeed))
+                {
+                    ReportLine($"seed{pageSeed} {overlayName} {pathName}", page, path, overlay, height);
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<(string Name, List<int> Path)> LinePaths(int seed)
+    {
+        foreach (double rate in new[] { 0.1, 0.2, 0.3 })
+        {
+            foreach (int notch in new[] { 100, 140 })
+            {
+                yield return ($"up r{rate} n{notch}", WheelPath(3600, 400, seed + (int)(rate * 100), rate, notch));
+                yield return ($"up-jump r{rate} n{notch}", JumpPath(3600, 400, seed + (int)(rate * 100), rate, notch));
+            }
+        }
+    }
+
+    // A wheel whose every notch lands at once, for an app that does not ease its scrolling.
+    private static List<int> JumpPath(int start, int end, int seed, double notchesPerFrame, int notchRows)
+    {
+        var random = new Random(seed);
+        var tops = new List<int> { start };
+        int direction = Math.Sign(end - start);
+        int top = start;
+        while (tops.Count < 2000 && top != end)
+        {
+            if (random.NextDouble() < notchesPerFrame)
+            {
+                top = direction > 0 ? Math.Min(top + notchRows, end) : Math.Max(top - notchRows, end);
+            }
+
+            tops.Add(top);
+        }
+
+        return tops;
+    }
+
+    private void ReportLine(string name, Page page, List<int> tops, Overlays overlays, int height)
+    {
+        (int minOverlap, int ignoreRight) = Parameters(page.Width, height);
+        using SKBitmap seed = Frame(page, tops[0], height, overlays);
+        using var stitcher = new ManualScrollStitcher(seed, minOverlap, ignoreRight, Tolerance, EdgeGuard);
+        int wrong = 0;
+        int worstMeasured = 0;
+        int worstReal = 0;
+        int previousTop = tops[0];
+        bool started = false;
+        var trace = new RowTrace(height, overlays);
+        for (int i = 1; i < tops.Count; i++)
+        {
+            ManualScrollStep step = stitcher.Add(Frame(page, tops[i], height, overlays, i));
+            if (!stitcher.Started)
+            {
+                continue;
+            }
+
+            if (!trace.Started)
+            {
+                trace.Start(tops[0], step.TopBand, step.BottomBand);
+            }
+
+            trace.Apply(step, tops[i], i, tops[i - 1], i - 1);
+            int compareWith = started ? tops[i - 1] : previousTop; // the strip started from the first frame
+            started = true;
+            int real = tops[i] - compareWith;
+            if (step.Shift is int measured && Math.Abs(measured - real) > 8)
+            {
+                wrong++;
+                if (Math.Abs(measured - real) > Math.Abs(worstMeasured - worstReal))
+                {
+                    worstMeasured = measured;
+                    worstReal = real;
+                }
+            }
+        }
+
+        string kept = trace.Started ? $"{trace.DuplicatedRows,5} {trace.Missing(tops),5} {trace.Breaks,6}" : $"{"-",5} {"-",5} {"-",6}";
+        output.WriteLine($"{name,-34} {wrong,5}  {worstMeasured,8}/{worstReal,-8} {kept}  {stitcher.Describe()}");
+    }
+
     private static int Overhang(ScrollStitcher.FrameAlignment align, int stripHeight, int frameHeight) =>
         !align.Found ? 0
         : align.Offset < 0 ? -align.Offset
