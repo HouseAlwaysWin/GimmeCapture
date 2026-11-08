@@ -41,4 +41,17 @@ public class AppLogTests
 
         Assert.Equal(debugOn ? 1 : 0, evaluated);
     }
+
+    // An event name is cut at 120 characters. Lines of figures written as one lost their tails without a sign: every
+    // scrolling capture's result size, and an overlay's total open time once its window came ready.
+    [Fact]
+    public void ACutEventName_EndsInAnEllipsis()
+    {
+        string cut = AppLog.SanitizeLabel(new string('x', 200));
+
+        Assert.Equal(AppLog.MaxLabelLength, cut.Length);
+        Assert.EndsWith("…", cut);
+        Assert.Equal(new string('x', 120), AppLog.SanitizeLabel(new string('x', 120)));
+        Assert.Equal("short", AppLog.SanitizeLabel("  short "));
+    }
 }

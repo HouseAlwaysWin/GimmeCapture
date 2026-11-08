@@ -150,7 +150,8 @@
   window, and the bar never widened under it to be taken hold of. On that edge the handle now sits just outside the
   picture, and the bar widens to 20 pixels a tenth of a second after the pointer reaches it.
 - **The log says how each scrolling capture went.** One line at its end gives the frames seen and placed, how many were
-  found without the scrolling's measure, and the bars kept out, to tell what went wrong in one that came out badly.
+  found without the scrolling's measure, the bars kept out and the result's size, to tell what went wrong in one that
+  came out badly.
 
 ### 🛡️ Reliability
 
@@ -160,6 +161,10 @@
   pieces of compresses abandoned long ago, and took any folder without its progress file for one, though a compress
   just starting has none for a moment: its first piece then failed to write. A folder without one now goes only once
   nothing has been written in it for an hour.
+- **The log keeps the end of its longer lines.** Lines written as an event name were cut at 120 characters without a
+  sign, and lost what came last: a capture overlay's total open time once its window came ready, a scrolling capture's
+  result size, the managed memory after a trim with several reasons, and the start-up entry a registration replaced.
+  They are written whole now, and a name that is still cut ends in "…".
 
 ### 💾 Storage
 

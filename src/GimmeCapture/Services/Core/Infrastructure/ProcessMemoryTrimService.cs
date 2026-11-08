@@ -112,7 +112,8 @@ public static class ProcessMemoryTrimService
         try
         {
             var before = CaptureSnapshot();
-            AppLog.Information($"MemoryTrim.Before.{reason}.{before}");
+            // As a message: an event name is cut at 120 characters, which took the managed heap once the reasons ran long.
+            AppLog.Information("MemoryTrim.Before", $"{reason} {before}");
 
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
@@ -124,7 +125,7 @@ public static class ProcessMemoryTrimService
             ReturnFreedMemoryToOs();
 
             var after = CaptureSnapshot();
-            AppLog.Information($"MemoryTrim.After.{reason}.{after}");
+            AppLog.Information("MemoryTrim.After", $"{reason} {after}");
         }
         catch (Exception ex)
         {
@@ -138,12 +139,12 @@ public static class ProcessMemoryTrimService
         try
         {
             var before = CaptureSnapshot();
-            AppLog.Information($"MemoryTrim.WorkingSetBefore.{reason}.{before}");
+            AppLog.Information("MemoryTrim.WorkingSetBefore", $"{reason} {before}");
 
             ReturnFreedMemoryToOs();
 
             var after = CaptureSnapshot();
-            AppLog.Information($"MemoryTrim.WorkingSetAfter.{reason}.{after}");
+            AppLog.Information("MemoryTrim.WorkingSetAfter", $"{reason} {after}");
         }
         catch (Exception ex)
         {

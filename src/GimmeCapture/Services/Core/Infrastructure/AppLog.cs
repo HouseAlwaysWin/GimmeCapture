@@ -289,7 +289,13 @@ public static class AppLog
         Log.Write(level, template, safeOperation, exceptionType, exception.HResult, stack);
     }
 
-    private static string SanitizeLabel(string value)
+    /// <summary>
+    /// An event name or operation as logged: trimmed, and at most <see cref="MaxLabelLength"/> characters. A longer one
+    /// is cut and ends in "…", so the line says it lost its tail: lines of figures written as event names lost theirs
+    /// without a sign (a scrolling capture's result size, an overlay's total open time). What may run long belongs in
+    /// a message, <see cref="Information(string, string)"/>, which is written whole.
+    /// </summary>
+    internal static string SanitizeLabel(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -297,6 +303,8 @@ public static class AppLog
         }
 
         var safe = value.Trim();
-        return safe.Length <= 120 ? safe : safe[..120];
+        return safe.Length <= MaxLabelLength ? safe : string.Concat(safe.AsSpan(0, MaxLabelLength - 1), "…");
     }
+
+    internal const int MaxLabelLength = 120;
 }

@@ -91,12 +91,14 @@ public class StartupService
         if (ShouldClaimRegistration(existingValue, expectedValue))
         {
             key.SetValue(AppName, expectedValue);
-            AppLog.Information($"StartupRegistration: registered run-on-startup -> {expectedValue} (previous: {existingValue ?? "<none>"})");
+            // As messages: an event name is cut at 120 characters, which took the value it replaced.
+            AppLog.Information(
+                "StartupRegistration", $"registered run-on-startup -> {expectedValue} (previous: {existingValue ?? "<none>"})");
         }
         else if (existingValue != expectedValue)
         {
             AppLog.Information(
-                $"StartupRegistration: left another install's entry alone -> {existingValue} (this copy: {expectedValue})");
+                "StartupRegistration", $"left another install's entry alone -> {existingValue} (this copy: {expectedValue})");
         }
     }
 
@@ -122,12 +124,12 @@ public class StartupService
         if (!OwnsRegistration(existingValue, exePath))
         {
             AppLog.Information(
-                $"StartupRegistration: left another install's entry alone -> {existingValue} (this copy: {exePath})");
+                "StartupRegistration", $"left another install's entry alone -> {existingValue} (this copy: {exePath})");
             return;
         }
 
         key.DeleteValue(AppName);
-        AppLog.Information($"StartupRegistration: removed the run-on-startup entry ({reason}).");
+        AppLog.Information("StartupRegistration", $"removed the run-on-startup entry ({reason}).");
     }
 
     /// <summary>

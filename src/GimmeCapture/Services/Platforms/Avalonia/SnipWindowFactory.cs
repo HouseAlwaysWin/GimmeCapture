@@ -255,8 +255,11 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
         // The next capture's window, once this one is done with and the app is idle again.
         snip.Closed += (_, _) => _preparedWindow.PrepareSoon();
 
+        // As a message: an event name is cut at 120 characters, which took this line's total (and always its earlyGrab)
+        // once the window came ready.
         AppLog.Information(
-            $"SnipOpen.Timings mode={mode} "
+            "SnipOpen.Timings",
+            $"mode={mode} "
             + $"waitedForUiThread={(waitedForUiThreadMs is { } waited ? waited.ToString("F0") : "n/a")} "
             + $"window={afterWindowMs:F0}{(prepared != null ? " (ready)" : string.Empty)} "
             + $"services={afterServicesMs - afterWindowMs:F0} "

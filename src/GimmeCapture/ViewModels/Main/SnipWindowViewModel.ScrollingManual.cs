@@ -256,7 +256,8 @@ public partial class SnipWindowViewModel
         // DIAGNOSTIC (temporary): records the resolved direction, region/strip dims and the active
         // match params so a captured log can show whether forcing is applied and how alignment behaves.
         AppLog.Information(
-            $"ManualScroll.Start dir={chosenDirection} horiz={_manualHorizontal} physW={physW} physH={physH} " +
+            "ManualScroll.Start",
+            $"dir={chosenDirection} horiz={_manualHorizontal} physW={physW} physH={physH} " +
             $"strip={_manualAccumulated.Width}x{_manualAccumulated.Height} minOverlap={_manualMinOverlap} ignoreRight={_manualIgnoreRight}");
 
         // Register finish (Pin key) / cancel (Close key) as temporary GLOBAL hotkeys for the
@@ -441,8 +442,8 @@ public partial class SnipWindowViewModel
             {
                 _manualStallSignaled = true;
                 AppLog.Information(
-                    $"ManualScroll.Stalled after {_manualAlignFailStreak} consecutive misses " +
-                    $"(strip={stitcher.Width}x{stitcher.Height})");
+                    "ManualScroll.Stalled",
+                    $"after {_manualAlignFailStreak} consecutive misses (strip={stitcher.Width}x{stitcher.Height})");
                 Dispatcher.UIThread.Post(() => UpdateScrollingStallAction?.Invoke(true));
             }
         }
@@ -575,9 +576,11 @@ public partial class SnipWindowViewModel
             ManualScrollStitcher? strip = _manualStitcher;
             SKBitmap? result = strip != null ? strip.ToBitmap() : _manualAccumulated;
             SKBitmap? prev = _manualPrevFrame;
-            // Once a capture: how its stitching went, for chasing a bad one without debug logging.
+            // Once a capture: how its stitching went, for chasing a bad one without debug logging. As a message: an event
+            // name is cut at 120 characters, which took this line's started= and result= in every capture.
             AppLog.Information(
-                $"ManualScroll.Finish cancelled={cancelled} horiz={_manualHorizontal} " +
+                "ManualScroll.Finish",
+                $"cancelled={cancelled} horiz={_manualHorizontal} " +
                 $"{strip?.Describe() ?? "stitcher=none"} result={result?.Width ?? 0}x{result?.Height ?? 0}");
             _manualStitcher = null;
             _manualAccumulated = null;
