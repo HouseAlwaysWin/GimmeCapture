@@ -5,150 +5,132 @@
              xmlns:models="using:GimmeCapture.Models"
              xmlns:conv="using:Avalonia.Data.Converters"
              xmlns:converters="using:GimmeCapture.Converters"
-             x:Class="GimmeCapture.Views.Main.Tabs.SettingsCompressTab"
+             x:Class="GimmeCapture.Views.Main.CompressWorkspaceView"
              x:DataType="vm:MainWindowViewModel">
+
     <UserControl.Styles>
-        <!-- Sub-tabs: smaller than the main window tabs so they read as secondary. -->
-        <Style Selector="TabItem">
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Padding" Value="12,4"/>
+        <!-- A check box's label wraps in the narrow settings column, instead of running off its edge. -->
+        <Style Selector="CheckBox /template/ ContentPresenter">
+            <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
     </UserControl.Styles>
 
-    <DockPanel Margin="10">
+    <!-- The video-editing window. Left, what to compress: the queue takes all the height there is, as a working folder can
+         hold dozens of files. Right, how to compress it, always in view, so a changed setting shows at once in every
+         file's size estimate. -->
+    <Grid RowDefinitions="*,Auto" ColumnDefinitions="*,Auto" Margin="12">
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="{Binding [CompressHint], Source={x:Static services:LocalizationService.Instance}}"
-                   Foreground="#9A9A9A"
-                   TextWrapping="Wrap"
-                   FontSize="12"
-                   Margin="0,0,0,10"/>
+        <Grid Grid.Row="0" Grid.Column="0" RowDefinitions="Auto,Auto,*">
 
-        <!-- Sub-tabs: batch queue / edit / output settings -->
-        <TabControl>
+            <Grid Grid.Row="0" RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+                <!-- Persistent working directories: their videos auto-load into the queue on startup. Picking another one
+                     replaces the queue with its videos, which a running batch rules out. -->
+                <TextBlock Grid.Row="0" Grid.Column="0"
+                           Text="{Binding [CompressWorkingDirLabel], Source={x:Static services:LocalizationService.Instance}}"
+                           VerticalAlignment="Center" FontSize="12"/>
+                <ComboBox Grid.Row="0" Grid.Column="1"
+                          ItemsSource="{Binding CompressWorkingDirectories}"
+                          SelectedItem="{Binding SelectedCompressWorkingDir}"
+                          IsEnabled="{Binding IsBatchRunning, Converter={StaticResource BoolInvertConverter}}"
+                          ToolTip.Tip="{Binding ActiveWorkingDir}"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:CompileBindings="False">
+                            <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" FontSize="11"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Grid.Row="0" Grid.Column="2"
+                        Content="{Binding [CompressWorkingDirAdd], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}"
+                        Command="{Binding AddCompressWorkingDirCommand}"/>
+                <Button Grid.Row="0" Grid.Column="3"
+                        Content="{Binding [CompressWorkingDirRemove], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}"
+                        Command="{Binding RemoveCompressWorkingDirCommand}"
+                        CommandParameter="{Binding ActiveWorkingDir}"
+                        IsEnabled="{Binding ActiveWorkingDir, Converter={x:Static conv:ObjectConverters.IsNotNull}}"/>
 
-            <!-- ① Batch queue: add files and compress them in parallel -->
-            <TabItem Header="{Binding [CompressQueueLabel], Source={x:Static services:LocalizationService.Instance}}">
-                <ScrollViewer Padding="0,0,16,0">
-                    <StackPanel Spacing="12" Margin="0,10,0,0">
+                <!-- Create a category subfolder inside the active working area. Each row can then sort
+                     its output into one of these categories via the per-row dropdown below. -->
+                <TextBlock Grid.Row="1" Grid.Column="0"
+                           Text="{Binding [CompressCategoryLabel], Source={x:Static services:LocalizationService.Instance}}"
+                           VerticalAlignment="Center" FontSize="12"/>
+                <TextBox Grid.Row="1" Grid.Column="1"
+                         Text="{Binding NewCategoryName}"
+                         FontSize="11"
+                         IsEnabled="{Binding ActiveWorkingDir, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+                         PlaceholderText="{Binding [CompressCategoryNameWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
+                <Button Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Content="{Binding [CompressAddCategory], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}"
+                        Command="{Binding AddCompressCategoryCommand}"/>
+            </Grid>
 
-                        <!-- Persistent working directories: their videos auto-load into the queue on startup -->
-                        <StackPanel Spacing="6">
-                            <DockPanel>
-                                <Button Content="{Binding [CompressWorkingDirAdd], Source={x:Static services:LocalizationService.Instance}}"
-                                        DockPanel.Dock="Right"
-                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                        Command="{Binding AddCompressWorkingDirCommand}"
-                                        Margin="10,0,0,0"/>
-                                <TextBlock Text="{Binding [CompressWorkingDirLabel], Source={x:Static services:LocalizationService.Instance}}"
-                                           VerticalAlignment="Center" FontSize="12"/>
-                                <TextBlock Text="{Binding ActiveWorkingDir}"
-                                           IsVisible="{Binding ActiveWorkingDir, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
-                                           VerticalAlignment="Center" FontSize="11" Foreground="#C8A24B"
-                                           TextTrimming="CharacterEllipsis" Margin="10,0,0,0"/>
-                            </DockPanel>
-                            <ItemsControl ItemsSource="{Binding CompressWorkingDirectories}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:CompileBindings="False">
-                                        <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,6,0,7">
-                                        <DockPanel>
-                                            <Button Content="{Binding [CompressWorkingDirRemove], Source={x:Static services:LocalizationService.Instance}}"
-                                                    DockPanel.Dock="Right"
-                                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                                    FontSize="10"
-                                                    Command="{Binding $parent[UserControl].DataContext.RemoveCompressWorkingDirCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    Margin="6,0,0,0"/>
-                                            <Button Content="{Binding [CompressWorkingDirSwitch], Source={x:Static services:LocalizationService.Instance}}"
-                                                    DockPanel.Dock="Right"
-                                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                                    FontSize="10"
-                                                    Command="{Binding $parent[UserControl].DataContext.SwitchCompressWorkingDirCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    Margin="10,0,0,0"/>
-                                            <TextBlock Text="{Binding}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       VerticalAlignment="Center"
-                                                       FontSize="11" Foreground="#9A9A9A"/>
-                                        </DockPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+            <DockPanel Grid.Row="1" Margin="0,10">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="10,0,0,0">
+                    <TextBlock Text="{Binding [CompressQueueParallel], Source={x:Static services:LocalizationService.Instance}}"
+                               VerticalAlignment="Center" FontSize="12"/>
+                    <ComboBox ItemsSource="{Binding CompressParallelOptions}"
+                              SelectedItem="{Binding CompressParallelCount}"
+                              IsEnabled="{Binding IsBatchRunning, Converter={StaticResource BoolInvertConverter}}"
+                              MinWidth="70" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="{Binding [CompressQueueAddFiles], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}"
+                            Command="{Binding AddCompressFilesCommand}"/>
+                    <Button Content="{Binding [CompressQueueClear], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}"
+                            Command="{Binding ClearCompressQueueCommand}"/>
+                    <Button Content="{Binding [CompressQueueStart], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource GothicMetalButton}"
+                            Command="{Binding CompressQueueCommand}"/>
+                    <Button Content="{Binding [CompressEstimateAll], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}"
+                            Command="{Binding EstimateAllCompressQueueCommand}"/>
+                    <Button Content="{Binding [CompressQueueCancelAll], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}"
+                            IsVisible="{Binding IsBatchRunning}"
+                            Command="{Binding CancelAllCompressQueueCommand}"/>
+                </StackPanel>
+            </DockPanel>
 
-                            <!-- Create a category subfolder inside the active working area. Each row can then sort
-                                 its output into one of these categories via the per-row dropdown below. -->
-                            <DockPanel IsEnabled="{Binding ActiveWorkingDir, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
-                                <Button Content="{Binding [CompressAddCategory], Source={x:Static services:LocalizationService.Instance}}"
-                                        DockPanel.Dock="Right"
-                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                        FontSize="10"
-                                        Command="{Binding AddCompressCategoryCommand}"
-                                        Margin="10,0,0,0"/>
-                                <TextBlock Text="{Binding [CompressCategoryLabel], Source={x:Static services:LocalizationService.Instance}}"
-                                           DockPanel.Dock="Left"
-                                           VerticalAlignment="Center" FontSize="12" Margin="0,0,10,0"/>
-                                <TextBox Text="{Binding NewCategoryName}"
-                                         FontSize="11"
-                                         PlaceholderText="{Binding [CompressCategoryNameWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
-                            </DockPanel>
-                        </StackPanel>
-
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <Button Content="{Binding [CompressQueueAddFiles], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                    Command="{Binding AddCompressFilesCommand}"/>
-                            <Button Content="{Binding [CompressQueueClear], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                    Command="{Binding ClearCompressQueueCommand}"/>
-                            <Button Content="{Binding [CompressQueueStart], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource GothicMetalButton}"
-                                    Command="{Binding CompressQueueCommand}"/>
-                            <Button Content="{Binding [CompressEstimateAll], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                    Command="{Binding EstimateAllCompressQueueCommand}"/>
-                            <Button Content="{Binding [CompressQueueCancelAll], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                    IsVisible="{Binding IsBatchRunning}"
-                                    Command="{Binding CancelAllCompressQueueCommand}"/>
-                            <!-- 並行數量 shares the action row. -->
-                            <TextBlock Text="{Binding [CompressQueueParallel], Source={x:Static services:LocalizationService.Instance}}"
-                                       VerticalAlignment="Center" FontSize="12" Margin="12,0,0,0"/>
-                            <ComboBox ItemsSource="{Binding CompressParallelOptions}"
-                                      SelectedItem="{Binding CompressParallelCount}"
-                                      IsEnabled="{Binding IsBatchRunning, Converter={StaticResource BoolInvertConverter}}"
-                                      MinWidth="70" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <Border BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4"
-                                MinHeight="48" Padding="6">
-                            <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,14,0">
-                                <ItemsControl ItemsSource="{Binding CompressQueue}">
-                                <!-- Only the rows in view are built. A plain stack built every row the first time the tab
-                                     opened: 79 files came to 9,300 controls and a 0.77 s freeze, for the four or five
-                                     rows this 240-pixel window shows. -->
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <VirtualizingStackPanel/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="models:CompressQueueItem">
-                                        <!-- Hairline separator between rows -->
-                                        <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,8,0,10">
+            <Border Grid.Row="2" BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4" Padding="6">
+                <Panel>
+                    <!-- With nothing queued, how to fill it. -->
+                    <TextBlock Text="{Binding [CompressQueueHint], Source={x:Static services:LocalizationService.Instance}}"
+                               IsVisible="{Binding !CompressQueueCount}"
+                               FontSize="12" Foreground="#9A9A9A" TextWrapping="Wrap" TextAlignment="Center"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="440"/>
+                    <ScrollViewer x:Name="QueueScroller" VerticalScrollBarVisibility="Auto" Padding="0,0,14,0">
+                        <ItemsControl ItemsSource="{Binding CompressQueue}">
+                            <!-- Only the rows in view are built. A plain stack built every row the first time the view
+                                 opened: 79 files came to 9,300 controls and a 0.77 s freeze, for the few rows in view. -->
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="models:CompressQueueItem">
+                                    <!-- Hairline separator between rows -->
+                                    <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,8,0,10">
                                         <Grid ColumnDefinitions="Auto,*,Auto">
                                             <Border Grid.Column="0" Width="64" Height="40"
                                                     Background="#101010" CornerRadius="3"
                                                     VerticalAlignment="Center" Margin="0,0,10,0">
                                                 <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
                                             </Border>
-                                            <!-- MinWidth keeps the file-name / status / estimate column readable so the
-                                                 two dropdowns + action buttons on the right can't crowd it. -->
-                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center" MinWidth="210">
-                                                <!-- Status text sits right after the file name. -->
-                                                <Grid ColumnDefinitions="Auto,*">
-                                                    <!-- Cap the name so very long files can't push the status/buttons around. -->
+
+                                            <!-- The file, how far it got and where its output goes, in the width the buttons leave.
+                                                 A long name is cut here: it used to widen the row past the list, which clipped
+                                                 the thumbnail on one side and the buttons on the other. -->
+                                            <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                                <Grid ColumnDefinitions="*,Auto">
                                                     <TextBlock Grid.Column="0" Text="{Binding FileName}"
-                                                               TextTrimming="CharacterEllipsis" MaxWidth="420"
+                                                               TextTrimming="CharacterEllipsis"
                                                                ToolTip.Tip="{Binding FileName}"
                                                                FontSize="12" VerticalAlignment="Center"/>
                                                     <TextBlock Grid.Column="1" Text="{Binding StatusText}"
@@ -159,15 +141,8 @@
                                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                                     <TextBlock Text="{Binding FileSizeText}" FontSize="10" Foreground="#9A9A9A"/>
                                                     <TextBlock Text="{Binding DateText}" FontSize="10" Foreground="#9A9A9A"/>
+                                                    <TextBlock Text="{Binding EstimatedText}" FontSize="10" Foreground="#9A9A9A"/>
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding EstimatedText}"
-                                                           Foreground="#9A9A9A"
-                                                           FontSize="10"/>
-                                                <!-- Edit summary (from the removed 編輯 tab) under the estimate. -->
-                                                <TextBlock Text="{Binding EditSummaryText}"
-                                                           Foreground="#C8A24B" FontSize="10"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           ToolTip.Tip="{Binding EditSummaryText}"/>
                                                 <!-- Progress bar + percentage, plus (CRF only) the safe resume checkpoint. -->
                                                 <Grid ColumnDefinitions="*,Auto,Auto" IsVisible="{Binding ShowProgress}">
                                                     <ProgressBar Grid.Column="0" Minimum="0" Maximum="1"
@@ -185,116 +160,121 @@
                                                                FontSize="10" Foreground="#C8A24B"
                                                                VerticalAlignment="Center" Margin="8,0,0,0"/>
                                                 </Grid>
+                                                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6">
+                                                    <!-- Per-item output-settings bundle (a bundle overrides the live
+                                                         輸出設定 for this file; "current settings" keeps them). -->
+                                                    <ComboBox Grid.Column="0"
+                                                              ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).BatchPresetChoices}"
+                                                              SelectedItem="{Binding SelectedPreset, Converter={x:Static converters:IgnoreNullWriteBackConverter.Instance}}"
+                                                              IsEnabled="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
+                                                              FontSize="10" MinWidth="120" VerticalAlignment="Center">
+                                                        <ComboBox.ItemTemplate>
+                                                            <DataTemplate x:CompileBindings="False">
+                                                                <!-- The "current settings" sentinel has an empty Name → show the
+                                                                     localized label (reactive to language); saved bundles show Name. -->
+                                                                <Panel>
+                                                                    <TextBlock Text="{Binding [CompressPresetCurrent], Source={x:Static services:LocalizationService.Instance}}"
+                                                                               IsVisible="{Binding Name, Converter={x:Static conv:StringConverters.IsNullOrEmpty}}"/>
+                                                                    <TextBlock Text="{Binding Name}"
+                                                                               IsVisible="{Binding Name, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                                                                </Panel>
+                                                            </DataTemplate>
+                                                        </ComboBox.ItemTemplate>
+                                                    </ComboBox>
+                                                    <!-- Per-item output category: sort this file's output into a subfolder
+                                                         of the active working area; the empty sentinel keeps the global /
+                                                         next-to-source default. Entries show the category (leaf) name. -->
+                                                    <ComboBox Grid.Column="1"
+                                                              ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).CompressCategoryChoices}"
+                                                              SelectedItem="{Binding SelectedOutputDir, Converter={x:Static converters:IgnoreNullWriteBackConverter.Instance}}"
+                                                              IsEnabled="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
+                                                              FontSize="10" MinWidth="96" MaxWidth="150" VerticalAlignment="Center"
+                                                              ToolTip.Tip="{Binding [CompressItemOutputDirTip], Source={x:Static services:LocalizationService.Instance}}">
+                                                        <ComboBox.ItemTemplate>
+                                                            <DataTemplate x:CompileBindings="False">
+                                                                <!-- Empty string = the localized "default" label (reactive to
+                                                                     language); a category path shows just its leaf name. -->
+                                                                <Panel>
+                                                                    <TextBlock Text="{Binding [CompressOutputDirDefault], Source={x:Static services:LocalizationService.Instance}}"
+                                                                               IsVisible="{Binding Converter={x:Static conv:StringConverters.IsNullOrEmpty}}"/>
+                                                                    <TextBlock Text="{Binding Converter={x:Static converters:FolderLeafNameConverter.Instance}}"
+                                                                               TextTrimming="CharacterEllipsis"
+                                                                               IsVisible="{Binding Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                                                                </Panel>
+                                                            </DataTemplate>
+                                                        </ComboBox.ItemTemplate>
+                                                    </ComboBox>
+                                                    <TextBlock Grid.Column="2" Text="{Binding EditSummaryText}"
+                                                               Foreground="#C8A24B" FontSize="10" VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding EditSummaryText}"/>
+                                                </Grid>
                                             </StackPanel>
+
                                             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
-                                                        VerticalAlignment="Center" Margin="10,0,0,0">
-                                                <!-- Per-item output-settings bundle (a bundle overrides the live
-                                                     輸出設定 for this file; "current settings" keeps them). -->
-                                                <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).BatchPresetChoices}"
-                                                          SelectedItem="{Binding SelectedPreset, Converter={x:Static converters:IgnoreNullWriteBackConverter.Instance}}"
-                                                          IsEnabled="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
-                                                          FontSize="10" MinWidth="120" VerticalAlignment="Center">
-                                                    <ComboBox.ItemTemplate>
-                                                        <DataTemplate x:CompileBindings="False">
-                                                            <!-- The "current settings" sentinel has an empty Name → show the
-                                                                 localized label (reactive to language); saved bundles show Name. -->
-                                                            <Panel>
-                                                                <TextBlock Text="{Binding [CompressPresetCurrent], Source={x:Static services:LocalizationService.Instance}}"
-                                                                           IsVisible="{Binding Name, Converter={x:Static conv:StringConverters.IsNullOrEmpty}}"/>
-                                                                <TextBlock Text="{Binding Name}"
-                                                                           IsVisible="{Binding Name, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
-                                                            </Panel>
-                                                        </DataTemplate>
-                                                    </ComboBox.ItemTemplate>
-                                                </ComboBox>
-                                                <!-- Per-item output category: sort this file's output into a subfolder
-                                                     of the active working area; the empty sentinel keeps the global /
-                                                     next-to-source default. Entries show the category (leaf) name. -->
-                                                <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).CompressCategoryChoices}"
-                                                          SelectedItem="{Binding SelectedOutputDir, Converter={x:Static converters:IgnoreNullWriteBackConverter.Instance}}"
-                                                          IsEnabled="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
-                                                          FontSize="10" MinWidth="96" MaxWidth="150" VerticalAlignment="Center"
-                                                          ToolTip.Tip="{Binding [CompressItemOutputDirTip], Source={x:Static services:LocalizationService.Instance}}">
-                                                    <ComboBox.ItemTemplate>
-                                                        <DataTemplate x:CompileBindings="False">
-                                                            <!-- Empty string = the localized "default" label (reactive to
-                                                                 language); a category path shows just its leaf name. -->
-                                                            <Panel>
-                                                                <TextBlock Text="{Binding [CompressOutputDirDefault], Source={x:Static services:LocalizationService.Instance}}"
-                                                                           IsVisible="{Binding Converter={x:Static conv:StringConverters.IsNullOrEmpty}}"/>
-                                                                <TextBlock Text="{Binding Converter={x:Static converters:FolderLeafNameConverter.Instance}}"
-                                                                           TextTrimming="CharacterEllipsis"
-                                                                           IsVisible="{Binding Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
-                                                            </Panel>
-                                                        </DataTemplate>
-                                                    </ComboBox.ItemTemplate>
-                                                </ComboBox>
-                                                <!-- Per-row 編輯 (the former 編輯 tab now lives on each row). -->
-                                                <Button Content="{Binding [CompressEditButton], Source={x:Static services:LocalizationService.Instance}}"
-                                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                                        FontSize="10"
-                                                        IsVisible="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
-                                                        Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).OpenEditorCommand}"
-                                                        CommandParameter="{Binding}"/>
-                                                <Button Content="{Binding [CompressEstimateItem], Source={x:Static services:LocalizationService.Instance}}"
-                                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                                        FontSize="10"
-                                                        IsVisible="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
-                                                        Command="{Binding EstimateCommand}"/>
-                                                <Button Content="{Binding [CompressQueueStartItem], Source={x:Static services:LocalizationService.Instance}}"
-                                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                                        FontSize="10"
-                                                        IsVisible="{Binding ShowStart}"
-                                                        Command="{Binding StartCommand}"/>
-                                                <!-- Cold-paused file: a "繼續" button that re-encodes the whole file from the start. -->
-                                                <Button Content="{Binding [CompressResume], Source={x:Static services:LocalizationService.Instance}}"
-                                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                                        FontSize="10"
-                                                        IsVisible="{Binding ShowColdResume}"
-                                                        Command="{Binding StartCommand}"/>
-                                                <Button Content="{Binding [CompressPause], Source={x:Static services:LocalizationService.Instance}}"
-                                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                                        FontSize="10"
-                                                        IsVisible="{Binding ShowPause}"
-                                                        Command="{Binding PauseCommand}"/>
-                                                <Button Content="{Binding [CompressResume], Source={x:Static services:LocalizationService.Instance}}"
-                                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                                        FontSize="10"
-                                                        IsVisible="{Binding ShowResume}"
-                                                        Command="{Binding ResumeCommand}"/>
-                                                <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
-                                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                                        FontSize="10"
-                                                        IsVisible="{Binding CanCancel}"
-                                                        Command="{Binding CancelCommand}"/>
-                                                <!-- Open the produced file's folder; only shown once this row has finished. -->
-                                                <Button Content="{Binding [CompressOpenOutputFolder], Source={x:Static services:LocalizationService.Instance}}"
-                                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                                        FontSize="10"
-                                                        IsVisible="{Binding HasOutput}"
-                                                        Command="{Binding RevealCommand}"/>
+                                                        Height="32" VerticalAlignment="Center" Margin="10,0,0,0">
+                                            <!-- Opens this file in the 進階影片編輯 window. -->
+                                            <Button Content="{Binding [CompressEditButton], Source={x:Static services:LocalizationService.Instance}}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    FontSize="10"
+                                                    IsVisible="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
+                                                    Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).OpenEditorCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Content="{Binding [CompressEstimateItem], Source={x:Static services:LocalizationService.Instance}}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    FontSize="10"
+                                                    IsVisible="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
+                                                    Command="{Binding EstimateCommand}"/>
+                                            <Button Content="{Binding [CompressQueueStartItem], Source={x:Static services:LocalizationService.Instance}}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    FontSize="10"
+                                                    IsVisible="{Binding ShowStart}"
+                                                    Command="{Binding StartCommand}"/>
+                                            <!-- Cold-paused file: a "繼續" button that re-encodes the whole file from the start. -->
+                                            <Button Content="{Binding [CompressResume], Source={x:Static services:LocalizationService.Instance}}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    FontSize="10"
+                                                    IsVisible="{Binding ShowColdResume}"
+                                                    Command="{Binding StartCommand}"/>
+                                            <Button Content="{Binding [CompressPause], Source={x:Static services:LocalizationService.Instance}}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    FontSize="10"
+                                                    IsVisible="{Binding ShowPause}"
+                                                    Command="{Binding PauseCommand}"/>
+                                            <Button Content="{Binding [CompressResume], Source={x:Static services:LocalizationService.Instance}}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    FontSize="10"
+                                                    IsVisible="{Binding ShowResume}"
+                                                    Command="{Binding ResumeCommand}"/>
+                                            <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    FontSize="10"
+                                                    IsVisible="{Binding CanCancel}"
+                                                    Command="{Binding CancelCommand}"/>
+                                            <!-- Open the produced file's folder; only shown once this row has finished. -->
+                                            <Button Content="{Binding [CompressOpenOutputFolder], Source={x:Static services:LocalizationService.Instance}}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    FontSize="10"
+                                                    IsVisible="{Binding HasOutput}"
+                                                    Command="{Binding RevealCommand}"/>
                                             </StackPanel>
                                         </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </Border>
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="{Binding CompressStatusText}"
-                                       VerticalAlignment="Center"
-                                       FontSize="12"/>
-                        </StackPanel>
-                        <TextBlock Text="{Binding [CompressQueueHint], Source={x:Static services:LocalizationService.Instance}}"
-                                   FontSize="11" Foreground="#9A9A9A" TextWrapping="Wrap"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Panel>
+            </Border>
+        </Grid>
 
-            <!-- ② Edit: pick a queued file, preview its first frame, rotate it -->
-            <!-- ③ Output settings -->
-            <TabItem Header="{Binding [CompressSettingsGroup], Source={x:Static services:LocalizationService.Instance}}">
+        <!-- Output settings: what every file whose row keeps "current settings" is encoded with. -->
+        <Border Grid.Row="0" Grid.Column="1" Width="320" Margin="12,0,0,0" Padding="12,0,0,0"
+                BorderBrush="#333333" BorderThickness="1,0,0,0">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top"
+                           Text="{Binding [CompressSettingsGroup], Source={x:Static services:LocalizationService.Instance}}"
+                           FontSize="13" Foreground="{DynamicResource ThemeAccentBrush}"/>
                 <ScrollViewer Padding="0,0,16,0">
                     <StackPanel Spacing="12" Margin="0,8,0,0">
 
@@ -541,8 +521,11 @@
 
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
+            </DockPanel>
+        </Border>
 
-        </TabControl>
-    </DockPanel>
+        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                   Text="{Binding CompressStatusText}"
+                   FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,8,0,0"/>
+    </Grid>
 </UserControl>

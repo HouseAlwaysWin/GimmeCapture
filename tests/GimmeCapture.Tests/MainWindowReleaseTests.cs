@@ -11,10 +11,11 @@ namespace GimmeCapture.Tests;
 
 /// <summary>
 /// The main window, hidden in the tray, is let go of (<see cref="MainWindow.Release"/>) and built again on the next open.
-/// The view model outlives it, so nothing the window or its tabs wired into the view model may keep it: the Compress tab's
-/// file pickers did. And closing it for real must not write into any setting, as the Compress queue's dropdowns once
-/// nulled their files' choices that way. Opt-in (MAIN_WINDOW_PROBE=1) because it sets up a headless Avalonia
-/// application, which a process can do only once.
+/// The view model outlives it, so nothing the window or its tabs wired into the view model may keep it: the Compress
+/// file pickers did, in a tab then. The video-editing window they went to lets go the same way when it is closed. And
+/// closing either for real must not write into any setting, as the Compress queue's dropdowns once nulled their files'
+/// choices that way. Opt-in (MAIN_WINDOW_PROBE=1) because it sets up a headless Avalonia application, which a process
+/// can do only once.
 /// </summary>
 public sealed class MainWindowReleaseTests
 {
@@ -41,16 +42,17 @@ public sealed class MainWindowReleaseTests
         string settingsBefore = JsonSerializer.Serialize(vm.CreateSettingsSnapshot());
 
         var released = OpenEveryTabThenRelease(vm);
-        for (int pass = 0; pass < 3; pass++)
-        {
-            Dispatcher.UIThread.RunJobs();
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-        }
+        Collect();
 
         Assert.False(released.Window.IsAlive, "The released main window is still reachable.");
         Assert.False(released.FirstTab.IsAlive, "A tab of the released main window is still reachable.");
         Assert.Null(vm.PickFolderAction);
+        Assert.Equal(settingsBefore, JsonSerializer.Serialize(vm.CreateSettingsSnapshot()));
+
+        var closed = OpenThenCloseCompressWindow(vm);
+        Collect();
+
+        Assert.False(closed.IsAlive, "The closed video-editing window is still reachable.");
         Assert.Null(vm.PickCompressFilesAction);
         Assert.Equal(settingsBefore, JsonSerializer.Serialize(vm.CreateSettingsSnapshot()));
 
@@ -61,6 +63,36 @@ public sealed class MainWindowReleaseTests
         Assert.NotNull(vm.PickFolderAction);
         reopened.Release();
         Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void Collect()
+    {
+        for (int pass = 0; pass < 3; pass++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference OpenThenCloseCompressWindow(MainWindowViewModel vm)
+    {
+        var window = new CompressWindow { DataContext = vm };
+        window.Show();
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (window.Content is not CompressWorkspaceView && DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(10);
+        }
+
+        Assert.IsType<CompressWorkspaceView>(window.Content);
+        Assert.NotNull(vm.PickCompressFilesAction);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+        return new WeakReference(window);
     }
 
     // In a method of its own, so no local of the test keeps the window.
@@ -77,8 +109,6 @@ public sealed class MainWindowReleaseTests
             tabs.SelectedIndex = index;
             Dispatcher.UIThread.RunJobs();
         }
-
-        Assert.NotNull(vm.PickCompressFilesAction);
 
         // Closed to the tray first, as the user does: the window hides, then sits there until it is let go of.
         window.Close();

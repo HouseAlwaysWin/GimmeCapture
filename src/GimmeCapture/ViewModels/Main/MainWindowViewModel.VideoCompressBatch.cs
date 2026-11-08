@@ -19,7 +19,7 @@ using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;
 
-// Batch queue for the Compress tab. Each file can be started / paused / cancelled individually; a shared
+// Batch queue for the video-editing window. Each file can be started / paused / cancelled individually; a shared
 // concurrency cap (CompressParallelCount) bounds how many encode at once, whether started one-by-one or via
 // "Compress all". This partial keeps only the bindable queue/settings state + command wiring; the actual
 // scheduling engine (shared CTS + concurrency semaphore + in-flight count + per-item run loop) lives in
@@ -111,7 +111,26 @@ public partial class MainWindowViewModel
     public string? ActiveWorkingDir
     {
         get => _activeWorkingDir;
-        private set => this.RaiseAndSetIfChanged(ref _activeWorkingDir, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _activeWorkingDir, value);
+            this.RaisePropertyChanged(nameof(SelectedCompressWorkingDir));
+        }
+    }
+
+    // The working-folder dropdown: shows the active folder, and picking another switches the queue to it. The dropdown
+    // writes a null when its list changes under it or it goes with its window, which picks nothing.
+    public string? SelectedCompressWorkingDir
+    {
+        get => _activeWorkingDir;
+        set
+        {
+            if (!string.IsNullOrEmpty(value)
+                && !string.Equals(value, _activeWorkingDir, StringComparison.OrdinalIgnoreCase))
+            {
+                SwitchCompressWorkingDirCommand.Execute(value).SubscribeLoggingErrors("Compress.SwitchWorkingDir");
+            }
+        }
     }
 
     // Per-file edit/progress state (rotation, output name, done), persisted across restarts; keyed by source path.
@@ -163,23 +182,23 @@ public partial class MainWindowViewModel
     private Task? _compressInitTask;
 
     /// <summary>
-    /// Sets the Compress tab up the first time it is shown: its commands, presets and last-used settings, then the
-    /// queue saved last session (per-file edit/done state, working directories, the active directory's videos).
-    /// Nothing outside that tab reaches any of it, and doing it at start-up cost every launch about a quarter of a
+    /// Sets the video-editing window up the first time it is shown: its commands, presets and last-used settings, then
+    /// the queue saved last session (per-file edit/done state, working directories, the active directory's videos).
+    /// Nothing outside that window reaches any of it, and doing it at start-up cost every launch about a quarter of a
     /// second on the UI thread. The files are read on a worker thread and the result applied on the caller's; the
-    /// view builds the tab once this completes, so it never offers an empty queue in the meantime.
+    /// window builds its view once this completes, so it never offers an empty queue in the meantime.
     /// </summary>
     internal Task EnsureCompressInitializedAsync() => _compressInitTask ??= InitializeCompressAsync();
 
     private async Task InitializeCompressAsync()
     {
         // Reading the saved state and the active folder, and sweeping abandoned resume chunks, held the UI thread for
-        // up to 0.45 s on the tab's first open.
+        // up to 0.45 s on the first open.
         CompressStartupState saved = await Task.Run(LoadCompressStartupState);
         ApplyCompressStartupState(saved);
     }
 
-    // Everything the Compress tab's first open reads from disk.
+    // Everything the video-editing window's first open reads from disk.
     private sealed record CompressStartupState(
         IReadOnlyList<CompressPreset> Presets,
         CompressSessionState Session,
@@ -213,7 +232,7 @@ public partial class MainWindowViewModel
             ListCategoryFolders(active), ListVideoFiles(active));
     }
 
-    // UI thread: wires the tab up with what LoadCompressStartupState read, then fills the queue with the active
+    // UI thread: wires the window up with what LoadCompressStartupState read, then fills the queue with the active
     // directory's videos (what switching to it does, minus the file reads).
     private void ApplyCompressStartupState(CompressStartupState saved)
     {

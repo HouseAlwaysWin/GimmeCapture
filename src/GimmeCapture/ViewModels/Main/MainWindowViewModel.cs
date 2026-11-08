@@ -171,6 +171,9 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
     /// <summary>Opens the main window, building it first in a launch to the tray. Wired by the tray.</summary>
     public Action? ShowMainWindowAction { get; set; }
 
+    /// <summary>Opens the video-editing window, or brings it forward. Wired with the view model (AppBootstrapper).</summary>
+    public Action? ShowCompressWindowAction { get; set; }
+
     // Status keys that are routine/idle noise and should NOT pop a toast.
     private static readonly HashSet<string> _quietStatusKeys = new(StringComparer.Ordinal)
     {
@@ -344,6 +347,7 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> ScrollingCaptureCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> ResetToDefaultCommand { get; } = null!;
+    public ReactiveCommand<Unit, Unit> OpenCompressWindowCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; } = null!;
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; } = null!;
@@ -450,6 +454,8 @@ public partial class MainWindowViewModel : ViewModelBase, ISnipWindowHost, ISnip
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
         ScrollingCaptureCommand = ReactiveCommand.CreateFromTask(() => StartCapture(CaptureMode.ScrollingCapture));
         ResetToDefaultCommand = ReactiveCommand.CreateFromTask(ResetToDefault);
+        OpenCompressWindowCommand = ReactiveCommand.Create(() => ShowCompressWindowAction?.Invoke());
+        OpenCompressWindowCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenWindow", ex));
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness < 9) BorderThickness += 1; });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness > 1) BorderThickness -= 1; });
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => BorderColor = c);

@@ -20,6 +20,7 @@ public sealed class TrayController
 
     // Held so the localization change handler can update them for the tray's lifetime.
     private NativeMenuItem? _showItem;
+    private NativeMenuItem? _compressItem;
     private NativeMenuItem? _autoStartItem;
     private NativeMenuItem? _autoUpdateItem;
     private NativeMenuItem? _exitItem;
@@ -65,6 +66,11 @@ public sealed class TrayController
             _showItem.Click += (s, e) => ShowMainWindow();
             menu.Items.Add(_showItem);
 
+            // Video editing: a window of its own, reached without the main window
+            _compressItem = new NativeMenuItem(loc["CompressWindowTitle"] ?? "Video Editing");
+            _compressItem.Click += (s, e) => _bootstrapper.ShowCompressWindow();
+            menu.Items.Add(_compressItem);
+
             // Separator
             menu.Items.Add(new NativeMenuItemSeparator());
 
@@ -105,6 +111,7 @@ public sealed class TrayController
                     Dispatcher.UIThread.Post(() =>
                     {
                         _showItem.Header = loc["TrayShow"] ?? "Show";
+                        _compressItem.Header = loc["CompressWindowTitle"] ?? "Video Editing";
                         _exitItem.Header = loc["TrayExit"] ?? "Exit";
                         _autoStartItem.Header = FormatToggleLabel(loc["RunOnStartup"] ?? "Run On Startup", _bootstrapper.RunOnStartup);
                         _autoUpdateItem.Header = FormatToggleLabel(loc["AutoCheckUpdates"] ?? "Auto Check Updates", _bootstrapper.AutoCheckUpdates);

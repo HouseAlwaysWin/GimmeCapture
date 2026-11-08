@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -7,9 +8,11 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.ViewModels.Main;
+using GimmeCapture.Views.Dialogs;
 using GimmeCapture.Views.Shared;
 using ReactiveUI;
 using ReactiveUI.Reactive;
@@ -213,6 +216,10 @@ public partial class VideoEditWindow : Window
         if (DataContext is VideoEditViewModel vm)
         {
             vm.RequestClose = Close;
+            // Changing crop/rotation clears surface-space annotations/redaction, and 還原預設 discards every (non-undoable) edit.
+            vm.ConfirmTransformClearsEditsAction = () =>
+                ConfirmAsync(LocalizationService.Instance["CompressEditTransformClearsEdits"]);
+            vm.ConfirmResetAllAction = () => ConfirmAsync(LocalizationService.Instance["CompressEditResetConfirm"]);
             // Frames are drawn into the bitmap the preview already shows, which repaints nothing by itself.
             vm.RequestRedraw = PreviewImage.InvalidateVisual;
             _layoutHandler = () => Dispatcher.UIThread.Post(UpdateSegmentLayout);
@@ -222,6 +229,15 @@ public partial class VideoEditWindow : Window
             UpdateSegmentLayout();
             _ = vm.InitializeAsync(); // decode + show the first frame
         }
+    }
+
+    // Asked over this window, the one in front of the user. The main window may be hidden in the tray, where Avalonia shows
+    // no dialog over it, or already let go of.
+    private async Task<bool> ConfirmAsync(string message)
+    {
+        ConfirmationResult result = await ConfirmationDialog.ShowConfirmation(
+            this, LocalizationService.Instance["CompressEditWindowTitle"], message, ConfirmationMode.YesNo);
+        return result == ConfirmationResult.Yes;
     }
 
     protected override void OnClosed(EventArgs e)

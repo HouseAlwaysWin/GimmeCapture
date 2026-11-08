@@ -57,7 +57,7 @@ src/GimmeCapture/
     Floating/                  # pin window VMs (image/video/translation)
     Shared/                    # cross-cutting VM helpers
   Views/
-    Main/                      # MainWindow, SnipWindow (partial code-behind)
+    Main/                      # MainWindow, SnipWindow (partial code-behind), CompressWindow (video editing)
     Main/Tabs/                 # Settings tabs (General/Snip/Record/Translation/Modules/…)
     Floating/                  # floating image/video/translation windows
   Services/
@@ -240,7 +240,8 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
   freeze there that no hotkey press or tray click set off reads short by up to a second, or not at all below it, and
   one after a press reads from the press (`UiThreadStallMonitor.NotifyInput`).
 - Every settings tab except General is built the first time it is shown (`EnsureLazyTabContent` in
-  `MainWindow.Tabs.cs`), and set-up only one tab needs belongs there too (`EnsureCompressInitializedAsync`).
+  `MainWindow.Tabs.cs`), and set-up only one tab needs belongs there too. The video-editing window (`CompressWindow`)
+  likewise builds its view once `EnsureCompressInitializedAsync` is done.
   `Startup.Timings` in the log breaks a launch down by stage, each as `wall/cpu` ms; on Windows it adds what a slow
   start waited on (`systemCpu`, `hardFaults`, `disk`) and what `StartupPrefetch` read ahead of it (`prefetch`); a
   start through the sign-in launcher adds its share (`launcher`), which comes before `beforeMain`.

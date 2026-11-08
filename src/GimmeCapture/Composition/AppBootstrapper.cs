@@ -174,8 +174,8 @@ public sealed class AppBootstrapper : IAsyncDisposable
     /// Lets go of the main window when it is still hidden in the tray (<see cref="MainWindow.Release"/>). The app is left
     /// as a launch to the tray leaves it, and the next open builds the window again. With every tab opened, that brought
     /// the commit size down 14-28 MB, and the full trim that follows 14 MB more; the rest of what opening it cost stays
-    /// (the GPU's share, fonts, loaded libraries). Not while a module download reports through the window, or a Compress
-    /// editor confirms through it, which would then confirm unasked: it tries again after another idle delay.
+    /// (the GPU's share, fonts, loaded libraries). Not while a module download reports through the window: it tries again
+    /// after another idle delay.
     /// </summary>
     internal void ReleaseHiddenMainWindow()
     {
@@ -184,8 +184,7 @@ public sealed class AppBootstrapper : IAsyncDisposable
             return;
         }
 
-        if (_mainWindowViewModel.Value.IsProcessing
-            || _mainWindowDependencies.Value.WindowManager.FindWindowOfType<VideoEditWindow>() != null)
+        if (_mainWindowViewModel.Value.IsProcessing)
         {
             _mainWindowRelease.NotifyUse();
             return;
@@ -197,6 +196,29 @@ public sealed class AppBootstrapper : IAsyncDisposable
         MainWindowReleased?.Invoke();
         // Nothing allocates in an idle app, so nothing would collect the window for a long time: the full trim does.
         ProcessMemoryTrimService.RequestIdleTrimAsync("main-window-released").Forget("MemoryTrim.MainWindowReleased");
+    }
+
+    /// <summary>
+    /// Opens the video-editing window, on the main window's screen when that is up, or brings it forward when it already is
+    /// open. There is only ever the one: the queue it shows is the view model's.
+    /// </summary>
+    public void ShowCompressWindow()
+    {
+        // The stall monitor beats once a second in the tray: a probe of its own reads the window's build and show.
+        UiThreadStallMonitor.NotifyInput();
+        var window = _mainWindowDependencies.Value.WindowManager.FindWindowOfType<CompressWindow>();
+        if (window == null)
+        {
+            window = new CompressWindow { DataContext = _mainWindowViewModel.Value };
+            window.PlaceOnScreenOf(_mainWindow is { IsVisible: true } ? _mainWindow : null);
+            window.Show();
+        }
+        else if (window.WindowState == WindowState.Minimized)
+        {
+            window.WindowState = WindowState.Normal;
+        }
+
+        window.Activate();
     }
 
     /// <summary>
@@ -320,6 +342,7 @@ public sealed class AppBootstrapper : IAsyncDisposable
         viewModel.ShowToastAction = (message, severity) => _toastService.Value.Show(message, severity);
         viewModel.ShowPreviewToastAction = (message, severity, preview) => _toastService.Value.Show(message, severity, preview);
         viewModel.ShowClickableToastAction = (message, severity, onClick) => _toastService.Value.Show(message, severity, onClick: onClick);
+        viewModel.ShowCompressWindowAction = ShowCompressWindow;
         // So were the main window's dialog for a hotkey that could not be registered, at a launch to the tray before the
         // hotkeys are registered, and the Modules tab the capture overlay asks for: stand-ins until a main window is up.
         viewModel.UseWindowlessHandlers();

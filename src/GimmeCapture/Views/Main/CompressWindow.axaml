@@ -1,0 +1,13 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GimmeCapture.ViewModels.Main"
+        xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+        x:Class="GimmeCapture.Views.Main.CompressWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding [CompressWindowTitle], Source={x:Static services:LocalizationService.Instance}}"
+        Icon="avares://GimmeCapture/Assets/kitsune_icon_256.png"
+        Width="1180" Height="760"
+        MinWidth="1040" MinHeight="560"
+        Background="#101010"
+        Foreground="White"
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>

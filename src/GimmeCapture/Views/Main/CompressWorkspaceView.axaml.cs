@@ -4,21 +4,20 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.ViewModels.Main;
-using GimmeCapture.Views.Main;
 
-namespace GimmeCapture.Views.Main.Tabs;
+namespace GimmeCapture.Views.Main;
 
-public partial class SettingsCompressTab : UserControl
+public partial class CompressWorkspaceView : UserControl
 {
     private MainWindowViewModel? _wiredViewModel;
 
-    public SettingsCompressTab()
+    public CompressWorkspaceView()
     {
         InitializeComponent();
     }
 
-    // The view model outlives the main window, which is let go of once it has sat hidden in the tray: what this tab wired
-    // into it would keep the tab, and through it the window. Leaving the logical tree is the window closing.
+    // The view model outlives this window: what this view wired into it would keep the view, and through it the window.
+    // Leaving the logical tree is the window closing.
     protected override void OnDetachedFromLogicalTree(Avalonia.LogicalTree.LogicalTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromLogicalTree(e);
@@ -104,18 +103,6 @@ public partial class SettingsCompressTab : UserControl
         // Advanced video editing: open a standalone editor window for the prepared view model.
         vm.OpenEditorAction = editVm =>
         {
-            var loc = GimmeCapture.Services.Core.Infrastructure.LocalizationService.Instance;
-
-            // Changing crop/rotation clears surface-space annotations/redaction — confirm via the main dialog.
-            editVm.ConfirmTransformClearsEditsAction = () =>
-                vm.ConfirmYesNoAction?.Invoke(loc["CompressEditWindowTitle"], loc["CompressEditTransformClearsEdits"])
-                ?? System.Threading.Tasks.Task.FromResult(true);
-
-            // 還原預設 discards every (non-undoable) edit — confirm via the same dialog.
-            editVm.ConfirmResetAllAction = () =>
-                vm.ConfirmYesNoAction?.Invoke(loc["CompressEditWindowTitle"], loc["CompressEditResetConfirm"])
-                ?? System.Threading.Tasks.Task.FromResult(true);
-
             // Freeze-frame → a plain floating image pin (no AI): just the current frame pinned out.
             // The user can enter point-removal / background-removal from the pinned image's own toolbar.
             editVm.FreezeFrameToImagePinAction = bitmap => Avalonia.Threading.Dispatcher.UIThread.Post(() =>

@@ -8,23 +8,23 @@ using Avalonia.VisualTree;
 using GimmeCapture.Converters;
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Main;
-using GimmeCapture.Views.Main.Tabs;
+using GimmeCapture.Views.Main;
 using Xunit.Abstractions;
 
 namespace GimmeCapture.Tests;
 
 /// <summary>
-/// The Compress tab's queue. Its rows each hold two dropdowns bound both ways to the file's preset and output category,
-/// and eight buttons. The headless test builds the tab with the user's 79-file queue; it is opt-in
+/// The video-editing window's queue. Its rows each hold two dropdowns bound both ways to the file's preset and output
+/// category, and eight buttons. The headless test builds the view with the user's 79-file queue; it is opt-in
 /// (COMPRESS_TAB_PROBE=1) because it sets up an Avalonia application, which a process can do only once, and it prints
 /// what each build took.
 /// </summary>
-public sealed class SettingsCompressTabTests
+public sealed class CompressWorkspaceViewTests
 {
     private const int QueueLength = 79;
     private readonly ITestOutputHelper _output;
 
-    public SettingsCompressTabTests(ITestOutputHelper output) => _output = output;
+    public CompressWorkspaceViewTests(ITestOutputHelper output) => _output = output;
 
     [Fact]
     public void ADropdownLosingItsOptions_WritesNothingBack()
@@ -39,7 +39,7 @@ public sealed class SettingsCompressTabTests
     }
 
     [OptInFact("COMPRESS_TAB_PROBE=1")]
-    public async Task TheQueue_BuildsOnlyTheRowsInView_AndLeavesEachFilesChoicesAlone()
+    public void TheQueue_BuildsOnlyTheRowsInView_AndLeavesEachFilesChoicesAlone()
     {
         AppBuilder.Configure<GimmeCapture.App>()
             .UseSkia()
@@ -47,7 +47,17 @@ public sealed class SettingsCompressTabTests
             .SetupWithoutStarting();
 
         var vm = new MainWindowViewModel();
-        await vm.InitialSettingsLoadTask;
+        // Applying saved settings goes through the UI thread, which in a headless test is this one: pump it meanwhile. An
+        // await here never returned, and after one the test could go on on another thread.
+        var settingsLoad = vm.InitialSettingsLoadTask;
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (!settingsLoad.IsCompleted && DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(10);
+        }
+
+        settingsLoad.GetAwaiter().GetResult();
         vm.BatchPresetChoices.Clear();
         vm.BatchPresetChoices.Add(vm._currentSettingsChoice);
         vm.BatchPresetChoices.Add(new CompressPreset { Name = "A" });
@@ -65,9 +75,9 @@ public sealed class SettingsCompressTabTests
             });
         }
 
-        // A first build pays for loading the tab itself; the second is what a warm app pays. The queue used to build
-        // every row the first time the tab opened, though its box shows four or five: 9,300 controls, 150 MB
-        // allocated and a 0.77 s freeze in the user's log.
+        // A first build pays for loading the view itself; the second is what a warm app pays. The queue used to build
+        // every row the first time it opened, though its box shows a few: 9,300 controls, 150 MB allocated and a
+        // 0.77 s freeze in the user's log.
         Build(vm, "cold").Close();
         var window = Build(vm, "warm");
         int rows = window.GetVisualDescendants().OfType<Control>()
@@ -88,7 +98,7 @@ public sealed class SettingsCompressTabTests
             };
         }
 
-        var scroller = window.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.MaxHeight == 240);
+        var scroller = window.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.Name == "QueueScroller");
         double extent = scroller.Extent.Height;
         for (double y = 0; y <= extent; y += 37)
         {
@@ -125,7 +135,8 @@ public sealed class SettingsCompressTabTests
         int gen0 = GC.CollectionCount(0), gen1 = GC.CollectionCount(1), gen2 = GC.CollectionCount(2);
         long allocated = GC.GetAllocatedBytesForCurrentThread();
         var stopwatch = Stopwatch.StartNew();
-        var window = new Window { Content = new SettingsCompressTab { DataContext = vm }, Width = 1100, Height = 900 };
+        // This height leaves the queue about the 240 pixels of list it had as a tab, so the count of rows built compares.
+        var window = new Window { Content = new CompressWorkspaceView { DataContext = vm }, Width = 1100, Height = 400 };
         window.Show();
         Dispatcher.UIThread.RunJobs();
         _output.WriteLine(

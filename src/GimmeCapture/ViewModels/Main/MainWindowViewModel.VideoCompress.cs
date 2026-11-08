@@ -17,7 +17,7 @@ using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;
 
-// "Compress Video" tab: import any video file from disk and re-encode it smaller through the in-process
+// The video-editing window: import any video file from disk and re-encode it smaller through the in-process
 // LibavClipExporter pipeline. Exposes codec, CRF/target-size, preset, downscale and drop-audio knobs.
 public partial class MainWindowViewModel
 {
@@ -174,7 +174,7 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _selectedCompressAudioChannels, value);
     }
 
-    // HandBrake-style video filters (safe 1:1 subset), applied on the 輸出設定 tab and folded into every encode
+    // HandBrake-style video filters (safe 1:1 subset), set in 輸出設定 and folded into every encode
     // via the settings snapshot. Denoise/Sharpen are strength pickers; Deblock/Grayscale are on/off toggles.
     public sealed class CompressDenoiseOption
     {

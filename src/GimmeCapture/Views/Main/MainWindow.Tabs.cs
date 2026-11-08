@@ -1,8 +1,6 @@
 using System;
 using Avalonia.Controls;
 using Avalonia;
-using Avalonia.Layout;
-using Avalonia.Threading;
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Dialogs;
@@ -28,7 +26,6 @@ namespace GimmeCapture.Views.Main;
 public partial class MainWindow
 {
     private ContentControl? _snipTabHost;
-    private ContentControl? _compressTabHost;
     private ContentControl? _hotkeysTabHost;
     private ContentControl? _historyTabHost;
     private ContentControl? _recordTabHost;
@@ -51,7 +48,7 @@ public partial class MainWindow
 
         Show();
         Activate();
-        tabControl.SelectedIndex = 6;
+        tabControl.SelectedIndex = 5;
     }
 
     // The microphone list is read on the thread pool the first time the tab is shown, and the tab is built once it is in,
@@ -98,13 +95,6 @@ public partial class MainWindow
                 }
                 break;
             case 3:
-                _compressTabHost ??= this.FindControl<ContentControl>("CompressTabHost");
-                if (_compressTabHost!.Content == null)
-                {
-                    ShowCompressTabAsync(_compressTabHost).Forget("Compress.ShowTab");
-                }
-                break;
-            case 4:
                 if (DataContext is MainWindowViewModel translationVm)
                 {
                     translationVm.RefreshLlamaModelCatalog();
@@ -113,11 +103,11 @@ public partial class MainWindow
                 _translationTabHost ??= this.FindControl<ContentControl>("TranslationTabHost");
                 _translationTabHost!.Content ??= new SettingsTranslationTab();
                 break;
-            case 5:
+            case 4:
                 _hotkeysTabHost ??= this.FindControl<ContentControl>("HotkeysTabHost");
                 _hotkeysTabHost!.Content ??= new SettingsHotkeysTab();
                 break;
-            case 6:
+            case 5:
                 if (DataContext is MainWindowViewModel vm)
                 {
                     vm.EnsureModulesInitialized();
@@ -127,11 +117,11 @@ public partial class MainWindow
                 _modulesTabHost ??= this.FindControl<ContentControl>("ModulesTabHost");
                 _modulesTabHost!.Content ??= new SettingsModulesTab();
                 break;
-            case 7:
+            case 6:
                 _historyTabHost ??= this.FindControl<ContentControl>("HistoryTabHost");
                 _historyTabHost!.Content ??= new SettingsHistoryTab();
                 break;
-            case 8:
+            case 7:
                 if (DataContext is MainWindowViewModel aboutVm)
                 {
                     aboutVm.LoadAvailableReleasesAsync().Forget("About.LoadAvailableReleases");
@@ -141,49 +131,5 @@ public partial class MainWindow
                 _aboutTabHost!.Content ??= new SettingsAboutTab();
                 break;
         }
-    }
-
-    // The read usually takes a blink; a progress bar shown for that long would only flash.
-    private static readonly TimeSpan CompressTabProgressDelay = TimeSpan.FromMilliseconds(300);
-
-    // The Compress tab's saved queue and settings are read from disk in the background the first time it is shown, and
-    // the tab is built only once they are in: earlier, it would offer an empty queue to act on, and settings the restore
-    // then overwrites. A progress bar holds its place meanwhile, visible once the read takes long enough to notice.
-    private async Task ShowCompressTabAsync(ContentControl host)
-    {
-        if (DataContext is MainWindowViewModel vm)
-        {
-            Task ready = vm.EnsureCompressInitializedAsync();
-            IDisposable? revealProgress = null;
-            if (!ready.IsCompleted)
-            {
-                var progress = new ProgressBar
-                {
-                    IsIndeterminate = true,
-                    IsVisible = false,
-                    Width = 160,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                host.Content = progress; // also keeps a second visit from starting this again
-                revealProgress = DispatcherTimer.RunOnce(() => progress.IsVisible = true, CompressTabProgressDelay);
-            }
-
-            try
-            {
-                await ready;
-            }
-            catch (Exception ex)
-            {
-                // Still show the tab: whatever part of the restore failed is in the log.
-                AppLog.Error("Compress.Initialize", ex);
-            }
-            finally
-            {
-                revealProgress?.Dispose();
-            }
-        }
-
-        host.Content = new SettingsCompressTab();
     }
 }

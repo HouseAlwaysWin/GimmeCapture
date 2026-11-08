@@ -83,11 +83,6 @@
                 <ContentControl x:Name="RecordTabHost"/>
             </TabItem>
 
-            <!-- 壓縮 (Compress) -->
-            <TabItem Header="{Binding [TabCompress], Source={x:Static services:LocalizationService.Instance}}">
-                <ContentControl x:Name="CompressTabHost"/>
-            </TabItem>
-
             <!-- 翻譯設定 (Translation) -->
             <TabItem Header="{Binding [TabTranslation], Source={x:Static services:LocalizationService.Instance}}">
                 <ContentControl x:Name="TranslationTabHost"/>
@@ -117,6 +112,8 @@
         <!-- Bottom Actions: settings auto-save on change; status shown via floating toasts. -->
         <Border Grid.Row="2" BorderBrush="#1E1E1E" BorderThickness="0,1,0,0" Padding="10,10,10,10">
             <Grid ColumnDefinitions="*,Auto">
+                <!-- Video editing has a window of its own: the queue and its settings outgrew a tab. -->
+                <Button Grid.Column="0" HorizontalAlignment="Left" Content="{Binding [CompressWindowTitle], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding OpenCompressWindowCommand}"/>
                 <Button Grid.Column="1" Content="{Binding [ResetDefault], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding ResetToDefaultCommand}"/>
             </Grid>
         </Border>

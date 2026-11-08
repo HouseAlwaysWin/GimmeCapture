@@ -162,6 +162,18 @@
   content that changed under it, in a capture that came out badly. Each warning also lists the movement of the 64 frames
   before it.
 
+### 🎬 Video editing
+
+- **Video editing has a window of its own.** The batch queue and its output settings were two sub-tabs of one tab in
+  the 800×520 main window: the file list had 240 pixels under a stack of other controls, and no setting could be
+  changed with the size estimates in view. The window shows both side by side, the queue taking the full height. It
+  opens from a button at the bottom of the main window or from the tray menu, stays up when the main window goes to
+  the tray, and closing it leaves the queue and any running encode as they were. Working folders moved into a dropdown.
+- **A long file name no longer pushes its queue row out of the list.** It widened the row past the list's edge, which
+  clipped the thumbnail on one side and the buttons on the other. The name is now cut, in full in its tooltip.
+- **The advanced editor asks its questions over itself.** Its confirmations (resetting every edit, a crop or rotation
+  that clears the drawings) went through the main window, which cannot host a dialog while hidden in the tray.
+
 ### 🛡️ Reliability
 
 - **A capture saved over a larger file no longer keeps that file's end.** Saving onto an existing file wrote the new
