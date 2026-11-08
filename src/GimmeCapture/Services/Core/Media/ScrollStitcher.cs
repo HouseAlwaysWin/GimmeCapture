@@ -125,7 +125,7 @@ internal static class ScrollStitcher
         byte[] nextSig = RentRowSignatures(next, ignoreRightColumns, out _);
         try
         {
-            return FindVerticalShift(prevSig, nextSig, height, sampleCount, effectiveMin, clampedRatio, expectedShift);
+            return FindVerticalShift(prevSig, nextSig, height, sampleCount, effectiveMin, clampedRatio, expectedShift, out _);
         }
         finally
         {
@@ -139,9 +139,62 @@ internal static class ScrollStitcher
     /// <summary>How far from the expected shift a shift picked among equals may be (see <c>expectedShift</c>).</summary>
     internal static int ExpectedShiftReach(int expectedShift) => Math.Max(48, Math.Abs(expectedShift));
 
-    private static VerticalShift FindVerticalShift(
-        byte[] prevSig, byte[] nextSig, int height, int sampleCount, int effectiveMin, double clampedRatio, int? expectedShift)
+    /// <summary>
+    /// <see cref="FindVerticalShift(SKBitmap,SKBitmap,int,int,double,int?)"/>, also giving the best shift's score (the
+    /// weighted share of sampled pixels that differ; <c>double.MaxValue</c> when no shift scored), whether or not it
+    /// was taken.
+    /// </summary>
+    internal static VerticalShift FindVerticalShift(
+        SKBitmap previous,
+        SKBitmap next,
+        int minOverlapRows,
+        int ignoreRightColumns,
+        double maxRowMismatchRatio,
+        out double bestScore)
     {
+        bestScore = double.MaxValue;
+        if (previous.Width != next.Width || previous.Height != next.Height || previous.Width <= 0 || previous.Height <= 0)
+        {
+            return new VerticalShift(0, false);
+        }
+
+        int height = previous.Height;
+        byte[] prevSig = RentRowSignatures(previous, ignoreRightColumns, out int sampleCount);
+        byte[] nextSig = RentRowSignatures(next, ignoreRightColumns, out _);
+        try
+        {
+            return FindVerticalShift(
+                prevSig, nextSig, height, sampleCount, Math.Clamp(minOverlapRows, 1, height),
+                Math.Clamp(maxRowMismatchRatio, 0.0, 1.0), expectedShift: null, out bestScore);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(prevSig);
+            ArrayPool<byte>.Shared.Return(nextSig);
+        }
+    }
+
+    /// <summary>The rows <paramref name="first"/> to <paramref name="first"/> + <paramref name="count"/> of a bitmap, sharing its pixels.</summary>
+    internal static SKBitmap RowsOf(SKBitmap bitmap, int first, int count)
+    {
+        var rows = new SKBitmap();
+        if (count > 0 && bitmap.ExtractSubset(rows, new SKRectI(0, first, bitmap.Width, first + count)))
+        {
+            return rows;
+        }
+
+        rows.Dispose();
+        var copy = new SKBitmap(new SKImageInfo(Math.Max(1, bitmap.Width), Math.Max(1, count), SKColorType.Bgra8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(copy);
+        canvas.DrawBitmap(bitmap, new SKRect(0, first, bitmap.Width, first + Math.Max(1, count)), new SKRect(0, 0, bitmap.Width, Math.Max(1, count)));
+        return copy;
+    }
+
+    private static VerticalShift FindVerticalShift(
+        byte[] prevSig, byte[] nextSig, int height, int sampleCount, int effectiveMin, double clampedRatio, int? expectedShift,
+        out double bestScoreOut)
+    {
+        bestScoreOut = double.MaxValue;
         if (sampleCount == 0)
         {
             return new VerticalShift(0, false);
@@ -223,6 +276,7 @@ internal static class ScrollStitcher
             }
         }
 
+        bestScoreOut = bestScore;
         if (!found || bestScore > MaxMatchSampleDiffRatio || AtRangeEnd(bestShift, maxShift))
         {
             // At the end of the range, the best may only be the slope toward a bigger shift than two frames this tall

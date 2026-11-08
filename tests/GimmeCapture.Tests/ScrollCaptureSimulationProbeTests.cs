@@ -77,6 +77,83 @@ public sealed class ScrollCaptureSimulationProbeTests(ITestOutputHelper output)
         }
     }
 
+    // SCROLL_SIM=1 too: which way the Auto direction locks, the old way (whole frames, the edge overhung by 8 rows) and
+    // ManualScrollAxisDetector's, and at which frame. Sideways scenarios turn every frame a quarter clockwise.
+    [OptInFact("SCROLL_SIM")]
+    public void AxisReport()
+    {
+        var cases = new List<(string Name, Func<Page> Page, List<int> Path, Overlays Overlays, int Width, int Height, bool Sideways)>
+        {
+            ("chat down", () => Chat(600, 5600, seed: 11), WheelPath(0, 1500, seed: 1, notchesPerFrame: 0.5), new Overlays(), 600, 500, false),
+            ("chat bars down", () => Chat(600, 5600, seed: 11), WheelPath(0, 1500, seed: 5, notchesPerFrame: 0.5), new Overlays(HeaderRows: 56, FooterRows: 80), 600, 500, false),
+            ("line down", () => Line(545, 5000, seed: 3), WheelPath(0, 1500, seed: 31, notchesPerFrame: 0.5), new Overlays(), 545, 731, false),
+            ("line bars down", () => Line(545, 5000, seed: 3), WheelPath(0, 1500, seed: 32, notchesPerFrame: 0.5), new Overlays(HeaderRows: 170), 545, 731, false),
+            ("line bars up", () => Line(545, 5000, seed: 4), WheelPath(3000, 1500, seed: 33, notchesPerFrame: 0.5), new Overlays(HeaderRows: 170), 545, 731, false),
+            ("line bars pill up", () => Line(545, 5000, seed: 5), WheelPath(3000, 1500, seed: 34, notchesPerFrame: 0.5), new Overlays(HeaderRows: 170, DatePill: true), 545, 731, false),
+            ("line all bars down", () => Line(545, 5000, seed: 6), WheelPath(0, 1500, seed: 35, notchesPerFrame: 0.5), new Overlays(HeaderRows: 170, FooterRows: 60), 545, 731, false),
+            ("line bars slow down", () => Line(545, 5000, seed: 7), WheelPath(0, 1500, seed: 36, notchesPerFrame: 0.15), new Overlays(HeaderRows: 170), 545, 731, false),
+            ("chat sideways", () => Chat(600, 5600, seed: 11), WheelPath(0, 1500, seed: 37, notchesPerFrame: 0.5), new Overlays(), 600, 500, true),
+            ("line sideways", () => Line(545, 5000, seed: 8), WheelPath(0, 1500, seed: 38, notchesPerFrame: 0.5), new Overlays(), 545, 731, true),
+            ("line bars sideways", () => Line(545, 5000, seed: 9), WheelPath(0, 1500, seed: 39, notchesPerFrame: 0.5), new Overlays(HeaderRows: 120), 545, 731, true),
+        };
+
+        output.WriteLine($"{"scenario",-20} {"want",-10} {"old",-16} {"new",-16}");
+        foreach (var c in cases)
+        {
+            using Page page = c.Page();
+            SKBitmap Grab(int i)
+            {
+                SKBitmap frame = Frame(page, c.Path[i], c.Height, c.Overlays, i);
+                return c.Sideways ? Sideways(frame) : frame;
+            }
+
+            using SKBitmap first = Grab(0);
+            int screenWidth = first.Width;
+            int screenHeight = first.Height;
+            int minOverlapV = Math.Max(8, screenHeight / 10);
+            int ignoreRightV = Math.Clamp(180, 24, Math.Max(24, screenWidth * 35 / 100));
+            int minOverlapH = Math.Max(8, screenWidth / 10);
+            int ignoreRightH = Math.Clamp(32, 8, Math.Max(8, screenHeight / 8));
+
+            string old = "none";
+            using (SKBitmap firstTurned = ScrollStitcher.RotateCcw90(first))
+            {
+                for (int i = 1; i < c.Path.Count && old == "none"; i++)
+                {
+                    using SKBitmap frame = Grab(i);
+                    using SKBitmap frameTurned = ScrollStitcher.RotateCcw90(frame);
+                    int growV = Overhang(ScrollStitcher.AlignFrameToStrip(first, frame, minOverlapV, ignoreRightV, Tolerance, frame.Height), first.Height, frame.Height);
+                    int growH = Overhang(ScrollStitcher.AlignFrameToStrip(firstTurned, frameTurned, minOverlapH, ignoreRightH, Tolerance, frameTurned.Height), firstTurned.Height, frameTurned.Height);
+                    int dominant = Math.Max(growV, growH);
+                    if (dominant >= 8 && dominant >= Math.Min(growV, growH) * 2)
+                    {
+                        old = $"{(growH > growV ? "SIDEWAYS" : "down")} @{i}";
+                    }
+                }
+            }
+
+            string decided = "none";
+            var detector = new ManualScrollAxisDetector(minOverlapV, ignoreRightV, minOverlapH, ignoreRightH, Tolerance);
+            for (int i = 1; i < c.Path.Count && decided == "none"; i++)
+            {
+                using SKBitmap frame = Grab(i);
+                bool? axis = detector.Decide(first, frame);
+                if (axis != null)
+                {
+                    decided = $"{(axis == true ? "SIDEWAYS" : "down")} @{i}";
+                }
+            }
+
+            output.WriteLine($"{c.Name,-20} {(c.Sideways ? "SIDEWAYS" : "down"),-10} {old,-16} {decided,-16}");
+        }
+    }
+
+    private static int Overhang(ScrollStitcher.FrameAlignment align, int stripHeight, int frameHeight) =>
+        !align.Found ? 0
+        : align.Offset < 0 ? -align.Offset
+        : align.Offset + frameHeight > stripHeight ? align.Offset + frameHeight - stripHeight
+        : 0;
+
     [OptInFact("SCROLL_SIM_TRACE")]
     public void TraceSteps()
     {

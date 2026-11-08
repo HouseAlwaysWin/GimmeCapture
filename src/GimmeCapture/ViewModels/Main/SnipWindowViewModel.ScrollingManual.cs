@@ -50,10 +50,11 @@ public partial class SnipWindowViewModel
     private int _manualEdgeGuard;
 
     // null = scroll axis not yet detected; false = vertical; true = horizontal. While null, each
-    // frame is tested against both hypotheses and the axis locks to whichever first shows real
-    // movement (see ManualConsumerLoopAsync). Once horizontal, the accumulated strip and every
+    // frame is tested against both hypotheses and the axis locks once _manualAxisDetector settles it
+    // (see ManualConsumerLoopAsync). Once horizontal, the accumulated strip and every
     // incoming frame live in rotated stitch space, and the final strip is rotated back on finish.
     private bool? _manualHorizontal;
+    private ManualScrollAxisDetector? _manualAxisDetector;
 
     private CancellationTokenSource? _manualCts;
     private Task? _manualPipelineTask;
@@ -66,12 +67,6 @@ public partial class SnipWindowViewModel
     // Bounded capture queue: a few frames of slack so a slow stitch (Append on a tall strip)
     // doesn't stall capture, without unbounded memory growth.
     private const int ManualQueueCapacity = 8;
-
-    // Minimum overhang (physical px) the dominant axis must reach before the scroll direction is
-    // locked. Because the accumulated strip stays the first frame while undecided, the measured
-    // overhang grows as scrolling continues, so this is crossed within a few frames of real motion.
-    // Prevents locking on a 1px jitter (hover/reflow/wheel drift) before the real scroll begins.
-    private const int ManualAxisLockMinShift = 8;
 
     /// <summary>True while a manual scrolling-capture session is running (overlay hidden).</summary>
     public bool IsManualScrollActive => _manualScrollActive;
@@ -197,6 +192,7 @@ public partial class SnipWindowViewModel
         // choice. Auto leaves _manualHorizontal undecided so DetectAxisAndGrow picks the axis from
         // the first real scroll; Vertical/Horizontal lock the axis up front.
         ScrollingCaptureDirection chosenDirection = _settings?.ScrollingCaptureDirection ?? ScrollingCaptureDirection.Auto;
+        _manualAxisDetector = null; // only Auto has one (below)
         switch (chosenDirection)
         {
             case ScrollingCaptureDirection.Vertical:
@@ -221,6 +217,8 @@ public partial class SnipWindowViewModel
                 _manualMinOverlap = _manualMinOverlapV;
                 _manualIgnoreRight = _manualIgnoreRightV;
                 _manualMaxHeight = _manualMaxHeightV;
+                _manualAxisDetector = new ManualScrollAxisDetector(
+                    _manualMinOverlapV, _manualIgnoreRightV, _manualMinOverlapH, _manualIgnoreRightH, ManualRowMismatchTolerance);
                 break;
         }
 
@@ -484,39 +482,19 @@ public partial class SnipWindowViewModel
         return ApplyStitchFrame(frame);
     }
 
-    // Scroll axis unknown: test the frame against both the vertical (screen-space) and horizontal
-    // (rotated) hypotheses. Lock to whichever first shows real edge movement (larger overhang wins
-    // a rare diagonal nudge). Until something moves, just advance the anchor and stay undecided.
+    // Scroll axis unknown: ask the detector, which measures the motion since the first frame along both axes
+    // (ManualScrollAxisDetector). Until it settles, just advance the anchor and stay undecided.
     private bool DetectAxisAndGrow(SKBitmap frame)
     {
-        ScrollStitcher.FrameAlignment alignV = ScrollStitcher.AlignFrameToStrip(
-            _manualAccumulated!, frame, _manualMinOverlapV, _manualIgnoreRightV, ManualRowMismatchTolerance, frame.Height);
-        int growV = OverhangRows(alignV, _manualAccumulated!.Height, frame.Height);
-
-        SKBitmap accRotated = ScrollStitcher.RotateCcw90(_manualAccumulated);
-        SKBitmap frameRotated = ScrollStitcher.RotateCcw90(frame);
-        ScrollStitcher.FrameAlignment alignH = ScrollStitcher.AlignFrameToStrip(
-            accRotated, frameRotated, _manualMinOverlapH, _manualIgnoreRightH, ManualRowMismatchTolerance, frameRotated.Height);
-        int growH = OverhangRows(alignH, accRotated.Height, frameRotated.Height);
-
-        int dominant = Math.Max(growV, growH);
-        int other = Math.Min(growV, growH);
-
-        // Stay undecided until one axis shows a decisive, dominant movement: it must clear the
-        // jitter threshold AND beat the other axis by 2x. A 1px vertical wobble on a horizontal
-        // scroll (or vice-versa) must not lock the wrong axis — it would stitch garbage and pin
-        // the wrong orientation. The overhang grows against the (still first-frame) strip as the
-        // user keeps scrolling, so the real axis becomes unambiguous within a few frames.
-        if (dominant < ManualAxisLockMinShift || dominant < other * 2)
+        bool? horizontal = _manualAxisDetector?.Decide(_manualAccumulated!, frame);
+        if (horizontal == null)
         {
-            accRotated.Dispose();
-            frameRotated.Dispose();
             _manualPrevFrame!.Dispose();
             _manualPrevFrame = frame; // anchor advances, still in screen space
             return false;
         }
 
-        if (growH > growV)
+        if (horizontal == true)
         {
             // Horizontal: switch the whole session into rotated stitch space.
             _manualHorizontal = true;
@@ -524,41 +502,20 @@ public partial class SnipWindowViewModel
             _manualIgnoreRight = _manualIgnoreRightH;
             _manualMaxHeight = _manualMaxHeightH;
 
-            _manualAccumulated.Dispose();
-            _manualAccumulated = accRotated; // keep the rotated accumulated strip
-            frame.Dispose();                 // original screen frame no longer needed
+            SKBitmap accRotated = ScrollStitcher.RotateCcw90(_manualAccumulated!);
+            _manualAccumulated!.Dispose();
+            _manualAccumulated = accRotated;
+            SKBitmap frameRotated = ScrollStitcher.RotateCcw90(frame);
+            frame.Dispose(); // original screen frame no longer needed
             return ApplyStitchFrame(frameRotated);
         }
 
-        // Vertical: keep screen space, drop the rotated probes.
+        // Vertical: keep screen space.
         _manualHorizontal = false;
         _manualMinOverlap = _manualMinOverlapV;
         _manualIgnoreRight = _manualIgnoreRightV;
         _manualMaxHeight = _manualMaxHeightV;
-        accRotated.Dispose();
-        frameRotated.Dispose();
         return ApplyStitchFrame(frame);
-    }
-
-    // New rows a frame contributes past an edge of the strip (top or bottom overhang), else 0.
-    private static int OverhangRows(ScrollStitcher.FrameAlignment align, int stripHeight, int frameHeight)
-    {
-        if (!align.Found)
-        {
-            return 0;
-        }
-
-        if (align.Offset < 0)
-        {
-            return -align.Offset; // overhangs the top
-        }
-
-        if (align.Offset + frameHeight > stripHeight)
-        {
-            return align.Offset + frameHeight - stripHeight; // overhangs the bottom
-        }
-
-        return 0;
     }
 
     internal void FinishManualScrollCapture(bool cancelled)
@@ -663,6 +620,7 @@ public partial class SnipWindowViewModel
             _manualFrameChannel = null;
             _manualFinishing = false;
             _manualHorizontal = null;
+            _manualAxisDetector = null;
             CloseAction?.Invoke();
         }
     }

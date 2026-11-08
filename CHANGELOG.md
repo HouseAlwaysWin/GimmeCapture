@@ -133,6 +133,13 @@
   capture took a fifth to under half the time, which leaves room for more frames a second to follow a fast scroll.
   Scrolling faster than about 400 pixels a frame (a 500-pixel region), which the old stitching sometimes kept up with
   and sometimes stitched out of place, now waits for you to scroll back.
+- **The Auto direction no longer takes a chat scrolled down for one scrolled sideways.** It locked onto whichever
+  way the first frames' edge moved 8 pixels, matching whole frames: with a chat's title bar, message box or floating
+  date in the picture, the match down the frame failed while the mostly empty chat matched itself turned sideways,
+  and the capture locked sideways and kept nothing (a LINE capture placed none of its 674 frames). It now measures how
+  far the content moved each way over the middle of the frame, takes the way that matched clearly better, and locks
+  once two frames in a row agree. In simulated LINE captures the old way locked sideways or never locked; now down,
+  one frame later than before (40 ms).
 - **A long screenshot's pin can be scrolled by dragging its scroll bar.** The handle for resizing the pin along its
   right edge (its bottom edge, for a capture scrolled sideways) lay over the scroll bar, so the pointer there resized the
   window, and the bar never widened under it to be taken hold of. On that edge the handle now sits just outside the

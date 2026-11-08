@@ -136,6 +136,95 @@ internal static class ScrollCaptureSimulation
         return new Page(bitmap, blocks);
     }
 
+    private static readonly SKColor LineBackground = new(34, 34, 34);
+
+    /// <summary>
+    /// A chat drawn like LINE's dark theme: mostly empty background, received bubbles on the left under an avatar,
+    /// sent bubbles on the right with the time and "read" beside them, small date pills in the middle, and pictures.
+    /// Far sparser than <see cref="Chat"/>: most rows are background from edge to edge.
+    /// </summary>
+    public static Page Line(int width, int height, int seed)
+    {
+        var random = new Random(seed);
+        var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        var blocks = new List<(int Top, int Bottom)>();
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(LineBackground);
+        using var received = new SKPaint { Color = new SKColor(58, 58, 58), IsAntialias = true };
+        using var sent = new SKPaint { Color = new SKColor(108, 198, 85), IsAntialias = true };
+        using var avatar = new SKPaint { Color = new SKColor(120, 160, 220), IsAntialias = true };
+
+        int y = 20;
+        while (y < height - 220)
+        {
+            int top = y;
+            int kind = random.Next(100);
+            if (kind < 8)
+            {
+                using var pill = new SKPaint { Color = new SKColor(52, 52, 52), IsAntialias = true };
+                canvas.DrawRoundRect((width / 2) - 34, y, 68, 22, 11, 11, pill);
+                DrawPhrase(canvas, (width / 2) - 22, y + 5, 44, DarkMuted, phrase: 400 + random.Next(4), em: 11);
+                y += 40;
+                continue;
+            }
+
+            bool mine = random.Next(2) == 0;
+            int lines = random.Next(1, 4);
+            int bubbleWidth = random.Next(60, Math.Max(90, (width * 3 / 5) - 40));
+            int bubbleHeight = 14 + (lines * 20);
+            if (random.Next(100) < 10)
+            {
+                // A picture instead of text.
+                bubbleWidth = Math.Min(width / 2, 220);
+                bubbleHeight = random.Next(140, 260);
+            }
+
+            int x;
+            if (mine)
+            {
+                x = width - 24 - bubbleWidth;
+                canvas.DrawRoundRect(x, y, bubbleWidth, bubbleHeight, 14, 14, sent);
+                DrawPhrase(canvas, x - 40, y + bubbleHeight - 26, 30, DarkMuted, phrase: 500, em: 9);             // read
+                DrawPhrase(canvas, x - 52, y + bubbleHeight - 12, 42, DarkMuted, phrase: 501 + random.Next(30), em: 9); // time
+            }
+            else
+            {
+                canvas.DrawCircle(30, y + 16, 16, avatar);
+                x = 56;
+                canvas.DrawRoundRect(x, y, bubbleWidth, bubbleHeight, 14, 14, received);
+                DrawPhrase(canvas, x + bubbleWidth + 6, y + bubbleHeight - 12, 42, DarkMuted, phrase: 501 + random.Next(30), em: 9);
+            }
+
+            if (bubbleHeight > 14 + (3 * 20))
+            {
+                DrawImage(canvas, random, x + 4, y + 4, bubbleWidth - 8, bubbleHeight - 8);
+            }
+            else
+            {
+                for (int line = 0; line < lines; line++)
+                {
+                    DrawText(canvas, random, x + 12, y + 8 + (line * 20), bubbleWidth - 24, mine ? new SKColor(20, 20, 20) : DarkText, em: 13);
+                }
+            }
+
+            y += bubbleHeight + random.Next(14, 40);
+            blocks.Add((top, y));
+        }
+
+        return new Page(bitmap, blocks);
+    }
+
+    /// <summary>
+    /// A frame of a scroll along the other axis: <paramref name="frame"/> turned a quarter clockwise, so content that
+    /// moved up the frame moves left across this one. The capture turns it back before stitching.
+    /// </summary>
+    public static SKBitmap Sideways(SKBitmap frame)
+    {
+        SKBitmap turned = GimmeCapture.Services.Core.Media.ScrollStitcher.RotateCw90(frame);
+        frame.Dispose();
+        return turned;
+    }
+
     /// <summary>
     /// The frame a capture grabs with the view's top at page row <paramref name="top"/>: the page's rows, then what
     /// the app keeps in place over them.

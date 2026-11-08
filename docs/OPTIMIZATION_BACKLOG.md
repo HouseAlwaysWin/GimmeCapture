@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 28 entries (2026-11-08).
+- Since v0.74.0, `## Unreleased` holds 29 entries (2026-11-08).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+eba19e6c`, installed by hand on 2026-11-08 at 10:11 over
   `0.74.0+1a89f37b` (by hand, the same day at 08:20), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1282,7 +1282,13 @@ tool.
   handle (`HandleRight`, 15 px inside the content), so it could not be dragged: that handle now moves out past the
   content on the edge the bar runs along (`RightResizeHandleMargin`, `BottomResizeHandleMargin`), and the bar widens to
   20 px after 0.1 s (an opt-in headless check showed Fluent's own 16 px and 0.5 s, and that the pin's ScrollViewer
-  resources reach its bar). `LongPinResizeHandleTests`.
+  resources reach its bar). `LongPinResizeHandleTests`. The Auto direction is now `ManualScrollAxisDetector`: the
+  motion since the first frame measured along each axis over the frame's middle half (`FindVerticalShift`, with its
+  score), the clearly better axis winning, locked when two frames in a row agree. `AxisReport` (opt-in, `SCROLL_SIM`)
+  reproduced the wrong lock: a LINE-like chat (`ScrollCaptureSimulation.Line`) scrolled up under a 170-row title bar and
+  the floating date, where the old way found no match down the frame and a sideways one 489 of 545 columns over, and
+  locked sideways at the first frame; with a message box too it never locked. The new one locks down at the second
+  frame in both, and sideways scrolls still lock sideways. `ManualScrollAxisDetectorTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
