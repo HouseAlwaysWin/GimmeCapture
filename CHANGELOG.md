@@ -133,6 +133,10 @@
   capture took a fifth to under half the time, which leaves room for more frames a second to follow a fast scroll.
   Scrolling faster than about 400 pixels a frame (a 500-pixel region), which the old stitching sometimes kept up with
   and sometimes stitched out of place, now waits for you to scroll back.
+- **A long screenshot's pin can be scrolled by dragging its scroll bar.** The handle for resizing the pin along its
+  right edge (its bottom edge, for a capture scrolled sideways) lay over the scroll bar, so the pointer there resized the
+  window, and the bar never widened under it to be taken hold of. On that edge the handle now sits just outside the
+  picture, and the bar widens to 20 pixels a tenth of a second after the pointer reaches it.
 - **The log says how each scrolling capture went.** One line at its end gives the frames seen and placed, how many were
   found without the scrolling's measure, and the bars kept out, to tell what went wrong in one that came out badly.
 

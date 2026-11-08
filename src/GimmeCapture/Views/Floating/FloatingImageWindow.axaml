@@ -129,6 +129,16 @@
                         <ScrollViewer HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                       HorizontalScrollBarVisibility="{Binding ContentHorizontalScrollBarVisibility}"
                                       VerticalScrollBarVisibility="{Binding ContentVerticalScrollBarVisibility}">
+                        <!-- A long pin's scroll bar is how it is read: under the pointer it widens to 20 px (Fluent's
+                             16) after 0.1 s (Fluent's 0.5), so it can be taken hold of as soon as the pointer is on it. -->
+                        <ScrollViewer.Resources>
+                            <x:Double x:Key="ScrollBarSize">20</x:Double>
+                        </ScrollViewer.Resources>
+                        <ScrollViewer.Styles>
+                            <Style Selector="ScrollBar">
+                                <Setter Property="ShowDelay" Value="0:0:0.1"/>
+                            </Style>
+                        </ScrollViewer.Styles>
                         <Grid Width="{Binding ScrollContentWidth}" Height="{Binding ScrollContentHeight}"
                               HorizontalAlignment="Left" VerticalAlignment="Top">
                             <Image Source="{Binding Image}"
@@ -245,9 +255,9 @@
                             <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15"/>
                             <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15"/>
                             <Grid Classes="Handle" Name="HandleTop" Cursor="TopSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0"/>
-                            <Grid Classes="Handle" Name="HandleBottom" Cursor="BottomSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="15,0"/>
+                            <Grid Classes="Handle" Name="HandleBottom" Cursor="BottomSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="{Binding BottomResizeHandleMargin}"/>
                             <Grid Classes="Handle" Name="HandleLeft" Cursor="LeftSide" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"/>
-                            <Grid Classes="Handle" Name="HandleRight" Cursor="RightSide" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"/>
+                            <Grid Classes="Handle" Name="HandleRight" Cursor="RightSide" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="{Binding RightResizeHandleMargin}"/>
                         </Grid>
                     </Grid>
                 </Grid>

@@ -204,6 +204,17 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
             : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
 
+    // The resize handles along the right and bottom edges lie over the content's edge, where a long pin's scroll bar
+    // runs: on the right for a pin that scrolls down, at the bottom for one that scrolls sideways. There the handle
+    // took the pointer, so the bar never widened under it and a drag resized the window instead of scrolling. On that
+    // edge the handle moves out past the content, into the margin the pin keeps around it (none with its decoration
+    // hidden: that edge then resizes only at its corners).
+    public Avalonia.Thickness RightResizeHandleMargin =>
+        _contentScrolls && _scrollVertical ? new Avalonia.Thickness(0, 15, -15, 15) : new Avalonia.Thickness(0, 15, 0, 15);
+
+    public Avalonia.Thickness BottomResizeHandleMargin =>
+        _contentScrolls && !_scrollVertical ? new Avalonia.Thickness(15, 0, 15, -15) : new Avalonia.Thickness(15, 0, 15, 0);
+
     private void RaiseScrollContentChanged()
     {
         this.RaisePropertyChanged(nameof(ScrollContentWidth));
@@ -234,6 +245,8 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         RaiseScrollContentChanged();
         this.RaisePropertyChanged(nameof(ContentVerticalScrollBarVisibility));
         this.RaisePropertyChanged(nameof(ContentHorizontalScrollBarVisibility));
+        this.RaisePropertyChanged(nameof(RightResizeHandleMargin));
+        this.RaisePropertyChanged(nameof(BottomResizeHandleMargin));
     }
 
     // Decoration Scale

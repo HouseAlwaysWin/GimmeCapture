@@ -19,10 +19,10 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 27 entries (2026-11-08).
+- Since v0.74.0, `## Unreleased` holds 28 entries (2026-11-08).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+1a89f37b`, installed by hand on 2026-11-08 at 08:20 over
-  `0.74.0+dfb0185e` (by hand, 2026-11-07 23:45), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+eba19e6c`, installed by hand on 2026-11-08 at 10:11 over
+  `0.74.0+1a89f37b` (by hand, the same day at 08:20), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1274,8 +1274,15 @@ tool.
   scenarios now keep every row once; 440 and 700 rows a frame, past what the window can follow, keep only the first
   frame (the old one kept up with 440, its window the whole frame, and stitched 700 out of place). Each frame scores a
   few dozen placements instead of the whole strip: runs took 17-21% of the old time. A capture now ends with
-  `ManualScroll.Finish frames= placed= unguided= tentative= bands=top/bottom bandChanges=`. Not yet seen on a real
-  Discord or LINE capture.
+  `ManualScroll.Finish frames= placed= unguided= tentative= bands=top/bottom bandChanges=`. The user's first captures
+  with it (LINE, 2026-11-08 10:19-10:21): three captures placed every frame (481, 360 and 379 of them, none unguided,
+  bands found top and bottom, 3-5 band changes each); a fourth locked onto the wrong axis before the stitcher started
+  (`horiz=True`, 674 frames, none placed; the user cancelled and took it again): the axis detection still matches each
+  frame against the first by the old whole-frame search. The long pin's scroll bar lay under the right edge's resize
+  handle (`HandleRight`, 15 px inside the content), so it could not be dragged: that handle now moves out past the
+  content on the edge the bar runs along (`RightResizeHandleMargin`, `BottomResizeHandleMargin`), and the bar widens to
+  20 px after 0.1 s (an opt-in headless check showed Fluent's own 16 px and 0.5 s, and that the pin's ScrollViewer
+  resources reach its bar). `LongPinResizeHandleTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
