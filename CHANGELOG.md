@@ -177,6 +177,9 @@
   the mouse was let go. The picture shows the frame near the pointer, as fast as it can be decoded, and the exact frame
   when the drag ends: on a 4K phone video about 27 frames a second across the timeline, from the keyframes nearest
   the pointer, where exact frames came at about 9.
+- **The editor's preview no longer stalls at every cut.** Each kept piece opened the file and the graphics card's
+  decoder again, so on a 4K phone video the picture stood still for 350-530 ms at every cut and at every turn of the
+  loop. The pieces now play in one go, and a cut holds the picture for 120-155 ms.
 
 ### 🛡️ Reliability
 

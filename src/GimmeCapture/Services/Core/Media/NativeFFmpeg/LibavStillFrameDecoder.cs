@@ -283,20 +283,25 @@ internal sealed class LibavStillFrameDecoder : IDisposable
             return false; // that frame, or one after the time asked for, has already come out
         }
 
-        double keyframe = KeyframeAtOrBefore(target);
-        return double.IsNaN(keyframe)
-            ? target - _decodedSeconds <= DecodeOnSeconds
-            : keyframe <= _decodedSeconds + FrameTimeTolerance;
+        unsafe
+        {
+            return DecodingOnIsNearer(_input->streams[_videoStream], _decodedSeconds, target);
+        }
     }
 
-    // When the keyframe a seek to `seconds` would start from shows, by the file's index; NaN when it has none there.
-    private unsafe double KeyframeAtOrBefore(double seconds)
+    /// <summary>
+    /// Whether <paramref name="target"/>, later than the frame last decoded, is reached sooner by decoding on than by a
+    /// seek: the file's index has no keyframe between them for a seek to start from, or the file has no index and it is
+    /// no more than <see cref="DecodeOnSeconds"/> away.
+    /// </summary>
+    internal static unsafe bool DecodingOnIsNearer(AVStream* stream, double decodedSeconds, double target)
     {
-        AVStream* stream = _input->streams[_videoStream];
-        long timestamp = (long)(seconds / ffmpeg.av_q2d(_timeBase));
-        int index = ffmpeg.av_index_search_timestamp(stream, timestamp, ffmpeg.AVSEEK_FLAG_BACKWARD);
-        AVIndexEntry* entry = index >= 0 ? ffmpeg.avformat_index_get_entry(stream, index) : null;
-        return entry != null ? entry->timestamp * ffmpeg.av_q2d(_timeBase) : double.NaN;
+        double timeBase = ffmpeg.av_q2d(stream->time_base);
+        int index = ffmpeg.av_index_search_timestamp(stream, (long)(target / timeBase), ffmpeg.AVSEEK_FLAG_BACKWARD);
+        AVIndexEntry* keyframe = index >= 0 ? ffmpeg.avformat_index_get_entry(stream, index) : null;
+        return keyframe != null
+            ? keyframe->timestamp * timeBase <= decodedSeconds + FrameTimeTolerance
+            : target - decodedSeconds <= DecodeOnSeconds;
     }
 
     private unsafe void Seek(double target)

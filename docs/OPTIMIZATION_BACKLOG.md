@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 36 entries (2026-11-09).
+- Since v0.74.0, `## Unreleased` holds 37 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+1f7e84fd`, installed by hand on 2026-11-08 in the evening over
   `0.74.0+36c839ad` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1331,7 +1331,27 @@ tool.
   real window; times out with `ScrubTo` disabled), `ScrubFramePumpTests`, a keyframe case in
   `LibavStillFrameDecoderTests`. Measured and left for now: while playing that video the preview took 1,019 M cycles/s
   (`EditorPlaybackProbeTests`, about a third of a core) and kept up at 28.8 of 29 frames a second, 5.95 ms a frame to
-  download the whole 4K frame and 5.88 to scale it to 720 wide; scaling on the GPU would leave out most of both.
+  download the whole 4K frame and 5.88 to scale it to 720 wide. Scaling on the GPU would leave out most of both, but
+  the bundled FFmpeg's `scale_d3d11` cannot do it on this laptop: once given a buffer source with the frames context and
+  `format=nv12`, its output pool fails with `Could not create the texture (80070057)` (E_INVALIDARG, from the bind flags
+  it asks for). A D3D11 video processor written by hand was not worth it: colour handling that varies by vendor, for
+  about 600 M cycles/s while playing and about 12 ms a paused frame.
+- Done since batch 1 (2026-11-09): **the editor's preview stopped at every cut** (Compress and the editor).
+  `VideoEditViewModel.PlayAsync` played each kept run with a `LibavVideoFramePlayer` of its own, so every cut and every
+  lap of Loop closed the file, the decoder and its D3D11VA device and opened them again. `PlaybackPieces` and
+  `LibavVideoFramePlayer.PlayPiecesAsync` play them in one decode: at a piece's end it seeks to the next with all that
+  kept, or decodes on when the index has no keyframe between (`LibavStillFrameDecoder.DecodingOnIsNearer`), and the next
+  piece's first frame waits until the last one's time is over. How long the picture stands still at a cut on
+  `V_20260110_175957_ES0` (`EditorPlaybackProbeTests`, five cuts, both ways in turn, twice; a frame lasts 34 ms): 10 s
+  cut out, 353-435 ms against 119-140; 0.3 s cut out, 372-528 against 127-156, where seeking every time had left
+  130-290. Not something the user has met yet: none of the 33 saved items has more than one kept piece and Loop starts
+  off, so the choice rests on cuts being the editor's main use. The first piece's sound now starts once the file is
+  open rather than before it. `LibavVideoFramePlayerPiecesTests` (fails without the wait for a piece's last frame or
+  without each piece's own speed), `PlaybackPiecesTests`, and opt-in EDITOR_CUT_PLAY_PROBE=1 through the real window.
+  Measured, nothing done: opening the editor on that video (a headless host with the app's precompiled assemblies)
+  holds the UI thread 410-480 ms the first time in a session and 65-90 ms after that, and the picture follows 240-425
+  ms later (`Open()` is 83-157 of it, the first seek and decode the rest). Hand check owed: play a 4K video with a piece
+  cut out, with its sound on.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

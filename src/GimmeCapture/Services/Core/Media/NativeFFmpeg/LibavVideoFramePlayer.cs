@@ -629,6 +629,26 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     }
 
     /// <summary>
+    /// Plays <paramref name="pieces"/> one after the other in this one decode, each at its own speed, until the last is
+    /// over or <paramref name="ct"/> cancels: at a piece's end it seeks to the next with the file, the decoder and its GPU
+    /// device kept, and the first frame of the next shows when the last of the piece before has had its time, or as soon
+    /// as it is decoded if that is later. <paramref name="onPieceStarts"/> hears each piece once the decode is about to
+    /// reach it, on the decode thread, for its sound to start with its picture. <paramref name="onFrame"/> as for
+    /// <see cref="PlayFramesAsync"/>.
+    /// </summary>
+    internal Task PlayPiecesAsync(
+        string videoPath,
+        int outputWidth,
+        int outputHeight,
+        PlaybackPieces pieces,
+        BgraFrameHandler onFrame,
+        CancellationToken ct,
+        Action<PlaybackPiece>? onPieceStarts = null) =>
+        PlayFramesAsync(
+            videoPath, outputWidth, outputHeight, pieces.Current.StartSeconds, pieces.Current.Speed, loop: false, onFrame, ct,
+            pieces: pieces, onPieceStarts: onPieceStarts);
+
+    /// <summary>
     /// Decodes <paramref name="videoPath"/> from <paramref name="startSeconds"/>, scaled to outputWidth × outputHeight
     /// BGRA, and hands each frame to <paramref name="onFrame"/> on the decode thread at its presentation time. The
     /// frame is the scaler's own output, not a copy: a caller that keeps it copies what it needs during the call.
@@ -640,6 +660,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     /// loop alike. Frames are then shown by <paramref name="soundClock"/> while it plays, at 1×
     /// (<see cref="PlaybackMediaClock"/>), and by a stopwatch otherwise. A file that does not say how long its picture
     /// is, or cannot seek back, cannot be looped that way: it plays to its end once, and the call returns.</para>
+    /// <para>With <paramref name="pieces"/> it plays those instead, see <see cref="PlayPiecesAsync"/>.</para>
     /// </summary>
     public async Task PlayFramesAsync(
         string videoPath,
@@ -653,7 +674,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         Action<double>? onDurationKnown = null,
         PlaybackLoop? loopRange = null,
         Func<SoundClockReading>? soundClock = null,
-        Action<PlaybackLoop>? onLoopKnown = null)
+        Action<PlaybackLoop>? onLoopKnown = null,
+        PlaybackPieces? pieces = null,
+        Action<PlaybackPiece>? onPieceStarts = null)
     {
         await Task.Run(() =>
         {
@@ -800,6 +823,11 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                         }
                     }
 
+                    if (pieces != null)
+                    {
+                        onPieceStarts?.Invoke(pieces.Current);
+                    }
+
                     double loopStartSeconds = Math.Max(0, startSeconds);
                     int frameSize = outputWidth * outputHeight * 4;
                     int packedRowBytes = outputWidth * 4;
@@ -807,6 +835,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     bool decoderDraining = false;
                     bool shouldResetLoop = false;
                     bool passOver = false;
+                    bool pieceOver = false;
+                    double frameAfterPiece = -1;  // the time of the frame that said so, when one did
+                    double lastPieceEndsAt = -1; // by playbackClock, until the first frame of the piece after it
                     double startedAtSeconds = -1;
                     int consecutiveDrops = 0;
                     int hwTransferFailures = 0;
@@ -864,6 +895,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                 {
                                     shouldResetLoop = loop && timeline == null;
                                     passOver = timeline != null;
+                                    pieceOver = pieces != null;
                                     break;
                                 }
 
@@ -917,8 +949,25 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                         continue;
                                     }
 
+                                    if (pieces != null && pieces.EndsPiece(seconds))
+                                    {
+                                        pieceOver = true;
+                                        frameAfterPiece = seconds;
+                                        break;
+                                    }
+
                                     if (startedAtSeconds < 0)
                                     {
+                                        if (lastPieceEndsAt >= 0)
+                                        {
+                                            DelayUntilFrame(frameWaiter, playbackClock, 0, lastPieceEndsAt, 1.0, ct);
+                                            lastPieceEndsAt = -1;
+                                            if (ct.IsCancellationRequested)
+                                            {
+                                                break;
+                                            }
+                                        }
+
                                         startedAtSeconds = seconds;
                                         playbackClock.Restart();
                                     }
@@ -1011,6 +1060,42 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                 }
 
                                 ffmpeg.avcodec_flush_buffers(decCtx);
+                                continue;
+                            }
+
+                            // The piece is over: on to the next, nothing reopened, while its last frame stays up. A
+                            // frame just decoded past its end is what said so, ahead of that frame's time, which is
+                            // when the last one's time is over.
+                            if (pieceOver && pieces != null && !ct.IsCancellationRequested)
+                            {
+                                pieceOver = false;
+                                bool pieceShowedAFrame = startedAtSeconds >= 0;
+                                lastPieceEndsAt = pieceShowedAFrame
+                                    ? Math.Max(0, pieces.Current.EndSeconds - startedAtSeconds) / Math.Max(0.1, speed)
+                                    : -1;
+                                if (!pieces.MoveNext(pieceShowedAFrame))
+                                {
+                                    break;
+                                }
+
+                                startSeconds = pieces.Current.StartSeconds;
+                                speed = pieces.Current.Speed;
+                                startedAtSeconds = -1;
+                                consecutiveDrops = 0;
+                                hwTransferFailures = 0;
+
+                                // A short way on, the frames between are decoded and not shown, which is sooner than
+                                // going back to a keyframe to decode them and the ones before them again.
+                                bool decodeOn = !decoderDraining && frameAfterPiece >= 0 && startSeconds > frameAfterPiece + 0.0005
+                                    && LibavStillFrameDecoder.DecodingOnIsNearer(st, frameAfterPiece, startSeconds);
+                                frameAfterPiece = -1;
+                                if (!decodeOn)
+                                {
+                                    decoderDraining = false;
+                                    Seek(fmt, decCtx, videoStream, st->time_base, startSeconds);
+                                }
+
+                                onPieceStarts?.Invoke(pieces.Current);
                                 continue;
                             }
 

@@ -13,8 +13,9 @@ namespace GimmeCapture.Tests;
 /// <summary>
 /// The Compress editor's picture while its seek bar or its strip of pieces is dragged, through the real window and a
 /// clip whose every frame is its own grey: the frame under the pointer shows during the drag, from a keyframe near it,
-/// and the exact frame once the drag ends. Until 2026-11 nothing but the time moved until the release. Opt-in
-/// (EDITOR_SCRUB_PROBE=1): it sets up a headless Avalonia application, which a process can do only once.
+/// and the exact frame once the drag ends. Until 2026-11 nothing but the time moved until the release. Each test is
+/// opt-in by a switch of its own (EDITOR_SCRUB_PROBE=1, EDITOR_CUT_PLAY_PROBE=1): it sets up a headless Avalonia
+/// application, which a process can do only once.
 /// </summary>
 public sealed class VideoEditWindowScrubTests : IDisposable
 {
@@ -41,13 +42,46 @@ public sealed class VideoEditWindowScrubTests : IDisposable
         }
     }
 
+    [OptInFact("EDITOR_CUT_PLAY_PROBE=1")]
+    public void PlayingAVideoWithAPieceCutOut_ShowsWhatIsKept_AndNoFrameOfThatPiece()
+    {
+        SetUpAvalonia();
+        string clip = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "clip.mp4"), Width, Height, FrameCount, Fps, gopSize: 10);
+        double duration = (double)FrameCount / Fps;
+        var vm = new VideoEditViewModel(
+            clip, duration, Fps, Width, Height,
+            VideoEditResult.Empty with { KeptRuns = [new VideoEditSegment(0, 0.3), new VideoEditSegment(0.7, duration)] }, _ => { });
+        var window = new VideoEditWindow { DataContext = vm, Width = 960, Height = 760 };
+        window.Show();
+        Pump(() => !vm.IsPreparing && ShownFrame(vm) == 0, "the first frame");
+
+        var shown = new HashSet<int>();
+        vm.PlayPauseCommand.Execute().Subscribe();
+        Assert.True(vm.IsPlaying);
+        Pump(
+            () =>
+            {
+                if (ShownFrame(vm) is { } frame)
+                {
+                    shown.Add(frame);
+                }
+
+                return !vm.IsPlaying;
+            },
+            "the end of the playback");
+
+        Assert.DoesNotContain(shown, frame => frame is >= 10 and <= 20); // 9 and 21 are within a rounding of the cuts
+        Assert.Contains(shown, frame => frame is > 0 and < 9);
+        Assert.Contains(shown, frame => frame >= 21);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
     [OptInFact("EDITOR_SCRUB_PROBE=1")]
     public void DraggingTheSeekBarOrTheStrip_ShowsThePictureUnderThePointer_AndTheDropTheExactFrame()
     {
-        AppBuilder.Configure<GimmeCapture.App>()
-            .UseSkia()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-            .SetupWithoutStarting();
+        SetUpAvalonia();
 
         string clip = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "clip.mp4"), Width, Height, FrameCount, Fps, gopSize: 10);
         double duration = (double)FrameCount / Fps;
@@ -88,6 +122,12 @@ public sealed class VideoEditWindowScrubTests : IDisposable
         window.Close();
         Dispatcher.UIThread.RunJobs();
     }
+
+    private static void SetUpAvalonia() =>
+        AppBuilder.Configure<GimmeCapture.App>()
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            .SetupWithoutStarting();
 
     private static Point OnSlider(Slider slider, Window window, double fraction)
     {

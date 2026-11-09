@@ -516,8 +516,9 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     }
 
     // Output-aware playback: play each KEPT run at its own speed, skipping the dropped gaps — so the preview
-    // reflects the actual edit (2× plays in half the wall-clock time; cut pieces are skipped). Frames are
-    // cropped/rotated by BytesToBitmap to match the output. Video-only (the editor has no audio preview).
+    // reflects the actual edit (2× plays in half the wall-clock time; cut pieces are skipped). One decode plays them
+    // all, so a cut costs a seek and not a reopening of the file and the GPU device. Frames are cropped/rotated by
+    // DrawFrame to match the output.
     private Task PlayAsync()
     {
         if (_duration <= 0)
@@ -559,52 +560,37 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         }
         PositionSeconds = startWithin;
 
+        var pieces = new PlaybackPieces(
+            runs.Select(r => new PlaybackPiece(r.SourceStart, r.SourceEnd, (r.Speed > 0 ? r.Speed : 1.0) * _playbackSpeed)).ToArray(),
+            startIdx, startWithin, () => IsLooping);
+
         _ = Task.Run(async () =>
         {
             try
             {
-                bool firstLap = true;
-                do
-                {
-                    int lapStartIdx = firstLap ? startIdx : 0;
-                    for (int i = lapStartIdx; i < runs.Length && !ct.IsCancellationRequested; i++)
+                using var player = new LibavVideoFramePlayer();
+                await player.PlayPiecesAsync(
+                    _sourcePath, _decodeW, _decodeH, pieces,
+                    (bgra, ts) =>
                     {
-                        VideoEditSegment run = runs[i];
-                        double from = firstLap && i == startIdx ? startWithin : run.SourceStart;
-                        double pieceSpeed = run.Speed > 0 ? run.Speed : 1.0;
-                        double speed = pieceSpeed * _playbackSpeed; // per-run × global preview speed
-                        using var runCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                        using var p = new LibavVideoFramePlayer();
-
-                        // (Re)start preview audio at this run's start, retimed to the effective speed.
+                        // Only the newest frame waits for the UI thread; one that comes before it was drawn
+                        // replaces it, so a busy UI thread skips frames instead of falling behind.
+                        if (_playedFrames.Offer(bgra, _decodeW, _decodeH, gen, ts))
+                        {
+                            Dispatcher.UIThread.Post(DrawPlayedFrame);
+                        }
+                    },
+                    ct,
+                    piece =>
+                    {
+                        // (Re)start preview audio at this piece's start, retimed to its effective speed.
                         if (!IsMuted)
                         {
-                            _audioPreview.Start(_sourcePath, from, speed);
+                            _audioPreview.Start(_sourcePath, piece.StartSeconds, piece.Speed);
                         }
-
-                        try
-                        {
-                            await p.PlayAsync(_sourcePath, _decodeW, _decodeH, from, speed, false, (data, ts) =>
-                            {
-                                if (ts >= run.SourceEnd - 0.0005)
-                                {
-                                    runCts.Cancel(); // reached this kept run's end → advance to the next kept run
-                                    return;
-                                }
-                                // Only the newest frame waits for the UI thread; one that comes before it was drawn
-                                // replaces it, so a busy UI thread skips frames instead of falling behind.
-                                if (_playedFrames.Offer(data, _decodeW, _decodeH, gen, ts))
-                                {
-                                    Dispatcher.UIThread.Post(DrawPlayedFrame);
-                                }
-                            }, runCts.Token);
-                        }
-                        catch (OperationCanceledException) { /* run end or paused */ }
-                    }
-
-                    firstLap = false;
-                } while (IsLooping && !ct.IsCancellationRequested);
+                    });
             }
+            catch (OperationCanceledException) { /* paused */ }
             catch (Exception ex) { AppLog.Error("Compress.EditPlay", ex); }
             finally
             {

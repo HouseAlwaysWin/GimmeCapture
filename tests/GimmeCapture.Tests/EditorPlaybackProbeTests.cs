@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using Xunit.Abstractions;
 
@@ -35,6 +36,52 @@ public sealed class EditorPlaybackProbeTests(ITestOutputHelper output)
         {
             output.WriteLine($"  {row.MegaCycles,8:F1} M cycles/s {row.Wakeups,8:F1} wakeups/s  {ThreadActivity.Describe(row.Thread)}");
         }
+    }
+
+    /// <summary>
+    /// A preview of a video with pieces cut out: how long the picture stands still between one kept piece's last frame
+    /// and the next one's first, in the one decode the editor plays them in.
+    /// </summary>
+    [OptInFact("EDITOR_PLAYBACK_CLIP")]
+    public async Task ThePreviewOfACutVideo_StandsStillAtEachCut()
+    {
+        string clip = Environment.GetEnvironmentVariable("EDITOR_PLAYBACK_CLIP")!;
+        using var prober = new LibavVideoFramePlayer();
+        LibavVideoFramePlayer.MediaInfo info = await prober.ProbeAsync(clip);
+        double scale = Math.Min(1.0, 720.0 / Math.Max(1, info.Width));
+        int width = Math.Max(2, (int)(info.Width * scale)) & ~1;
+        int height = Math.Max(2, (int)(info.Height * scale)) & ~1;
+
+        // Pieces of a second; ten seconds, then a third of a second, between them.
+        foreach (double between in new[] { 10.0, 0.3 })
+        {
+            var pieces = Enumerable.Range(0, 6).Select(i => (Start: 20.0 + (i * (1 + between)), End: 21.0 + (i * (1 + between)))).ToArray();
+            output.WriteLine($"{between} s cut out: {string.Join(", ", (await StandingStillAtEachCut(clip, width, height, pieces)).Select(g => g.ToString("F0")))} ms");
+        }
+
+        output.WriteLine($"{Path.GetFileName(clip)}: a frame lasts {1000.0 / Math.Max(1, info.Fps):F0} ms");
+    }
+
+    private static async Task<List<double>> StandingStillAtEachCut(string clip, int width, int height, (double Start, double End)[] pieces)
+    {
+        var gaps = new List<double>();
+        var clock = Stopwatch.StartNew();
+        double lastFrameAt = -1;
+        double lastSeconds = -1;
+        using var player = new LibavVideoFramePlayer();
+        var run = new PlaybackPieces(pieces.Select(p => new PlaybackPiece(p.Start, p.End, 1.0)).ToArray(), 0, pieces[0].Start, () => false);
+        await player.PlayPiecesAsync(clip, width, height, run, (_, seconds) =>
+        {
+            double now = clock.Elapsed.TotalMilliseconds;
+            if (lastSeconds >= 0 && seconds - lastSeconds > 0.2)
+            {
+                gaps.Add(now - lastFrameAt);
+            }
+
+            lastFrameAt = now;
+            lastSeconds = seconds;
+        }, CancellationToken.None);
+        return gaps;
     }
 
     private static async Task<int> Play(string clip, int width, int height, double start, TimeSpan duration)
