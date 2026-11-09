@@ -51,7 +51,8 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     private WriteableBitmap? _frameBitmap;
     private bool _disposed;
 
-    // The paused frames: steps, seeks and redraws after a rotation or crop, from one decoder that keeps the file open.
+    // The paused frames, steps, seeks and redraws after a rotation or crop, and the playback too: one decoder that keeps
+    // the file open, so pressing Play neither opens it nor seeks.
     private readonly LibavStillFrameDecoder _stillFrames;
 
     // The picture under a drag of the seek bar or the strip, from the same decoder.
@@ -522,9 +523,9 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     }
 
     // Output-aware playback: play each KEPT run at its own speed, skipping the dropped gaps — so the preview
-    // reflects the actual edit (2× plays in half the wall-clock time; cut pieces are skipped). One decode plays them
-    // all, so a cut costs a seek and not a reopening of the file and the GPU device. Frames are cropped/rotated by
-    // DrawFrame to match the output.
+    // reflects the actual edit (2× plays in half the wall-clock time; cut pieces are skipped). The decoder the paused
+    // frames come from plays them all, so neither Play nor a cut reopens the file and the GPU device. Frames are
+    // cropped/rotated by DrawFrame to match the output.
     private Task PlayAsync()
     {
         if (_duration <= 0)
@@ -574,9 +575,8 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         {
             try
             {
-                using var player = new LibavVideoFramePlayer();
-                await player.PlayPiecesAsync(
-                    _sourcePath, _decodeW, _decodeH, pieces,
+                await _stillFrames.PlayPiecesAsync(
+                    pieces,
                     (bgra, ts) =>
                     {
                         // Only the newest frame waits for the UI thread; one that comes before it was drawn
@@ -590,17 +590,25 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
                     piece =>
                     {
                         // (Re)start preview audio at this piece's start, retimed to its effective speed.
-                        if (!IsMuted)
+                        if (IsMuted)
                         {
-                            _audioPreview.Start(_sourcePath, piece.StartSeconds, piece.Speed);
+                            return null;
                         }
+
+                        long ticket = _audioPreview.Start(_sourcePath, piece.StartSeconds, piece.Speed);
+                        return () => _audioPreview.ReadClock(ticket);
                     });
             }
             catch (OperationCanceledException) { /* paused */ }
             catch (Exception ex) { AppLog.Error("Compress.EditPlay", ex); }
             finally
             {
-                _audioPreview.Stop();
+                // A pause has stopped the sound already, and a newer playback has its own, which this must not stop.
+                if (gen == Volatile.Read(ref _playGeneration))
+                {
+                    _audioPreview.Stop();
+                }
+
                 Dispatcher.UIThread.Post(() => { if (gen == _playGeneration) IsPlaying = false; });
             }
         }, ct);
@@ -685,7 +693,8 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
 
     private async Task ShowFrameAtAsync(double pos)
     {
-        if (_duration <= 0)
+        // While playing, the decoder is in use and its next frame shows a new crop or rotation.
+        if (_duration <= 0 || IsPlaying)
         {
             return;
         }

@@ -183,6 +183,11 @@
 - **The editor keeps its video open for five minutes between frames.** It let go after 30 seconds without a frame, so
   the first step or seek after a pause to think took 0.4-0.6 s on a 4K video, where a step takes 0.03-0.18. Closing the
   editor lets go of it at once.
+- **Pressing Play in the editor starts at once.** Play opened the video anew, 220-510 ms on a 4K phone video before the
+  picture moved. It now goes on from the decoder the paused picture came from, in 14-36 ms, and at normal speed the
+  picture keeps to the sound. Playing holds one decoder instead of two.
+- **Changing the speed or an edit during playback keeps the sound.** The old playback, as it stopped, stopped the sound
+  the new one had just started.
 
 ### 🛡️ Reliability
 

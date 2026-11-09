@@ -32,6 +32,10 @@ internal sealed class LibavStillFrameDecoder : IDisposable
     // As in the player: a frame up to half a millisecond before the time asked for counts as at it.
     private const double FrameTimeTolerance = 0.0005;
 
+    // How far past where a playback starts the decoder can stand and the playback still go on from it: the frames out
+    // of the decoder but not yet on the screen when the last playback was paused.
+    private const double PlaysOnSeconds = 0.15;
+
     private readonly int _width;
     private readonly int _height;
 
@@ -47,18 +51,13 @@ internal sealed class LibavStillFrameDecoder : IDisposable
     private unsafe AVFormatContext* _input;
     private unsafe AVCodecContext* _decoder;
     private unsafe AVBufferRef* _hwDevice;
-    private unsafe SwsContext* _scaler;
+    private LibavBgraConverter? _converter;
     private unsafe AVPacket* _packet;
     private unsafe AVFrame* _decoded;
     private unsafe AVFrame* _downloaded;
     private unsafe AVFrame* _scaled;
     private int _videoStream = -1;
     private AVRational _timeBase;
-    private int _scalerWidth;
-    private int _scalerHeight;
-    private AVPixelFormat _scalerFormat = AVPixelFormat.AV_PIX_FMT_NONE;
-    private AVColorSpace _scalerSpace;
-    private AVColorRange _scalerRange;
     private bool _draining;
 
     // The time of the last frame out of the decoder. Negative infinity just after the file opens, when the decoder stands
@@ -146,6 +145,100 @@ internal sealed class LibavStillFrameDecoder : IDisposable
             _requests.Release();
         }
     }
+
+    /// <summary>
+    /// Plays <paramref name="pieces"/> with the file and decoder this keeps, as <see cref="LibavVideoFramePlayer.RunFrames"/>
+    /// does, on from where they stand when that reaches the first piece, so that a playback neither opens the file nor
+    /// seeks. Frames are asked for after it ends: <see cref="DecodeFrameAtAsync"/> waits its turn. Ends when the pieces do
+    /// or <paramref name="ct"/> cancels, or at once when disposed.
+    /// </summary>
+    internal async Task PlayPiecesAsync(
+        PlaybackPieces pieces,
+        LibavVideoFramePlayer.BgraFrameHandler onFrame,
+        CancellationToken ct,
+        Func<PlaybackPiece, Func<SoundClockReading>?>? onPieceStarts = null)
+    {
+        try
+        {
+            await _requests.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        try
+        {
+            if (ct.IsCancellationRequested || !TryBeginUse())
+            {
+                return;
+            }
+
+            try
+            {
+                await Task.Run(() => PlayOn(pieces, onFrame, onPieceStarts, ct), CancellationToken.None).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (EndUse())
+                {
+                    _idleClose.NotifyUse();
+                }
+            }
+        }
+        finally
+        {
+            _requests.Release();
+        }
+    }
+
+    // On the pool, for one request at a time. A failure closes the file, as for a frame.
+    private unsafe void PlayOn(
+        PlaybackPieces pieces,
+        LibavVideoFramePlayer.BgraFrameHandler onFrame,
+        Func<PlaybackPiece, Func<SoundClockReading>?>? onPieceStarts,
+        CancellationToken ct)
+    {
+        try
+        {
+            if (_input == null)
+            {
+                Open();
+            }
+
+            double start = pieces.Current.StartSeconds;
+            if (_draining || !PlaysOnTo(start))
+            {
+                Seek(start);
+            }
+
+            _converter ??= new LibavBgraConverter();
+            _decodedSeconds = LibavVideoFramePlayer.RunFrames(
+                new LibavVideoFramePlayer.OpenDecode
+                {
+                    Input = _input,
+                    Decoder = _decoder,
+                    VideoStream = _videoStream,
+                    Packet = _packet,
+                    Decoded = _decoded,
+                    Downloaded = _downloaded,
+                    Bgra = _scaled,
+                },
+                _converter, _width, _height, start, pieces.Current.Speed, loop: false, onFrame, ct,
+                pieces: pieces, onPieceStarts: onPieceStarts, framesMayBeWaiting: true);
+        }
+        catch
+        {
+            Close(dropLastFrame: true);
+            throw;
+        }
+    }
+
+    // Whether a playback from `start` can go on from where the decoder stands: it can reach the frame by decoding on, or
+    // has just given it, which is the frame on the screen, so the playback goes on with the one after it.
+    private bool PlaysOnTo(double start) =>
+        CanDecodeOnTo(start)
+        || (double.IsFinite(_decodedSeconds) && start <= _decodedSeconds + FrameTimeTolerance && _decodedSeconds - start <= PlaysOnSeconds);
 
     // Marks the decoder in use, unless it has been disposed.
     private bool TryBeginUse()
@@ -373,34 +466,9 @@ internal sealed class LibavStillFrameDecoder : IDisposable
         }
 
         // The colours are the decoded frame's: a download from the GPU carries none.
-        if (_scaler == null || source->width != _scalerWidth || source->height != _scalerHeight ||
-            (AVPixelFormat)source->format != _scalerFormat ||
-            _decoded->colorspace != _scalerSpace || _decoded->color_range != _scalerRange)
-        {
-            if (_scaler != null)
-            {
-                ffmpeg.sws_freeContext(_scaler);
-            }
-
-            _scalerWidth = source->width;
-            _scalerHeight = source->height;
-            _scalerFormat = (AVPixelFormat)source->format;
-            _scalerSpace = _decoded->colorspace;
-            _scalerRange = _decoded->color_range;
-            _scaler = ffmpeg.sws_getContext(
-                _scalerWidth, _scalerHeight, _scalerFormat,
-                _width, _height, AVPixelFormat.AV_PIX_FMT_BGRA,
-                (int)SwsFlags.SWS_BILINEAR, null, null, null);
-            if (_scaler == null)
-            {
-                throw new InvalidOperationException("sws_getContext failed.");
-            }
-
-            LibavColorMatrix.ReadAs(_scaler, _scalerSpace, _scalerRange);
-        }
-
         ThrowIfErr(ffmpeg.av_frame_make_writable(_scaled), "still_frame_writable");
-        ffmpeg.sws_scale(_scaler, source->data, source->linesize, 0, source->height, _scaled->data, _scaled->linesize);
+        _converter ??= new LibavBgraConverter();
+        _converter.Convert(source, _decoded->colorspace, _decoded->color_range, _scaled);
 
         var frame = new byte[_width * _height * 4];
         LibavVideoFramePlayer.CopyBgraFrame(_scaled, _width, _height, frame);
@@ -485,8 +553,8 @@ internal sealed class LibavStillFrameDecoder : IDisposable
         frame = _scaled;
         if (frame != null) ffmpeg.av_frame_free(&frame);
         _scaled = null;
-        if (_scaler != null) ffmpeg.sws_freeContext(_scaler);
-        _scaler = null;
+        _converter?.Dispose();
+        _converter = null;
         AVCodecContext* decoder = _decoder;
         if (decoder != null) ffmpeg.avcodec_free_context(&decoder);
         _decoder = null;
@@ -498,7 +566,6 @@ internal sealed class LibavStillFrameDecoder : IDisposable
         _input = null;
 
         _videoStream = -1;
-        _scalerFormat = AVPixelFormat.AV_PIX_FMT_NONE;
         _decodedSeconds = double.NaN;
         _draining = false;
         if (dropLastFrame)

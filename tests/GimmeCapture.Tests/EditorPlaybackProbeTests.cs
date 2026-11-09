@@ -68,9 +68,9 @@ public sealed class EditorPlaybackProbeTests(ITestOutputHelper output)
         var clock = Stopwatch.StartNew();
         double lastFrameAt = -1;
         double lastSeconds = -1;
-        using var player = new LibavVideoFramePlayer();
+        using var decoder = new LibavStillFrameDecoder(clip, width, height);
         var run = new PlaybackPieces(pieces.Select(p => new PlaybackPiece(p.Start, p.End, 1.0)).ToArray(), 0, pieces[0].Start, () => false);
-        await player.PlayPiecesAsync(clip, width, height, run, (_, seconds) =>
+        await decoder.PlayPiecesAsync(run, (_, seconds) =>
         {
             double now = clock.Elapsed.TotalMilliseconds;
             if (lastSeconds >= 0 && seconds - lastSeconds > 0.2)
@@ -82,6 +82,92 @@ public sealed class EditorPlaybackProbeTests(ITestOutputHelper output)
             lastSeconds = seconds;
         }, CancellationToken.None);
         return gaps;
+    }
+
+    /// <summary>
+    /// How long pressing Play takes to show a picture on a paused editor: a player of its own, which opens the file, the
+    /// decoder and its GPU device and seeks, against the decoder the paused frame came from, in turn.
+    /// </summary>
+    [OptInFact("EDITOR_PLAYBACK_CLIP")]
+    public async Task PressingPlay_Timed()
+    {
+        string clip = Environment.GetEnvironmentVariable("EDITOR_PLAYBACK_CLIP")!;
+        using var prober = new LibavVideoFramePlayer();
+        LibavVideoFramePlayer.MediaInfo info = await prober.ProbeAsync(clip);
+        double scale = Math.Min(1.0, 720.0 / Math.Max(1, info.Width));
+        int width = Math.Max(2, (int)(info.Width * scale)) & ~1;
+        int height = Math.Max(2, (int)(info.Height * scale)) & ~1;
+        double[] positions = [20.3, 41.7, 63.1, 88.45, 110.9, 132.2, 155.6, 180.05];
+
+        using var kept = new LibavStillFrameDecoder(clip, width, height, TimeSpan.FromMinutes(5));
+        await kept.DecodeFrameAtAsync(5);
+        var ownPlayer = new List<double>();
+        var keptDecoder = new List<double>();
+        var keptResumed = new List<double>();
+        for (int i = 0; i < positions.Length; i++)
+        {
+            // Places a few seconds apart, so neither way finds the file already in memory for the other.
+            double forOwn = positions[i] + (i % 2 == 0 ? 0 : 7);
+            double forKept = positions[i] + (i % 2 == 0 ? 7 : 0);
+            await kept.DecodeFrameAtAsync(forKept - 3);
+            for (int way = 0; way < 2; way++)
+            {
+                if ((way == 0) == (i % 2 == 0))
+                {
+                    ownPlayer.Add(await TimeToFirstFrame((frame, ct) =>
+                    {
+                        var player = new LibavVideoFramePlayer();
+                        return player.PlayFramesAsync(clip, width, height, forOwn, 1.0, false, frame, ct).ContinueWith(
+                            t =>
+                            {
+                                player.Dispose();
+                                return t;
+                            },
+                            TaskScheduler.Default).Unwrap();
+                    }));
+                }
+                else
+                {
+                    await kept.DecodeFrameAtAsync(forKept);
+                    PlaybackPieces Pieces(double from) => new([new PlaybackPiece(0, info.Duration, 1.0)], 0, from, () => false);
+                    keptDecoder.Add(await TimeToFirstFrame((frame, ct) => kept.PlayPiecesAsync(Pieces(forKept), frame, ct)));
+                    keptResumed.Add(await TimeToFirstFrame((frame, ct) => kept.PlayPiecesAsync(Pieces(forKept + (4.0 / Math.Max(1, info.Fps))), frame, ct)));
+                }
+
+                await OwnThread.Delay(TimeSpan.FromMilliseconds(300));
+            }
+        }
+
+        output.WriteLine($"{Path.GetFileName(clip)}, first frame after Play, in turn:");
+        output.WriteLine($"  a player of its own  {string.Join(", ", ownPlayer.Select(v => v.ToString("F0")))} ms");
+        output.WriteLine($"  the decoder kept     {string.Join(", ", keptDecoder.Select(v => v.ToString("F0")))} ms");
+        output.WriteLine($"  the same, after a pause {string.Join(", ", keptResumed.Select(v => v.ToString("F0")))} ms");
+    }
+
+    // The milliseconds from starting to the first frame shown; the play is cancelled on it.
+    private static async Task<double> TimeToFirstFrame(Func<LibavVideoFramePlayer.BgraFrameHandler, CancellationToken, Task> play)
+    {
+        using var stop = new CancellationTokenSource();
+        var clock = Stopwatch.StartNew();
+        double first = -1;
+        try
+        {
+            await play(
+                (_, _) =>
+                {
+                    if (first < 0)
+                    {
+                        first = clock.Elapsed.TotalMilliseconds;
+                        stop.Cancel();
+                    }
+                },
+                stop.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        return first;
     }
 
     private static async Task<int> Play(string clip, int width, int height, double start, TimeSpan duration)

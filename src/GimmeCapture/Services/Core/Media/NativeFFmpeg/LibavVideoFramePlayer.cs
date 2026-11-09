@@ -629,26 +629,6 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     }
 
     /// <summary>
-    /// Plays <paramref name="pieces"/> one after the other in this one decode, each at its own speed, until the last is
-    /// over or <paramref name="ct"/> cancels: at a piece's end it seeks to the next with the file, the decoder and its GPU
-    /// device kept, and the first frame of the next shows when the last of the piece before has had its time, or as soon
-    /// as it is decoded if that is later. <paramref name="onPieceStarts"/> hears each piece once the decode is about to
-    /// reach it, on the decode thread, for its sound to start with its picture. <paramref name="onFrame"/> as for
-    /// <see cref="PlayFramesAsync"/>.
-    /// </summary>
-    internal Task PlayPiecesAsync(
-        string videoPath,
-        int outputWidth,
-        int outputHeight,
-        PlaybackPieces pieces,
-        BgraFrameHandler onFrame,
-        CancellationToken ct,
-        Action<PlaybackPiece>? onPieceStarts = null) =>
-        PlayFramesAsync(
-            videoPath, outputWidth, outputHeight, pieces.Current.StartSeconds, pieces.Current.Speed, loop: false, onFrame, ct,
-            pieces: pieces, onPieceStarts: onPieceStarts);
-
-    /// <summary>
     /// Decodes <paramref name="videoPath"/> from <paramref name="startSeconds"/>, scaled to outputWidth × outputHeight
     /// BGRA, and hands each frame to <paramref name="onFrame"/> on the decode thread at its presentation time. The
     /// frame is the scaler's own output, not a copy: a caller that keeps it copies what it needs during the call.
@@ -660,7 +640,6 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     /// loop alike. Frames are then shown by <paramref name="soundClock"/> while it plays, at 1×
     /// (<see cref="PlaybackMediaClock"/>), and by a stopwatch otherwise. A file that does not say how long its picture
     /// is, or cannot seek back, cannot be looped that way: it plays to its end once, and the call returns.</para>
-    /// <para>With <paramref name="pieces"/> it plays those instead, see <see cref="PlayPiecesAsync"/>.</para>
     /// </summary>
     public async Task PlayFramesAsync(
         string videoPath,
@@ -674,9 +653,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         Action<double>? onDurationKnown = null,
         PlaybackLoop? loopRange = null,
         Func<SoundClockReading>? soundClock = null,
-        Action<PlaybackLoop>? onLoopKnown = null,
-        PlaybackPieces? pieces = null,
-        Action<PlaybackPiece>? onPieceStarts = null)
+        Action<PlaybackLoop>? onLoopKnown = null)
     {
         await Task.Run(() =>
         {
@@ -823,308 +800,18 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                         }
                     }
 
-                    if (pieces != null)
-                    {
-                        onPieceStarts?.Invoke(pieces.Current);
-                    }
-
-                    double loopStartSeconds = Math.Max(0, startSeconds);
-                    int frameSize = outputWidth * outputHeight * 4;
-                    int packedRowBytes = outputWidth * 4;
-                    byte[]? packedFrame = null; // only if the scaler's rows ever come padded
-                    bool decoderDraining = false;
-                    bool shouldResetLoop = false;
-                    bool passOver = false;
-                    bool pieceOver = false;
-                    double frameAfterPiece = -1;  // the time of the frame that said so, when one did
-                    double lastPieceEndsAt = -1; // by playbackClock, until the first frame of the piece after it
-                    double startedAtSeconds = -1;
-                    int consecutiveDrops = 0;
-                    int hwTransferFailures = 0;
-                    var playbackClock = Stopwatch.StartNew();
-                    var frameWaiter = FrameDeadlineWaiter.Create(ct);
-
-                    // A loop's frames are shown by the sound's clock, or a stopwatch; its first frame at once.
-                    PlaybackMediaClock? mediaClock = timeline != null ? new PlaybackMediaClock(speed) : null;
-                    Func<SoundClockReading>? readSound = Math.Abs(speed - 1.0) < 0.001 ? soundClock : null;
-
-                    try
-                    {
-                        while (!ct.IsCancellationRequested)
+                    RunFrames(
+                        new OpenDecode
                         {
-                            if (!decoderDraining)
-                            {
-                                int rr = ffmpeg.av_read_frame(fmt, pkt);
-                                if (rr == ffmpeg.AVERROR_EOF)
-                                {
-                                    ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, (AVPacket*)null), "send_eof");
-                                    decoderDraining = true;
-                                    continue;
-                                }
-
-                                if (rr < 0)
-                                {
-                                    if (rr == ffmpeg.AVERROR(11))
-                                    {
-                                        Thread.Sleep(1);
-                                        continue;
-                                    }
-
-                                    ThrowIfErr(rr, "read_frame");
-                                }
-
-                                if (pkt->stream_index != videoStream)
-                                {
-                                    ffmpeg.av_packet_unref(pkt);
-                                    continue;
-                                }
-
-                                ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet");
-                                ffmpeg.av_packet_unref(pkt);
-                            }
-
-                            while (!ct.IsCancellationRequested)
-                            {
-                                int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
-                                if (gr == ffmpeg.AVERROR(11))
-                                {
-                                    break;
-                                }
-
-                                if (gr == ffmpeg.AVERROR_EOF)
-                                {
-                                    shouldResetLoop = loop && timeline == null;
-                                    passOver = timeline != null;
-                                    pieceOver = pieces != null;
-                                    break;
-                                }
-
-                                ThrowIfErr(gr, "receive_frame");
-
-                                long ts = decFrame->best_effort_timestamp;
-                                double seconds = ts >= 0 ? ts * ffmpeg.av_q2d(st->time_base) : 0;
-
-                                if (timeline != null && mediaClock != null)
-                                {
-                                    if (timeline.IsBeforePassStart(seconds))
-                                    {
-                                        continue;
-                                    }
-
-                                    if (timeline.EndsPass(seconds))
-                                    {
-                                        passOver = true;
-                                        break;
-                                    }
-
-                                    double due = timeline.PlaybackSeconds(seconds);
-                                    if (startedAtSeconds < 0)
-                                    {
-                                        startedAtSeconds = seconds;
-                                        playbackClock.Restart();
-                                        mediaClock.Begin(0, due, readSound?.Invoke() ?? SoundClockReading.Unavailable);
-                                    }
-                                    else
-                                    {
-                                        double now = mediaClock.Now(
-                                            playbackClock.Elapsed.TotalSeconds, readSound?.Invoke() ?? SoundClockReading.Unavailable);
-                                        if (IsLateFrame(now, due, consecutiveDrops))
-                                        {
-                                            consecutiveDrops++;
-                                            continue;
-                                        }
-
-                                        consecutiveDrops = 0;
-                                        DelayUntilPlaybackTime(frameWaiter, playbackClock, mediaClock, readSound, due, speed, ct);
-                                        if (ct.IsCancellationRequested)
-                                        {
-                                            break;
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    if (seconds + 0.0005 < startSeconds)
-                                    {
-                                        continue;
-                                    }
-
-                                    if (pieces != null && pieces.EndsPiece(seconds))
-                                    {
-                                        pieceOver = true;
-                                        frameAfterPiece = seconds;
-                                        break;
-                                    }
-
-                                    if (startedAtSeconds < 0)
-                                    {
-                                        if (lastPieceEndsAt >= 0)
-                                        {
-                                            DelayUntilFrame(frameWaiter, playbackClock, 0, lastPieceEndsAt, 1.0, ct);
-                                            lastPieceEndsAt = -1;
-                                            if (ct.IsCancellationRequested)
-                                            {
-                                                break;
-                                            }
-                                        }
-
-                                        startedAtSeconds = seconds;
-                                        playbackClock.Restart();
-                                    }
-
-                                    // Real-time catch-up: if we've already fallen behind this frame's scheduled slot,
-                                    // skip displaying it (decode still ran, so reference frames stay intact) instead of
-                                    // rendering late frames that pile onto the UI thread. Capped so the picture — and
-                                    // the caller's time readout — keeps advancing.
-                                    if (ShouldDropLateFrame(playbackClock.Elapsed.TotalSeconds, startedAtSeconds, seconds, speed, consecutiveDrops))
-                                    {
-                                        consecutiveDrops++;
-                                        continue;
-                                    }
-
-                                    consecutiveDrops = 0;
-
-                                    DelayUntilFrame(frameWaiter, playbackClock, startedAtSeconds, seconds, speed, ct);
-                                    if (ct.IsCancellationRequested)
-                                    {
-                                        break;
-                                    }
-                                }
-
-                                // Under hw decode the frame lives on a GPU surface (AV_PIX_FMT_D3D11); download it
-                                // to system memory (NV12) before scaling. Software frames are used directly.
-                                AVFrame* srcFrame = decFrame;
-                                if (decFrame->format == (int)AVPixelFormat.AV_PIX_FMT_D3D11)
-                                {
-                                    ffmpeg.av_frame_unref(swFrame);
-                                    int tr = ffmpeg.av_hwframe_transfer_data(swFrame, decFrame, 0);
-                                    if (tr < 0)
-                                    {
-                                        // Transient failure: skip just this frame. Persistent failure (device-removed):
-                                        // tear down so the caller can surface it and the user can turn hw decode off —
-                                        // otherwise we would freeze on a stale picture with the clock stuck.
-                                        if (++hwTransferFailures >= MaxHwTransferFailures)
-                                        {
-                                            AppLog.Information($"LibavVideoFramePlayer.PlayAsync hwframe transfer failing persistently (rc={tr}); tearing down");
-                                            throw FFmpegErrors.ToException(tr, "hwframe_transfer_data");
-                                        }
-
-                                        continue;
-                                    }
-
-                                    hwTransferFailures = 0;
-                                    srcFrame = swFrame;
-                                }
-
-                                // Keyed on the true source format and size, only known here for the hw path (the
-                                // downloaded NV12), and set up again if a stream ever changes them. The colours are the
-                                // decoded frame's: a download from the GPU carries none.
-                                ThrowIfErr(ffmpeg.av_frame_make_writable(outFrame), "out_frame_writable");
-                                converter.Convert(srcFrame, decFrame->colorspace, decFrame->color_range, outFrame);
-
-                                // outFrame's buffer was allocated with 1-byte alignment, so its rows are packed and the
-                                // scaler's output already is the frame: hand it over without copying it first.
-                                ReadOnlySpan<byte> bgra;
-                                if (outFrame->linesize[0] == packedRowBytes)
-                                {
-                                    bgra = new ReadOnlySpan<byte>(outFrame->data[0], frameSize);
-                                }
-                                else
-                                {
-                                    packedFrame ??= ArrayPool<byte>.Shared.Rent(frameSize);
-                                    CopyBgraFrame(outFrame, outputWidth, outputHeight, packedFrame.AsSpan(0, frameSize));
-                                    bgra = packedFrame.AsSpan(0, frameSize);
-                                }
-
-                                onFrame(bgra, seconds);
-                            }
-
-                            // The loop's pass is over: back to its start, nothing reopened, the time running on. A file
-                            // that cannot seek there ends the call instead, and its caller plays it pass by pass.
-                            if (passOver && timeline != null && !ct.IsCancellationRequested)
-                            {
-                                passOver = false;
-                                timeline.NextPass();
-                                decoderDraining = false;
-                                consecutiveDrops = 0;
-                                hwTransferFailures = 0;
-                                int seekRc = ffmpeg.av_seek_frame(
-                                    fmt,
-                                    videoStream,
-                                    (long)Math.Max(0, timeline.PassStartSeconds / ffmpeg.av_q2d(st->time_base)),
-                                    ffmpeg.AVSEEK_FLAG_BACKWARD);
-                                if (seekRc < 0)
-                                {
-                                    AppLog.Debug("LibavVideoFramePlayer.Loop", $"cannot seek back to the loop's start (rc={seekRc})");
-                                    break;
-                                }
-
-                                ffmpeg.avcodec_flush_buffers(decCtx);
-                                continue;
-                            }
-
-                            // The piece is over: on to the next, nothing reopened, while its last frame stays up. A
-                            // frame just decoded past its end is what said so, ahead of that frame's time, which is
-                            // when the last one's time is over.
-                            if (pieceOver && pieces != null && !ct.IsCancellationRequested)
-                            {
-                                pieceOver = false;
-                                bool pieceShowedAFrame = startedAtSeconds >= 0;
-                                lastPieceEndsAt = pieceShowedAFrame
-                                    ? Math.Max(0, pieces.Current.EndSeconds - startedAtSeconds) / Math.Max(0.1, speed)
-                                    : -1;
-                                if (!pieces.MoveNext(pieceShowedAFrame))
-                                {
-                                    break;
-                                }
-
-                                startSeconds = pieces.Current.StartSeconds;
-                                speed = pieces.Current.Speed;
-                                startedAtSeconds = -1;
-                                consecutiveDrops = 0;
-                                hwTransferFailures = 0;
-
-                                // A short way on, the frames between are decoded and not shown, which is sooner than
-                                // going back to a keyframe to decode them and the ones before them again.
-                                bool decodeOn = !decoderDraining && frameAfterPiece >= 0 && startSeconds > frameAfterPiece + 0.0005
-                                    && LibavStillFrameDecoder.DecodingOnIsNearer(st, frameAfterPiece, startSeconds);
-                                frameAfterPiece = -1;
-                                if (!decodeOn)
-                                {
-                                    decoderDraining = false;
-                                    Seek(fmt, decCtx, videoStream, st->time_base, startSeconds);
-                                }
-
-                                onPieceStarts?.Invoke(pieces.Current);
-                                continue;
-                            }
-
-                            if (shouldResetLoop && !ct.IsCancellationRequested)
-                            {
-                                decoderDraining = false;
-                                shouldResetLoop = false;
-                                startedAtSeconds = -1;
-                                consecutiveDrops = 0;
-                                hwTransferFailures = 0;
-                                Seek(fmt, decCtx, videoStream, st->time_base, loopStartSeconds);
-                                continue;
-                            }
-
-                            if (decoderDraining)
-                            {
-                                break;
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        if (packedFrame != null)
-                        {
-                            ArrayPool<byte>.Shared.Return(packedFrame);
-                        }
-
-                        frameWaiter.Dispose();
-                    }
+                            Input = fmt,
+                            Decoder = decCtx,
+                            VideoStream = videoStream,
+                            Packet = pkt,
+                            Decoded = decFrame,
+                            Downloaded = swFrame,
+                            Bgra = outFrame,
+                        },
+                        converter, outputWidth, outputHeight, startSeconds, speed, loop, onFrame, ct, timeline, soundClock);
                 }
                 finally
                 {
@@ -1140,6 +827,373 @@ internal sealed class LibavVideoFramePlayer : IDisposable
             }
         }, ct).ConfigureAwait(false);
     }
+
+    /// <summary>A file and its decoder, already open, and the frames to decode into, for <see cref="RunFrames"/>.</summary>
+    internal readonly unsafe struct OpenDecode
+    {
+        public required AVFormatContext* Input { get; init; }
+
+        public required AVCodecContext* Decoder { get; init; }
+
+        public required int VideoStream { get; init; }
+
+        public required AVPacket* Packet { get; init; }
+
+        public required AVFrame* Decoded { get; init; }
+
+        public required AVFrame* Downloaded { get; init; }
+
+        public required AVFrame* Bgra { get; init; }
+    }
+
+    /// <summary>
+    /// Decodes on from where <paramref name="open"/> stands and shows each frame at its time, until the end or
+    /// <paramref name="ct"/>: <see cref="PlayFramesAsync"/>'s work once the file is open, and a
+    /// <see cref="LibavStillFrameDecoder"/>'s when it plays. A caller that has decoded with them before says
+    /// <paramref name="framesMayBeWaiting"/>.
+    /// <para>With <paramref name="pieces"/> it plays those one after the other, each at its own speed: at a piece's end it
+    /// seeks to the next, or decodes on when that is nearer, and the next piece's first frame shows when the last of the
+    /// piece before has had its time, or as soon as it is decoded if that is later. <paramref name="onPieceStarts"/> hears
+    /// each piece as the decode is about to reach it, on the decode thread, and returns its sound's clock, if it has a
+    /// sound, for the picture to keep to at 1× (<see cref="PlaybackMediaClock"/>).</para>
+    /// </summary>
+    /// <returns>The time of the last frame out of the decoder, NaN when the next frame needs a seek first.</returns>
+    internal static unsafe double RunFrames(
+        in OpenDecode open,
+        LibavBgraConverter converter,
+        int outputWidth,
+        int outputHeight,
+        double startSeconds,
+        double speed,
+        bool loop,
+        BgraFrameHandler onFrame,
+        CancellationToken ct,
+        LoopPassTimeline? timeline = null,
+        Func<SoundClockReading>? soundClock = null,
+        PlaybackPieces? pieces = null,
+        Func<PlaybackPiece, Func<SoundClockReading>?>? onPieceStarts = null,
+        bool framesMayBeWaiting = false)
+    {
+        AVFormatContext* fmt = open.Input;
+        AVCodecContext* decCtx = open.Decoder;
+        int videoStream = open.VideoStream;
+        AVStream* st = fmt->streams[videoStream];
+        AVPacket* pkt = open.Packet;
+        AVFrame* decFrame = open.Decoded;
+        AVFrame* swFrame = open.Downloaded;
+        AVFrame* outFrame = open.Bgra;
+        double lastDecoded = double.NaN;
+
+        double loopStartSeconds = Math.Max(0, startSeconds);
+        int frameSize = outputWidth * outputHeight * 4;
+        int packedRowBytes = outputWidth * 4;
+        byte[]? packedFrame = null; // only if the scaler's rows ever come padded
+        bool decoderDraining = false;
+        bool shouldResetLoop = false;
+        bool passOver = false;
+        bool pieceOver = false;
+        double frameAfterPiece = -1;  // the time of the frame that said so, when one did
+        double lastPieceEndsAt = -1; // by playbackClock, until the first frame of the piece after it
+        double startedAtSeconds = -1;
+        int consecutiveDrops = 0;
+        int hwTransferFailures = 0;
+        var playbackClock = Stopwatch.StartNew();
+        var frameWaiter = FrameDeadlineWaiter.Create(ct);
+
+        // A loop's frames and a preview's pieces are shown by the sound's clock, or a stopwatch; the first frame at once.
+        PlaybackMediaClock? mediaClock = timeline != null || pieces != null ? new PlaybackMediaClock(speed) : null;
+        Func<SoundClockReading>? readSound = FollowedAt(
+            speed, pieces != null && onPieceStarts != null ? onPieceStarts(pieces.Current) : soundClock);
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                // Frames still in the decoder come out before it is given more: it would not take the next packet.
+                if (!decoderDraining && !framesMayBeWaiting)
+                {
+                    int rr = ffmpeg.av_read_frame(fmt, pkt);
+                    if (rr == ffmpeg.AVERROR_EOF)
+                    {
+                        ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, (AVPacket*)null), "send_eof");
+                        decoderDraining = true;
+                        continue;
+                    }
+
+                    if (rr < 0)
+                    {
+                        if (rr == ffmpeg.AVERROR(11))
+                        {
+                            Thread.Sleep(1);
+                            continue;
+                        }
+
+                        ThrowIfErr(rr, "read_frame");
+                    }
+
+                    if (pkt->stream_index != videoStream)
+                    {
+                        ffmpeg.av_packet_unref(pkt);
+                        continue;
+                    }
+
+                    ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet");
+                    ffmpeg.av_packet_unref(pkt);
+                }
+
+                framesMayBeWaiting = false;
+                while (!ct.IsCancellationRequested)
+                {
+                    int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
+                    if (gr == ffmpeg.AVERROR(11))
+                    {
+                        break;
+                    }
+
+                    if (gr == ffmpeg.AVERROR_EOF)
+                    {
+                        shouldResetLoop = loop && timeline == null;
+                        passOver = timeline != null;
+                        pieceOver = pieces != null;
+                        break;
+                    }
+
+                    ThrowIfErr(gr, "receive_frame");
+
+                    long ts = decFrame->best_effort_timestamp;
+                    double seconds = ts >= 0 ? ts * ffmpeg.av_q2d(st->time_base) : 0;
+                    lastDecoded = seconds;
+
+                    if (mediaClock != null)
+                    {
+                        if (timeline?.IsBeforePassStart(seconds) ?? seconds + 0.0005 < startSeconds)
+                        {
+                            continue;
+                        }
+
+                        if (timeline?.EndsPass(seconds) == true)
+                        {
+                            passOver = true;
+                            break;
+                        }
+
+                        if (pieces?.EndsPiece(seconds) == true)
+                        {
+                            pieceOver = true;
+                            frameAfterPiece = seconds;
+                            break;
+                        }
+
+                        double due = timeline?.PlaybackSeconds(seconds) ?? seconds - startSeconds;
+                        if (startedAtSeconds < 0)
+                        {
+                            if (lastPieceEndsAt >= 0)
+                            {
+                                DelayUntilFrame(frameWaiter, playbackClock, 0, lastPieceEndsAt, 1.0, ct);
+                                lastPieceEndsAt = -1;
+                                if (ct.IsCancellationRequested)
+                                {
+                                    break;
+                                }
+                            }
+
+                            startedAtSeconds = seconds;
+                            playbackClock.Restart();
+                            mediaClock.Begin(0, due, readSound?.Invoke() ?? SoundClockReading.Unavailable);
+                        }
+                        else
+                        {
+                            double now = mediaClock.Now(
+                                playbackClock.Elapsed.TotalSeconds, readSound?.Invoke() ?? SoundClockReading.Unavailable);
+                            if (IsLateFrame(now, due, consecutiveDrops))
+                            {
+                                consecutiveDrops++;
+                                continue;
+                            }
+
+                            consecutiveDrops = 0;
+                            DelayUntilPlaybackTime(frameWaiter, playbackClock, mediaClock, readSound, due, speed, ct);
+                            if (ct.IsCancellationRequested)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (seconds + 0.0005 < startSeconds)
+                        {
+                            continue;
+                        }
+
+                        if (startedAtSeconds < 0)
+                        {
+                            startedAtSeconds = seconds;
+                            playbackClock.Restart();
+                        }
+
+                        // Real-time catch-up: if we've already fallen behind this frame's scheduled slot,
+                        // skip displaying it (decode still ran, so reference frames stay intact) instead of
+                        // rendering late frames that pile onto the UI thread. Capped so the picture — and
+                        // the caller's time readout — keeps advancing.
+                        if (ShouldDropLateFrame(playbackClock.Elapsed.TotalSeconds, startedAtSeconds, seconds, speed, consecutiveDrops))
+                        {
+                            consecutiveDrops++;
+                            continue;
+                        }
+
+                        consecutiveDrops = 0;
+
+                        DelayUntilFrame(frameWaiter, playbackClock, startedAtSeconds, seconds, speed, ct);
+                        if (ct.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                    }
+
+                    // Under hw decode the frame lives on a GPU surface (AV_PIX_FMT_D3D11); download it
+                    // to system memory (NV12) before scaling. Software frames are used directly.
+                    AVFrame* srcFrame = decFrame;
+                    if (decFrame->format == (int)AVPixelFormat.AV_PIX_FMT_D3D11)
+                    {
+                        ffmpeg.av_frame_unref(swFrame);
+                        int tr = ffmpeg.av_hwframe_transfer_data(swFrame, decFrame, 0);
+                        if (tr < 0)
+                        {
+                            // Transient failure: skip just this frame. Persistent failure (device-removed):
+                            // tear down so the caller can surface it and the user can turn hw decode off —
+                            // otherwise we would freeze on a stale picture with the clock stuck.
+                            if (++hwTransferFailures >= MaxHwTransferFailures)
+                            {
+                                AppLog.Information($"LibavVideoFramePlayer.PlayAsync hwframe transfer failing persistently (rc={tr}); tearing down");
+                                throw FFmpegErrors.ToException(tr, "hwframe_transfer_data");
+                            }
+
+                            continue;
+                        }
+
+                        hwTransferFailures = 0;
+                        srcFrame = swFrame;
+                    }
+
+                    // Keyed on the true source format and size, only known here for the hw path (the
+                    // downloaded NV12), and set up again if a stream ever changes them. The colours are the
+                    // decoded frame's: a download from the GPU carries none.
+                    ThrowIfErr(ffmpeg.av_frame_make_writable(outFrame), "out_frame_writable");
+                    converter.Convert(srcFrame, decFrame->colorspace, decFrame->color_range, outFrame);
+
+                    // outFrame's buffer was allocated with 1-byte alignment, so its rows are packed and the
+                    // scaler's output already is the frame: hand it over without copying it first.
+                    ReadOnlySpan<byte> bgra;
+                    if (outFrame->linesize[0] == packedRowBytes)
+                    {
+                        bgra = new ReadOnlySpan<byte>(outFrame->data[0], frameSize);
+                    }
+                    else
+                    {
+                        packedFrame ??= ArrayPool<byte>.Shared.Rent(frameSize);
+                        CopyBgraFrame(outFrame, outputWidth, outputHeight, packedFrame.AsSpan(0, frameSize));
+                        bgra = packedFrame.AsSpan(0, frameSize);
+                    }
+
+                    onFrame(bgra, seconds);
+                }
+
+                // The loop's pass is over: back to its start, nothing reopened, the time running on. A file
+                // that cannot seek there ends the call instead, and its caller plays it pass by pass.
+                if (passOver && timeline != null && !ct.IsCancellationRequested)
+                {
+                    passOver = false;
+                    timeline.NextPass();
+                    decoderDraining = false;
+                    consecutiveDrops = 0;
+                    hwTransferFailures = 0;
+                    int seekRc = ffmpeg.av_seek_frame(
+                        fmt,
+                        videoStream,
+                        (long)Math.Max(0, timeline.PassStartSeconds / ffmpeg.av_q2d(st->time_base)),
+                        ffmpeg.AVSEEK_FLAG_BACKWARD);
+                    if (seekRc < 0)
+                    {
+                        AppLog.Debug("LibavVideoFramePlayer.Loop", $"cannot seek back to the loop's start (rc={seekRc})");
+                        break;
+                    }
+
+                    ffmpeg.avcodec_flush_buffers(decCtx);
+                    continue;
+                }
+
+                // The piece is over: on to the next, nothing reopened, while its last frame stays up. A
+                // frame just decoded past its end is what said so, ahead of that frame's time, which is
+                // when the last one's time is over.
+                if (pieceOver && pieces != null && !ct.IsCancellationRequested)
+                {
+                    pieceOver = false;
+                    bool pieceShowedAFrame = startedAtSeconds >= 0;
+                    lastPieceEndsAt = pieceShowedAFrame
+                        ? Math.Max(0, pieces.Current.EndSeconds - startedAtSeconds) / Math.Max(0.1, speed)
+                        : -1;
+                    if (!pieces.MoveNext(pieceShowedAFrame))
+                    {
+                        break;
+                    }
+
+                    startSeconds = pieces.Current.StartSeconds;
+                    speed = pieces.Current.Speed;
+                    startedAtSeconds = -1;
+                    consecutiveDrops = 0;
+                    hwTransferFailures = 0;
+                    mediaClock = new PlaybackMediaClock(speed);
+
+                    // A short way on, the frames between are decoded and not shown, which is sooner than
+                    // going back to a keyframe to decode them and the ones before them again.
+                    framesMayBeWaiting = !decoderDraining && frameAfterPiece >= 0 && startSeconds > frameAfterPiece + 0.0005
+                        && LibavStillFrameDecoder.DecodingOnIsNearer(st, frameAfterPiece, startSeconds);
+                    frameAfterPiece = -1;
+                    if (!framesMayBeWaiting)
+                    {
+                        decoderDraining = false;
+                        lastDecoded = double.NaN;
+                        Seek(fmt, decCtx, videoStream, st->time_base, startSeconds);
+                    }
+
+                    readSound = FollowedAt(speed, onPieceStarts?.Invoke(pieces.Current));
+                    continue;
+                }
+
+                if (shouldResetLoop && !ct.IsCancellationRequested)
+                {
+                    decoderDraining = false;
+                    shouldResetLoop = false;
+                    startedAtSeconds = -1;
+                    consecutiveDrops = 0;
+                    hwTransferFailures = 0;
+                    Seek(fmt, decCtx, videoStream, st->time_base, loopStartSeconds);
+                    continue;
+                }
+
+                if (decoderDraining)
+                {
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            if (packedFrame != null)
+            {
+                ArrayPool<byte>.Shared.Return(packedFrame);
+            }
+
+            frameWaiter.Dispose();
+        }
+
+        return decoderDraining ? double.NaN : lastDecoded;
+    }
+
+    // A sound is followed at 1× only: at another speed it is retimed, and its clock does not run in the file's time.
+    private static Func<SoundClockReading>? FollowedAt(double speed, Func<SoundClockReading>? clock) =>
+        Math.Abs(speed - 1.0) < 0.001 ? clock : null;
 
     private static unsafe void Seek(AVFormatContext* fmt, AVCodecContext* decCtx, int streamIndex, AVRational timeBase, double seconds)
     {

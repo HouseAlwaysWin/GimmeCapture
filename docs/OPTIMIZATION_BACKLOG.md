@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 38 entries (2026-11-09).
+- Since v0.74.0, `## Unreleased` holds 40 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+1f7e84fd`, installed by hand on 2026-11-08 in the evening over
   `0.74.0+36c839ad` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1339,14 +1339,14 @@ tool.
 - Done since batch 1 (2026-11-09): **the editor's preview stopped at every cut** (Compress and the editor).
   `VideoEditViewModel.PlayAsync` played each kept run with a `LibavVideoFramePlayer` of its own, so every cut and every
   lap of Loop closed the file, the decoder and its D3D11VA device and opened them again. `PlaybackPieces` and
-  `LibavVideoFramePlayer.PlayPiecesAsync` play them in one decode: at a piece's end it seeks to the next with all that
+  `LibavStillFrameDecoder.PlayPiecesAsync` play them in one decode: at a piece's end it seeks to the next with all that
   kept, or decodes on when the index has no keyframe between (`LibavStillFrameDecoder.DecodingOnIsNearer`), and the next
   piece's first frame waits until the last one's time is over. How long the picture stands still at a cut on
   `V_20260110_175957_ES0` (`EditorPlaybackProbeTests`, five cuts, both ways in turn, twice; a frame lasts 34 ms): 10 s
   cut out, 353-435 ms against 119-140; 0.3 s cut out, 372-528 against 127-156, where seeking every time had left
   130-290. Not something the user has met yet: none of the 33 saved items has more than one kept piece and Loop starts
   off, so the choice rests on cuts being the editor's main use. The first piece's sound now starts once the file is
-  open rather than before it. `LibavVideoFramePlayerPiecesTests` (fails without the wait for a piece's last frame or
+  open rather than before it. `LibavStillFrameDecoderPiecesTests` (fails without the wait for a piece's last frame or
   without each piece's own speed), `PlaybackPiecesTests`, and opt-in EDITOR_CUT_PLAY_PROBE=1 through the real window.
   Measured, nothing done: opening the editor on that video (a headless host with the app's precompiled assemblies)
   holds the UI thread 410-480 ms the first time in a session and 65-90 ms after that, and the picture follows 240-425
@@ -1357,6 +1357,22 @@ tool.
   next frame of `V_20260110_175957_ES0` took 400-593 ms, where a step takes 29-79. Compare and a paused pin keep 30 s,
   and closing the editor still lets go at once. What it holds on longer was read only in a test host (private bytes 69
   → 477 MB open), not in the app, where such figures have come out lower.
+- Done since batch 1 (2026-11-09, "繼續下一步"): **pressing Play opened the video again** (Compress and the editor). The
+  editor kept one decoder for its paused frames and made another for each playback. `LibavVideoFramePlayer.RunFrames` is
+  now the decode loop alone, over an `OpenDecode`, and `LibavStillFrameDecoder.PlayPiecesAsync` runs it with the file and
+  decoder it keeps, on from where they stand when that reaches the playhead: decoding on, or the next frame when the
+  decoder has just given the one on the screen (or stands up to 0.15 s past it, the frames out of the decoder but not
+  drawn when a playback paused). First frame after Play on `V_20260110_175957_ES0`, in turn (`EditorPlaybackProbeTests.
+  PressingPlay_Timed`): 221-508 ms with a player of its own against 14-26 from the kept decoder and 25-36 after a pause.
+  A playback holds one decoder instead of two. At 1× the picture now keeps to the sound (`PlaybackMediaClock`, the pin's:
+  the first frame at once, the next when the sound has started, a second at most), so an instant first frame does not
+  run ahead of a sound that takes 30-150 ms to open. Frames asked for during a playback wait for it to end, and a redraw
+  for a new crop or rotation while playing is left to the next frame. Also fixed: an old playback's end stopped the sound of
+  the new one that a change of speed or an edit had just started (`Stop` only for the playback still current); frames
+  left in the decoder at a short cut could make it refuse the next packet (EAGAIN from `avcodec_send_packet`, not seen in
+  1,200 short cuts of that video, but the send path allows it), so it now empties them first. The paused frames go through
+  `LibavBgraConverter` as the played ones do. Hand check owed, with the one above: Play with sound on a 4K video, that
+  picture and sound agree.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
