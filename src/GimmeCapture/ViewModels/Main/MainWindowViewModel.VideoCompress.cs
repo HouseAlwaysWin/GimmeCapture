@@ -895,6 +895,7 @@ public partial class MainWindowViewModel
         vm.OutputFileName = item.OutputName;
         vm.BuildCompareViewModel = (anchor, rotation) => BuildCompareVm(item, anchor, rotation);
 
+        vm.StartDecodingFirstFrame(); // on the pool, while the UI thread builds the window
         OpenEditorAction(vm);
     }
 

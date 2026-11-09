@@ -134,6 +134,10 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
 
     internal TimeSpan StillFramesKeptOpenFor => _stillFrames.IdleCloseAfter;
 
+    internal bool StillFramesAreOpen => _stillFrames.IsOpen;
+
+    internal int StillFramesOpens => _stillFrames.Opens;
+
     /// <summary>
     /// Whether Space and the arrow keys work the playback now: not before the first frame, while the compare view has the
     /// transport, or while text is being typed on the picture.
@@ -342,6 +346,13 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
 
     /// <summary>還原預設: revert every edit (segments/speed, crop, rotation, annotations, redaction, preview speed).</summary>
     public ReactiveCommand<Unit, Unit> ResetAllCommand { get; }
+
+    /// <summary>
+    /// Starts on the first frame while the window is still being built, which holds the UI thread for 65-480 ms: the
+    /// window then finds the frame done or under way, where it used to ask for it once it had opened.
+    /// </summary>
+    internal void StartDecodingFirstFrame() =>
+        _stillFrames.DecodeFrameAtAsync(PositionSeconds).Forget("Compress.EditFirstFrame");
 
     /// <summary>Decodes and shows the frame at the current position. Call once after the window opens.</summary>
     public async Task InitializeAsync()

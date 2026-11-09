@@ -41,6 +41,36 @@ public sealed class VideoEditViewModelStillFramesTests
     }
 
     [Fact]
+    public async Task TheFirstFrame_IsUnderWayBeforeTheWindowAsksForIt()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string clip = VideoTestClips.WriteConstantRate(Path.Combine(dir, "clip.mp4"), 64, 48, 30, 30, gopSize: 10);
+            using var vm = new VideoEditViewModel(
+                clip, 1, 30, 64, 48, VideoEditResult.Empty with { KeptRuns = [new VideoEditSegment(0, 1)] }, _ => { });
+            Assert.False(vm.StillFramesAreOpen);
+
+            vm.StartDecodingFirstFrame();
+            DateTime deadline = DateTime.UtcNow.AddSeconds(30);
+            while (!vm.StillFramesAreOpen)
+            {
+                Assert.True(DateTime.UtcNow < deadline, "Nothing began on the first frame.");
+                await OwnThread.Delay(TimeSpan.FromMilliseconds(5));
+            }
+
+            await vm.InitializeAsync(); // what the window does once it has opened
+            Assert.False(vm.IsPreparing);
+            Assert.Equal(1, vm.StillFramesOpens);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task TheKeys_WaitForTheFirstFrame()
     {
         using var vm = NewEditor();

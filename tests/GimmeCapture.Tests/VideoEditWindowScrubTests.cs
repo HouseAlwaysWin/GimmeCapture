@@ -6,8 +6,11 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
+using System.Diagnostics;
+using Xunit.Abstractions;
 
 namespace GimmeCapture.Tests;
 
@@ -15,10 +18,10 @@ namespace GimmeCapture.Tests;
 /// The Compress editor's picture while its seek bar or its strip of pieces is dragged, through the real window and a
 /// clip whose every frame is its own grey: the frame under the pointer shows during the drag, from a keyframe near it,
 /// and the exact frame once the drag ends. Until 2026-11 nothing but the time moved until the release. Each test is
-/// opt-in by a switch of its own (EDITOR_SCRUB_PROBE=1, EDITOR_CUT_PLAY_PROBE=1, EDITOR_KEYS_PROBE=1): it sets up a headless
-/// Avalonia application, which a process can do only once.
+/// opt-in by a switch of its own (EDITOR_SCRUB_PROBE=1, EDITOR_CUT_PLAY_PROBE=1, EDITOR_KEYS_PROBE=1, EDITOR_OPEN_PROBE=1): it
+/// sets up a headless Avalonia application, which a process can do only once.
 /// </summary>
-public sealed class VideoEditWindowScrubTests : IDisposable
+public sealed class VideoEditWindowScrubTests(ITestOutputHelper output) : IDisposable
 {
     private const int Width = 64;
     private const int Height = 48;
@@ -28,9 +31,8 @@ public sealed class VideoEditWindowScrubTests : IDisposable
     // What one step of the clips' grey (7 levels of luma) comes to in BGRA.
     private const double GreyStep = 7 * 255.0 / 219;
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
-
-    public VideoEditWindowScrubTests() => Directory.CreateDirectory(_dir);
+    private readonly string _dir = Directory.CreateDirectory(
+        Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"))).FullName;
 
     public void Dispose()
     {
@@ -40,6 +42,46 @@ public sealed class VideoEditWindowScrubTests : IDisposable
         }
         catch (IOException)
         {
+        }
+    }
+
+    /// <summary>
+    /// How long a real video takes to open in the editor, from pressing Edit: the UI thread building and showing the
+    /// window, and the picture on it. The first open of a process is the cold one; EDITOR_OPEN_HEADSTART=0 leaves out
+    /// the first frame's head start, and EDITOR_PLAYBACK_CLIP names the video.
+    /// </summary>
+    [OptInFact("EDITOR_OPEN_PROBE=1", "EDITOR_PLAYBACK_CLIP")]
+    public void OpeningARealVideo_Timed()
+    {
+        string clip = Environment.GetEnvironmentVariable("EDITOR_PLAYBACK_CLIP")!;
+        bool headStart = Environment.GetEnvironmentVariable("EDITOR_OPEN_HEADSTART") != "0";
+        LibavVideoFramePlayer.MediaInfo info = Task.Run(async () =>
+        {
+            using var prober = new LibavVideoFramePlayer();
+            return await prober.ProbeAsync(clip);
+        }).GetAwaiter().GetResult();
+
+        SetUpAvalonia(); // no await after this: the UI thread is this one
+        for (int i = 0; i < 4; i++)
+        {
+            var watch = Stopwatch.StartNew();
+            var vm = new VideoEditViewModel(
+                clip, info.Duration, info.Fps, info.Width, info.Height,
+                VideoEditResult.Empty with { KeptRuns = [new VideoEditSegment(0, info.Duration)] }, _ => { });
+            if (headStart)
+            {
+                vm.StartDecodingFirstFrame();
+            }
+
+            var window = new VideoEditWindow { DataContext = vm, Width = 960, Height = 760 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            long windowUp = watch.ElapsedMilliseconds;
+            Pump(() => vm.Frame is WriteableBitmap, "the picture");
+            output.WriteLine($"open {i + 1} headStart={headStart}: window {windowUp} ms, picture {watch.ElapsedMilliseconds} ms");
+
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
         }
     }
 

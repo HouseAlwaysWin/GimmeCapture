@@ -190,6 +190,10 @@
   the new one had just started.
 - **The editor has keys.** Space plays and pauses, and the left and right arrows step a frame, which keep stepping while
   held, with the picture following. Typing in the file name, or on the picture, is left alone.
+- **A video opens in the editor with its picture.** The editor asked for the first frame only once its window had
+  opened, so the first open of a run showed a blurred thumbnail for a quarter of a second or more. The frame now starts
+  decoding at the press of Edit and arrives with the window: on a 4K phone video 460-520 ms after the press the first
+  time, where it took 660-880, and 250-410 ms after that, where it took 290-520.
 
 ### 🛡️ Reliability
 

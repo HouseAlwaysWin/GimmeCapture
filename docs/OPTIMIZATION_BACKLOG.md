@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 41 entries (2026-11-09).
+- Since v0.74.0, `## Unreleased` holds 42 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+1f7e84fd`, installed by hand on 2026-11-08 in the evening over
   `0.74.0+36c839ad` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1381,6 +1381,12 @@ tool.
   `ScrubFramePump`, of exact frames. A held Space toggles once. `VideoEditWindowScrubTests` (opt-in EDITOR_KEYS_PROBE=1,
   real key events on the real window; fails with the handler on the bubble phase, without the held-Space guard, and
   without the check for text boxes) and `VideoEditViewModelStillFramesTests`.
+- Done since batch 1 (2026-11-09, "繼續優化"): **the editor's first frame starts at the press of Edit**, not once its
+  window has opened, so it decodes on the pool while the UI thread builds the window (`StartDecodingFirstFrame`; the
+  window's own request then finds it, in `LibavStillFrameDecoder`'s last frame). ABAB in fresh processes on the 4K HEVC
+  phone video, a headless host with the app's precompiled assemblies (opt-in EDITOR_OPEN_PROBE=1): the first open of a
+  process 660-883 ms to the picture before, 460-523 after, 1-2 ms behind the window itself, which takes as long as it
+  did (434-522); later opens 286-524 before, 251-408 after. `VideoEditViewModelStillFramesTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 
