@@ -13,16 +13,16 @@ tool.
 ## Status
 
 - Batch 1 is on `main` with CI, Linux and CodeQL green. `verify.ps1`: 1600 passed, 0 failed, 22 skipped, coverage 44%.
-- Released as v0.74.0 on 2026-11-06 (13 entries), after v0.73.0 on 2026-11-05 (17 entries), v0.72.1 on 2026-11-04
+- Released as v0.75.0 on 2026-11-09 (50 entries), after v0.74.0 on 2026-11-06 (13 entries), v0.73.0 on 2026-11-05 (17 entries), v0.72.1 on 2026-11-04
   (2 entries: a pinned recording's seamless loop and its frame rate), v0.72.0 the same day (17 entries) and v0.71.0 on
   2026-11-03: `release.ps1` after the `docs/catalog/releases.md` entry went in as its own commit; `## Unreleased`
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 50 entries (2026-11-09).
+- Since v0.75.0, `## Unreleased` holds no entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+7b98611c`, installed by hand on the evening of 2026-11-09 over
-  `0.74.0+937b851c` (by hand, the night before), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+84937434`, installed by hand late on 2026-11-09 over
+  `0.74.0+7b98611c` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC

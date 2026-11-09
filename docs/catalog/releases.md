@@ -2,6 +2,27 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.75.0 - 2026-11-09
+
+- **Video editing** — it has a window of its own, the batch queue beside its output settings, opened from a button in
+  the main window or from the tray. The queue is ready the moment the window opens, as each video's length and picture
+  are remembered while the file stays as it was, and an MP4 split into thousands of pieces no longer takes 40 seconds
+  to open from a hard disk.
+- **The editor** — the picture follows a drag of the seek bar and the strip of pieces, Play starts at once, a cut no
+  longer stalls the preview, Space and the arrow keys play and step, and a video opens with its picture.
+- **Quality compare** — Play starts at once and encodes what follows while it plays, the original side shares the
+  editor's decoder, and both sides show the same frame. A compressed video's picture starts with its sound.
+- **Scrolling capture** — a window's fixed bars are no longer repeated down the result or stop it growing, repeated
+  messages no longer pull a frame to the wrong place, a floating date is kept once, the Auto direction no longer takes
+  a chat for a sideways scroll, picking where to capture picks the window, and a long pin's scroll bar can be dragged.
+- **Start-up** — starting with Windows from a hard disk is quicker: whole files read four at a time again, about 50 MB
+  less to read, and the app ahead of other programs until its tray icon is up.
+- **Capture overlay and OCR** — the overlay opens sooner, also right after the app is opened by hand; with two screens
+  the text on each is found (62% of the lines against 4% in tests); Save closes the overlay at once; and going back to
+  smart selection within a minute is instant.
+- **Reliability and storage** — a capture saved over a larger file no longer keeps that file's end, and recordings early
+  versions left behind are cleared away.
+
 ## v0.74.0 - 2026-11-06
 
 - **Recording** — a region on one display is grabbed through Desktop Duplication and its frames go to the encoder as
