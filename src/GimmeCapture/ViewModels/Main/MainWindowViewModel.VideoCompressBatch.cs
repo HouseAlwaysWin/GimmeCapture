@@ -206,7 +206,9 @@ public partial class MainWindowViewModel
         IReadOnlyList<string> WorkingDirectories,
         string? ActiveWorkingDirectory,
         IReadOnlyList<string> Categories,
-        IReadOnlyList<string> Videos);
+        IReadOnlyList<QueuedVideo> Videos,
+        Dictionary<string, CompressProbeEntry> Probes,
+        IReadOnlyDictionary<string, LibavVideoFramePlayer.BgraThumbnail> Thumbnails);
 
     // Worker thread: reads the saved presets, settings, per-file state and working directories, and lists the active
     // directory (the saved one, else the first) — its categories and its videos.
@@ -227,9 +229,29 @@ public partial class MainWindowViewModel
             CompressWorkingDirsService.Save(new CompressWorkingDirsState { Directories = dirState.Directories, Active = active });
         }
 
+        Dictionary<string, CompressProbeEntry> probes = CompressProbeCacheService.Load();
+        List<QueuedVideo> videos = ListVideoFiles(active);
         return new CompressStartupState(
             presets, session, itemStates, dirState.Directories, active,
-            ListCategoryFolders(active), ListVideoFiles(active));
+            ListCategoryFolders(active), videos, probes, DecodeRememberedThumbnails(videos, probes));
+    }
+
+    // The rows' pictures for the videos that have not changed since they were probed, decoded here to spare the UI thread.
+    private static Dictionary<string, LibavVideoFramePlayer.BgraThumbnail> DecodeRememberedThumbnails(
+        IEnumerable<QueuedVideo> videos, Dictionary<string, CompressProbeEntry> probes)
+    {
+        var thumbnails = new Dictionary<string, LibavVideoFramePlayer.BgraThumbnail>(StringComparer.OrdinalIgnoreCase);
+        foreach (QueuedVideo video in videos)
+        {
+            if (probes.TryGetValue(video.Path, out CompressProbeEntry? entry)
+                && entry.Describes(video.Length, video.LastWriteUtc)
+                && CompressThumbnailCodec.Decode(entry) is { } thumbnail)
+            {
+                thumbnails[video.Path] = thumbnail;
+            }
+        }
+
+        return thumbnails;
     }
 
     // UI thread: wires the window up with what LoadCompressStartupState read, then fills the queue with the active
@@ -240,6 +262,7 @@ public partial class MainWindowViewModel
 
         // The persisted per-file edit/done state, BEFORE any queue items are created below.
         _itemStates = saved.ItemStates;
+        _probeCache = saved.Probes;
 
         foreach (string dir in saved.WorkingDirectories)
         {
@@ -250,7 +273,7 @@ public partial class MainWindowViewModel
         {
             ActiveWorkingDir = saved.ActiveWorkingDirectory;
             ResetCategoryChoices(saved.Categories);
-            AddFilesToQueue(saved.Videos);
+            AddFilesToQueue(saved.Videos, saved.Thumbnails);
         }
     }
 
@@ -289,11 +312,11 @@ public partial class MainWindowViewModel
     }
 
     // The videos directly inside a working directory, listed now (ExpandToVideoFiles enumerates lazily).
-    private static List<string> ListVideoFiles(string? dir)
+    private static List<QueuedVideo> ListVideoFiles(string? dir)
     {
         if (string.IsNullOrEmpty(dir))
         {
-            return new List<string>();
+            return new List<QueuedVideo>();
         }
 
         try
@@ -303,7 +326,7 @@ public partial class MainWindowViewModel
         catch (Exception ex)
         {
             AppLog.Error("Compress.QueueExpand", ex);
-            return new List<string>();
+            return new List<QueuedVideo>();
         }
     }
 
@@ -523,18 +546,20 @@ public partial class MainWindowViewModel
         AddFilesToQueue(paths.Where(path => !string.IsNullOrWhiteSpace(path)).SelectMany(ExpandToVideoFiles));
     }
 
-    // Adds video files to the queue, skipping ones already in it, and has them probed.
-    private void AddFilesToQueue(IEnumerable<string> files)
+    // Adds video files to the queue, skipping ones already in it. A file not changed since it was last probed takes what
+    // that found; the rest are probed. thumbnails holds the pictures already decoded, for the first open.
+    private void AddFilesToQueue(
+        IEnumerable<QueuedVideo> files, IReadOnlyDictionary<string, LibavVideoFramePlayer.BgraThumbnail>? thumbnails = null)
     {
         var existing = new HashSet<string>(
             CompressQueue.Select(i => i.Path), StringComparer.OrdinalIgnoreCase);
         var added = new List<CompressQueueItem>();
 
-        foreach (string file in files)
+        foreach (QueuedVideo file in files)
         {
-            if (existing.Add(file))
+            if (existing.Add(file.Path))
             {
-                var item = new CompressQueueItem(file)
+                var item = new CompressQueueItem(file.Path, (file.Length, file.LastWriteUtc))
                 {
                     SelectedPreset = _currentSettingsChoice, // "current settings" by default
                     StartRequested = StartCompressItem,
@@ -572,7 +597,10 @@ public partial class MainWindowViewModel
                     .Skip(1)
                     .Subscribe(_ => item.EstimatedText = BuildItemEstimate(item));
                 CompressQueue.Add(item);
-                added.Add(item);
+                if (!TakeRememberedProbe(item, thumbnails))
+                {
+                    added.Add(item);
+                }
             }
         }
 
@@ -584,6 +612,59 @@ public partial class MainWindowViewModel
         {
             _ = ProbeQueueItemAsync(item, queueToken);
         }
+    }
+
+    // What earlier probes found, by source path. UI thread.
+    private Dictionary<string, CompressProbeEntry> _probeCache = new(StringComparer.OrdinalIgnoreCase);
+
+    // Fills a new row from what an earlier probe found. False, and left to a probe, when the file has changed since.
+    private bool TakeRememberedProbe(
+        CompressQueueItem item, IReadOnlyDictionary<string, LibavVideoFramePlayer.BgraThumbnail>? thumbnails)
+    {
+        if (!_probeCache.TryGetValue(item.Path, out CompressProbeEntry? entry) || !entry.Describes(item.FileLength, item.FileLastWriteUtc))
+        {
+            return false;
+        }
+
+        LibavVideoFramePlayer.BgraThumbnail? thumbnail =
+            thumbnails != null && thumbnails.TryGetValue(item.Path, out var decoded) ? decoded : CompressThumbnailCodec.Decode(entry);
+        if (thumbnail == null)
+        {
+            return false;
+        }
+
+        item.ProbedDuration = entry.Duration;
+        item.ProbedWidth = entry.Width;
+        item.ProbedHeight = entry.Height;
+        item.ProbedFps = entry.Fps;
+        item.RaiseEditSummary();
+        item.EstimatedText = BuildItemEstimate(item);
+        item.Thumbnail = CreateThumbnailBitmap(thumbnail);
+        return true;
+    }
+
+    // Keeps what a probe found. Only with its picture: a first frame that could not be decoded is worth trying again.
+    private void RememberProbe(CompressQueueItem item, LibavVideoFramePlayer.BgraThumbnail thumbnail)
+    {
+        if (CompressThumbnailCodec.Encode(thumbnail) is not { } jpeg)
+        {
+            return;
+        }
+
+        _probeCache[item.Path] = new CompressProbeEntry
+        {
+            Length = item.FileLength,
+            LastWriteUtcTicks = item.FileLastWriteUtc.Ticks,
+            ProbedUtcTicks = DateTime.UtcNow.Ticks,
+            Duration = item.ProbedDuration,
+            Width = item.ProbedWidth,
+            Height = item.ProbedHeight,
+            Fps = item.ProbedFps,
+            ThumbnailWidth = thumbnail.Width,
+            ThumbnailHeight = thumbnail.Height,
+            ThumbnailJpeg = jpeg,
+        };
+        CompressProbeCacheService.Save(_probeCache);
     }
 
     // The longest side of a queue row's thumbnail, in pixels.
@@ -646,6 +727,11 @@ public partial class MainWindowViewModel
             {
                 item.Thumbnail = CreateThumbnailBitmap(thumbnail);
             }
+
+            if (thumbnail != null && item.ProbedDuration > 0)
+            {
+                RememberProbe(item, thumbnail);
+            }
         }
         finally
         {
@@ -669,18 +755,22 @@ public partial class MainWindowViewModel
         }
     }
 
-    private static IEnumerable<string> ExpandToVideoFiles(string path)
+    // A folder's listing gives each file's size and date with its name, without reading each file's record on the disk.
+    private static IEnumerable<QueuedVideo> ExpandToVideoFiles(string path)
     {
         try
         {
             if (Directory.Exists(path))
             {
-                return Directory.EnumerateFiles(path, "*.*", SearchOption.TopDirectoryOnly).Where(IsVideoFile);
+                return new DirectoryInfo(path).EnumerateFiles("*.*", SearchOption.TopDirectoryOnly)
+                    .Where(file => IsVideoFile(file.Name))
+                    .Select(file => new QueuedVideo(file.FullName, file.Length, file.LastWriteTimeUtc));
             }
 
             if (File.Exists(path) && IsVideoFile(path))
             {
-                return new[] { path };
+                var file = new FileInfo(path);
+                return new[] { new QueuedVideo(path, file.Length, file.LastWriteTimeUtc) };
             }
         }
         catch (Exception ex)
@@ -688,7 +778,7 @@ public partial class MainWindowViewModel
             AppLog.Error("Compress.QueueExpand", ex);
         }
 
-        return Array.Empty<string>();
+        return Array.Empty<QueuedVideo>();
     }
 
     private static bool IsVideoFile(string path) =>

@@ -28,10 +28,29 @@ public enum CompressQueueStatus
 public sealed class CompressQueueItem : ReactiveObject, IDisposable
 {
     public CompressQueueItem(string path)
+        : this(path, ReadFileFacts(path))
+    {
+    }
+
+    /// <param name="path">The video.</param>
+    /// <param name="facts">Its size and date, when the folder's listing already gave them, or null when it cannot be read.</param>
+    internal CompressQueueItem(string path, (long Length, DateTime LastWriteUtc)? facts)
     {
         Path = path;
         FileName = System.IO.Path.GetFileName(path);
-        (FileSizeText, DateText) = ReadFileMeta(path);
+        if (facts is { } known)
+        {
+            FileLength = known.Length;
+            FileLastWriteUtc = known.LastWriteUtc;
+            FileSizeText = FileSizeFormatter.Format(known.Length);
+            DateText = known.LastWriteUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        }
+        else
+        {
+            FileSizeText = string.Empty;
+            DateText = string.Empty;
+        }
+
         _outputName = System.IO.Path.GetFileNameWithoutExtension(path); // editable; may include \subfolder\
         StartCommand = ReactiveCommand.Create(() => StartRequested?.Invoke(this), this.WhenAnyValue(x => x.CanStart));
         PauseCommand = ReactiveCommand.Create(Pause, this.WhenAnyValue(x => x.ShowPause));
@@ -68,23 +87,24 @@ public sealed class CompressQueueItem : ReactiveObject, IDisposable
         _thumbnail = null;
     }
 
-    private static (string Size, string Date) ReadFileMeta(string path)
+    // Best effort: a missing or locked file just shows no size or date.
+    private static (long Length, DateTime LastWriteUtc)? ReadFileFacts(string path)
     {
         try
         {
-            var fi = new System.IO.FileInfo(path);
-            if (fi.Exists)
-            {
-                return (FileSizeFormatter.Format(fi.Length), fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm"));
-            }
+            var file = new System.IO.FileInfo(path);
+            return file.Exists ? (file.Length, file.LastWriteTimeUtc) : null;
         }
-        catch
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            // best effort — a missing/locked file just shows no size/date
+            return null;
         }
-
-        return (string.Empty, string.Empty);
     }
+
+    /// <summary>The file's size when it was queued, 0 when it could not be read: with its date, what says it has not changed.</summary>
+    internal long FileLength { get; }
+
+    internal DateTime FileLastWriteUtc { get; }
 
     // User-editable output name. May carry a relative subfolder path (e.g. "\sub\clip"); the date stamp
     // and extension are added when the path is composed. Blank falls back to the source name.

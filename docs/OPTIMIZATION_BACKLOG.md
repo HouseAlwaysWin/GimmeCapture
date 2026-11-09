@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 49 entries (2026-11-09).
+- Since v0.74.0, `## Unreleased` holds 50 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+7b98611c`, installed by hand on the evening of 2026-11-09 over
   `0.74.0+937b851c` (by hand, the night before), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1438,6 +1438,15 @@ tool.
   38-93 reads against 1,503-3,225; the first seek far ahead pays for the atoms it passes (730-1,586 reads to the
   middle), once. Over the whole folder exactly those four were flagged, 313 reads against 9,757. `Mp4LayoutTests`,
   `LibavInputTests` (a real clip rewritten with its `mdat` split in two).
+- Done since batch 1 (2026-11-09, same request): **the queue's probes ran again every run** (Compress and the editor).
+  The first open of the window in a run opened every video of the working folder for its length, size, frame rate and
+  first frame, and a row's Edit does nothing until that is in. `CompressProbeCache` keeps them by path, against the
+  file's size and date as its folder's listing gives them (so no read of each file's record either, which
+  `CompressQueueItem` did on the UI thread), with the picture as a JPEG. Headless through the real view model on the
+  user's 78 files, cold cache of probes but the OS's file cache warm: 3.6 s and 3,536 reads to fill, then 63 ms and 7
+  reads with every row and picture there at once; the file is 168 KB. A file that cannot be opened is tried again each
+  run, as before. What moved: with nothing reading those files at the first open, the OS no longer has them cached
+  when the editor opens one. `CompressProbeCacheTests`, two cases in `CompressFirstOpenTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

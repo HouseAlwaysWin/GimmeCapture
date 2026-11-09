@@ -164,6 +164,11 @@
 
 ### 🎬 Video editing
 
+- **The queue is ready the moment the window opens.** Each video's length, size and picture are remembered for as long
+  as the file stays as it was, instead of every file being opened again the first time the window opens in a run. A
+  folder of 78 videos on a hard disk took 66-72 seconds to fill in, and left no row's Edit button working until its
+  turn; it now fills in about a twentieth of a second, without touching that disk. About 2 KB a video, 1,000 videos
+  at most.
 - **A video whose data is split into thousands of pieces opens at once.** Some tools write an MP4 with its picture and
   sound in thousands of separate blocks. Opening one read the header of every block first, 36-46 seconds each on a hard
   disk, every time: for the queue, the editor and an encode alike. They now open like any other, and the same frames
