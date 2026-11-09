@@ -194,6 +194,14 @@
   opened, so the first open of a run showed a blurred thumbnail for a quarter of a second or more. The frame now starts
   decoding at the press of Edit and arrives with the window: on a 4K phone video 460-520 ms after the press the first
   time, where it took 660-880, and 250-410 ms after that, where it took 290-520.
+- **Pressing Play in the quality compare starts at once.** It first encoded the next thirty seconds with the chosen
+  settings: on a 4K phone video 8-12 s at H.264 480p and about a minute at AV1 1080p `slow`, with nothing moving. It now
+  plays what is already encoded, in about 60 ms, and encodes what follows while that plays, as much as will be ready in
+  time. At H.264 480p it plays straight through; an encoder slower than the picture, like AV1 at `slow`, stops it for
+  6-9 s after every 6 s, where it stopped for a minute after every thirty.
+- **The quality compare shares the editor's decoder.** It opened the video twice more, once for its paused frames and
+  once to play, each holding 210-230 MB of a 4K video on top of the editor's 420. The original side now comes from the
+  decoder the editor already has open, and shows at once.
 
 ### 🛡️ Reliability
 

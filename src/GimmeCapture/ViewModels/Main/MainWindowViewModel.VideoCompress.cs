@@ -832,7 +832,8 @@ public partial class MainWindowViewModel
 
     // Builds a CompareViewModel for the given file with the current encode settings, anchored at the editor's
     // playhead and using the editor's live rotation. The editor hosts the result inline (no separate window).
-    private CompareViewModel BuildCompareVm(CompressQueueItem item, double anchorSeconds, int rotationDegrees)
+    private CompareViewModel BuildCompareVm(
+        CompressQueueItem item, LibavStillFrameDecoder source, double anchorSeconds, int rotationDegrees)
     {
         CompressSettingsSnapshot snap = BuildSettingsSnapshot();
         int targetKbps = snap.UseTargetSize && item.ProbedDuration > 0
@@ -842,9 +843,7 @@ public partial class MainWindowViewModel
         // Rotation is applied at display time to BOTH compare frames, not baked into the sample.
         var options = snap.ToExportOptions(rotationDegrees: 0, targetVideoBitrateKbps: targetKbps);
 
-        return new CompareViewModel(
-            item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight,
-            options, rotationDegrees, anchorSeconds);
+        return new CompareViewModel(source, item.ProbedDuration, item.ProbedFps, options, rotationDegrees, anchorSeconds);
     }
 
     // Opens the 進階影片編輯 window for a queue row's file; on Apply writes the whole edit (kept runs with speed,
@@ -893,7 +892,7 @@ public partial class MainWindowViewModel
 
         // Output filename + quality compare moved from the 編輯 tab into the editor window.
         vm.OutputFileName = item.OutputName;
-        vm.BuildCompareViewModel = (anchor, rotation) => BuildCompareVm(item, anchor, rotation);
+        vm.BuildCompareViewModel = (source, anchor, rotation) => BuildCompareVm(item, source, anchor, rotation);
 
         vm.StartDecodingFirstFrame(); // on the pool, while the UI thread builds the window
         OpenEditorAction(vm);

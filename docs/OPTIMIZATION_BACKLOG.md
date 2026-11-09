@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 42 entries (2026-11-09).
+- Since v0.74.0, `## Unreleased` holds 44 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+1f7e84fd`, installed by hand on 2026-11-08 in the evening over
   `0.74.0+36c839ad` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1387,6 +1387,24 @@ tool.
   phone video, a headless host with the app's precompiled assemblies (opt-in EDITOR_OPEN_PROBE=1): the first open of a
   process 660-883 ms to the picture before, 460-523 after, 1-2 ms behind the window itself, which takes as long as it
   did (434-522); later opens 286-524 before, 251-408 after. `VideoEditViewModelStillFramesTests`.
+- Done since batch 1 (2026-11-09, "繼續優化"): **the quality compare's Play and its decoders**. Measured with the user's
+  own settings on the 4K HEVC phone video: a window of 6 s took 2.2-2.6 s at H.264 480p `slow` and 9.4-9.8 at AV1 1080p
+  `slow`, and the 30 s window Play encoded before anything moved 8.4-12.5 and 53-59. Encoding moved to
+  `CompareSampleWindows` (one at a time, the latest request wins, a request for a place under way waits for it, the
+  newest three kept). Play now starts on the window already encoded and encodes the next while it plays, as long as will
+  be ready when it is needed by the last encode's speed, from 6 to 30 s (`AheadSeconds`); the overlay shows only when the
+  picture reaches a window not ready. Both sides play through kept decoders (`PlayPiecesAsync`), the source through the
+  editor's own, and the next window's decoder opens while the one before it plays. Through the real view model on that
+  video (opt-in COMPARE_REAL_PROBE=1): first frames on both sides 46-64 ms after Play; at H.264 480p the source 28.2-28.8
+  frames a second and the sample 28.9-29.1 of the video's 29, the windows growing 8, 12, 21 s, no overlay; before the
+  next decoder opened ahead, the sample stood still 172-202 ms at each window. AV1 1080p `slow`: 4.5 s of picture, then
+  stops of 6-9 s per 6 s. Private bytes with kept decoders on that video: 466 MB with one, 691 with two, 901 with three,
+  which is what a compare held while playing (the editor's, its paused frames', its playback's). Dropping the sample's
+  sound changed nothing (2.66-2.83 s dropped, 2.71-2.74 kept), so it stays. Left, the user's call: the first window's own
+  encode. In turn on that video, a window of 3 s took 1.95-2.09 s against 2.6-3.3 for 6 s at H.264 480p, and 6.3-6.9 against
+  12.2-12.4 at AV1 1080p, at the cost of room to step around the playhead and of a rate control that has settled less
+  when it reaches it. `CompareSampleWindowsTests`, and opt-in COMPARE_PLAY_PROBE=1 (a held encoder; fails without the
+  encode ahead and with its wait shown on the overlay).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

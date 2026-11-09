@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.ViewModels.Main;
 using Xunit;
@@ -10,8 +11,8 @@ namespace GimmeCapture.Tests;
 // decode/playback is covered by the gated real-encode integration tests.
 public class CompareViewModelTests
 {
-    private static CompareViewModel Make(double duration = 100, int fps = 30, int width = 1920, int height = 1080, int rotation = 0)
-        => new(@"C:\does-not-exist.mp4", duration, fps, width, height, new LibavExportOptions(), rotation);
+    private static CompareViewModel Make(double duration = 100, int fps = 30, int width = 720, int height = 404, int rotation = 0)
+        => new(new LibavStillFrameDecoder(@"C:\does-not-exist.mp4", width, height), duration, fps, new LibavExportOptions(), rotation);
 
     [Fact]
     public void Constructor_SpansFullDuration_AndSetsInitialState()
@@ -48,29 +49,29 @@ public class CompareViewModelTests
     }
 
     [Fact]
-    public void ComputeWindowStart_StartsSlightlyBeforePos()
+    public void WindowStartAround_StartsSlightlyBeforePos()
     {
         // The window starts a little before the requested position (winLen*0.25 = 1s for a 4s window).
-        Assert.Equal(39, CompareViewModel.ComputeWindowStart(100, 4, 40));
+        Assert.Equal(39, CompareSampleWindows.WindowStartAround(100, 4, 40));
     }
 
     [Fact]
-    public void ComputeWindowStart_ClampsToZeroNearStart()
+    public void WindowStartAround_ClampsToZeroNearStart()
     {
-        Assert.Equal(0, CompareViewModel.ComputeWindowStart(100, 4, 0.5));
+        Assert.Equal(0, CompareSampleWindows.WindowStartAround(100, 4, 0.5));
     }
 
     [Fact]
-    public void ComputeWindowStart_ClampsSoWindowFitsNearEnd()
+    public void WindowStartAround_ClampsSoWindowFitsNearEnd()
     {
         // Near the end the window slides back so the whole 4s window still fits inside the 100s clip.
-        Assert.Equal(96, CompareViewModel.ComputeWindowStart(100, 4, 100));
+        Assert.Equal(96, CompareSampleWindows.WindowStartAround(100, 4, 100));
     }
 
     [Fact]
-    public void ComputeWindowStart_ShortClip_AlwaysZero()
+    public void WindowStartAround_ShortClip_AlwaysZero()
     {
         // When the window is the whole (short) clip, the start stays pinned at 0 regardless of position.
-        Assert.Equal(0, CompareViewModel.ComputeWindowStart(6, 6, 3));
+        Assert.Equal(0, CompareSampleWindows.WindowStartAround(6, 6, 3));
     }
 }

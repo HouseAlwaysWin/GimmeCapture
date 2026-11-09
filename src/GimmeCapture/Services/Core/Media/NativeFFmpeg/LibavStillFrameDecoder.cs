@@ -80,6 +80,12 @@ internal sealed class LibavStillFrameDecoder : IDisposable
 
     public string VideoPath { get; }
 
+    /// <summary>The width of the frames this gives, in pixels.</summary>
+    public int Width => _width;
+
+    /// <summary>The height of the frames this gives, in pixels.</summary>
+    public int Height => _height;
+
     /// <summary>How long this decoder keeps the file open with no frame asked for.</summary>
     internal TimeSpan IdleCloseAfter { get; }
 

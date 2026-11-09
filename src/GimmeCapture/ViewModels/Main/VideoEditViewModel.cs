@@ -164,9 +164,9 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     public Action? RequestClose { get; set; }
 
     /// <summary>Set by the host: builds a <see cref="CompareViewModel"/> for this item with the current output
-    /// settings, anchored at the given playhead position and using the editor's live rotation (so the compare
-    /// matches the on-screen orientation). The editor hosts it inline (no separate window).</summary>
-    public Func<double, int, CompareViewModel?>? BuildCompareViewModel { get; set; }
+    /// settings, on this editor's decoder, anchored at the given playhead position and using the editor's live rotation
+    /// (so the compare matches the on-screen orientation). The editor hosts it inline (no separate window).</summary>
+    public Func<LibavStillFrameDecoder, double, int, CompareViewModel?>? BuildCompareViewModel { get; set; }
 
     public ReactiveCommand<Unit, Unit> CompareCommand { get; }
 
@@ -845,10 +845,10 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         _stepCts?.Cancel();
         _playCts?.Dispose();
         _stepCts?.Dispose();
+        Compare?.Dispose(); // stops the inline compare's playback + deletes its temp sample, if still open
         _stillFrames.Dispose();
         _audioPreview.Dispose();
         Draw.Dispose();
-        Compare?.Dispose(); // stops the inline compare's playback + deletes its temp sample, if still open
 
         // The preview's frame bitmap, or the queue thumbnail if no frame was ever decoded.
         Bitmap? shown = Frame;

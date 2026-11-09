@@ -60,7 +60,7 @@ internal sealed partial class VideoEditViewModel
 
         // Pass the editor's LIVE rotation so the compare matches the current on-screen orientation (not the
         // item's last-saved rotation, which may differ after an unapplied rotate in the editor).
-        CompareViewModel? vm = BuildCompareViewModel(PositionSeconds, RotationDegrees);
+        CompareViewModel? vm = BuildCompareViewModel(_stillFrames, PositionSeconds, RotationDegrees);
         if (vm == null)
         {
             return;
