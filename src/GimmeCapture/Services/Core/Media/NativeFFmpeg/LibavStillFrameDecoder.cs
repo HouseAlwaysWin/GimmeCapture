@@ -75,10 +75,14 @@ internal sealed class LibavStillFrameDecoder : IDisposable
         VideoPath = videoPath;
         _width = width;
         _height = height;
-        _idleClose = new IdleReleaseScheduler(idleCloseDelay ?? IdleCloseDelay, CloseWhenIdle);
+        IdleCloseAfter = idleCloseDelay ?? IdleCloseDelay;
+        _idleClose = new IdleReleaseScheduler(IdleCloseAfter, CloseWhenIdle);
     }
 
     public string VideoPath { get; }
+
+    /// <summary>How long this decoder keeps the file open with no frame asked for.</summary>
+    internal TimeSpan IdleCloseAfter { get; }
 
     /// <summary>How many times the file was opened: once, unless it closed for being idle or for a failure.</summary>
     internal int Opens { get; private set; }

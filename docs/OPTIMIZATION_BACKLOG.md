@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 37 entries (2026-11-09).
+- Since v0.74.0, `## Unreleased` holds 38 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+1f7e84fd`, installed by hand on 2026-11-08 in the evening over
   `0.74.0+36c839ad` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1352,6 +1352,11 @@ tool.
   holds the UI thread 410-480 ms the first time in a session and 65-90 ms after that, and the picture follows 240-425
   ms later (`Open()` is 83-157 of it, the first seek and decode the rest). Hand check owed: play a 4K video with a piece
   cut out, with its sound on.
+- Done since batch 1 (2026-11-09, the user's choice "改成 5 分鐘"): **the editor's decoder waits five minutes before
+  closing** (`VideoEditViewModel.StillFramesIdleClose`, `VideoEditViewModelStillFramesTests`). After the 30 s close the
+  next frame of `V_20260110_175957_ES0` took 400-593 ms, where a step takes 29-79. Compare and a paused pin keep 30 s,
+  and closing the editor still lets go at once. What it holds on longer was read only in a test host (private bytes 69
+  → 477 MB open), not in the app, where such figures have come out lower.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

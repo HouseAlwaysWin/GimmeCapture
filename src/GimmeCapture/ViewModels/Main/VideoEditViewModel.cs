@@ -57,6 +57,10 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     // The picture under a drag of the seek bar or the strip, from the same decoder.
     private readonly ScrubFramePump _scrubFrames;
 
+    // How long that decoder keeps the file open without a frame. Someone with the editor open is working in it, and the
+    // first frame after a close takes 0.4-0.6 s on a 4K video, where a step takes 0.03-0.18. Closing the window lets go of it.
+    private static readonly TimeSpan StillFramesIdleClose = TimeSpan.FromMinutes(5);
+
     internal VideoEditViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
         VideoEditResult initial, Action<VideoEditResult> onApply, Bitmap? initialPreview = null)
@@ -73,7 +77,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         double scale = Math.Min(1.0, 720.0 / Math.Max(1, _sourceWidth)); // cap decode width ~720px for responsiveness
         _decodeW = Math.Max(2, (int)(_sourceWidth * scale)); _decodeW -= _decodeW & 1;
         _decodeH = Math.Max(2, (int)(_sourceHeight * scale)); _decodeH -= _decodeH & 1;
-        _stillFrames = new LibavStillFrameDecoder(sourcePath, _decodeW, _decodeH);
+        _stillFrames = new LibavStillFrameDecoder(sourcePath, _decodeW, _decodeH, StillFramesIdleClose);
         _scrubFrames = new ScrubFramePump(
             (seconds, ct) => _stillFrames.DecodeFrameAtAsync(seconds, ct, keyframeWillDo: true),
             frame => DrawFrame(frame));
@@ -119,6 +123,8 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     }
 
     public string Title { get; }
+
+    internal TimeSpan StillFramesKeptOpenFor => _stillFrames.IdleCloseAfter;
 
     /// <summary>Total source duration — the strip's full-width basis (all pieces cover [0,duration]).</summary>
     public double TotalSourceDuration => _duration;

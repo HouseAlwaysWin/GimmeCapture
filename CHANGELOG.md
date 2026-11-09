@@ -180,6 +180,9 @@
 - **The editor's preview no longer stalls at every cut.** Each kept piece opened the file and the graphics card's
   decoder again, so on a 4K phone video the picture stood still for 350-530 ms at every cut and at every turn of the
   loop. The pieces now play in one go, and a cut holds the picture for 120-155 ms.
+- **The editor keeps its video open for five minutes between frames.** It let go after 30 seconds without a frame, so
+  the first step or seek after a pause to think took 0.4-0.6 s on a 4K video, where a step takes 0.03-0.18. Closing the
+  editor lets go of it at once.
 
 ### 🛡️ Reliability
 
