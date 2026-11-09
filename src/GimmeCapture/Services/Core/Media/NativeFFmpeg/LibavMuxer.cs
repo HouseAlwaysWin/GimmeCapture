@@ -684,7 +684,10 @@ internal static class LibavMuxer
         var inAudio = audioFmt->streams[audioIn];
         bool hasVideo = ReadNextStreamPacket(videoFmt, videoIn, videoPkt);
         bool hasAudio = ReadNextStreamPacket(audioFmt, audioIn, audioPkt);
-        long firstVideoPts = hasVideo ? GetPacketPrimaryTimestamp(videoPkt) : ffmpeg.AV_NOPTS_VALUE;
+
+        // The picture starts when its first frame is shown. With B-frames that frame is decoded at a negative time, and
+        // counting from there put the whole picture two frames (67 ms at 30 fps) later than the sound.
+        long firstVideoPts = hasVideo ? GetPacketPresentationTimestamp(videoPkt) : ffmpeg.AV_NOPTS_VALUE;
         long firstAudioPts = hasAudio ? GetPacketPrimaryTimestamp(audioPkt) : ffmpeg.AV_NOPTS_VALUE;
 
         int videoPackets = 0;
@@ -703,7 +706,7 @@ internal static class LibavMuxer
 
             if (takeVideo)
             {
-                NormalizePacketTimestamps(videoPkt, firstVideoPts);
+                ShiftPacketTimestamps(videoPkt, firstVideoPts);
                 ffmpeg.av_packet_rescale_ts(videoPkt, inVideo->time_base, outVideo->time_base);
                 videoPkt->stream_index = outVideo->index;
                 ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, videoPkt), "write_frame(video)");
@@ -748,6 +751,29 @@ internal static class LibavMuxer
         }
 
         return ffmpeg.AV_NOPTS_VALUE;
+    }
+
+    private static unsafe long GetPacketPresentationTimestamp(AVPacket* pkt) =>
+        pkt->pts != ffmpeg.AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
+
+    // Video: the decode times of the frames ahead of the first one shown stay negative, which the muxers take care of
+    // (an MP4's edit list, the others by moving every stream alike). Cut off at 0, they would no longer increase.
+    private static unsafe void ShiftPacketTimestamps(AVPacket* pkt, long firstTimestamp)
+    {
+        if (firstTimestamp == ffmpeg.AV_NOPTS_VALUE)
+        {
+            return;
+        }
+
+        if (pkt->pts != ffmpeg.AV_NOPTS_VALUE)
+        {
+            pkt->pts -= firstTimestamp;
+        }
+
+        if (pkt->dts != ffmpeg.AV_NOPTS_VALUE)
+        {
+            pkt->dts -= firstTimestamp;
+        }
     }
 
     private static unsafe void NormalizePacketTimestamps(AVPacket* pkt, long firstTimestamp)

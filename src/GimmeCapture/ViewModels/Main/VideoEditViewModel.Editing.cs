@@ -39,7 +39,7 @@ internal sealed partial class VideoEditViewModel
     public CompareViewModel? Compare { get => _compare; private set => this.RaiseAndSetIfChanged(ref _compare, value); }
 
     // 畫質比較 button is a toggle: open the inline compare, or close it if it's already showing.
-    private async Task ToggleCompareAsync()
+    private void ToggleCompare()
     {
         if (IsComparing)
         {
@@ -47,11 +47,11 @@ internal sealed partial class VideoEditViewModel
             return;
         }
 
-        await StartCompareAsync();
+        StartCompare();
     }
 
     // Compare button: build the engine for the current playhead, show it inline, then load (encode) on click.
-    private async Task StartCompareAsync()
+    private void StartCompare()
     {
         if (IsComparing || BuildCompareViewModel == null)
         {
@@ -69,7 +69,10 @@ internal sealed partial class VideoEditViewModel
         Pause(); // stop the editor's own playback while comparing
         Compare = vm;
         IsComparing = true;
-        await vm.InitializeAsync(); // encodes the sample (shows its IsPreparing overlay), then the first frame
+
+        // Encodes the sample (shows its IsPreparing overlay), then the first frame. Not part of the command: a command
+        // disables its button while it runs, and this button closes the compare, the only way out of a slow first encode.
+        vm.InitializeAsync().Forget("Compress.CompareInit");
     }
 
     // Close button in the inline compare panel: tear the engine down and re-enable editing.

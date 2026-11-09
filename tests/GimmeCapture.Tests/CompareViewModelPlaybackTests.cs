@@ -102,6 +102,44 @@ public sealed class CompareViewModelPlaybackTests(ITestOutputHelper output) : ID
     }
 
     /// <summary>
+    /// A seek to a place not encoded keeps the overlay on the compressed side until its frame is there, or the picture from
+    /// before the seek shows uncovered while the window's decoder opens.
+    /// </summary>
+    [OptInFact("COMPARE_SEEK_PROBE=1")]
+    public void ASeekToAPlaceNotEncoded_KeepsTheOverlay_UntilItsFrameIsThere()
+    {
+        SetUpAvalonia();
+        string clip = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "clip.mp4"), Width, Height, (int)(Duration * Fps), Fps, gopSize: 10);
+        using var release = new ManualResetEventSlim();
+        using var decoder = new LibavStillFrameDecoder(clip, Width, Height);
+        var vm = new CompareViewModel(decoder, Duration, Fps, new LibavExportOptions(), 0, anchorSeconds: 4, encodeWindow: (start, length, path, ct) =>
+        {
+            if (start > 3)
+            {
+                release.Wait(ct);
+            }
+
+            VideoTestClips.WriteConstantRate(path, Width, Height, (int)(length * Fps), Fps, gopSize: 10);
+            return true;
+        });
+
+        Task opening = vm.InitializeAsync();
+        Pump(() => opening.IsCompleted && !vm.IsPreparing, "the first window");
+        int before = Hash(vm.SampleFrame!);
+
+        // Near the end, where the window starts further before the time than it does elsewhere: another frame of a window.
+        Task seek = vm.SeekAsync(Duration - 0.1);
+        Pump(() => vm.IsPreparing, "the overlay");
+        release.Set();
+        Pump(() => !vm.IsPreparing, "the end of the wait");
+        Assert.NotEqual(before, Hash(vm.SampleFrame!));
+
+        Pump(() => seek.IsCompleted, "the seek");
+        vm.Dispose();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
     /// What the compare does with a real video and the real encoder: how soon each side shows, what pressing Play takes, and
     /// where the picture stops. EDITOR_PLAYBACK_CLIP names the video, COMPARE_PROBE_SETTINGS is h264 (480p) or av1 (1080p),
     /// both at slow, and COMPARE_PROBE_SECONDS how long to watch it play.

@@ -106,10 +106,11 @@ internal sealed class LibavStillFrameDecoder : IDisposable
     /// null when no frame is at or after that time, or when cancelled or disposed first. The same frame asked for again
     /// comes back as the same array, so it is only to be read. With <paramref name="keyframeWillDo"/>, for the picture
     /// under a drag, a frame that needs a seek comes as the keyframe the seek lands on, up to a GOP before the time asked
-    /// for, without decoding on from there; a frame reached by decoding on is still the exact one.
+    /// for, without decoding on from there; a frame reached by decoding on is still the exact one. With
+    /// <paramref name="lastFrameWillDo"/>, for a paused picture, a time past the last frame gives that frame.
     /// </summary>
     public async Task<byte[]?> DecodeFrameAtAsync(
-        double seconds, CancellationToken ct = default, bool keyframeWillDo = false)
+        double seconds, CancellationToken ct = default, bool keyframeWillDo = false, bool lastFrameWillDo = false)
     {
         try
         {
@@ -135,7 +136,7 @@ internal sealed class LibavStillFrameDecoder : IDisposable
                     return _lastFrame;
                 }
 
-                return await Task.Run(() => DecodeAt(target, keyframeWillDo, ct), CancellationToken.None)
+                return await Task.Run(() => DecodeAt(target, keyframeWillDo, lastFrameWillDo, ct), CancellationToken.None)
                     .ConfigureAwait(false);
             }
             finally
@@ -302,7 +303,7 @@ internal sealed class LibavStillFrameDecoder : IDisposable
     }
 
     // On the pool, for one request at a time. A failure closes the file, so the next request opens it afresh.
-    private unsafe byte[]? DecodeAt(double target, bool keyframeWillDo, CancellationToken ct)
+    private unsafe byte[]? DecodeAt(double target, bool keyframeWillDo, bool lastFrameWillDo, CancellationToken ct)
     {
         try
         {
@@ -311,6 +312,7 @@ internal sealed class LibavStillFrameDecoder : IDisposable
                 Open();
             }
 
+            double lastSeen = _decodedSeconds; // the latest frame passed over, from where the decoder stands
             bool landsOnKeyframe = false;
             if (!CanDecodeOnTo(target))
             {
@@ -329,6 +331,7 @@ internal sealed class LibavStillFrameDecoder : IDisposable
                     _decodedSeconds = frameSeconds;
                     if (frameSeconds + FrameTimeTolerance < target && !landsOnKeyframe)
                     {
+                        lastSeen = frameSeconds;
                         continue;
                     }
 
@@ -347,7 +350,12 @@ internal sealed class LibavStillFrameDecoder : IDisposable
                 if (received == ffmpeg.AVERROR_EOF || (received == ffmpeg.AVERROR(11) && _draining))
                 {
                     _decodedSeconds = double.NaN; // past the last frame; the next request's seek resets the decoder
-                    return null;
+
+                    // Passed over without being kept, the last frame is decoded again from its keyframe: only a time past
+                    // the end costs that.
+                    return lastFrameWillDo && double.IsFinite(lastSeen) && !ct.IsCancellationRequested
+                        ? DecodeAt(lastSeen, keyframeWillDo: false, lastFrameWillDo: false, ct)
+                        : null;
                 }
 
                 if (received != ffmpeg.AVERROR(11))

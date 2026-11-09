@@ -202,6 +202,16 @@
 - **The quality compare shares the editor's decoder.** It opened the video twice more, once for its paused frames and
   once to play, each holding 210-230 MB of a 4K video on top of the editor's 420. The original side now comes from the
   decoder the editor already has open, and shows at once.
+- **A compressed video's picture starts with its sound.** With B-frames, so with H.264 and H.265, the whole picture was
+  put two frames late when the sound was added, which left it 45 ms behind the sound in every such export. It is now 21
+  ms ahead of it, which is the sound encoder's own start.
+- **Both sides of the quality compare show the same frame.** Paused, stepped or sought, the compressed side showed a frame
+  two earlier than the original, from the same two frames. A seek that waits for an encode also keeps its overlay until
+  the compressed picture is there, where it came off 90-120 ms early and uncovered the picture from before the seek.
+- **The quality compare can be closed while its first stretch encodes.** Its button stayed disabled for as long as that
+  took, about 12 s at AV1 1080p `slow`, with nothing but closing the editor to get out of it.
+- **Going to the very end of a video shows its last frame.** A skip or a seek past the last frame left the picture where
+  it had been, in the editor and on both sides of the compare, with the time reading the end.
 
 ### 🛡️ Reliability
 

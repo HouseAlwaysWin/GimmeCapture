@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 44 entries (2026-11-09).
+- Since v0.74.0, `## Unreleased` holds 48 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+1f7e84fd`, installed by hand on 2026-11-08 in the evening over
   `0.74.0+36c839ad` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1405,6 +1405,19 @@ tool.
   12.2-12.4 at AV1 1080p, at the cost of room to step around the playhead and of a rate control that has settled less
   when it reaches it. `CompareSampleWindowsTests`, and opt-in COMPARE_PLAY_PROBE=1 (a held encoder; fails without the
   encode ahead and with its wait shown on the overlay).
+- Done since batch 1 (2026-11-09, "你幫我測試看看"): **a walk through the editor**, on the real `VideoEditWindow` and
+  `CompareView` with real pointer and key events, headless and at volume 0: permission to drive the desktop was declined,
+  so neither the GPU's presentation nor the speakers were checked. The clip was 4K HEVC with a bar moving 12 px a frame and
+  a flash and a beep every second, so a picture says which frame it is. Sound clock and picture agree before and after a
+  cut (picture 22-25 ms behind the clock on either side, 29-48 ms held over the cut, none of the dropped piece shown); the
+  arrows held over 40 rounds; both sides of the compare moved 29.6 times a second with no overlay at H.264 480p. Found and
+  fixed: `MuxVideoAndAudio` counted the picture from the negative decode time of its first B-frame, which put it 67 ms
+  late (`LibavMuxerMuxTests`; on the marked clip picture minus sound went from +44.6 ms to -21.4, the AAC encoder's
+  priming), and which was also why the compressed side showed two frames earlier when paused; the toggle disabled by its
+  own command through the first encode; a seek past the last frame showing nothing new (`lastFrameWillDo`); the overlay
+  coming off before the compressed frame (opt-in COMPARE_SEEK_PROBE=1). Left: in the first window of a playback, the one
+  that starts partway, the compressed side runs 1-2 frames behind the original; it is 0 from the second window on. Space
+  and the arrows do nothing in the compare (`TakesTransportKeys`), and Space closes it only with the toggle focused by Tab.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

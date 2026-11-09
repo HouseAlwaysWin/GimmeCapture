@@ -324,12 +324,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             return await window;
         }
 
-        Dispatcher.UIThread.Post(() =>
-        {
-            _windowWaits++;
-            StatusText = Localization["CompressComparePreparing"];
-            IsPreparing = true;
-        });
+        Dispatcher.UIThread.Post(BeginWindowWait);
 
         try
         {
@@ -337,9 +332,20 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         }
         finally
         {
-            Dispatcher.UIThread.Post(() => IsPreparing = --_windowWaits > 0);
+            Dispatcher.UIThread.Post(EndWindowWait);
         }
     }
+
+    // UI thread.
+    private void BeginWindowWait()
+    {
+        _windowWaits++;
+        StatusText = Localization["CompressComparePreparing"];
+        IsPreparing = true;
+    }
+
+    // UI thread.
+    private void EndWindowWait() => IsPreparing = --_windowWaits > 0;
 
     // UI thread: draws the newest frame each side's playback left, unless a pause / seek / new play superseded it.
     private void DrawPlayedSource()
@@ -446,25 +452,44 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
         try
         {
-            byte[]? src = await _sourceDecoder.DecodeFrameAtAsync(pos, ct);
+            byte[]? src = await _sourceDecoder.DecodeFrameAtAsync(pos, ct, lastFrameWillDo: true);
             if (ct.IsCancellationRequested)
             {
                 return;
             }
             if (src != null) { DrawFrame(ref _sourceFrame, nameof(SourceFrame), src); }
 
-            CompareSampleWindow? win = await ShowingWaitAsync(_windows.AroundAsync(pos));
-            if (ct.IsCancellationRequested || win == null)
+            // A window waited for keeps the overlay until its frame is drawn: the compressed side would otherwise show the
+            // picture from before the seek, uncovered, for the 90-120 ms its decoder takes.
+            Task<CompareSampleWindow?> around = _windows.AroundAsync(pos);
+            bool waiting = !around.IsCompleted;
+            if (waiting)
             {
-                return;
+                BeginWindowWait();
             }
 
-            byte[]? smp = await SampleDecoderFor(win).DecodeFrameAtAsync(pos - win.Start, ct);
-            if (ct.IsCancellationRequested)
+            try
             {
-                return;
+                CompareSampleWindow? win = await around;
+                if (ct.IsCancellationRequested || win == null)
+                {
+                    return;
+                }
+
+                byte[]? smp = await SampleDecoderFor(win).DecodeFrameAtAsync(pos - win.Start, ct, lastFrameWillDo: true);
+                if (ct.IsCancellationRequested)
+                {
+                    return;
+                }
+                if (smp != null) { DrawFrame(ref _sampleFrame, nameof(SampleFrame), smp); }
             }
-            if (smp != null) { DrawFrame(ref _sampleFrame, nameof(SampleFrame), smp); }
+            finally
+            {
+                if (waiting)
+                {
+                    EndWindowWait();
+                }
+            }
         }
         catch (OperationCanceledException) { /* superseded by a newer seek/step */ }
         catch (Exception ex) { AppLog.Error("Compress.CompareShowFrame", ex); }

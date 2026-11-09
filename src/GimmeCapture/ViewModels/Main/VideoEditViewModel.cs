@@ -87,7 +87,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
             (seconds, ct) => _stillFrames.DecodeFrameAtAsync(seconds, ct, keyframeWillDo: true),
             frame => DrawFrame(frame));
         _keyStepFrames = new ScrubFramePump(
-            (seconds, ct) => _stillFrames.DecodeFrameAtAsync(seconds, ct),
+            (seconds, ct) => _stillFrames.DecodeFrameAtAsync(seconds, ct, lastFrameWillDo: true),
             frame => DrawFrame(frame));
 
         Title = Path.GetFileName(sourcePath);
@@ -110,7 +110,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         ClearCropCommand = ReactiveCommand.CreateFromTask(ClearCropAsync);
         ApplyCommand = ReactiveCommand.Create(Apply);
         CancelCommand = ReactiveCommand.Create(() => RequestClose?.Invoke());
-        CompareCommand = ReactiveCommand.CreateFromTask(ToggleCompareAsync);
+        CompareCommand = ReactiveCommand.Create(ToggleCompare);
         ResetAllCommand = ReactiveCommand.CreateFromTask(ResetAllAsync);
 
         PlayPauseCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditPlayPause", ex));
@@ -755,7 +755,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         byte[]? frame;
         try
         {
-            frame = await _stillFrames.DecodeFrameAtAsync(pos, ct);
+            frame = await _stillFrames.DecodeFrameAtAsync(pos, ct, lastFrameWillDo: true);
         }
         catch (Exception ex)
         {

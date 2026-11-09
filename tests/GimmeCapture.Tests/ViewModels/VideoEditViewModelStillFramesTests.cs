@@ -1,4 +1,6 @@
+using System.Reactive.Linq;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.ViewModels.Main;
 using Xunit;
 
@@ -38,6 +40,42 @@ public sealed class VideoEditViewModelStillFramesTests
         vm.PositionSeconds = 10;
         vm.StepFrameByKey(1);
         Assert.Equal(10, vm.PositionSeconds);
+    }
+
+    [Fact]
+    public async Task TheCompareButton_StaysPressable_WhileTheFirstWindowEncodes()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string clip = VideoTestClips.WriteConstantRate(Path.Combine(dir, "clip.mp4"), 64, 48, 30, 30, gopSize: 10);
+            using var vm = new VideoEditViewModel(
+                clip, 1, 30, 64, 48, VideoEditResult.Empty with { KeptRuns = [new VideoEditSegment(0, 1)] }, _ => { });
+            using var started = new ManualResetEventSlim();
+            using var stopped = new ManualResetEventSlim();
+            vm.BuildCompareViewModel = (source, anchor, rotation) => new CompareViewModel(
+                source, 1, 30, new LibavExportOptions(), rotation, anchor, encodeWindow: (_, _, _, ct) =>
+                {
+                    started.Set();
+                    ct.WaitHandle.WaitOne();
+                    stopped.Set();
+                    return false;
+                });
+
+            vm.CompareCommand.Execute().Subscribe();
+            Assert.True(vm.IsComparing);
+            Assert.True(started.Wait(TimeSpan.FromSeconds(30)), "The first window never began to encode.");
+            Assert.True(await vm.CompareCommand.CanExecute.FirstAsync());
+
+            vm.CompareCommand.Execute().Subscribe();
+            Assert.False(vm.IsComparing);
+            Assert.True(stopped.Wait(TimeSpan.FromSeconds(30)), "The encode went on after the compare closed.");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]

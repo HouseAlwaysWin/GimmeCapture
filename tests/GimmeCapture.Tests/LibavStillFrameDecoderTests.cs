@@ -158,6 +158,20 @@ public sealed class LibavStillFrameDecoderTests : IDisposable
     }
 
     [Fact]
+    public async Task PastTheLastFrame_WhenTheLastFrameWillDo_ThatIsTheOneGiven()
+    {
+        string clip = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "clip.mp4"), Width, Height, 30, Fps, gopSize: 10);
+        using var decoder = new LibavStillFrameDecoder(clip, Width, Height);
+
+        Assert.Equal(29, FrameIndexOf(await decoder.DecodeFrameAtAsync(30.0 / Fps, default, lastFrameWillDo: true)));
+        Assert.Equal(29, FrameIndexOf(await decoder.DecodeFrameAtAsync(5, default, lastFrameWillDo: true)));
+
+        // A frame that is there is still the one asked for.
+        Assert.Equal(20, FrameIndexOf(await decoder.DecodeFrameAtAsync(20.0 / Fps, default, lastFrameWillDo: true)));
+        Assert.Equal(1, decoder.Opens);
+    }
+
+    [Fact]
     public async Task ACancelledRequest_GivesNothing_AndTheNextOneDecodes()
     {
         string clip = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "clip.mp4"), Width, Height, 30, Fps, gopSize: 10);
