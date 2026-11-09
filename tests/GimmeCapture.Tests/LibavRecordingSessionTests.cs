@@ -330,8 +330,10 @@ public sealed class LibavRecordingSessionTests : IDisposable
 
     private static async Task RecordAsync(Task<bool> start, Func<Task> stop, Func<string?> lastError)
     {
-        Assert.True(await start, $"did not start: {lastError()}");
-        await Task.Delay(Length);
+        // The recording runs until the stop, so nothing on the way there waits its turn: a delay in the thread pool, or
+        // a continuation for one of xUnit's busy threads, ran one recording to 7 s instead of 1.5 under the full suite.
+        Assert.True(await start.ConfigureAwait(false), $"did not start: {lastError()}");
+        await OwnThread.Delay(Length).ConfigureAwait(false);
         await stop();
         Assert.True(lastError() is null, $"the recording failed: {lastError()}");
     }
