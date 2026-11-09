@@ -55,6 +55,7 @@
     <Compile Remove="MainWindowOpenProbeTests.cs" />
     <Compile Remove="PinOpenProbeTests.cs" />
     <Compile Remove="PinPlaybackProbeTests.cs" />
+    <Compile Remove="EditorPlaybackProbeTests.cs" />
     <!-- Maps DLLs as images and copies them with robocopy. -->
     <Compile Remove="StartupPrefetchProbeTests.cs" />
     <!-- Copies the installed app with robocopy and reads it past the cache through kernel32. -->

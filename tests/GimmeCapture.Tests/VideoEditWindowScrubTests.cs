@@ -1,0 +1,126 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using GimmeCapture.Models;
+using GimmeCapture.ViewModels.Main;
+using GimmeCapture.Views.Main;
+
+namespace GimmeCapture.Tests;
+
+/// <summary>
+/// The Compress editor's picture while its seek bar or its strip of pieces is dragged, through the real window and a
+/// clip whose every frame is its own grey: the frame under the pointer shows during the drag, from a keyframe near it,
+/// and the exact frame once the drag ends. Until 2026-11 nothing but the time moved until the release. Opt-in
+/// (EDITOR_SCRUB_PROBE=1): it sets up a headless Avalonia application, which a process can do only once.
+/// </summary>
+public sealed class VideoEditWindowScrubTests : IDisposable
+{
+    private const int Width = 64;
+    private const int Height = 48;
+    private const int Fps = 30;
+    private const int FrameCount = 30; // a grey of its own for each, in the 219 levels of luma
+
+    // What one step of the clips' grey (7 levels of luma) comes to in BGRA.
+    private const double GreyStep = 7 * 255.0 / 219;
+
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "GimmeCapture.Tests", Guid.NewGuid().ToString("N"));
+
+    public VideoEditWindowScrubTests() => Directory.CreateDirectory(_dir);
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_dir, recursive: true);
+        }
+        catch (IOException)
+        {
+        }
+    }
+
+    [OptInFact("EDITOR_SCRUB_PROBE=1")]
+    public void DraggingTheSeekBarOrTheStrip_ShowsThePictureUnderThePointer_AndTheDropTheExactFrame()
+    {
+        AppBuilder.Configure<GimmeCapture.App>()
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            .SetupWithoutStarting();
+
+        string clip = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "clip.mp4"), Width, Height, FrameCount, Fps, gopSize: 10);
+        double duration = (double)FrameCount / Fps;
+        var vm = new VideoEditViewModel(
+            clip, duration, Fps, Width, Height,
+            VideoEditResult.Empty with { KeptRuns = [new VideoEditSegment(0, duration)] }, _ => { });
+        var window = new VideoEditWindow { DataContext = vm, Width = 960, Height = 760 };
+        window.Show();
+        Pump(() => !vm.IsPreparing && ShownFrame(vm) == 0, "the first frame");
+
+        // The seek bar, pressed near its start and dragged along it.
+        var slider = window.FindControl<Slider>("PositionSlider")!;
+        window.MouseDown(OnSlider(slider, window, 0.05), MouseButton.Left);
+        Pump(() => vm.PositionSeconds > 0, "the press on the bar");
+        window.MouseMove(OnSlider(slider, window, 0.55), RawInputModifiers.LeftMouseButton);
+        double dragged = vm.PositionSeconds;
+        int expected = (int)Math.Ceiling(dragged * Fps);
+        Assert.InRange(dragged, duration * 0.4, duration * 0.7);
+
+        // Before the release, the keyframe the position's seek lands on: within one group of ten frames of it.
+        Pump(() => ShownFrame(vm) is { } f && f >= expected - 10 && f <= expected, $"a frame near {expected} during the drag");
+        int duringDrag = ShownFrame(vm)!.Value;
+
+        window.MouseUp(OnSlider(slider, window, 0.55), MouseButton.Left);
+        Pump(() => ShownFrame(vm) == expected, $"the exact frame {expected} (the drag showed {duringDrag})");
+
+        // The strip of pieces, the same way.
+        var strip = window.FindControl<Grid>("SegmentStripGrid")!;
+        window.MouseDown(OnStrip(strip, window, 0.2), MouseButton.Left);
+        window.MouseMove(OnStrip(strip, window, 0.8), RawInputModifiers.LeftMouseButton);
+        double stripDragged = vm.PositionSeconds;
+        Assert.InRange(stripDragged, duration * 0.7, duration * 0.9);
+        int stripExpected = (int)Math.Ceiling(stripDragged * Fps);
+        Pump(() => ShownFrame(vm) is { } f && f >= stripExpected - 10 && f <= stripExpected, $"a frame near {stripExpected} on the strip");
+        window.MouseUp(OnStrip(strip, window, 0.8), MouseButton.Left);
+        Pump(() => ShownFrame(vm) == stripExpected, $"the exact frame {stripExpected} after the strip");
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static Point OnSlider(Slider slider, Window window, double fraction)
+    {
+        // The thumb's half width at each end of the track, about.
+        const double inset = 10;
+        double x = inset + (fraction * (slider.Bounds.Width - (2 * inset)));
+        return slider.TranslatePoint(new Point(x, slider.Bounds.Height / 2), window)!.Value;
+    }
+
+    private static Point OnStrip(Grid strip, Window window, double fraction) =>
+        strip.TranslatePoint(new Point(fraction * strip.Bounds.Width, strip.Bounds.Height / 2), window)!.Value;
+
+    // The frame the preview shows: its centre pixel's grey says which.
+    private static unsafe int? ShownFrame(VideoEditViewModel vm)
+    {
+        if (vm.Frame is not WriteableBitmap bitmap)
+        {
+            return null;
+        }
+
+        using var locked = bitmap.Lock();
+        byte* row = (byte*)locked.Address + ((Height / 2) * locked.RowBytes);
+        return (int)Math.Round(row[(Width / 2) * 4] / GreyStep);
+    }
+
+    private static void Pump(Func<bool> condition, string what)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting for {what}.");
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+    }
+}

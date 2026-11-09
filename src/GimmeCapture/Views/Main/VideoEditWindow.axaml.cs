@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -27,6 +28,7 @@ public partial class VideoEditWindow : Window
     private bool _stripDidDrag;
     private bool _stripScrubbing;
     private int _stripPressClickCount;
+    private bool _sliderScrubbing;
 
     private bool _cropDragging;
     private Point _cropStart;
@@ -68,9 +70,10 @@ public partial class VideoEditWindow : Window
 
         KeyDown += OnEditorKeyDown;
 
-        // Playback scrubber: pause on grab, seek to the dropped position on release.
+        // Playback scrubber: pause on grab, the picture follows the thumb, seek to the dropped position on release.
         PositionSlider.AddHandler(PointerPressedEvent, OnScrubPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         PositionSlider.AddHandler(PointerReleasedEvent, OnScrubReleased, RoutingStrategies.Bubble, handledEventsToo: true);
+        PositionSlider.ValueChanged += OnScrubValueChanged;
 
         // Segment strip: drag = scrub the playhead, double-click = keep/drop the piece under it.
         SegmentStripGrid.PointerPressed += OnStripPressed;
@@ -200,10 +203,26 @@ public partial class VideoEditWindow : Window
     }
 
     private void OnScrubPressed(object? sender, PointerPressedEventArgs e)
-        => (DataContext as VideoEditViewModel)?.BeginScrub();
+    {
+        if (DataContext is VideoEditViewModel vm)
+        {
+            _sliderScrubbing = true;
+            vm.BeginScrub();
+            vm.ScrubTo(PositionSlider.Value); // a press on the track has moved the thumb already
+        }
+    }
+
+    private void OnScrubValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_sliderScrubbing && DataContext is VideoEditViewModel vm)
+        {
+            vm.ScrubTo(e.NewValue);
+        }
+    }
 
     private void OnScrubReleased(object? sender, PointerReleasedEventArgs e)
     {
+        _sliderScrubbing = false;
         if (DataContext is VideoEditViewModel vm)
         {
             _ = vm.SeekAsync(PositionSlider.Value);
@@ -325,6 +344,7 @@ public partial class VideoEditWindow : Window
             return;
         }
         vm.PositionSeconds = Math.Clamp(localX / w, 0, 1) * total;
+        vm.ScrubTo(vm.PositionSeconds);
         UpdateSegmentLayout();
     }
 

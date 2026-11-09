@@ -173,6 +173,10 @@
   clipped the thumbnail on one side and the buttons on the other. The name is now cut, in full in its tooltip.
 - **The advanced editor asks its questions over itself.** Its confirmations (resetting every edit, a crop or rotation
   that clears the drawings) went through the main window, which cannot host a dialog while hidden in the tray.
+- **The editor's picture follows a drag of its seek bar or its strip of pieces.** Until now only the time moved until
+  the mouse was let go. The picture shows the frame near the pointer, as fast as it can be decoded, and the exact frame
+  when the drag ends: on a 4K phone video about 27 frames a second across the timeline, from the keyframes nearest
+  the pointer, where exact frames came at about 9.
 
 ### 🛡️ Reliability
 

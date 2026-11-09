@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 35 entries (2026-11-08).
+- Since v0.74.0, `## Unreleased` holds 36 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+1f7e84fd`, installed by hand on 2026-11-08 in the evening over
   `0.74.0+36c839ad` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -412,7 +412,8 @@ tool.
   99 ms against 1.5, a step back 106 against 70. Timed one way after the other, the second ran slower than in turn (a
   warmer processor), which first showed the kept decoder slower at software steps back. Open, the decoder holds 70-90 MB
   of the process, on the CPU or the GPU. Not done: a step back still decodes from the keyframe; keeping the few frames
-  before the one shown would make repeated steps back instant.
+  before the one shown would make repeated steps back instant. Hand check owed since 2026-11-09: drag the editor's
+  seek bar and strip on a 4K video, the picture should follow and the drop show the exact frame.
 - Done since batch 1: **GIF/WebM output's extra encode, and its Pause** (Compress and the editor). `EncodeGifWebmAsync`
   transcodes the source itself when `NeedsNoIntermediate` (the whole clip at its own speed, no crop, rotation, burn-in
   or filter, and for a WebM sound not mixed to mono: the transcoders' sound is stereo, as the intermediate's AAC is) and
@@ -1316,6 +1317,21 @@ tool.
   in scenarios that had none), and the check without the clear-match rule (`beyond` down to 107, but breaks up to 33). Each
   stall warning now lists the last 64 shifts (`shifts=`, `!` on a frame not placed, `x` where none was measured): the next
   real one tells a wild jump from a scroll too fast to follow.
+- Done since batch 1 (2026-11-09, "繼續優化,影片編輯部分"): **the editor's picture during a drag** (Compress and the
+  editor). The user's queue is 4K HEVC phone videos (`D:\影片2`, 1.7-8.3 GB), of which `compress-item-states.json` shows
+  7 of 33 cut, 6 turned, 1 cropped, none drawn on, and earlier measurements of the editor had none of these. On
+  `V_20260110_175957_ES0` (3840x2160, 29 fps, 216.8 s, a keyframe a second), kept decoder (`STILL_FRAME_PROBE`): the
+  first frame 593 ms, a step forward 29, a step back 79 (42-189), a 5 s skip 180, a slider drop 135. Dragging the seek
+  bar or the strip moved only the time until the release. The pin's way, one request every 50 ms each cancelling the one
+  before, would show nothing at 115 ms a far seek, so `ScrubFramePump` decodes one at a time, always the newest
+  position asked for, and `LibavStillFrameDecoder.DecodeFrameAtAsync(keyframeWillDo)` gives a frame that needs a seek as
+  the keyframe it lands on. A drag across the clip, every position a seek: 116 ms a frame exact against 37 keyframes
+  (8.6 against 27 a second); a pixel at a time on an 800-wide bar, mostly decoding on and exact: 56-60 either way. The
+  release still decodes the exact frame. `VideoEditWindowScrubTests` (opt-in, headless, real pointer events on the
+  real window; times out with `ScrubTo` disabled), `ScrubFramePumpTests`, a keyframe case in
+  `LibavStillFrameDecoderTests`. Measured and left for now: while playing that video the preview took 1,019 M cycles/s
+  (`EditorPlaybackProbeTests`, about a third of a core) and kept up at 28.8 of 29 frames a second, 5.95 ms a frame to
+  download the whole 4K frame and 5.88 to scale it to 720 wide; scaling on the GPU would leave out most of both.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

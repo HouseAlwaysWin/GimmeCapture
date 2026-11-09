@@ -95,9 +95,12 @@ internal sealed class LibavStillFrameDecoder : IDisposable
     /// <summary>
     /// The frame at <paramref name="seconds"/> as width × height BGRA pixels with the rows packed, decoded on the pool;
     /// null when no frame is at or after that time, or when cancelled or disposed first. The same frame asked for again
-    /// comes back as the same array, so it is only to be read.
+    /// comes back as the same array, so it is only to be read. With <paramref name="keyframeWillDo"/>, for the picture
+    /// under a drag, a frame that needs a seek comes as the keyframe the seek lands on, up to a GOP before the time asked
+    /// for, without decoding on from there; a frame reached by decoding on is still the exact one.
     /// </summary>
-    public async Task<byte[]?> DecodeFrameAtAsync(double seconds, CancellationToken ct = default)
+    public async Task<byte[]?> DecodeFrameAtAsync(
+        double seconds, CancellationToken ct = default, bool keyframeWillDo = false)
     {
         try
         {
@@ -123,7 +126,8 @@ internal sealed class LibavStillFrameDecoder : IDisposable
                     return _lastFrame;
                 }
 
-                return await Task.Run(() => DecodeAt(target, ct), CancellationToken.None).ConfigureAwait(false);
+                return await Task.Run(() => DecodeAt(target, keyframeWillDo, ct), CancellationToken.None)
+                    .ConfigureAwait(false);
             }
             finally
             {
@@ -195,7 +199,7 @@ internal sealed class LibavStillFrameDecoder : IDisposable
     }
 
     // On the pool, for one request at a time. A failure closes the file, so the next request opens it afresh.
-    private unsafe byte[]? DecodeAt(double target, CancellationToken ct)
+    private unsafe byte[]? DecodeAt(double target, bool keyframeWillDo, CancellationToken ct)
     {
         try
         {
@@ -204,9 +208,11 @@ internal sealed class LibavStillFrameDecoder : IDisposable
                 Open();
             }
 
+            bool landsOnKeyframe = false;
             if (!CanDecodeOnTo(target))
             {
                 Seek(target);
+                landsOnKeyframe = keyframeWillDo;
             }
 
             int transferFailures = 0;
@@ -218,7 +224,7 @@ internal sealed class LibavStillFrameDecoder : IDisposable
                     long ts = _decoded->best_effort_timestamp;
                     double frameSeconds = ts >= 0 ? ts * ffmpeg.av_q2d(_timeBase) : 0;
                     _decodedSeconds = frameSeconds;
-                    if (frameSeconds + FrameTimeTolerance < target)
+                    if (frameSeconds + FrameTimeTolerance < target && !landsOnKeyframe)
                     {
                         continue;
                     }

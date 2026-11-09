@@ -54,6 +54,9 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     // The paused frames: steps, seeks and redraws after a rotation or crop, from one decoder that keeps the file open.
     private readonly LibavStillFrameDecoder _stillFrames;
 
+    // The picture under a drag of the seek bar or the strip, from the same decoder.
+    private readonly ScrubFramePump _scrubFrames;
+
     internal VideoEditViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
         VideoEditResult initial, Action<VideoEditResult> onApply, Bitmap? initialPreview = null)
@@ -71,6 +74,9 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         _decodeW = Math.Max(2, (int)(_sourceWidth * scale)); _decodeW -= _decodeW & 1;
         _decodeH = Math.Max(2, (int)(_sourceHeight * scale)); _decodeH -= _decodeH & 1;
         _stillFrames = new LibavStillFrameDecoder(sourcePath, _decodeW, _decodeH);
+        _scrubFrames = new ScrubFramePump(
+            (seconds, ct) => _stillFrames.DecodeFrameAtAsync(seconds, ct, keyframeWillDo: true),
+            frame => DrawFrame(frame));
 
         Title = Path.GetFileName(sourcePath);
 
@@ -526,6 +532,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         }
 
         _stepCts?.Cancel();
+        _scrubFrames.Stop();
         _playCts?.Cancel();
         _playCts = new CancellationTokenSource();
         CancellationToken ct = _playCts.Token;
@@ -655,8 +662,22 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         }
     }
 
-    // Slider/strip scrubbing: pause on grab, seek to the dropped position on release.
+    // Slider/strip scrubbing: pause on grab, show the picture under the pointer as it moves, seek to the dropped position
+    // on release.
     public void BeginScrub() => Pause();
+
+    /// <summary>
+    /// Shows the picture at <paramref name="seconds"/> during a drag: a keyframe near it, or the exact frame where
+    /// decoding on from the last one reaches it, as fast as they decode. The exact frame comes with the seek at the
+    /// drag's end.
+    /// </summary>
+    public void ScrubTo(double seconds)
+    {
+        if (_duration > 0 && !_disposed && !IsPlaying)
+        {
+            _scrubFrames.Request(Math.Clamp(seconds, 0, _duration));
+        }
+    }
 
     public async Task SeekAsync(double pos)
     {
@@ -680,6 +701,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         pos = Math.Clamp(pos, 0, _duration);
         PositionSeconds = pos;
 
+        _scrubFrames.Stop();
         _stepCts?.Cancel();
         _stepCts = new CancellationTokenSource();
         CancellationToken ct = _stepCts.Token;
@@ -771,6 +793,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         }
 
         _disposed = true;
+        _scrubFrames.Stop();
         _playCts?.Cancel();
         _stepCts?.Cancel();
         _playCts?.Dispose();

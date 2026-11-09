@@ -120,6 +120,31 @@ public sealed class LibavStillFrameDecoderTests : IDisposable
     }
 
     [Fact]
+    public async Task KeyframeWillDo_ASeekShowsTheKeyframeItLandsOn_AndTheExactFrameStillComes()
+    {
+        string clip = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "clip.mp4"), Width, Height, 30, Fps, gopSize: 10);
+        using var decoder = new LibavStillFrameDecoder(clip, Width, Height);
+        Assert.Equal(5, FrameIndexOf(await decoder.DecodeFrameAtAsync(5.0 / Fps)));
+        int seeks = decoder.Seeks;
+
+        // Frame 25 needs a seek, which lands on the keyframe at 20: what a drag shows, with no decoding on to 25.
+        Assert.Equal(20, FrameIndexOf(await decoder.DecodeFrameAtAsync(25.0 / Fps, default, keyframeWillDo: true)));
+        Assert.Equal(seeks + 1, decoder.Seeks);
+
+        // The exact frame when the drag ends: decoded on from that keyframe, and not the keyframe given back as frame 25.
+        Assert.Equal(25, FrameIndexOf(await decoder.DecodeFrameAtAsync(25.0 / Fps)));
+        Assert.Equal(seeks + 1, decoder.Seeks);
+
+        // A frame reached by decoding on is the exact one, drag or not.
+        Assert.Equal(27, FrameIndexOf(await decoder.DecodeFrameAtAsync(27.0 / Fps, default, keyframeWillDo: true)));
+        Assert.Equal(seeks + 1, decoder.Seeks);
+
+        // Back before the decoder: a seek again, to the keyframe at 10 for frame 13.
+        Assert.Equal(10, FrameIndexOf(await decoder.DecodeFrameAtAsync(13.0 / Fps, default, keyframeWillDo: true)));
+        Assert.Equal(seeks + 2, decoder.Seeks);
+    }
+
+    [Fact]
     public async Task PastTheLastFrame_ThereIsNone_AndAnEarlierFrameStillComes()
     {
         string clip = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "clip.mp4"), Width, Height, 30, Fps, gopSize: 10);
@@ -297,6 +322,27 @@ public sealed class LibavStillFrameDecoderTests : IDisposable
         foreach (string action in opened.Keys)
         {
             _output.WriteLine($"{action,-12} opened each time {Summary(opened[action])} | kept {Summary(kept[action])}");
+        }
+
+        // A drag along the seek bar as the editor sees it, each position asked for as the last one's frame arrives: across
+        // much of the clip (every frame needs a seek) and a pixel at a time on a bar about 800 wide.
+        double perPixel = info.Duration / 800;
+        foreach ((string name, double stride) in new[] { ("a fast drag", info.Duration * 0.6 / 40), ("a slow drag", perPixel) })
+        {
+            foreach (bool keyframeWillDo in new[] { false, true, false, true })
+            {
+                using var decoder = new LibavStillFrameDecoder(clip, width, height);
+                await decoder.DecodeFrameAtAsync(info.Duration * 0.2);
+                var times = new List<double>();
+                for (int i = 1; i <= 40; i++)
+                {
+                    var watch = Stopwatch.StartNew();
+                    await decoder.DecodeFrameAtAsync((info.Duration * 0.2) + (i * stride), default, keyframeWillDo);
+                    times.Add(watch.Elapsed.TotalMilliseconds);
+                }
+
+                _output.WriteLine($"{name}, {(keyframeWillDo ? "keyframes" : "exact frames")}: a frame in {Summary(times)}, {decoder.Seeks} seeks");
+            }
         }
 
         static long PrivateMegabytes()
