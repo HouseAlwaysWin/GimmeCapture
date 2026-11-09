@@ -9,7 +9,7 @@
 
 ---
 
-## Unreleased
+## v0.75.0 - 2026-11-09
 
 ### ⚡ Performance
 
