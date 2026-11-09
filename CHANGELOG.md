@@ -188,6 +188,8 @@
   picture keeps to the sound. Playing holds one decoder instead of two.
 - **Changing the speed or an edit during playback keeps the sound.** The old playback, as it stopped, stopped the sound
   the new one had just started.
+- **The editor has keys.** Space plays and pauses, and the left and right arrows step a frame, which keep stepping while
+  held, with the picture following. Typing in the file name, or on the picture, is left alone.
 
 ### 🛡️ Reliability
 

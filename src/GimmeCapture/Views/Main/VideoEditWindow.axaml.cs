@@ -29,6 +29,7 @@ public partial class VideoEditWindow : Window
     private bool _stripScrubbing;
     private int _stripPressClickCount;
     private bool _sliderScrubbing;
+    private bool _spaceHeld;
 
     private bool _cropDragging;
     private Point _cropStart;
@@ -69,6 +70,11 @@ public partial class VideoEditWindow : Window
         SurfacePanel.PointerReleased += OnSurfaceReleased;
 
         KeyDown += OnEditorKeyDown;
+
+        // Ahead of the controls: a focused button would take Space for a click, and the seek bar the arrows.
+        AddHandler(KeyDownEvent, OnTransportKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyUpEvent, OnTransportKeyUp, RoutingStrategies.Tunnel);
+        Deactivated += (_, _) => _spaceHeld = false; // its key-up goes to whichever window has the focus by then
 
         // Playback scrubber: pause on grab, the picture follows the thumb, seek to the dropped position on release.
         PositionSlider.AddHandler(PointerPressedEvent, OnScrubPressed, RoutingStrategies.Bubble, handledEventsToo: true);
@@ -201,6 +207,50 @@ public partial class VideoEditWindow : Window
                 break;
         }
     }
+
+    // Space plays and pauses, the arrows step a frame. The keys stay with a control that uses them for typing or choosing.
+    private void OnTransportKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not VideoEditViewModel vm || !vm.TakesTransportKeys || e.KeyModifiers != KeyModifiers.None
+            || KeysStayWith(e.Source))
+        {
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.Space:
+                if (!_spaceHeld) // a held key repeats, which would play and pause over and over
+                {
+                    _spaceHeld = true;
+                    vm.PlayPauseCommand.Execute(System.Reactive.Unit.Default).SubscribeLoggingErrors();
+                }
+
+                e.Handled = true;
+                break;
+            case Key.Left:
+                vm.StepFrameByKey(-1);
+                e.Handled = true;
+                break;
+            case Key.Right:
+                vm.StepFrameByKey(1);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    private void OnTransportKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Space)
+        {
+            _spaceHeld = false;
+        }
+    }
+
+    // Text boxes and drop-down lists use these keys themselves, and so does whatever is in a popup, like the volume slider.
+    private bool KeysStayWith(object? focused) =>
+        focused is TextBox or ComboBox or ComboBoxItem
+        || (focused is Visual visual && TopLevel.GetTopLevel(visual) != this);
 
     private void OnScrubPressed(object? sender, PointerPressedEventArgs e)
     {

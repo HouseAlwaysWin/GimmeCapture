@@ -318,9 +318,10 @@
                 <Button Content="{Binding [CompressCompareBack5], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding SkipBackCommand}"/>
                 <Button Content="{Binding [CompressCompareStepBack], Source={x:Static services:LocalizationService.Instance}}"
-                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding StepBackCommand}"/>
+                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding StepBackCommand}"
+                        ToolTip.Tip="{Binding [CompressEditKeyStepBack], Source={x:Static services:LocalizationService.Instance}}"/>
                 <Button Theme="{StaticResource GothicMetalButton}" MinWidth="56" Command="{Binding PlayPauseCommand}"
-                        ToolTip.Tip="{Binding [PlayPause], Source={x:Static services:LocalizationService.Instance}}">
+                        ToolTip.Tip="{Binding [CompressEditKeyPlayPause], Source={x:Static services:LocalizationService.Instance}}">
                     <Panel Width="16" Height="16">
                         <Path Data="M 2,1 L 2,15 L 14,8 Z" Fill="White" IsVisible="{Binding !IsPlaying}"/>
                         <StackPanel Orientation="Horizontal" Spacing="3"
@@ -332,7 +333,8 @@
                     </Panel>
                 </Button>
                 <Button Content="{Binding [CompressCompareStepFwd], Source={x:Static services:LocalizationService.Instance}}"
-                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding StepForwardCommand}"/>
+                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding StepForwardCommand}"
+                        ToolTip.Tip="{Binding [CompressEditKeyStepForward], Source={x:Static services:LocalizationService.Instance}}"/>
                 <Button Content="{Binding [CompressCompareFwd5], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding SkipForwardCommand}"/>
                 <Rectangle Fill="#444444" Width="1" Height="18" Margin="2,0" VerticalAlignment="Center"/>

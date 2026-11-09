@@ -58,6 +58,10 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     // The picture under a drag of the seek bar or the strip, from the same decoder.
     private readonly ScrubFramePump _scrubFrames;
 
+    // The picture under a held arrow key: exact frames, the newest asked for. A step back takes longer than the key
+    // repeats, and cancelling it at each repeat would show nothing until the key came up.
+    private readonly ScrubFramePump _keyStepFrames;
+
     // How long that decoder keeps the file open without a frame. Someone with the editor open is working in it, and the
     // first frame after a close takes 0.4-0.6 s on a 4K video, where a step takes 0.03-0.18. Closing the window lets go of it.
     private static readonly TimeSpan StillFramesIdleClose = TimeSpan.FromMinutes(5);
@@ -81,6 +85,9 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         _stillFrames = new LibavStillFrameDecoder(sourcePath, _decodeW, _decodeH, StillFramesIdleClose);
         _scrubFrames = new ScrubFramePump(
             (seconds, ct) => _stillFrames.DecodeFrameAtAsync(seconds, ct, keyframeWillDo: true),
+            frame => DrawFrame(frame));
+        _keyStepFrames = new ScrubFramePump(
+            (seconds, ct) => _stillFrames.DecodeFrameAtAsync(seconds, ct),
             frame => DrawFrame(frame));
 
         Title = Path.GetFileName(sourcePath);
@@ -126,6 +133,12 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     public string Title { get; }
 
     internal TimeSpan StillFramesKeptOpenFor => _stillFrames.IdleCloseAfter;
+
+    /// <summary>
+    /// Whether Space and the arrow keys work the playback now: not before the first frame, while the compare view has the
+    /// transport, or while text is being typed on the picture.
+    /// </summary>
+    internal bool TakesTransportKeys => !IsPreparing && !IsComparing && !Draw.IsEnteringText;
 
     /// <summary>Total source duration — the strip's full-width basis (all pieces cover [0,duration]).</summary>
     public double TotalSourceDuration => _duration;
@@ -541,6 +554,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
 
         _stepCts?.Cancel();
         _scrubFrames.Stop();
+        _keyStepFrames.Stop();
         _playCts?.Cancel();
         _playCts = new CancellationTokenSource();
         CancellationToken ct = _playCts.Token;
@@ -685,6 +699,25 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         await ShowFrameAtAsync(pos);
     }
 
+    /// <summary>
+    /// A frame on or back for an arrow key, which repeats while it is held: the time moves with every repeat, and the
+    /// picture shows the newest frame asked for as fast as exact frames can be decoded.
+    /// </summary>
+    internal void StepFrameByKey(int direction)
+    {
+        if (_duration <= 0 || _disposed)
+        {
+            return;
+        }
+
+        Pause();
+        _stepCts?.Cancel();
+        _scrubFrames.Stop();
+        double pos = Math.Clamp(PositionSeconds + (direction * (1.0 / _fps)), 0, _duration);
+        PositionSeconds = pos;
+        _keyStepFrames.Request(pos);
+    }
+
     private async Task StepAsync(int direction)
     {
         Pause();
@@ -703,6 +736,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         PositionSeconds = pos;
 
         _scrubFrames.Stop();
+        _keyStepFrames.Stop();
         _stepCts?.Cancel();
         _stepCts = new CancellationTokenSource();
         CancellationToken ct = _stepCts.Token;
@@ -795,6 +829,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
 
         _disposed = true;
         _scrubFrames.Stop();
+        _keyStepFrames.Stop();
         _playCts?.Cancel();
         _stepCts?.Cancel();
         _playCts?.Dispose();

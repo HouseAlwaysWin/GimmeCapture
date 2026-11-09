@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 40 entries (2026-11-09).
+- Since v0.74.0, `## Unreleased` holds 41 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+1f7e84fd`, installed by hand on 2026-11-08 in the evening over
   `0.74.0+36c839ad` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1373,6 +1373,14 @@ tool.
   1,200 short cuts of that video, but the send path allows it), so it now empties them first. The paused frames go through
   `LibavBgraConverter` as the played ones do. Hand check owed, with the one above: Play with sound on a 4K video, that
   picture and sound agree.
+- Done since batch 1 (2026-11-09, the user's choice "加上快捷鍵"): **the editor's keys**. Space plays and pauses, the left
+  and right arrows step a frame (`VideoEditWindow.OnTransportKeyDown`, in the tunnel phase, because a focused button
+  takes Space and the seek bar the arrows). Text boxes, drop-down lists and popups keep them, and the compare view has
+  its own transport. A held arrow repeats faster than a step back decodes (79 ms against about 33), and a request
+  cancelled at each repeat would show nothing until the key came up, so held steps go through a second
+  `ScrubFramePump`, of exact frames. A held Space toggles once. `VideoEditWindowScrubTests` (opt-in EDITOR_KEYS_PROBE=1,
+  real key events on the real window; fails with the handler on the bubble phase, without the held-Space guard, and
+  without the check for text boxes) and `VideoEditViewModelStillFramesTests`.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

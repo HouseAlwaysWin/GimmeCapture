@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
@@ -14,8 +15,8 @@ namespace GimmeCapture.Tests;
 /// The Compress editor's picture while its seek bar or its strip of pieces is dragged, through the real window and a
 /// clip whose every frame is its own grey: the frame under the pointer shows during the drag, from a keyframe near it,
 /// and the exact frame once the drag ends. Until 2026-11 nothing but the time moved until the release. Each test is
-/// opt-in by a switch of its own (EDITOR_SCRUB_PROBE=1, EDITOR_CUT_PLAY_PROBE=1): it sets up a headless Avalonia
-/// application, which a process can do only once.
+/// opt-in by a switch of its own (EDITOR_SCRUB_PROBE=1, EDITOR_CUT_PLAY_PROBE=1, EDITOR_KEYS_PROBE=1): it sets up a headless
+/// Avalonia application, which a process can do only once.
 /// </summary>
 public sealed class VideoEditWindowScrubTests : IDisposable
 {
@@ -76,6 +77,76 @@ public sealed class VideoEditWindowScrubTests : IDisposable
 
         window.Close();
         Dispatcher.UIThread.RunJobs();
+    }
+
+    [OptInFact("EDITOR_KEYS_PROBE=1")]
+    public void SpaceAndTheArrows_WorkThePlayback_ExceptWhereTheKeysAreForTyping()
+    {
+        SetUpAvalonia();
+        string clip = VideoTestClips.WriteConstantRate(Path.Combine(_dir, "clip.mp4"), Width, Height, FrameCount, Fps, gopSize: 10);
+        double duration = (double)FrameCount / Fps;
+        var vm = new VideoEditViewModel(
+            clip, duration, Fps, Width, Height,
+            VideoEditResult.Empty with { KeptRuns = [new VideoEditSegment(0, duration)] }, _ => { });
+        vm.OutputFileName = "name";
+        var window = new VideoEditWindow { DataContext = vm, Width = 960, Height = 760 };
+        window.Show();
+        Pump(() => !vm.IsPreparing && ShownFrame(vm) == 0, "the first frame");
+
+        // With the seek bar focused, which would take the arrows for moves of its own.
+        window.FindControl<Slider>("PositionSlider")!.Focus();
+        Tap(window, Key.Right, PhysicalKey.ArrowRight);
+        Pump(() => ShownFrame(vm) == 1, "a frame on");
+        Assert.Equal(1.0 / Fps, vm.PositionSeconds, 3);
+        Tap(window, Key.Left, PhysicalKey.ArrowLeft);
+        Pump(() => ShownFrame(vm) == 0, "a frame back");
+
+        // Held: the key repeats, and the picture follows to where it stopped.
+        for (int repeat = 0; repeat < 6; repeat++)
+        {
+            window.KeyPress(Key.Right, RawInputModifiers.None, PhysicalKey.ArrowRight, null);
+        }
+
+        window.KeyRelease(Key.Right, RawInputModifiers.None, PhysicalKey.ArrowRight, null);
+        Pump(() => ShownFrame(vm) == 6, "six frames on");
+
+        // Space with the Play button focused: once, not once for the shortcut and once for the button's click.
+        Button play = window.GetVisualDescendants().OfType<Button>().First(button => ReferenceEquals(button.Command, vm.PlayPauseCommand));
+        play.Focus();
+        Tap(window, Key.Space, PhysicalKey.Space);
+        Pump(() => vm.IsPlaying, "the playback");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(vm.IsPlaying);
+        Tap(window, Key.Space, PhysicalKey.Space);
+        Pump(() => !vm.IsPlaying, "the pause");
+
+        // Held, Space toggles once.
+        window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+        window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+        window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+        Pump(() => vm.IsPlaying, "the playback from a held key");
+        Assert.True(vm.IsPlaying);
+        Tap(window, Key.Space, PhysicalKey.Space);
+        Pump(() => !vm.IsPlaying, "the second pause");
+
+        // In the file name box the keys are for typing.
+        TextBox name = window.GetVisualDescendants().OfType<TextBox>().First(box => box.Text == "name");
+        name.Focus();
+        double before = vm.PositionSeconds;
+        Tap(window, Key.Space, PhysicalKey.Space);
+        Tap(window, Key.Left, PhysicalKey.ArrowLeft);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(vm.IsPlaying);
+        Assert.Equal(before, vm.PositionSeconds);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void Tap(Window window, Key key, PhysicalKey physical)
+    {
+        window.KeyPress(key, RawInputModifiers.None, physical, null);
+        window.KeyRelease(key, RawInputModifiers.None, physical, null);
     }
 
     [OptInFact("EDITOR_SCRUB_PROBE=1")]
