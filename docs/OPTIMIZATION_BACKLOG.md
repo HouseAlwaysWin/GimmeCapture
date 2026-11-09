@@ -21,8 +21,8 @@ tool.
   under it.
 - Since v0.74.0, `## Unreleased` holds 48 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+1f7e84fd`, installed by hand on 2026-11-08 in the evening over
-  `0.74.0+36c839ad` (by hand, that afternoon), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+937b851c`, installed by hand late on 2026-11-08 over
+  `0.74.0+1f7e84fd` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1223,7 +1223,14 @@ tool.
   reading them off the busy disk since a28e6305 took them out of the start-up list. `GetUpdateServiceAsync` makes it on
   the thread pool, and the check's and the About tab's requests run there too
   (`MainWindowViewModelUpdateCheckThreadTests`; their first request sets up the network on the calling thread). Next
-  sign-in: no stall after the timings line, none at 30 s, `beforeMain` still long at a busy `systemCpu`.
+  sign-in: no stall after the timings line, none at 30 s, `beforeMain` still long at a busy `systemCpu`. It came on
+  2026-11-09 at 20:13, on 937b851c: `launcher=2482ms/86MB beforeMain=1944/109 xaml=776/78 hotkeysAt=1215 systemCpu=77%`,
+  5.6 s from the launcher's start to the hotkeys, and nothing at 30 s. The stall after the timings line stayed: 2389 ms
+  at 9% of a processor (219 ms of it), with the priority and the fonts' read now behind it (`AfterStart: 28.3 MB in 404
+  ms` right after), so those were not its cause. Its clock starts at `UiThreadStallMonitor.Start`, and the stages known
+  to be in it come to about 170 ms. `Startup.AfterHotkeys` now splits the rest (`activation icon trayIcon menu
+  trayAttached init hostShown firstPump`, each wall/cpu): read it at the next cold start before changing anything. Only
+  a hotkey pressed in those seconds waits for it.
 - Seen 2026-11-07 18:32, not acted on: an overlay took 1227 ms to open (`services=509 viewModel=493`, the UI thread
   blocked at 5%, 13,174 page faults, a 345 ms gen2 GC), and the keyboard hook had got the key 171 ms late
   (`Hotkey.HookLate`): the whole machine was slow then, not the overlay's own work (61-117 ms at other opens that day).

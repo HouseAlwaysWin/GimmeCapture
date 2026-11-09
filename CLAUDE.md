@@ -244,7 +244,8 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
   likewise builds its view once `EnsureCompressInitializedAsync` is done.
   `Startup.Timings` in the log breaks a launch down by stage, each as `wall/cpu` ms; on Windows it adds what a slow
   start waited on (`systemCpu`, `hardFaults`, `disk`) and what `StartupPrefetch` read ahead of it (`prefetch`); a
-  start through the sign-in launcher adds its share (`launcher`), which comes before `beforeMain`.
+  start through the sign-in launcher adds its share (`launcher`), which comes before `beforeMain`. `Startup.AfterHotkeys`
+  splits what the UI thread does after that line ends, up to its first pump (the tray icon, the tray host's show).
 
 ### Accessibility
 - A screen reader names a button after its content, which for an icon is the icon's type name.

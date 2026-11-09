@@ -91,7 +91,9 @@ public partial class App : Application
                 StartupTrace.LaunchedToTray();
                 // With no main window, the tray host stands in as the lifetime's, which shows it: the visible top level
                 // the clipboard and dialogs need (see AppBootstrapper.CreateTrayHostWindow).
-                desktop.MainWindow = _bootstrapper.CreateTrayHostWindow();
+                var trayHost = _bootstrapper.CreateTrayHostWindow();
+                trayHost.Opened += OnTrayHostFirstOpened;
+                desktop.MainWindow = trayHost;
             }
 
             // The global hotkeys work from here. This used to wait for that hidden window to open, which a window launch
@@ -107,7 +109,13 @@ public partial class App : Application
             _bootstrapper.ScheduleCaptureOverlayWarmUp();
             // Behind the start's own work on this thread: from then on the app has no reason to stay ahead of other
             // programs, and the fonts' file can be read without its disk reads getting in the way.
-            Dispatcher.UIThread.Post(StartupSettled.UiWorkDone, DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    StartupTrace.AfterHotkeysDone();
+                    StartupSettled.UiWorkDone();
+                },
+                DispatcherPriority.Background);
 
             // Once the app settles into idle, do a FULL trim (GC to collect startup/JIT garbage + working-set
             // reclaim). Decoupled from the window-shown activity so it isn't immediately cancelled; the scheduler
@@ -140,6 +148,17 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+        StartupTrace.AfterHotkeys("init");
+    }
+
+    private void OnTrayHostFirstOpened(object? sender, EventArgs e)
+    {
+        if (sender is Avalonia.Controls.Window window)
+        {
+            window.Opened -= OnTrayHostFirstOpened;
+        }
+
+        StartupTrace.AfterHotkeys("hostShown");
     }
 
     /// <summary>

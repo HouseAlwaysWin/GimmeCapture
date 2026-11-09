@@ -48,6 +48,7 @@ internal static class StartupTrace
     private static string _launcher = "";
     private static bool _cameThroughLauncher;
     private static bool _written;
+    private static StepTimings? _afterHotkeys;
 
     /// <summary>The end of a stage, and the process's CPU time by then.</summary>
     internal readonly record struct Stage(string Name, long Timestamp, TimeSpan Cpu);
@@ -184,7 +185,31 @@ internal static class StartupTrace
 
     internal static void MarkSettingsApplied() => Mark(SettingsApplied);
 
-    internal static void MarkHotkeysInitialized() => Mark(HotkeysInitialized);
+    internal static void MarkHotkeysInitialized()
+    {
+        Mark(HotkeysInitialized);
+        _afterHotkeys = new StepTimings();
+    }
+
+    /// <summary>
+    /// A step of what the UI thread does between the hotkeys and its first pump, which the timings line ends before. The
+    /// sign-ins of 2026-11-07 and -09 spent 2.7 and 2.4 s there at 10% of a processor, and moving the fonts' read and the
+    /// priority out of the way did not change that. UI thread only.
+    /// </summary>
+    internal static void AfterHotkeys(string step) => _afterHotkeys?.Mark(step);
+
+    /// <summary>The UI thread has got to its first pump: writes the steps as <c>Startup.AfterHotkeys</c>, once.</summary>
+    internal static void AfterHotkeysDone()
+    {
+        if (_afterHotkeys is not { } steps)
+        {
+            return;
+        }
+
+        _afterHotkeys = null;
+        steps.Mark("firstPump");
+        AppLog.Information("Startup.AfterHotkeys", steps.ToString());
+    }
 
     /// <summary>The line, but for <see cref="FormatWaits"/>.</summary>
     internal static string Format(in Timings timings)
@@ -269,4 +294,31 @@ internal static class StartupTrace
     }
 
     private static string Ms(double ms) => ms.ToString("F0", CultureInfo.InvariantCulture);
+}
+
+/// <summary>A line of steps, each as <c>name=wall/cpu</c> in ms since the one before it. Used on one thread.</summary>
+internal sealed class StepTimings
+{
+    private readonly StringBuilder _line = new();
+    private long _previous = Stopwatch.GetTimestamp();
+    private TimeSpan _previousCpu = Environment.CpuUsage.TotalTime;
+
+    internal void Mark(string step)
+    {
+        long now = Stopwatch.GetTimestamp();
+        TimeSpan cpu = Environment.CpuUsage.TotalTime;
+        if (_line.Length > 0)
+        {
+            _line.Append(' ');
+        }
+
+        _line.Append(step).Append('=')
+            .Append(Stopwatch.GetElapsedTime(_previous, now).TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture))
+            .Append('/')
+            .Append((cpu - _previousCpu).TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture));
+        _previous = now;
+        _previousCpu = cpu;
+    }
+
+    public override string ToString() => _line.ToString();
 }

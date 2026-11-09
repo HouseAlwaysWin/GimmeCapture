@@ -44,18 +44,21 @@ public sealed class TrayController
 
         // What a toast opens, an update found with no main window up among them.
         _bootstrapper.CreateMainViewModel().ShowMainWindowAction = ShowMainWindow;
+        StartupTrace.AfterHotkeys("activation");
 
         try
         {
             var loc = LocalizationService.Instance;
             var assets = Avalonia.Platform.AssetLoader.Open(new Uri("avares://GimmeCapture/Assets/kitsune_icon_64.png"));
             var icon = new WindowIcon(assets);
+            StartupTrace.AfterHotkeys("icon");
 
             var trayIcon = new TrayIcon
             {
                 Icon = icon,
                 ToolTipText = "GimmeCapture (Kitsune Mode)"
             };
+            StartupTrace.AfterHotkeys("trayIcon");
 
             trayIcon.Clicked += (s, e) => ShowMainWindow();
 
@@ -122,7 +125,9 @@ public sealed class TrayController
             var trayIcons = new TrayIcons();
             trayIcons.Add(trayIcon);
 
+            StartupTrace.AfterHotkeys("menu");
             _app.SetValue(TrayIcon.IconsProperty, trayIcons);
+            StartupTrace.AfterHotkeys("trayAttached");
         }
         catch (Exception ex)
         {

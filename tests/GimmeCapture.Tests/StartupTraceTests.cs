@@ -67,5 +67,16 @@ public sealed class StartupTraceTests
         Assert.Equal("", StartupTrace.FormatWaits(null, null, (null, null)));
     }
 
+    [Fact]
+    public void StepTimings_GiveEachStepItsLengthAndCpuTime_InTheOrderTheyCame()
+    {
+        var steps = new StepTimings();
+
+        steps.Mark("icon");
+        steps.Mark("trayAttached");
+
+        Assert.Matches(@"^icon=\d+/\d+ trayAttached=\d+/\d+$", steps.ToString());
+    }
+
     private static long At(double ms) => (long)Math.Round(ms * Stopwatch.Frequency / 1000);
 }
