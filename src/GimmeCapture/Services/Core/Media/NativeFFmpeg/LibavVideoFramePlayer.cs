@@ -192,7 +192,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                 AVFormatContext* fmt = null;
                 try
                 {
-                    ThrowIfErr(ffmpeg.avformat_open_input(&fmt, videoPath, null, null), "open_input");
+                    ThrowIfErr(LibavInput.Open(&fmt, videoPath), "open_input");
                     ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
 
                     if (fmt->duration > 0)
@@ -234,7 +234,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                 AVFormatContext* fmt = null;
                 try
                 {
-                    ThrowIfErr(ffmpeg.avformat_open_input(&fmt, videoPath, null, null), "open_input");
+                    ThrowIfErr(LibavInput.Open(&fmt, videoPath), "open_input");
                     ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
                     return ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0) >= 0;
                 }
@@ -260,7 +260,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                 AVFormatContext* fmt = null;
                 try
                 {
-                    ThrowIfErr(ffmpeg.avformat_open_input(&fmt, videoPath, null, null), "open_input");
+                    ThrowIfErr(LibavInput.Open(&fmt, videoPath), "open_input");
                     ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
                     int v = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
                     if (v < 0)
@@ -293,7 +293,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                 AVFormatContext* fmt = null;
                 try
                 {
-                    ThrowIfErr(ffmpeg.avformat_open_input(&fmt, videoPath, null, null), "open_input");
+                    ThrowIfErr(LibavInput.Open(&fmt, videoPath), "open_input");
                     ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
                     int a = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);
                     return a < 0 ? 0 : fmt->streams[a]->codecpar->ch_layout.nb_channels;
@@ -424,7 +424,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     private static unsafe (long OpenMs, long FindMs) OpenForProbe(AVFormatContext** fmt, string videoPath)
     {
         var stage = Stopwatch.StartNew();
-        ThrowIfErr(ffmpeg.avformat_open_input(fmt, videoPath, null, null), "open_input");
+        ThrowIfErr(LibavInput.Open(fmt, videoPath), "open_input");
         long openMs = stage.ElapsedMilliseconds;
         stage.Restart();
         ThrowIfErr(ffmpeg.avformat_find_stream_info(*fmt, null), "find_stream_info");
@@ -682,7 +682,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     AVDictionary* openOpts = null;
                     ffmpeg.av_dict_set(&openOpts, "analyzeduration", "5000000", 0);
                     ffmpeg.av_dict_set(&openOpts, "probesize", "15000000", 0);
-                    int openRc = ffmpeg.avformat_open_input(&fmt, videoPath, null, &openOpts);
+                    int openRc = LibavInput.Open(&fmt, videoPath, &openOpts);
                     ffmpeg.av_dict_free(&openOpts);
                     ThrowIfErr(openRc, "open_input");
                     long openMs = openStage.ElapsedMilliseconds; openStage.Restart();

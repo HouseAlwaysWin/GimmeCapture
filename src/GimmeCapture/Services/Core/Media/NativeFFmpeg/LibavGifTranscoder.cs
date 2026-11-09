@@ -735,7 +735,7 @@ internal static class LibavGifTranscoder
             try
             {
                 AVFormatContext* input = null;
-                ThrowIfErr(ffmpeg.avformat_open_input(&input, inputPath, null, null), "gif_open_input");
+                ThrowIfErr(LibavInput.Open(&input, inputPath), "gif_open_input");
                 _input = input;
                 ThrowIfErr(ffmpeg.avformat_find_stream_info(_input, null), "gif_find_stream_info");
                 _videoStream = ffmpeg.av_find_best_stream(_input, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);

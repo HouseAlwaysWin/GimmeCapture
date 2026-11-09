@@ -21,7 +21,7 @@ internal static class LibavAudioStreamProbe
         AVFormatContext* fmt = null;
         try
         {
-            ThrowIfErr(ffmpeg.avformat_open_input(&fmt, path, null, null), "audio_probe_open");
+            ThrowIfErr(LibavInput.Open(&fmt, path), "audio_probe_open");
             ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "audio_probe_find_stream_info");
             return ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0) >= 0;
         }

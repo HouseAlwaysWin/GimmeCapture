@@ -19,10 +19,10 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.74.0, `## Unreleased` holds 48 entries (2026-11-09).
+- Since v0.74.0, `## Unreleased` holds 49 entries (2026-11-09).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+937b851c`, installed by hand late on 2026-11-08 over
-  `0.74.0+1f7e84fd` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.74.0+7b98611c`, installed by hand on the evening of 2026-11-09 over
+  `0.74.0+937b851c` (by hand, the night before), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1425,6 +1425,19 @@ tool.
   coming off before the compressed frame (opt-in COMPARE_SEEK_PROBE=1). Left: in the first window of a playback, the one
   that starts partway, the compressed side runs 1-2 frames behind the original; it is 0 from the second window on. Space
   and the arrows do nothing in the compare (`TakesTransportKeys`), and Space closes it only with the toggle focused by Tab.
+- Done since batch 1 (2026-11-09, "繼續優化影片編輯"): **an MP4 split over thousands of top-level atoms took 36-46 s to
+  open** (Compress and the editor). The user's log over five runs (11-03 to 11-08): the first open of the window in a
+  run probed its 78-file folder, on a hard disk, in 66-72 s, and the same four files took over 10 s each, up to 45.8,
+  all in `avformat_open_input`, not a sleeping disk as noted on 11-07. Those four have the index first and then
+  1,468-3,162 `mdat` atoms; libav's reader stops at the first `mdat` only if that runs to the end of the file, and
+  otherwise reads every atom's header looking for fragments. `AVFMT_FLAG_IGNIDX` makes it stop there, the walk then
+  happening as reading reaches each atom. `Mp4Layout` allows that only for an index first with no `mvex`, then a second
+  `mdat` straight after the first (it would make other readers ignore their indexes and leave a fragmented file
+  without its length), and `LibavInput.Open` is what the queue, the editor, the pin and the exporters open a user's
+  file with. On those four, packet by packet from the start and after seeks to 25, 50 and 90%, the same packets; an open
+  38-93 reads against 1,503-3,225; the first seek far ahead pays for the atoms it passes (730-1,586 reads to the
+  middle), once. Over the whole folder exactly those four were flagged, 313 reads against 9,757. `Mp4LayoutTests`,
+  `LibavInputTests` (a real clip rewritten with its `mdat` split in two).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

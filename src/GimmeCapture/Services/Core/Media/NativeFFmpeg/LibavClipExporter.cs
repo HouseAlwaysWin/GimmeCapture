@@ -454,7 +454,7 @@ internal static class LibavClipExporter
 
         try
         {
-            ThrowIfErr(ffmpeg.avformat_open_input(&inFmt, inputPath, null, null), "clip_open_input");
+            ThrowIfErr(LibavInput.Open(&inFmt, inputPath), "clip_open_input");
             ThrowIfErr(ffmpeg.avformat_find_stream_info(inFmt, null), "clip_find_stream_info");
             int videoIn = ffmpeg.av_find_best_stream(inFmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
             if (videoIn < 0)
@@ -1244,7 +1244,7 @@ internal static class LibavClipExporter
         AVFormatContext* fmt = null;
         try
         {
-            if (ffmpeg.avformat_open_input(&fmt, inputPath, null, null) < 0) return 30;
+            if (LibavInput.Open(&fmt, inputPath) < 0) return 30;
             if (ffmpeg.avformat_find_stream_info(fmt, null) < 0) return 30;
             int v = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
             return v < 0 ? 30 : ResolveFps(fmt->streams[v]);

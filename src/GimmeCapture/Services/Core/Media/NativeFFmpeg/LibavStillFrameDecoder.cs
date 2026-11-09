@@ -499,7 +499,7 @@ internal sealed class LibavStillFrameDecoder : IDisposable
         AVDictionary* options = null;
         ffmpeg.av_dict_set(&options, "analyzeduration", "5000000", 0);
         ffmpeg.av_dict_set(&options, "probesize", "15000000", 0);
-        int opened = ffmpeg.avformat_open_input(&input, VideoPath, null, &options);
+        int opened = LibavInput.Open(&input, VideoPath, &options);
         ffmpeg.av_dict_free(&options);
         ThrowIfErr(opened, "still_open_input");
         _input = input;

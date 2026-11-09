@@ -127,7 +127,7 @@ internal static class LibavPinAudioPcmDecoder
 
         try
         {
-            ThrowIfErr(ffmpeg.avformat_open_input(&fmt, path, null, null), "pin_audio_open");
+            ThrowIfErr(LibavInput.Open(&fmt, path), "pin_audio_open");
             ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "pin_audio_find_stream_info");
 
             int audioIx = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);

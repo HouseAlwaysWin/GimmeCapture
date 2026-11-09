@@ -96,7 +96,7 @@ internal static class LibavWebmTranscoder
 
         try
         {
-            ThrowIfErr(ffmpeg.avformat_open_input(&inFmt, inputPath, null, null), "webm_open_input");
+            ThrowIfErr(LibavInput.Open(&inFmt, inputPath), "webm_open_input");
             ThrowIfErr(ffmpeg.avformat_find_stream_info(inFmt, null), "webm_find_stream_info");
             videoIn = ffmpeg.av_find_best_stream(inFmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
             if (videoIn < 0)

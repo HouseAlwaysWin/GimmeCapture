@@ -164,6 +164,10 @@
 
 ### 🎬 Video editing
 
+- **A video whose data is split into thousands of pieces opens at once.** Some tools write an MP4 with its picture and
+  sound in thousands of separate blocks. Opening one read the header of every block first, 36-46 seconds each on a hard
+  disk, every time: for the queue, the editor and an encode alike. They now open like any other, and the same frames
+  come out.
 - **Video editing has a window of its own.** The batch queue and its output settings were two sub-tabs of one tab in
   the 800×520 main window: the file list had 240 pixels under a stack of other controls, and no setting could be
   changed with the size estimates in view. The window shows both side by side, the queue taking the full height. It
