@@ -342,13 +342,22 @@ public sealed class LibavStillFrameDecoderPiecesTests : IDisposable
         var decoder = new LibavStillFrameDecoder(WriteEncodedClip(), Width, Height);
         var firstShown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cts = new CancellationTokenSource();
+        // The first frame holds the playback until the decoder is disposed. On a busy machine this test got back from the
+        // await below only after the whole 2 s playback had ended, and Dispose then closed the file itself.
+        using var disposed = new ManualResetEventSlim();
         Task playback = decoder.PlayPiecesAsync(
             new PlaybackPieces([Piece(0, EncodedFrames, speed: 0.5)], 0, 0, () => false),
-            (_, _) => firstShown.TrySetResult(), cts.Token);
+            (_, _) =>
+            {
+                firstShown.TrySetResult();
+                disposed.Wait(Timeout);
+            },
+            cts.Token);
         await firstShown.Task.WaitAsync(Timeout);
 
         decoder.Dispose();
         Assert.True(decoder.IsOpen); // the playback still has it
+        disposed.Set();
         cts.Cancel();
         await playback.WaitAsync(Timeout);
 
