@@ -71,6 +71,16 @@ public partial class MainWindow
                 return result == ConfirmationResult.Yes;
             };
 
+            vm.ConfirmResetToDefaultAction = async () =>
+            {
+                var result = await ConfirmationDialog.ShowConfirmation(
+                    this,
+                    LocalizationService.Instance["ResetDefault"],
+                    LocalizationService.Instance["ResetDefaultConfirm"],
+                    ConfirmationMode.YesNo);
+                return result == ConfirmationResult.Yes;
+            };
+
             vm.HotkeyService.OnHotkeyRegistrationFailed = (id, hotkey, error) =>
             {
                 // Temporary registrations (an unfocused overlay's capture keys, a scrolling session's
@@ -119,6 +129,7 @@ public partial class MainWindow
         vm.PickGgufFileAction = null;
         vm.ConfirmAction = null;
         vm.ConfirmYesNoAction = null;
+        vm.ConfirmResetToDefaultAction = null;
         vm.UseWindowlessHandlers();
         vm.ShowUpdateDialogAction = null;
         _processingSubscription?.Dispose();

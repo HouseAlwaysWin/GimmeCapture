@@ -241,6 +241,7 @@
   "StatusSaveFailed": "儲存失敗：{0}",
   "SaveSettings": "保存",
   "ResetDefault": "重設預設",
+  "ResetDefaultConfirm": "要將設定還原為預設值嗎？\n\n包括熱鍵、「開機自動啟動」、「省記憶體」和 AI 資源路徑。\n這個動作無法復原。",
   "UnsavedTitle": "尚未儲存變更",
   "UnsavedMessage": "您有些設定尚未儲存。是否要在關閉前保存這些變更？",
   "SaveFailed": "設定儲存失敗。請檢查設定檔是否被佔用或唯讀。",

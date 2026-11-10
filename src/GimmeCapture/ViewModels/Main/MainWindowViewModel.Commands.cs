@@ -81,8 +81,20 @@ public partial class MainWindowViewModel
     Task<CaptureLaunchResult> ISnipWindowHost.RunCaptureActionAsync(CaptureMode mode, Func<Task> captureAsync) =>
         RunCaptureActionAsync(mode, captureAsync);
 
+    /// <summary>
+    /// Set by the view: asks before <see cref="ResetToDefaultCommand"/> changes anything. The button sits beside the
+    /// video-editing one and nothing undoes it: one click there reset 11 settings on 2026-11-09, unnoticed until the next
+    /// install. Unlike the editor's reset, null is not a yes: with no one to ask, nothing is reset.
+    /// </summary>
+    public Func<Task<bool>>? ConfirmResetToDefaultAction { get; set; }
+
     private async Task ResetToDefault()
     {
+        if (ConfirmResetToDefaultAction is not { } confirm || !await confirm())
+        {
+            return;
+        }
+
         _isDataLoading = true;
         
         // Reset AppSettings directly

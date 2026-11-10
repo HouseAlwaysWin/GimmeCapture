@@ -38,6 +38,12 @@
   one sound runs straight through the cuts and round the loop, with no gap, and the picture stays within 4 ms of it.
 - **Play at the end of a clip starts it over.** With Loop off, it showed the last frame again and stopped.
 
+### 🛡️ Reliability
+
+- **Reset Defaults asks first.** One click on the button beside Video Editing reset the settings, and nothing undoes
+  that: the hotkeys, Run On Startup, Use less memory and the AI Resources Path among them. It now asks, and No leaves
+  every setting as it was.
+
 ## v0.75.0 - 2026-11-09
 
 ### ⚡ Performance

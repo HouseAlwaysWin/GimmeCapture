@@ -241,6 +241,7 @@
   "StatusSaveFailed": "Save failed: {0}",
   "SaveSettings": "Save",
   "ResetDefault": "Reset Defaults",
+  "ResetDefaultConfirm": "Reset the settings to their defaults?\n\nThat includes your hotkeys, \"Run On Startup\", \"Use less memory\" and the AI Resources Path.\nThis cannot be undone.",
   "UnsavedTitle": "Unsaved Changes",
   "UnsavedMessage": "You have unsaved changes. Would you like to save them before closing?",
   "SaveFailed": "Failed to save settings. Please check if the configuration file is writable.",

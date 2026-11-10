@@ -237,6 +237,7 @@
   "StatusSaveFailed": "保存に失敗しました: {0}",
   "SaveSettings": "保存",
   "ResetDefault": "初期設定に戻す",
+  "ResetDefaultConfirm": "設定を初期状態に戻しますか？\n\nショートカット、「スタートアップ起動」、「メモリを節約」、AIリソースのパスも含まれます。\nこの操作は元に戻せません。",
   "UnsavedTitle": "未保存の変更",
   "UnsavedMessage": "保存されていない変更があります。閉じる前に保存しますか？",
   "SaveFailed": "設定の保存に失敗しました。設定ファイルが書き込み可能か確認してください。",
