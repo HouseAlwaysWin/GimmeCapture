@@ -17,10 +17,31 @@ internal static class CompressEncodeMath
     /// Maps the UI CRF (x265 scale) into the selected encoder's native scale: x264/x265 clamp to 1-51; AV1
     /// adds <see cref="Av1CrfOffset"/> and clamps to 1-63. Pure/static so tests can assert the mapping.
     /// </summary>
-    internal static int EncoderScaleCrf(VideoCodec codec, int uiCrf) =>
-        codec == VideoCodec.Av1
-            ? Math.Clamp(uiCrf + Av1CrfOffset, 1, 63)
-            : Math.Clamp(uiCrf, 1, 51);
+    internal static int EncoderScaleCrf(VideoCodec codec, int uiCrf, bool hardware = false)
+    {
+        int value = uiCrf + (hardware ? HardwareCqOffset(codec) : SoftwareOffset(codec));
+        return Math.Clamp(value, 1, codec == VideoCodec.Av1 ? 63 : 51);
+    }
+
+    private static int SoftwareOffset(VideoCodec codec) => codec == VideoCodec.Av1 ? Av1CrfOffset : 0;
+
+    /// <summary>The software encoder's value for what <see cref="EncoderScaleCrf"/> gave NVENC as <paramref name="cq"/>.</summary>
+    internal static int SoftwareScaleCrf(VideoCodec codec, int cq) => cq - HardwareCqOffset(codec) + SoftwareOffset(codec);
+
+    /// <summary>
+    /// How far NVENC's constant-quality value sits above the window's slider for about the VMAF the software encoder
+    /// gives at that slider. Measured at 22 on three real clips (480p, 1080p and 720p, RTX 4070 SUPER): the
+    /// software's VMAF 94.3, 95.3 and 90.1 for x265; hevc_nvenc at 30 gave 93.2, 95.0 and 91.7.
+    /// </summary>
+    internal static int HardwareCqOffset(VideoCodec codec) => codec switch
+    {
+        VideoCodec.Av1 => 15,
+        VideoCodec.H265 => 8,
+        _ => 6,
+    };
+
+    // NVENC's files at those offsets against the software encoder's: 0.85, 1.22 and 1.78 times for H.265 on those clips.
+    private const double HardwareSizeFactor = 1.3;
 
     /// <summary>
     /// Rough output-size estimate (bytes) for CRF mode from source geometry/duration and the chosen knobs.
@@ -29,7 +50,7 @@ internal static class CompressEncodeMath
     /// </summary>
     internal static long EstimateOutputSizeBytes(
         int srcWidth, int srcHeight, int srcFps, double durationSeconds,
-        int maxHeight, int maxFps, VideoCodec codec, int crf, int audioKbps)
+        int maxHeight, int maxFps, VideoCodec codec, int crf, int audioKbps, bool hardware = false)
     {
         if (durationSeconds <= 0 || srcWidth <= 0 || srcHeight <= 0)
         {
@@ -48,7 +69,9 @@ internal static class CompressEncodeMath
             VideoCodec.H265 => (0.050, 23.0),
             _ => (0.085, 23.0),
         };
-        double bpp = bppRef * Math.Pow(2.0, -(crf - anchor) / 6.0);
+        // The model is the software encoders': NVENC's value goes back to their scale, and its file comes out larger.
+        int softwareCrf = hardware ? SoftwareScaleCrf(codec, crf) : crf;
+        double bpp = bppRef * Math.Pow(2.0, -(softwareCrf - anchor) / 6.0) * (hardware ? HardwareSizeFactor : 1.0);
         double videoBytes = (double)w * h * fps * bpp * durationSeconds / 8.0;
         double audioBytes = audioKbps > 0 ? audioKbps * 1000.0 / 8.0 * durationSeconds : 0;
         return (long)(videoBytes + audioBytes);

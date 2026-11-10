@@ -162,6 +162,8 @@
   "CompressPresetLabel": "編碼預設",
   "CompressCrfHint": "CRF 越低畫質越好、檔案越大。18–23 為視覺高畫質；28 以上較小。",
   "CompressDropAudio": "移除音軌",
+  "CompressHardwareEncoder": "使用 NVIDIA 顯卡編碼（快很多，同畫質檔案較大）",
+  "CompressHardwareEncoderFailed": "NVIDIA 顯卡編碼失敗，改用處理器編碼。",
   "CompressAudioBitrateLabel": "音訊位元率",
   "CompressAudioBitrateAuto": "自動",
   "CompressAudioChannelsLabel": "聲道",

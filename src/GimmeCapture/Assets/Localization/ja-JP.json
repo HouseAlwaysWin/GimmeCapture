@@ -162,6 +162,8 @@
   "CompressPresetLabel": "エンコードプリセット",
   "CompressCrfHint": "CRF が低いほど高画質・大容量。18〜23 は視覚的に高品質、28 以上は小さめ。",
   "CompressDropAudio": "音声トラックを削除",
+  "CompressHardwareEncoder": "NVIDIA GPU でエンコード（大幅に高速、同じ画質ではファイルが大きめ）",
+  "CompressHardwareEncoderFailed": "NVIDIA GPU エンコードに失敗したため、CPU でエンコードします。",
   "CompressAudioBitrateLabel": "音声ビットレート",
   "CompressAudioBitrateAuto": "自動",
   "CompressAudioChannelsLabel": "チャンネル",

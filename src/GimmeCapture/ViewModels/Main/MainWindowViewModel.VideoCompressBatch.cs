@@ -915,7 +915,19 @@ public partial class MainWindowViewModel
 
         IsBatchRunning = true;
         _batchRunner.Start(item, snap, ext, outputFolder, appendDate, progress, resumeProgress, keptRuns, burnIn,
-            PersistItemState, OnAllWorkersDone);
+            PersistItemState, OnHardwareEncoderFailed, OnAllWorkersDone);
+    }
+
+    private bool _hardwareEncoderFailureShown;
+
+    // Once a batch: every file of one would say the same.
+    private void OnHardwareEncoderFailed()
+    {
+        if (!_hardwareEncoderFailureShown)
+        {
+            _hardwareEncoderFailureShown = true;
+            ShowToastAction?.Invoke(Localization["CompressHardwareEncoderFailed"], ToastSeverity.Info);
+        }
     }
 
     // Batch completion (UI-thread worker continuation from the runner): the runner has already torn down its
@@ -923,6 +935,7 @@ public partial class MainWindowViewModel
     private void OnAllWorkersDone()
     {
         IsBatchRunning = false;
+        _hardwareEncoderFailureShown = false;
 
         int done = CompressQueue.Count(i => i.Status == CompressQueueStatus.Done);
         CompressStatusText = $"{Localization["CompressQueueComplete"]}  ({done}/{CompressQueue.Count})";

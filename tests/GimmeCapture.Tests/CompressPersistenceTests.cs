@@ -101,7 +101,8 @@ public class CompressPersistenceTests
                 Crf = 20,
                 UseTargetSize = true,
                 TargetSizeMB = 40m,
-                AudioChannels = 1
+                AudioChannels = 1,
+                UseHardwareEncoder = true
             },
             OutputFolder = @"D:\Out",
             AppendDate = false,
@@ -118,6 +119,7 @@ public class CompressPersistenceTests
         Assert.True(round.Settings.UseTargetSize);
         Assert.Equal(40m, round.Settings.TargetSizeMB);
         Assert.Equal(1, round.Settings.AudioChannels);
+        Assert.True(round.Settings.UseHardwareEncoder);
         Assert.Equal(@"D:\Out", round.OutputFolder);
         Assert.False(round.AppendDate);
         Assert.Equal(3, round.ParallelCount);

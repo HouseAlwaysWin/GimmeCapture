@@ -249,6 +249,18 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _selectedCompressCodecOption, value);
     }
 
+    // Encode on the NVIDIA GPU: 5-8 times the speed of x265 at medium on three real clips, for files 6-48% larger at the
+    // same quality. A choice, so off until asked for.
+    private bool _compressUseHardwareEncoder;
+    public bool CompressUseHardwareEncoder
+    {
+        get => _compressUseHardwareEncoder;
+        set => this.RaiseAndSetIfChanged(ref _compressUseHardwareEncoder, value);
+    }
+
+    /// <summary>GIF, WebM and audio-only outputs have encoders of their own.</summary>
+    public bool CanUseHardwareEncoder => CanUseHardwareEncoderFor(SelectedCompressFormat);
+
     // Target-size mode: encode at a computed average bitrate so the output lands near a chosen file size.
     private bool _compressUseTargetSize;
     public bool CompressUseTargetSize
@@ -288,6 +300,7 @@ public partial class MainWindowViewModel
         {
             this.RaiseAndSetIfChanged(ref _selectedCompressFormat, value);
             this.RaisePropertyChanged(nameof(IsAudioOnlyFormatSelected));
+            this.RaisePropertyChanged(nameof(CanUseHardwareEncoder));
         }
     }
 
@@ -382,31 +395,40 @@ public partial class MainWindowViewModel
         return BuildSettingsSnapshot();
     }
 
-    private CompressSettingsSnapshot SnapshotFromPreset(CompressPreset p) => new(
-        p.Codec,
-        CompressEncodeMath.EncoderScaleCrf(p.Codec, p.Crf),
-        p.MaxHeight,
-        p.MaxFps,
-        CompressPresetOptions.Contains(p.Preset) ? p.Preset : "veryfast",
-        p.DropAudio,
-        p.AudioBitrateKbps,
-        p.AudioChannels,
-        p.UseTargetSize,
-        p.TargetSizeMB > 0 ? p.TargetSizeMB : 25m,
-        p.UseTargetSize && p.Codec == VideoCodec.H264,
-        p.Denoise,
-        p.Sharpen,
-        p.Deblock,
-        p.Grayscale);
+    internal CompressSettingsSnapshot SnapshotFromPreset(CompressPreset p)
+    {
+        bool hardware = p.UseHardwareEncoder && CanUseHardwareEncoderFor(FormatOf(p));
+        return new CompressSettingsSnapshot(
+            p.Codec,
+            CompressEncodeMath.EncoderScaleCrf(p.Codec, p.Crf, hardware),
+            p.MaxHeight,
+            p.MaxFps,
+            CompressPresetOptions.Contains(p.Preset) ? p.Preset : "veryfast",
+            p.DropAudio,
+            p.AudioBitrateKbps,
+            p.AudioChannels,
+            p.UseTargetSize,
+            p.TargetSizeMB > 0 ? p.TargetSizeMB : 25m,
+            p.UseTargetSize && p.Codec == VideoCodec.H264 && !hardware,
+            p.Denoise,
+            p.Sharpen,
+            p.Deblock,
+            p.Grayscale,
+            hardware);
+    }
+
+    internal static bool CanUseHardwareEncoderFor(string format) =>
+        !IsAudioOnlyFormat(format)
+        && !format.Equals("GIF", StringComparison.OrdinalIgnoreCase)
+        && !format.Equals("WebM", StringComparison.OrdinalIgnoreCase);
 
     // Output container/extension for an item: its bundle's format if picked, else the live format.
-    private string EffectiveFormatFor(CompressQueueItem? item)
-    {
-        string fmt = item?.SelectedPreset is { } p && !ReferenceEquals(p, _currentSettingsChoice)
-            ? p.Format
+    private string EffectiveFormatFor(CompressQueueItem? item) =>
+        item?.SelectedPreset is { } p && !ReferenceEquals(p, _currentSettingsChoice)
+            ? FormatOf(p)
             : SelectedCompressFormat;
-        return CompressOutputFormats.Contains(fmt) ? fmt : SelectedCompressFormat;
-    }
+
+    private string FormatOf(CompressPreset p) => CompressOutputFormats.Contains(p.Format) ? p.Format : SelectedCompressFormat;
 
     // A built-in "quick recipe": applies a bundle of the global encode knobs in one pick. Distinct from the
     // user-savable CompressPreset (those persist); these are fixed. IsCustom is a no-op "leave as-is" entry.
@@ -569,6 +591,13 @@ public partial class MainWindowViewModel
                 x => x.CompressDeblock, x => x.CompressGrayscale,
                 (a, b, c, d) => Unit.Default)
             .Subscribe(_ => RecomputeQueueEstimates());
+        this.WhenAnyValue(x => x.CompressUseHardwareEncoder)
+            .Skip(1)
+            .Subscribe(_ =>
+            {
+                RecomputeQueueEstimates();
+                SaveCompressSession();
+            });
         this.WhenAnyValue(
                 x => x.SelectedCompressDenoise, x => x.SelectedCompressSharpen,
                 x => x.CompressDeblock, x => x.CompressGrayscale,
@@ -615,7 +644,8 @@ public partial class MainWindowViewModel
         Denoise = SelectedCompressDenoise?.Value ?? DenoiseMode.Off,
         Sharpen = SelectedCompressSharpen?.Value ?? SharpenMode.Off,
         Deblock = CompressDeblock,
-        Grayscale = CompressGrayscale
+        Grayscale = CompressGrayscale,
+        UseHardwareEncoder = CompressUseHardwareEncoder
     };
 
     private void SaveCompressPreset()
@@ -676,6 +706,7 @@ public partial class MainWindowViewModel
         SelectedCompressSharpen = Array.Find(CompressSharpenOptions, o => o.Value == p.Sharpen) ?? CompressSharpenOptions[0];
         CompressDeblock = p.Deblock;
         CompressGrayscale = p.Grayscale;
+        CompressUseHardwareEncoder = p.UseHardwareEncoder;
     }
 
     private bool _restoringSession;
@@ -796,7 +827,8 @@ public partial class MainWindowViewModel
 
         int audioKbps = s.DropAudio ? 0 : (s.AudioBitrateKbps > 0 ? s.AudioBitrateKbps : 128);
         long est = CompressEncodeMath.EstimateOutputSizeBytes(
-            item.ProbedWidth, item.ProbedHeight, item.ProbedFps, dur, s.MaxHeight, s.MaxFps, s.Codec, s.Crf, audioKbps);
+            item.ProbedWidth, item.ProbedHeight, item.ProbedFps, dur, s.MaxHeight, s.MaxFps, s.Codec, s.Crf, audioKbps,
+            s.UseHardwareEncoder);
         return $"{prefix}: ≈ {FileSizeFormatter.Format(est)}";
     }
 
@@ -804,12 +836,13 @@ public partial class MainWindowViewModel
     // Services/Core/Media/CompressSettingsSnapshot.cs so the compress pipeline can consume it directly.
     // The AV1 CRF offset + EncoderScaleCrf mapping now live in Services/Core/Media/CompressEncodeMath.cs.
 
-    private CompressSettingsSnapshot BuildSettingsSnapshot()
+    internal CompressSettingsSnapshot BuildSettingsSnapshot()
     {
         VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
+        bool hardware = CompressUseHardwareEncoder && CanUseHardwareEncoder;
         return new CompressSettingsSnapshot(
             codec,
-            CompressEncodeMath.EncoderScaleCrf(codec, CompressCrf),
+            CompressEncodeMath.EncoderScaleCrf(codec, CompressCrf, hardware),
             SelectedCompressResolution?.MaxHeight ?? 0,
             SelectedCompressFps?.Fps ?? 0,
             SelectedCompressPreset,
@@ -819,11 +852,12 @@ public partial class MainWindowViewModel
             CompressUseTargetSize,
             CompressTargetSizeMB ?? 25m,
             // True two-pass replaces the corrective pass for H.264 target-size; H.265 keeps single-pass + correct.
-            CompressUseTargetSize && codec == VideoCodec.H264,
+            CompressUseTargetSize && codec == VideoCodec.H264 && !hardware,
             SelectedCompressDenoise?.Value ?? DenoiseMode.Off,
             SelectedCompressSharpen?.Value ?? SharpenMode.Off,
             CompressDeblock,
-            CompressGrayscale);
+            CompressGrayscale,
+            hardware);
     }
 
     // Toast shown when the user pauses a non-CRF file: only CRF mode can resume mid-encode after a restart.
@@ -843,7 +877,14 @@ public partial class MainWindowViewModel
         // Rotation is applied at display time to BOTH compare frames, not baked into the sample.
         var options = snap.ToExportOptions(rotationDegrees: 0, targetVideoBitrateKbps: targetKbps);
 
-        return new CompareViewModel(source, item.ProbedDuration, item.ProbedFps, options, rotationDegrees, anchorSeconds);
+        // With the GPU asked for, a sample it cannot encode is made on the processor, as the real encode is.
+        CompareSampleWindows.EncodeWindow? encodeWindow = snap.UseHardwareEncoder
+            ? (start, length, path, ct) => CompressPipeline.TryExportSample(
+                source.VideoPath, [new LibavClipExporter.SourceRange(start, start + length)], path, snap, targetKbps, token: ct)
+            : null;
+
+        return new CompareViewModel(
+            source, item.ProbedDuration, item.ProbedFps, options, rotationDegrees, anchorSeconds, encodeWindow);
     }
 
     // Opens the 進階影片編輯 window for a queue row's file; on Apply writes the whole edit (kept runs with speed,

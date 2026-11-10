@@ -218,6 +218,10 @@ restores unlocked with `--force-evaluate`. On `claude/**` pushes only, it commit
   libav wrappers (`LibavMuxer`, `Libav*Transcoder`, `LibavGdigrabMkvSession`…).
 - Native FFmpeg is resolved/loaded via `FFmpegRuntime` from the bundled
   `ffmpeg-lib/` folder next to the executable.
+- A compress can run on the NVIDIA GPU (`LibavHardwareExportEncoder`). An export asked to use it fails when the GPU
+  cannot, and `CompressPipeline.EncodeOneFileAsync` starts the whole file again on the processor, as chunks from two
+  encoders cannot be joined. `CompressSettingsSnapshot.Crf` is then NVENC's scale (`CompressEncodeMath.EncoderScaleCrf`);
+  `InSoftware()` puts the settings back.
 
 ### AI modules
 - AI models are **downloaded on demand** from the Modules tab (not bundled).

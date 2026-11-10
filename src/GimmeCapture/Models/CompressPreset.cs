@@ -24,4 +24,6 @@ public sealed class CompressPreset
     public SharpenMode Sharpen { get; set; } = SharpenMode.Off;
     public bool Deblock { get; set; }
     public bool Grayscale { get; set; }
+
+    public bool UseHardwareEncoder { get; set; }   // encode on the NVIDIA GPU when there is one
 }

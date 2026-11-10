@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.75.0, `## Unreleased` holds 6 entries (2026-11-10).
+- Since v0.75.0, `## Unreleased` holds 7 entries (2026-11-10).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+84937434`, installed by hand late on 2026-11-09 over
   `0.74.0+7b98611c` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1503,6 +1503,25 @@ tool.
   would change the time is a hardware encoder, which trades file size and is the user's call. The chunks and the
   staged output are written under the app's root on C: and the result copied to the output's drive: about twice the
   output's size for as long as that file takes, against an encode many times longer than the copy.
+- Done since batch 1 (2026-11-10, "加上顯卡編碼"): **a compress on the NVIDIA GPU** (Compress and the editor). An
+  option under the codec, off by default, kept with the session and in saved presets, for MP4, MKV and MOV.
+  `LibavHardwareExportEncoder` opens NVENC on frames in memory with what an offline encode can afford (`tune=hq`,
+  `spatial-aq`, `rc-lookahead=20`, B-frames as far as the GPU has them, `multipass`). Three real 12 s clips, 480p, 1080p
+  and 720p, VMAF against a near-lossless reference, RTX 4070 SUPER and Ryzen 7 5700X, in that order of clips. x265 CRF 22
+  medium: 678/2263/991 kbps, VMAF 94.3/95.3/90.1, 4.5-4.9/1.1-1.3/1.6-1.9x real time; veryfast: VMAF 94.2/94.8/89.8 at
+  the same size, 5.9/2.4/2.5x. `hevc_nvenc` cq 30 at p5: 576/2756/1768 kbps, VMAF 93.2/95.0/91.7, 21-27/9/10x. That is
+  5-8 times x265 medium, about 4 times veryfast. At equal VMAF the GPU's files are 6%/32%/48% larger. The offsets above
+  the software's value (H.265 +8, H.264 +6, AV1 +15) are what gives about the software's VMAF; at them the files are
+  about 1.3 times x265's, the estimate's factor. NVENC's presets hardly move the quality at one value (p1-p7 within 0.3
+  VMAF): p1 and p2 are up to 1.4 times as fast as p5, p6 about 1.7 times slower. Through the real pipeline, a 65 s span
+  of each clip in all three codecs with its sound: three chunks joined, every frame decoded, the length right to 0.01 s;
+  a target size kept nine times of nine, at 95-99%. One, two, four and eight files at once all stayed on the GPU, at
+  3.6, 3.0, 4.0 and 5.1 s a file, so more than two at once gains nothing on this GPU. An export asked for the GPU fails
+  when it cannot, and `EncodeOneFileAsync` starts the whole file again on the processor (`InSoftware`), since a
+  segmented encode's chunks from two encoders could not be joined. What moved: a run that used the GPU holds the CUDA
+  context's 200-260 MB until it exits, as a recording's NVENC does; on a machine where the GPU keeps failing, a resume
+  after a restart starts over, as the chunks on disk are the software's and the settings ask for the GPU.
+  `CompressHardwareEncodingTests`, the real GPU opt-in (NVENC_EXPORT_PROBE=1).
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

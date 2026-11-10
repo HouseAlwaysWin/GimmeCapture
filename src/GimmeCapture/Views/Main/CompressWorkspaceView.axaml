@@ -345,6 +345,11 @@
                             </ComboBox>
                         </DockPanel>
 
+                        <!-- The NVIDIA GPU instead of the processor, for MP4, MKV and MOV -->
+                        <CheckBox IsChecked="{Binding CompressUseHardwareEncoder}"
+                                  IsEnabled="{Binding CanUseHardwareEncoder}"
+                                  Content="{Binding [CompressHardwareEncoder], Source={x:Static services:LocalizationService.Instance}}"/>
+
                         <!-- Resolution (downscale) -->
                         <DockPanel>
                             <TextBlock Text="{Binding [CompressResolutionLabel], Source={x:Static services:LocalizationService.Instance}}"

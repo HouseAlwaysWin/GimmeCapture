@@ -43,10 +43,7 @@ internal static class CompressPipeline
             }
 
             // CRF sample (no target bitrate / two-pass): same knobs that drive the real per-file size.
-            var options = snap.ToExportOptions();
-
-            bool ok = await Task.Run(() =>
-                LibavClipExporter.TryExport(sourcePath, ranges, sampleOut, VideoQuality.Medium, crop: crop, options: options));
+            bool ok = await Task.Run(() => TryExportSample(sourcePath, ranges, sampleOut, snap, crop: crop));
             if (!ok || !File.Exists(sampleOut))
             {
                 return -1;
@@ -74,6 +71,39 @@ internal static class CompressPipeline
                 AppLog.Error("Compress.EstimateCleanup", ex);
             }
         }
+    }
+
+    /// <summary>
+    /// A stretch of a video at the snapshot's settings, to look at or to measure: on the processor when the settings ask
+    /// for the GPU and it cannot do it, as the real encode does.
+    /// </summary>
+    internal static bool TryExportSample(
+        string sourcePath, IReadOnlyList<LibavClipExporter.SourceRange> ranges, string outputPath, CompressSettingsSnapshot snap,
+        int targetVideoBitrateKbps = 0, VideoEditCrop? crop = null, CancellationToken token = default)
+    {
+        if (snap.UseHardwareEncoder)
+        {
+            try
+            {
+                if (Export(snap))
+                {
+                    return true;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLog.Warning("Compress.HardwareEncoder", ex);
+            }
+
+            token.ThrowIfCancellationRequested();
+            snap = snap.InSoftware();
+        }
+
+        return Export(snap);
+
+        bool Export(CompressSettingsSnapshot settings) => LibavClipExporter.TryExport(
+            sourcePath, ranges, outputPath, VideoQuality.Medium, crop: crop, cancellationToken: token,
+            options: settings.ToExportOptions(targetVideoBitrateKbps: targetVideoBitrateKbps));
     }
 
     // Short kept sets (<= 8s total) sample whole (exact). Longer ones take three 2s windows at 20/50/80% of the
@@ -147,12 +177,49 @@ internal static class CompressPipeline
     /// re-encode). Returns true on success; throws <see cref="OperationCanceledException"/> if cancelled.
     /// Manages its own temp dir and sets no shared UI state, so single + batch runs share one code path.
     /// </summary>
+    /// <param name="hardwareEncoderFailed">Told when the GPU could not encode the file, which starts again on the processor.</param>
     internal static async Task<bool> EncodeOneFileAsync(
         string input, string outputPath, CompressSettingsSnapshot s, int targetBitrateKbps,
         double durationSeconds, IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate,
         int rotationDegrees = 0, IProgress<double>? resumeProgress = null,
         IReadOnlyList<(double Start, double End, double Speed)>? keptRuns = null, VideoEditCrop? crop = null,
-        Action<SKBitmap, double>? burnInComposite = null)
+        Action<SKBitmap, double>? burnInComposite = null, Action? hardwareEncoderFailed = null)
+    {
+        if (s.UseHardwareEncoder)
+        {
+            try
+            {
+                if (await Encode(s))
+                {
+                    return true;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLog.Warning("Compress.HardwareEncoder", ex);
+            }
+
+            // The whole file again, not the rest of it: a segmented encode joins its chunks as they are, and chunks
+            // from two encoders cannot be joined.
+            token.ThrowIfCancellationRequested();
+            hardwareEncoderFailed?.Invoke();
+            progress.Report(0);
+            s = s.InSoftware();
+        }
+
+        return await Encode(s);
+
+        Task<bool> Encode(CompressSettingsSnapshot settings) => EncodeFileAsync(
+            input, outputPath, settings, targetBitrateKbps, durationSeconds, progress, token, pauseGate, rotationDegrees,
+            resumeProgress, keptRuns, crop, burnInComposite);
+    }
+
+    private static async Task<bool> EncodeFileAsync(
+        string input, string outputPath, CompressSettingsSnapshot s, int targetBitrateKbps,
+        double durationSeconds, IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate,
+        int rotationDegrees, IProgress<double>? resumeProgress,
+        IReadOnlyList<(double Start, double End, double Speed)>? keptRuns, VideoEditCrop? crop,
+        Action<SKBitmap, double>? burnInComposite)
     {
         // Kept runs to concatenate (whole file when none). TryExport joins multiple ranges into one output.
         var runs = (keptRuns ?? Array.Empty<(double Start, double End, double Speed)>())
@@ -541,7 +608,8 @@ internal static class CompressPipeline
             Denoise = s.Denoise,
             Sharpen = s.Sharpen,
             Deblock = s.Deblock,
-            Grayscale = s.Grayscale
+            Grayscale = s.Grayscale,
+            UseHardwareEncoder = s.UseHardwareEncoder
         };
 
         // The sound is built alongside the chunks, in a folder of its own: built after them, it kept the bar at 100%
@@ -641,7 +709,7 @@ internal static class CompressPipeline
     private static string BuildSegmentSettingsKey(CompressSettingsSnapshot s, int rotationDegrees, double trimStart, double trimEnd) =>
         string.Join('|', s.Codec, s.Crf, s.Preset, s.MaxHeight, s.MaxFps,
             s.DropAudio, s.AudioBitrateKbps, s.AudioChannels, rotationDegrees,
-            s.Denoise, s.Sharpen, s.Deblock, s.Grayscale,
+            s.Denoise, s.Sharpen, s.Deblock, s.Grayscale, s.UseHardwareEncoder,
             Math.Round(trimStart, 2), Math.Round(trimEnd, 2));
 
     /// <summary>

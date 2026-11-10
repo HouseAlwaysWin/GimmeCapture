@@ -22,7 +22,8 @@ public class CompressPresetTests
             TargetSizeMB = 12.5m,
             DropAudio = true,
             AudioBitrateKbps = 96,
-            AudioChannels = 1
+            AudioChannels = 1,
+            UseHardwareEncoder = true
         };
 
         string json = JsonSerializer.Serialize(original);
@@ -41,5 +42,6 @@ public class CompressPresetTests
         Assert.Equal(original.DropAudio, round.DropAudio);
         Assert.Equal(original.AudioBitrateKbps, round.AudioBitrateKbps);
         Assert.Equal(original.AudioChannels, round.AudioChannels);
+        Assert.True(round.UseHardwareEncoder);
     }
 }

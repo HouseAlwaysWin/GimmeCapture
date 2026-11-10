@@ -12,6 +12,13 @@ internal sealed class LibavExportOptions
     /// <summary>Output video codec. H.265 falls back to H.264 if unavailable.</summary>
     public VideoCodec Codec { get; init; } = VideoCodec.H264;
 
+    /// <summary>
+    /// Encode on the NVIDIA GPU, or fail: the caller that can go on without it starts again in software, as a file's
+    /// chunks from two encoders could not be joined. <see cref="CrfOverride"/> is then NVENC's constant-quality value
+    /// (<see cref="CompressEncodeMath.EncoderScaleCrf"/>).
+    /// </summary>
+    public bool UseHardwareEncoder { get; init; }
+
     /// <summary>Average video bitrate (kbps) for ABR/target-size mode. 0 = use the quality CRF ladder.</summary>
     public int TargetVideoBitrateKbps { get; init; }
 

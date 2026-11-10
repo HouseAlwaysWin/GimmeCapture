@@ -12,7 +12,7 @@ internal readonly record struct CompressSettingsSnapshot(
     VideoCodec Codec, int Crf, int MaxHeight, int MaxFps, string Preset,
     bool DropAudio, int AudioBitrateKbps, int AudioChannels,
     bool UseTargetSize, decimal TargetSizeMB, bool UseTwoPass,
-    DenoiseMode Denoise, SharpenMode Sharpen, bool Deblock, bool Grayscale)
+    DenoiseMode Denoise, SharpenMode Sharpen, bool Deblock, bool Grayscale, bool UseHardwareEncoder = false)
 {
     /// <summary>
     /// Build the <see cref="LibavExportOptions"/> for a straight snapshot-driven encode. The context-specific
@@ -37,5 +37,14 @@ internal readonly record struct CompressSettingsSnapshot(
             RotationDegrees = rotationDegrees,
             TargetVideoBitrateKbps = targetVideoBitrateKbps,
             TwoPass = twoPass,
+            UseHardwareEncoder = UseHardwareEncoder,
         };
+
+    /// <summary>The same settings for the processor's encoders, for a file the GPU could not encode.</summary>
+    public CompressSettingsSnapshot InSoftware() => this with
+    {
+        UseHardwareEncoder = false,
+        Crf = CompressEncodeMath.SoftwareScaleCrf(Codec, Crf),
+        UseTwoPass = UseTargetSize && Codec == VideoCodec.H264,
+    };
 }

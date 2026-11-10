@@ -552,99 +552,112 @@ internal static class LibavClipExporter
             int rotH = swap ? outW : outH;
             (int encW, int encH) = ScaleToMaxHeight(rotW, rotH, opt.MaxHeight);
 
-            encCtx = ffmpeg.avcodec_alloc_context3(enc);
-            encCtx->codec_type = AVMediaType.AVMEDIA_TYPE_VIDEO;
-            encCtx->codec_id = enc->id;
-            encCtx->width = encW;
-            encCtx->height = encH;
-            // AV1 encodes 10-bit (yuv420p10le): smaller and banding-free even from 8-bit sources. The sws
-            // target and the encFrame buffer both follow encCtx->pix_fmt, so this is the only knob to flip.
-            encCtx->pix_fmt = isAv1 ? AVPixelFormat.AV_PIX_FMT_YUV420P10LE : AVPixelFormat.AV_PIX_FMT_YUV420P;
-            encCtx->time_base = new AVRational { num = rate.den, den = rate.num };
-            encCtx->framerate = rate;
-            encCtx->gop_size = (int)Math.Round(2.0 * rate.num / rate.den);
-            // B-frames materially shrink offline output at the same quality. This whole path is offline export
-            // (never realtime capture), so enable them for x264/x265; SVT-AV1 manages hierarchical frames
-            // internally and takes no explicit count.
-            encCtx->max_b_frames = isAv1 ? 0 : 3;
-            if ((outFmt->oformat->flags & ffmpeg.AVFMT_GLOBALHEADER) != 0)
+            if (opt.UseHardwareEncoder)
             {
-                encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
+                encCtx = LibavHardwareExportEncoder.TryOpen(
+                    codec, encW, encH, rate, (outFmt->oformat->flags & ffmpeg.AVFMT_GLOBALHEADER) != 0, opt.CrfOverride,
+                    targetVideoBitrateKbps, opt.Preset);
+                if (encCtx == null)
+                {
+                    throw new InvalidOperationException("The hardware encoder did not open.");
+                }
             }
+            else
+            {
+                encCtx = ffmpeg.avcodec_alloc_context3(enc);
+                encCtx->codec_type = AVMediaType.AVMEDIA_TYPE_VIDEO;
+                encCtx->codec_id = enc->id;
+                encCtx->width = encW;
+                encCtx->height = encH;
+                // AV1 encodes 10-bit (yuv420p10le): smaller and banding-free even from 8-bit sources. The sws
+                // target and the encFrame buffer both follow encCtx->pix_fmt, so this is the only knob to flip.
+                encCtx->pix_fmt = isAv1 ? AVPixelFormat.AV_PIX_FMT_YUV420P10LE : AVPixelFormat.AV_PIX_FMT_YUV420P;
+                encCtx->time_base = new AVRational { num = rate.den, den = rate.num };
+                encCtx->framerate = rate;
+                encCtx->gop_size = (int)Math.Round(2.0 * rate.num / rate.den);
+                // B-frames materially shrink offline output at the same quality. This whole path is offline export
+                // (never realtime capture), so enable them for x264/x265; SVT-AV1 manages hierarchical frames
+                // internally and takes no explicit count.
+                encCtx->max_b_frames = isAv1 ? 0 : 3;
+                if ((outFmt->oformat->flags & ffmpeg.AVFMT_GLOBALHEADER) != 0)
+                {
+                    encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
+                }
 
-            // Speed knob differs per encoder: x264/x265 take the word (e.g. "slow"); SVT-AV1 takes an integer
-            // 0-13 via "preset"; libaom-av1 has NO "preset" option and uses "cpu-used" 0-8 instead (feeding it
-            // an SVT integer would be silently ignored, leaving libaom at its near-placebo default speed).
-            if (isSvtAv1)
-            {
-                ffmpeg.av_dict_set(&encOpts, "preset", MapPreset(opt.Preset, true), 0);
-            }
-            else if (isAv1)
-            {
-                ffmpeg.av_dict_set(&encOpts, "cpu-used", MapLibaomCpuUsed(opt.Preset), 0);
-            }
-            else
-            {
-                ffmpeg.av_dict_set(&encOpts, "preset", MapPreset(opt.Preset, false), 0);
-            }
-            if (targetVideoBitrateKbps > 0)
-            {
-                // Average-bitrate mode for "compress to a target size".
-                long bps = (long)targetVideoBitrateKbps * 1000;
-                encCtx->bit_rate = bps;
-                bool twoPass = passNumber > 0;
-                if (!twoPass)
+                // Speed knob differs per encoder: x264/x265 take the word (e.g. "slow"); SVT-AV1 takes an integer
+                // 0-13 via "preset"; libaom-av1 has NO "preset" option and uses "cpu-used" 0-8 instead (feeding it
+                // an SVT integer would be silently ignored, leaving libaom at its near-placebo default speed).
+                if (isSvtAv1)
                 {
-                    // Single-pass ABR with a VBV peak cap so the output lands near the requested size
-                    // (approximate). Two-pass omits the cap and lets x264 distribute bits from pass-1 stats.
-                    encCtx->rc_max_rate = bps;
-                    encCtx->rc_buffer_size = (int)Math.Min(int.MaxValue, bps * 2);
+                    ffmpeg.av_dict_set(&encOpts, "preset", MapPreset(opt.Preset, true), 0);
                 }
-                // libx265 reads rate control from x265-params, not the AVCodecContext bitrate fields.
-                if (enc->id == AVCodecID.AV_CODEC_ID_HEVC)
+                else if (isAv1)
                 {
-                    long kbps = targetVideoBitrateKbps;
-                    ffmpeg.av_dict_set(&encOpts, "x265-params",
-                        $"bitrate={kbps}:vbv-maxrate={kbps}:vbv-bufsize={kbps * 2}", 0);
+                    ffmpeg.av_dict_set(&encOpts, "cpu-used", MapLibaomCpuUsed(opt.Preset), 0);
                 }
-                else if (twoPass && statsFile != null)
+                else
                 {
-                    // True two-pass for libx264: pass 1 writes stats, pass 2 reads them. The "stats" AVOption
-                    // takes a full path (unlike x265-params' colon-delimited string), so Windows paths work.
-                    encCtx->flags |= passNumber == 1 ? ffmpeg.AV_CODEC_FLAG_PASS1 : ffmpeg.AV_CODEC_FLAG_PASS2;
-                    ffmpeg.av_dict_set(&encOpts, "stats", statsFile, 0);
+                    ffmpeg.av_dict_set(&encOpts, "preset", MapPreset(opt.Preset, false), 0);
                 }
+                if (targetVideoBitrateKbps > 0)
+                {
+                    // Average-bitrate mode for "compress to a target size".
+                    long bps = (long)targetVideoBitrateKbps * 1000;
+                    encCtx->bit_rate = bps;
+                    bool twoPass = passNumber > 0;
+                    if (!twoPass)
+                    {
+                        // Single-pass ABR with a VBV peak cap so the output lands near the requested size
+                        // (approximate). Two-pass omits the cap and lets x264 distribute bits from pass-1 stats.
+                        encCtx->rc_max_rate = bps;
+                        encCtx->rc_buffer_size = (int)Math.Min(int.MaxValue, bps * 2);
+                    }
+                    // libx265 reads rate control from x265-params, not the AVCodecContext bitrate fields.
+                    if (enc->id == AVCodecID.AV_CODEC_ID_HEVC)
+                    {
+                        long kbps = targetVideoBitrateKbps;
+                        ffmpeg.av_dict_set(&encOpts, "x265-params",
+                            $"bitrate={kbps}:vbv-maxrate={kbps}:vbv-bufsize={kbps * 2}", 0);
+                    }
+                    else if (twoPass && statsFile != null)
+                    {
+                        // True two-pass for libx264: pass 1 writes stats, pass 2 reads them. The "stats" AVOption
+                        // takes a full path (unlike x265-params' colon-delimited string), so Windows paths work.
+                        encCtx->flags |= passNumber == 1 ? ffmpeg.AV_CODEC_FLAG_PASS1 : ffmpeg.AV_CODEC_FLAG_PASS2;
+                        ffmpeg.av_dict_set(&encOpts, "stats", statsFile, 0);
+                    }
+                }
+                else
+                {
+                    // AV1's CRF scale is 0-63 and sits ~8 higher than x264/x265 for equal quality. The compress UI
+                    // already folds that offset into CrfOverride, so honour it verbatim; only the no-override
+                    // fallback ladder (pin/editor trim path, which never uses AV1) needs a per-codec scale.
+                    string crf = opt.CrfOverride > 0
+                        ? opt.CrfOverride.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        : isAv1
+                            ? quality switch
+                            {
+                                VideoQuality.High => "28",
+                                VideoQuality.Low => "36",
+                                _ => "31",
+                            }
+                            : quality switch
+                            {
+                                VideoQuality.High => "20",
+                                VideoQuality.Low => "28",
+                                _ => "23",
+                            };
+                    ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
+                }
+                // Through the API libavcodec gives an encoder one thread unless asked for more; only the ffmpeg command line
+                // asks for auto. libx264 sets auto for itself, but libx265 encoded one frame at a time and libaom on one
+                // thread. Hardware encoders are left as they are, and SVT-AV1 sizes its own thread pool whatever this says.
+                if ((enc->capabilities & (ffmpeg.AV_CODEC_CAP_HARDWARE | ffmpeg.AV_CODEC_CAP_HYBRID)) == 0)
+                {
+                    encCtx->thread_count = 0;
+                }
+                ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, &encOpts), "clip_open_encoder");
             }
-            else
-            {
-                // AV1's CRF scale is 0-63 and sits ~8 higher than x264/x265 for equal quality. The compress UI
-                // already folds that offset into CrfOverride, so honour it verbatim; only the no-override
-                // fallback ladder (pin/editor trim path, which never uses AV1) needs a per-codec scale.
-                string crf = opt.CrfOverride > 0
-                    ? opt.CrfOverride.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    : isAv1
-                        ? quality switch
-                        {
-                            VideoQuality.High => "28",
-                            VideoQuality.Low => "36",
-                            _ => "31",
-                        }
-                        : quality switch
-                        {
-                            VideoQuality.High => "20",
-                            VideoQuality.Low => "28",
-                            _ => "23",
-                        };
-                ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
-            }
-            // Through the API libavcodec gives an encoder one thread unless asked for more; only the ffmpeg command line
-            // asks for auto. libx264 sets auto for itself, but libx265 encoded one frame at a time and libaom on one
-            // thread. Hardware encoders are left as they are, and SVT-AV1 sizes its own thread pool whatever this says.
-            if ((enc->capabilities & (ffmpeg.AV_CODEC_CAP_HARDWARE | ffmpeg.AV_CODEC_CAP_HYBRID)) == 0)
-            {
-                encCtx->thread_count = 0;
-            }
-            ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, &encOpts), "clip_open_encoder");
 
             outStream = ffmpeg.avformat_new_stream(outFmt, null);
             if (outStream == null)

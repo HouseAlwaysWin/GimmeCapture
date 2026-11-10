@@ -162,6 +162,8 @@
   "CompressPresetLabel": "Encoder preset",
   "CompressCrfHint": "Lower CRF = better quality and a bigger file. 18–23 is visually high quality; 28+ is small.",
   "CompressDropAudio": "Remove audio track",
+  "CompressHardwareEncoder": "Encode on the NVIDIA GPU (much faster, larger files at the same quality)",
+  "CompressHardwareEncoderFailed": "NVIDIA GPU encoding failed: encoding on the processor instead.",
   "CompressAudioBitrateLabel": "Audio bitrate",
   "CompressAudioBitrateAuto": "Auto",
   "CompressAudioChannelsLabel": "Audio channels",

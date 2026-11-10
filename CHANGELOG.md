@@ -13,6 +13,13 @@
 
 ### 🎬 Video editing
 
+- **A compress can run on the NVIDIA GPU.** A new option under the codec, off by default, encodes MP4, MKV and MOV
+  output with NVENC in H.264, H.265 or AV1. On three real clips (480p, 720p, 1080p) an RTX 4070 SUPER encoded H.265 5-8
+  times as fast as x265 at medium (1080p: 9 times real time against 1.2), and at the same VMAF the files came out 6-48%
+  larger, the price the option's label states. The quality slider means about the same on both, the size estimate
+  allows for the larger files, and a target size is kept (nine of nine tries, at 95-99% of it). A video the GPU cannot
+  encode (no NVIDIA GPU, a GPU without AV1, a video too small or too large for it) starts again on the processor, and
+  a notice says so, once a batch.
 - **A video that cannot be read says so in the queue.** Its row looked ready, while its Edit button did nothing and it
   failed only once started. An empty file no longer gets a row at all.
 - **An exported video's sound now comes with its picture to the millisecond.** Every export with AAC sound started that

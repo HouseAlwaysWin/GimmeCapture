@@ -39,24 +39,25 @@ internal sealed class CompressBatchRunner
 
     /// <summary>Launches one item worker (fire-and-forget; tracked via the in-flight count). The concurrency
     /// cap is enforced by the shared semaphore. <paramref name="persistItemState"/> mirrors the item's state
-    /// to disk; <paramref name="onAllDone"/> runs (worker continuation) when the last worker finishes and the
+    /// to disk; <paramref name="onHardwareEncoderFailed"/> is told when the GPU could not encode a file;
+    /// <paramref name="onAllDone"/> runs (worker continuation) when the last worker finishes and the
     /// batch context is torn down.</summary>
     public void Start(
         CompressQueueItem item, CompressSettingsSnapshot snap, string ext, string outputFolder, bool appendDate,
         IProgress<double> progress, IProgress<double> resumeProgress,
         IReadOnlyList<(double Start, double End, double Speed)> keptRuns, Action<SKBitmap, double>? burnInComposite,
-        Action<CompressQueueItem> persistItemState, Action onAllDone)
+        Action<CompressQueueItem> persistItemState, Action onHardwareEncoderFailed, Action onAllDone)
     {
         _inFlight++;
         _ = RunItemAsync(item, snap, ext, outputFolder, appendDate, progress, resumeProgress, keptRuns,
-            burnInComposite, persistItemState, onAllDone);
+            burnInComposite, persistItemState, onHardwareEncoderFailed, onAllDone);
     }
 
     private async Task RunItemAsync(
         CompressQueueItem item, CompressSettingsSnapshot snap, string ext, string outputFolder, bool appendDate,
         IProgress<double> progress, IProgress<double> resumeProgress,
         IReadOnlyList<(double Start, double End, double Speed)> keptRuns, Action<SKBitmap, double>? burnInComposite,
-        Action<CompressQueueItem> persistItemState, Action onAllDone)
+        Action<CompressQueueItem> persistItemState, Action onHardwareEncoderFailed, Action onAllDone)
     {
         SemaphoreSlim semaphore = _semaphore!;
         CancellationToken token = item.Cts!.Token;
@@ -141,7 +142,7 @@ internal sealed class CompressBatchRunner
 
                 bool ok = await CompressPipeline.EncodeOneFileAsync(
                     item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation,
-                    resumeProgress, runs, crop, burnInComposite);
+                    resumeProgress, runs, crop, burnInComposite, onHardwareEncoderFailed);
                 if (ok)
                 {
                     item.OutputPath = outputPath; // record the produced file for the 開啟資料夾 button
