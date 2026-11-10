@@ -1441,11 +1441,16 @@ tool.
   piece to the end of the file now ends where the picture does (`PlaybackPieces.EndAtMost`, in `RunFrames`, so the editor
   gets it too): a recording's sound runs on 0.2-1 s and the last frame would hold through it. A file that cannot go on
   in one decode falls back to the passes. Found on the way: with Loop off, Play at the end showed the last frame and
-  stopped, a clip with no timeline as well (`StartsOver`). Left: at a cut the sound stops and starts again (a device open,
-  30-150 ms); a sound stitched across the pieces, as `LoopingWaveProvider` does for a loop, would leave no gap, and the
-  picture would have to catch up the 50 ms it holds. Real speakers not checked. OCR's load and unload were ruled out as
-  a leak first (40 cycles in a test host, Windows heaps flat at 46-53 MB committed; the 2-5 MB a capture in the log is
-  elsewhere).
+  stopped, a clip with no timeline as well (`StartsOver`). Then the sound: restarted for each piece, it was off for 82-126
+  ms after the last frame before each cut, the time its file and device took to open. At the speed of the file one sound
+  now plays straight through the pieces and round the loop (`SoundPieces`, `PiecesWaveProvider` as `LoopingWaveProvider`
+  is for a loop, a stretch at a time on the decoded path), and each piece reads its clock from its own start
+  (`SoundAcrossPieces`). The picture still holds 86-124 ms at a cut on that recording, and catches up the sound in two or
+  three frames (4-10 ms each): sound minus picture +2..+4 ms round after round, including a piece that ends past the
+  picture (34.23 s of 34.62). Pieces at other speeds keep a sound each. Going round is fixed when the sound starts, as it
+  is decoded ahead, so a change to Loop starts the playback again from the playhead. The editor's preview still restarts
+  its sound at each piece. Real speakers not checked. OCR's load and unload were ruled out as a leak first (40 cycles in
+  a test host, Windows heaps flat at 46-53 MB committed; the 2-5 MB a capture in the log is elsewhere).
 - Done since batch 1 (2026-11-10, "拉最新後再繼續優化"): **what an export holds, checked against the clip itself**
   (Compress and the editor). The real `CompressPipeline.EncodeOneFileAsync` on the 4K clip with frame marks, flashes and
   beeps in twelve shapes (whole at a CRF and at a target size, trimmed, one and six cuts, three speeds, turned, H.265, AV1,
@@ -1456,7 +1461,9 @@ tool.
   no edit list, so the muxer moves every stream on by it: -0.4 ms, with the first frame at 21 ms. A retimed piece: atempo
   leaves 3-60 ms out of the start of its output, by the tempo, which put the piece early and what followed earlier by what
   had added up (+56 ms after two pieces); `ToLengthAtTempo` gives the missing part back in front as silence, within 20 ms
-  of its place and no longer adding up. Recordings go through the same mux and were not measured.
+  of its place and no longer adding up. Recordings go through the same mux: three 3 s recordings through the real
+  `RecordingService` (`RecordingAvSyncTests`, AV_SYNC_PROBE=1, 2026-11-10) start their sound's first packet at -21 ms, the
+  priming the edit list leaves out, against a first frame at 0, and run 27-39 ms longer than their picture with it in.
   `LibavMuxerMuxTests`, `LibavClipExporterSpeedTests`.
 - Done since batch 1 (2026-11-10, "拉最新後再繼續優化"): **a GIF of a cut goes straight from the source** (Pins, Compress
   and the editor; the item left by the 2026-11-06 GIF work). `GifFrameSource` takes the kept ranges and their speeds, and a
@@ -1894,7 +1901,7 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
   starts a new `PlayFramesAsync` (68-123 ms to the first frame with D3D11VA on the user's recordings, measured
   2026-11-03, 13-44 on the CPU). Seeking inside the kept decode would need the sound clock's ticket to change mid-run
   (`PlaybackMediaClock` follows one); the editor's `LibavStillFrameDecoder.PlayPiecesAsync` plays from the decoder its
-  paused frames come from. A paused pin's seeks keep a decoder now (Status). At a cut the sound still restarts.
+  paused frames come from. A paused pin's seeks keep a decoder now (Status).
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done

@@ -99,10 +99,10 @@ public partial class FloatingVideoViewModel
             return;
         }
 
-        // Turned on, what can loop without being opened again does so from here.
-        if (IsLooping
-            && ActivePiecesRun() is not null
-            && SeamlessLoopFor(_keptForPlayback.Kept, IsLooping, _playbackSpeed) is not null)
+        // One sound through the pieces was laid out for the Loop as it was; and turned on, what can loop without being
+        // opened again does so from here.
+        if (ActivePiecesRun() is { } run
+            && (run.OneSound || (IsLooping && SeamlessLoopFor(_keptForPlayback.Kept, IsLooping, _playbackSpeed) is not null)))
         {
             StartPlayback();
         }

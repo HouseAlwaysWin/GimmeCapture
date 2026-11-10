@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -24,7 +25,8 @@ namespace GimmeCapture.Services.Core.Media;
 /// read its format and opens it again for reading on the output's own playback thread (another MTA thread), so its
 /// COM objects never cross apartments.</para>
 /// <para>A start can be given a <see cref="PlaybackLoop"/>: the sound then plays it over and over without being opened
-/// again, and <see cref="ReadClock"/> says how much of it has played, which a video pin's picture keeps time with.</para>
+/// again, and <see cref="ReadClock"/> says how much of it has played, which a video pin's picture keeps time with. Given
+/// <see cref="SoundPieces"/>, it plays those in a row the same way, straight through what was cut out.</para>
 /// </summary>
 internal sealed class AudioPreviewPlayer : IDisposable
 {
@@ -63,7 +65,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
 
     // A start of the file at a position and speed, looping or not, or a stop when VideoPath is null.
     private readonly record struct Request(
-        string? VideoPath, double StartSeconds, double EffectiveSpeed, PlaybackLoop? Loop, long Ticket);
+        string? VideoPath, double StartSeconds, double EffectiveSpeed, PlaybackLoop? Loop, SoundPieces? Pieces, long Ticket);
 
     public AudioPreviewPlayer()
     {
@@ -114,12 +116,30 @@ internal sealed class AudioPreviewPlayer : IDisposable
         }
 
         long ticket = Interlocked.Increment(ref _lastTicket);
-        _requests.Submit(new Request(videoPath, Math.Max(0, startSeconds), effectiveSpeed, loop, ticket));
+        _requests.Submit(new Request(videoPath, Math.Max(0, startSeconds), effectiveSpeed, loop, null, ticket));
+        return ticket;
+    }
+
+    /// <summary>
+    /// (Re)start audio as one sound through <paramref name="pieces"/>, at the speed of the file. Any previous playback is
+    /// stopped first, and it returns at once, as <see cref="Start(string, double, double, PlaybackLoop?)"/> does, with the
+    /// ticket whose clock counts the seconds played across all the pieces.
+    /// </summary>
+    public long Start(string videoPath, SoundPieces pieces)
+    {
+        if (_disposed || string.IsNullOrEmpty(videoPath))
+        {
+            Stop();
+            return 0;
+        }
+
+        long ticket = Interlocked.Increment(ref _lastTicket);
+        _requests.Submit(new Request(videoPath, Math.Max(0, pieces.StartSeconds), 1.0, null, pieces, ticket));
         return ticket;
     }
 
     /// <summary>Stops playback and releases the player/stream/decode token. Safe to call repeatedly. Returns at once.</summary>
-    public void Stop() => _requests.Submit(new Request(null, 0, 0, null, Interlocked.Increment(ref _lastTicket)));
+    public void Stop() => _requests.Submit(new Request(null, 0, 0, null, null, Interlocked.Increment(ref _lastTicket)));
 
     /// <summary>True once a start of <paramref name="videoPath"/> has found it has no audio stream.</summary>
     internal bool FoundNoAudioStream(string videoPath) => _filesWithoutAudio.Contains(videoPath);
@@ -209,11 +229,11 @@ internal sealed class AudioPreviewPlayer : IDisposable
         {
             if (ShouldUseDecodedPlayback(videoPath, effectiveSpeed))
             {
-                StartDecodedPlayback(videoPath, start, effectiveSpeed, request.Loop, request.Ticket);
+                StartDecodedPlayback(videoPath, start, effectiveSpeed, request.Loop, request.Pieces, request.Ticket);
                 return true;
             }
 
-            StartMediaFoundationPlayback(videoPath, start, request.Loop, request.Ticket, superseded);
+            StartMediaFoundationPlayback(videoPath, start, request.Loop, request.Pieces, request.Ticket, superseded);
             return false;
         }
         catch (Exception ex)
@@ -235,7 +255,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
 
             try
             {
-                StartDecodedPlayback(videoPath, start, effectiveSpeed, request.Loop, request.Ticket);
+                StartDecodedPlayback(videoPath, start, effectiveSpeed, request.Loop, request.Pieces, request.Ticket);
                 return true;
             }
             catch (Exception fallbackEx)
@@ -248,7 +268,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
     }
 
     private void StartMediaFoundationPlayback(
-        string videoPath, double start, PlaybackLoop? loop, long ticket, Func<bool> superseded)
+        string videoPath, double start, PlaybackLoop? loop, SoundPieces? pieces, long ticket, Func<bool> superseded)
     {
         MediaFoundationReader? reader = null;
         IWavePlayer? player = null;
@@ -256,7 +276,11 @@ internal sealed class AudioPreviewPlayer : IDisposable
         {
             reader = new MediaFoundationReader(videoPath);
             IWaveProvider source;
-            if (loop is { } looping)
+            if (pieces != null)
+            {
+                source = new PiecesWaveProvider(reader, pieces); // puts the reader where the playback begins
+            }
+            else if (loop is { } looping)
             {
                 source = new LoopingWaveProvider(reader, start, looping); // puts the reader where the playback begins
             }
@@ -308,8 +332,36 @@ internal sealed class AudioPreviewPlayer : IDisposable
             || Math.Abs(effectiveSpeed - 1.0) > 0.01;
     }
 
+    // What a sound decoded a stretch at a time plays: the pieces, a loop pass after pass, or the file from a position on.
+    private static IEnumerable<(double StartSeconds, double Seconds)> DecodedStretches(
+        double startSeconds, PlaybackLoop? loop, SoundPieces? pieces)
+    {
+        if (pieces != null)
+        {
+            foreach ((double StartSeconds, double Seconds) stretch in pieces.Stretches())
+            {
+                yield return stretch;
+            }
+
+            yield break;
+        }
+
+        if (loop is not { } looping)
+        {
+            yield return (startSeconds, double.PositiveInfinity);
+            yield break;
+        }
+
+        double from = looping.ClampStart(startSeconds);
+        while (true)
+        {
+            yield return (from, looping.EndSeconds - from);
+            from = looping.StartSeconds;
+        }
+    }
+
     private void StartDecodedPlayback(
-        string videoPath, double startSeconds, double playbackSpeed, PlaybackLoop? loop, long ticket)
+        string videoPath, double startSeconds, double playbackSpeed, PlaybackLoop? loop, SoundPieces? pieces, long ticket)
     {
         if (_disposed)
         {
@@ -325,8 +377,8 @@ internal sealed class AudioPreviewPlayer : IDisposable
         // Stream the audio: open the device on an initially-empty BufferedWaveProvider, feed it from a background
         // decode, and start it once a little sound is in (DecodedStartBuffer). Memory stays bounded (decoder throttled
         // ~4 s ahead) regardless of file size — versus the old full-file PCM decode that blocked the play loop and held
-        // hundreds of MB in a MemoryStream. A loop decodes each pass in turn, well ahead of the device, so nothing is
-        // heard of the file being opened again.
+        // hundreds of MB in a MemoryStream. A loop or pieces decode each stretch in turn, well ahead of the device, so
+        // nothing is heard of the file being opened again.
         _decodeTask = Task.Run(() =>
         {
             // This decode's own output, so a decode that a newer request cancelled never feeds the next one's device.
@@ -337,10 +389,8 @@ internal sealed class AudioPreviewPlayer : IDisposable
             WaveFormat? pcmFormat = null;
             try
             {
-                double passStart = loop?.ClampStart(startSeconds) ?? startSeconds;
-                while (true)
+                foreach ((double passStart, double passSeconds) in DecodedStretches(startSeconds, loop, pieces))
                 {
-                    double passSeconds = loop is { } passLoop ? passLoop.EndSeconds - passStart : double.PositiveInfinity;
                     long passBytes = 0;
                     LibavPinAudioPcmDecoder.DecodeRangeStreaming(
                         videoPath,
@@ -395,16 +445,16 @@ internal sealed class AudioPreviewPlayer : IDisposable
                         token,
                         beforePacket: WaitIfFull);
 
-                    // Nothing to loop into without an output (PulseAudio would not start): the decode would only spin.
-                    if (loop is not { } looping || pcmFormat == null || (buffered == null && linuxOutput == null))
+                    // The file to its end, or nothing to go on into without an output (PulseAudio would not start): the
+                    // decode would only spin.
+                    if (double.IsPositiveInfinity(passSeconds) || pcmFormat == null || (buffered == null && linuxOutput == null))
                     {
                         break;
                     }
 
-                    // A sound that ends before the loop's end is filled with silence up to it, so every pass lasts what
-                    // the picture's does.
+                    // A sound that ends before the stretch does is filled with silence up to it, so every stretch lasts
+                    // what the picture's does.
                     FeedSilence(LibavPinAudioPcmDecoder.RangeByteLimit(passSeconds, pcmFormat.SampleRate) - passBytes);
-                    passStart = looping.StartSeconds;
                 }
 
                 StartDevice(); // the whole sound is in, shorter than the start buffer

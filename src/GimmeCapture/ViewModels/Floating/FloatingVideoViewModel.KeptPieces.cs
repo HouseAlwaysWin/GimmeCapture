@@ -12,14 +12,15 @@ namespace GimmeCapture.ViewModels.Floating;
 // A timeline with pieces cut out or at other speeds, in one decode. Played a pass per piece, every piece opened the file,
 // its decoder and its GPU device again: on a 1450x900 recording the last frame of a piece stood 182-221 ms where a frame
 // lasts 33, and the sound, started on its own each time, came -154 to +19 ms off the picture, another amount each piece.
-// The file now stays open from the first piece to the last and round again, the picture keeps to each piece's sound, and
-// the next piece begins as soon as the last one's time is over.
+// The file now stays open from the first piece to the last and round again, and the next piece begins as soon as the last
+// one's time is over. At the speed of the file one sound plays straight through the cuts, and the picture keeps to it;
+// started anew for each piece, the sound stopped at every cut for as long as its file and output device took to open.
 public partial class FloatingVideoViewModel
 {
     // The pieces being played that way, while they are: any thread reads it, the playback loop sets it.
     private PiecesRun? _piecesRun;
 
-    private sealed record PiecesRun(IReadOnlyList<VideoEditSegment> Runs, int Generation);
+    private sealed record PiecesRun(IReadOnlyList<VideoEditSegment> Runs, int Generation, bool OneSound);
 
     /// <summary>
     /// The pieces to play for <paramref name="runs"/> (kept stretches, contiguous ones joined) from
@@ -64,7 +65,7 @@ public partial class FloatingVideoViewModel
     private async Task<bool> PlayKeptPiecesAsync(
         CancellationToken ct, int generation, PlaybackPieces pieces, IReadOnlyList<VideoEditSegment> runs)
     {
-        Volatile.Write(ref _piecesRun, new PiecesRun(runs, generation));
+        Volatile.Write(ref _piecesRun, new PiecesRun(runs, generation, pieces.AreAllAtTheFilesSpeed));
         try
         {
             await _nativeFramePlayer.PlayFramesAsync(
@@ -88,7 +89,7 @@ public partial class FloatingVideoViewModel
                 ct,
                 onDurationKnown: ApplyProbedDuration,
                 pieces: pieces,
-                onPieceStarts: piece => StartPieceSound(piece, ct)).ConfigureAwait(false);
+                onPieceStarts: SoundForPieces(pieces, ct)).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException && !ct.IsCancellationRequested)
@@ -107,6 +108,38 @@ public partial class FloatingVideoViewModel
                 RequestCurrentTimeUiRefresh(force: true);
             }
         }
+    }
+
+    // One sound through all the pieces when they play at the speed of the file; else a sound for each, at its own speed.
+    private Func<PlaybackPiece, Func<SoundClockReading>?> SoundForPieces(PlaybackPieces pieces, CancellationToken ct)
+    {
+        if (!pieces.AreAllAtTheFilesSpeed)
+        {
+            return piece => StartPieceSound(piece, ct);
+        }
+
+        var sound = new SoundAcrossPieces(() => StartOneSound(pieces, ct), ticket => _audioPreview.ReadClock(ticket));
+        return sound.OnPieceStarts;
+    }
+
+    // The decode thread, at the first piece: the sound of them all, laid out with the pieces as the player has ended them.
+    // Going round is fixed here, as a sound is decoded ahead of the picture: a change to Loop starts the playback again.
+    private long StartOneSound(PlaybackPieces pieces, CancellationToken ct)
+    {
+        if (IsMuted || _isDisposed || ct.IsCancellationRequested || _audioPreview.FoundNoAudioStream(VideoPath))
+        {
+            return 0;
+        }
+
+        long ticket = _audioPreview.Start(VideoPath, pieces.ForOneSound(IsLooping));
+        if (ct.IsCancellationRequested)
+        {
+            // A pause between the check and the start has stopped the sound already, ahead of this one.
+            StopAudioPlayback();
+            return 0;
+        }
+
+        return ticket;
     }
 
     // The decode thread, as it reaches a piece: starts that piece's sound and returns its clock for the picture to keep to.

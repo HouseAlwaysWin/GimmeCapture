@@ -57,6 +57,26 @@ internal sealed class PlaybackPieces
         Current = Current with { EndSeconds = Math.Min(Current.EndSeconds, pictureEndSeconds) };
     }
 
+    /// <summary>Whether every piece plays at the file's own speed, which is what one sound can follow through them all.</summary>
+    public bool AreAllAtTheFilesSpeed
+    {
+        get
+        {
+            foreach (PlaybackPiece piece in _pieces)
+            {
+                if (Math.Abs(piece.Speed - 1.0) >= 0.001)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>The pieces for one sound to play in a row, from where the playback stands, as they end now.</summary>
+    public SoundPieces ForOneSound(bool goesRound) => new(_pieces, _index, Current.StartSeconds, goesRound);
+
     /// <summary>A frame at or past the end of the piece, which ends the piece instead of being shown.</summary>
     public bool EndsPiece(double frameSeconds) => frameSeconds >= Current.EndSeconds - Epsilon;
 

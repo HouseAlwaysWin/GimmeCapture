@@ -116,6 +116,31 @@ public sealed class PlaybackPiecesTests
     }
 
     [Fact]
+    public void ForOneSound_IsThePiecesAsTheyEnd_FromWhereThePlaybackStands()
+    {
+        var pieces = new PlaybackPieces([new PlaybackPiece(1, 3, 1.0), new PlaybackPiece(8, 34.6, 1.0)], 1, 9, () => false);
+        pieces.EndAtMost(34.27);
+
+        SoundPieces sound = pieces.ForOneSound(goesRound: true);
+
+        Assert.Equal(1, sound.First);
+        Assert.Equal(9, sound.StartSeconds);
+        Assert.True(sound.GoesRound);
+        Assert.Equal(34.27, sound.Pieces[1].EndSeconds);
+    }
+
+    [Theory]
+    [InlineData(1.0, 1.0, true)]
+    [InlineData(1.0, 1.5, false)]
+    [InlineData(0.5, 1.0, false)]
+    public void OneSoundFollows_OnlyPiecesAtTheFilesSpeed(double first, double second, bool expected)
+    {
+        var pieces = new PlaybackPieces([new PlaybackPiece(1, 3, first), new PlaybackPiece(8, 9, second)], 0, 1, () => false);
+
+        Assert.Equal(expected, pieces.AreAllAtTheFilesSpeed);
+    }
+
+    [Fact]
     public void APictureThatDoesNotSayHowLongItIs_ChangesNothing()
     {
         var pieces = new PlaybackPieces([new PlaybackPiece(1, 34.6, 1.0)], 0, 1, () => false);
