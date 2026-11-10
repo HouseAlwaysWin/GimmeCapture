@@ -9,6 +9,17 @@
 
 ---
 
+## Unreleased
+
+### 🎬 Video editing
+
+- **An exported video's sound now comes with its picture to the millisecond.** Every export with AAC sound started that
+  sound 21 ms late: the encoder writes 21 ms of priming ahead of the sound itself, which a file is meant to skip and these
+  played. On a clip with a flash and a beep each second, in every way of exporting it (whole, trimmed, cut, turned, at
+  H.264, H.265 and AV1, as MP4, MOV and MKV), the picture was 21 ms ahead of the sound and is now level with it.
+- **A piece at another speed keeps its sound where it belongs.** Its sound came out 3-60 ms short, taken from its start, so
+  that piece played early and every piece after it earlier still. It now has exactly the length of the piece.
+
 ## v0.75.0 - 2026-11-09
 
 ### ⚡ Performance

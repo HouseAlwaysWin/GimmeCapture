@@ -235,7 +235,7 @@ internal static class LibavMuxer
             // own, re-based to 0 as it is written.
             bool hasVideo = video.Read(videoPkt, outVideo);
             bool hasAudio = audioFmt != null && ReadNextStreamPacket(audioFmt, audioIn, audioPkt);
-            long firstAudioPts = hasAudio ? GetPacketPrimaryTimestamp(audioPkt) : ffmpeg.AV_NOPTS_VALUE;
+            long firstAudioPts = hasAudio ? GetSoundOrigin(audioPkt) : ffmpeg.AV_NOPTS_VALUE;
             int videoPackets = 0;
             int audioPackets = 0;
             while (hasVideo || hasAudio)
@@ -251,7 +251,7 @@ internal static class LibavMuxer
                 }
                 else
                 {
-                    NormalizePacketTimestamps(audioPkt, firstAudioPts);
+                    ShiftPacketTimestamps(audioPkt, firstAudioPts);
                     ffmpeg.av_packet_rescale_ts(audioPkt, inAudio->time_base, outAudio->time_base);
                     audioPkt->stream_index = outAudio->index;
                     ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, audioPkt), "write_frame(join_audio)");
@@ -688,7 +688,7 @@ internal static class LibavMuxer
         // The picture starts when its first frame is shown. With B-frames that frame is decoded at a negative time, and
         // counting from there put the whole picture two frames (67 ms at 30 fps) later than the sound.
         long firstVideoPts = hasVideo ? GetPacketPresentationTimestamp(videoPkt) : ffmpeg.AV_NOPTS_VALUE;
-        long firstAudioPts = hasAudio ? GetPacketPrimaryTimestamp(audioPkt) : ffmpeg.AV_NOPTS_VALUE;
+        long firstAudioPts = hasAudio ? GetSoundOrigin(audioPkt) : ffmpeg.AV_NOPTS_VALUE;
 
         int videoPackets = 0;
         int audioPackets = 0;
@@ -716,7 +716,7 @@ internal static class LibavMuxer
             }
             else
             {
-                NormalizePacketTimestamps(audioPkt, firstAudioPts);
+                ShiftPacketTimestamps(audioPkt, firstAudioPts);
                 ffmpeg.av_packet_rescale_ts(audioPkt, inAudio->time_base, outAudio->time_base);
                 audioPkt->stream_index = outAudio->index;
                 ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, audioPkt), "write_frame(audio)");
@@ -756,8 +756,17 @@ internal static class LibavMuxer
     private static unsafe long GetPacketPresentationTimestamp(AVPacket* pkt) =>
         pkt->pts != ffmpeg.AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
 
-    // Video: the decode times of the frames ahead of the first one shown stay negative, which the muxers take care of
-    // (an MP4's edit list, the others by moving every stream alike). Cut off at 0, they would no longer increase.
+    // Where a sound's time 0 is. AAC starts with the encoder's priming, at a negative time, which the output's edit list
+    // leaves out as the input's did; counted from there, the priming was heard and everything after it came 21 ms late.
+    private static unsafe long GetSoundOrigin(AVPacket* pkt)
+    {
+        long first = GetPacketPrimaryTimestamp(pkt);
+        return first != ffmpeg.AV_NOPTS_VALUE && first < 0 ? 0 : first;
+    }
+
+    // The decode times of a picture's frames ahead of the first one shown stay negative, and so does a sound's priming,
+    // which the muxers take care of (an MP4's edit list, the others by moving every stream alike). Cut off at 0, they
+    // would no longer increase.
     private static unsafe void ShiftPacketTimestamps(AVPacket* pkt, long firstTimestamp)
     {
         if (firstTimestamp == ffmpeg.AV_NOPTS_VALUE)

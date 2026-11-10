@@ -93,11 +93,12 @@ public sealed class LibavMuxerJoinTests : IDisposable
             offset += own.DurationSeconds;
         }
 
+        // From the first frame: Matroska has no edit list, so the sound's priming, ahead of 0, moves the whole file on by it.
         VideoTestClips.Timeline joined = VideoTestClips.Read(output);
         Assert.Equal(expected.Count, joined.Frames);
         Assert.All(
             joined.FrameSeconds.Zip(expected),
-            pair => Assert.Equal(pair.Second, pair.First, 0.0015));
+            pair => Assert.Equal(pair.Second, pair.First - joined.StartSeconds, 0.0015));
         Assert.Equal(offset, joined.DurationSeconds, 0.0015);
 
         string merged = Path.Combine(_dir, "merged.mkv");

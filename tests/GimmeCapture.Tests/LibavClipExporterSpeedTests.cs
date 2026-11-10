@@ -109,6 +109,62 @@ public class LibavClipExporterSpeedTests
         Assert.Equal(0.25, Product(chain), 6);
     }
 
+    // A real run of atempo, which leaves the start of its output out: the sound came early by what it lost, and every
+    // piece after it earlier still.
+    [Theory]
+    [InlineData(0.5)]
+    [InlineData(0.75)]
+    [InlineData(1.5)]
+    [InlineData(2.0)]
+    public void ARetimedSound_HasTheLengthOfItsPiece_WithItsBeepsWhereTheyBelong(double tempo)
+    {
+        const int Rate = 48000;
+        const int Channels = 2;
+        const int BytesPerFrame = Channels * 2;
+        const int Seconds = 6;
+        const short Loud = 8000;
+
+        // A 60 ms beep at half past each second.
+        int frames = Seconds * Rate;
+        var pcm = new byte[frames * BytesPerFrame];
+        for (int i = 0; i < frames; i++)
+        {
+            double t = (double)i / Rate;
+            double intoSecond = t - Math.Floor(t);
+            short sample = intoSecond is >= 0.5 and < 0.56 ? (short)(Math.Sin(2 * Math.PI * 1000 * t) * Loud) : (short)0;
+            BitConverter.TryWriteBytes(pcm.AsSpan(i * BytesPerFrame), sample);
+            BitConverter.TryWriteBytes(pcm.AsSpan((i * BytesPerFrame) + 2), sample);
+        }
+
+        byte[] retimed = LibavAtempoFilter.Process(pcm, Rate, Channels, tempo);
+
+        Assert.Equal((int)Math.Round(frames / tempo) * BytesPerFrame, retimed.Length);
+        var beeps = new List<double>();
+        int quiet = Rate;
+        for (int i = 0; i < retimed.Length / BytesPerFrame; i++)
+        {
+            if (Math.Abs(BitConverter.ToInt16(retimed, i * BytesPerFrame)) > Loud / 10)
+            {
+                if (quiet > Rate / 8)
+                {
+                    beeps.Add((double)i / Rate);
+                }
+
+                quiet = 0;
+            }
+            else
+            {
+                quiet++;
+            }
+        }
+
+        Assert.Equal(Seconds, beeps.Count);
+        for (int k = 0; k < Seconds; k++)
+        {
+            Assert.InRange(beeps[k] - ((k + 0.5) / tempo), -0.03, 0.03);
+        }
+    }
+
     private static double Product(double[] values)
     {
         double p = 1.0;

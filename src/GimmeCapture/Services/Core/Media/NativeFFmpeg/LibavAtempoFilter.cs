@@ -127,7 +127,7 @@ internal static class LibavAtempoFilter
                 ffmpeg.av_frame_unref(outFrame);
             }
 
-            return outPcm.ToArray();
+            return ToLengthAtTempo(outPcm.ToArray(), samplesPerChannel, bytesPerFrame, tempo);
         }
         finally
         {
@@ -136,6 +136,32 @@ internal static class LibavAtempoFilter
             ffmpeg.avfilter_graph_free(&graph);
             ffmpeg.av_channel_layout_uninit(&layout);
         }
+    }
+
+    /// <summary>
+    /// What came out, the length the sound has at that tempo. atempo's output starts some way into its first fragment: 3 to
+    /// 60 ms of it is missing, by the tempo, which left everything in the piece that much early and every piece after it
+    /// earlier still, as those added up. What is missing goes back in front, as silence.
+    /// </summary>
+    internal static byte[] ToLengthAtTempo(byte[] retimed, int samplesPerChannel, int bytesPerFrame, double tempo)
+    {
+        int expected = (int)Math.Round(samplesPerChannel / tempo) * bytesPerFrame;
+        if (retimed.Length == expected)
+        {
+            return retimed;
+        }
+
+        var exact = new byte[expected];
+        if (retimed.Length < expected)
+        {
+            retimed.CopyTo(exact, expected - retimed.Length);
+        }
+        else
+        {
+            Array.Copy(retimed, exact, expected);
+        }
+
+        return exact;
     }
 
     /// <summary>

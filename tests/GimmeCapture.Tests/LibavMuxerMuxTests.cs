@@ -6,8 +6,9 @@ namespace GimmeCapture.Tests;
 
 /// <summary>
 /// A picture and a sound made into one file. A picture encoded with B-frames has frames decoded before the first one
-/// shown, at negative times; the mux once took those for the start, which put the whole picture two frames after the
-/// sound. Real libav on clips written in-process; needs only the bundled FFmpeg.
+/// shown, at negative times, and AAC has the encoder's priming before its first sample; the mux once took those for the
+/// start, which put the whole picture two frames late and the sound 21 ms late. Real libav on clips written in-process;
+/// needs only the bundled FFmpeg.
 /// </summary>
 public sealed class LibavMuxerMuxTests : IDisposable
 {
@@ -38,8 +39,10 @@ public sealed class LibavMuxerMuxTests : IDisposable
         string output = Path.Combine(_dir, name);
         LibavMuxer.MuxVideoAndAudio(video, m4a, output, container);
 
-        (double picture, double sound) = FirstShownSeconds(output);
-        Assert.Equal(sound, picture, 3);
+        // AAC begins with the encoder's priming, a packet ahead of the sound itself: the sound starts when the picture does.
+        const double Priming = 1024.0 / 48000;
+        (double picture, double firstSoundPacket) = FirstShownSeconds(output);
+        Assert.Equal(firstSoundPacket + Priming, picture, 3);
         Assert.Equal(FrameCount, VideoTestClips.Read(output).Frames);
     }
 

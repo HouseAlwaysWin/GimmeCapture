@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.75.0, `## Unreleased` holds no entries (2026-11-09).
+- Since v0.75.0, `## Unreleased` holds 2 entries (2026-11-10).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+84937434`, installed by hand late on 2026-11-09 over
   `0.74.0+7b98611c` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1425,6 +1425,18 @@ tool.
   coming off before the compressed frame (opt-in COMPARE_SEEK_PROBE=1). Left: in the first window of a playback, the one
   that starts partway, the compressed side runs 1-2 frames behind the original; it is 0 from the second window on. Space
   and the arrows do nothing in the compare (`TakesTransportKeys`), and Space closes it only with the toggle focused by Tab.
+- Done since batch 1 (2026-11-10, "拉最新後再繼續優化"): **what an export holds, checked against the clip itself**
+  (Compress and the editor). The real `CompressPipeline.EncodeOneFileAsync` on the 4K clip with frame marks, flashes and
+  beeps in twelve shapes (whole at a CRF and at a target size, trimmed, one and six cuts, three speeds, turned, H.265, AV1,
+  MKV, MOV, MKV with a cut), read back with ffmpeg by the files' own timestamps. Every frame was the one it should be, but
+  for one frame at a cut that falls between frames, and picture minus sound was a steady -21.4 ms: `MuxVideoAndAudio` and
+  `ConcatVideoSegmentsWithAudio` re-based the sound on its first packet, the AAC encoder's priming, so the priming played.
+  Its time now stays negative and an MP4's edit list leaves it out, as the M4A's did: -0.1 ms in MP4 and MOV. Matroska has
+  no edit list, so the muxer moves every stream on by it: -0.4 ms, with the first frame at 21 ms. A retimed piece: atempo
+  leaves 3-60 ms out of the start of its output, by the tempo, which put the piece early and what followed earlier by what
+  had added up (+56 ms after two pieces); `ToLengthAtTempo` gives the missing part back in front as silence, within 20 ms
+  of its place and no longer adding up. Recordings go through the same mux and were not measured.
+  `LibavMuxerMuxTests`, `LibavClipExporterSpeedTests`.
 - Done since batch 1 (2026-11-09, "繼續優化影片編輯"): **an MP4 split over thousands of top-level atoms took 36-46 s to
   open** (Compress and the editor). The user's log over five runs (11-03 to 11-08): the first open of the window in a
   run probed its 78-file folder, on a hard disk, in 66-72 s, and the same four files took over 10 s each, up to 45.8,
