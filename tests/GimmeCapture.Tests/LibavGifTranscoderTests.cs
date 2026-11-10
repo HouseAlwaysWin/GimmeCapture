@@ -71,6 +71,75 @@ public sealed class LibavGifTranscoderTests : IDisposable
         Assert.InRange(colors.Count, 1, 256);
     }
 
+    // Two stretches of the clip, on even frames so that the kept frames are the coloured ones: frames 16 to 31 and 60 to 75.
+    [Fact]
+    public void WithRanges_TheGifIsThoseStretches_OneAfterTheOther()
+    {
+        string clip = WriteFlatClip();
+        string gif = Path.Combine(_dir, "cut.gif");
+        var ranges = new[]
+        {
+            new LibavClipExporter.SourceRange(16 / 30.0, 32 / 30.0),
+            new LibavClipExporter.SourceRange(60 / 30.0, 76 / 30.0),
+        };
+
+        LibavGifTranscoder.TranscodeToGif(clip, gif, GifFps, maxWidth: 0, ranges: ranges);
+
+        using SKCodec codec = OpenGif(gif);
+        int[] sourceFrames = [.. Enumerable.Range(0, 8).Select(k => 16 + (2 * k)), .. Enumerable.Range(0, 8).Select(k => 60 + (2 * k))];
+        Assert.Equal(sourceFrames.Length, codec.FrameCount);
+        for (int k = 0; k < sourceFrames.Length; k++)
+        {
+            int expected = RgbOfLuma(KeptLumas[(sourceFrames[k] / 2) % KeptLumas.Length]);
+            Assert.True(MaxDeviation(DecodeFrame(codec, k), expected) <= 3, $"GIF frame {k} is not source frame {sourceFrames[k]}");
+        }
+    }
+
+    // Twice as fast: two seconds of the clip in one second of GIF, every fourth frame of it.
+    [Fact]
+    public void WithARangeAtTwiceTheSpeed_TheGifLastsHalfAsLong()
+    {
+        string clip = WriteFlatClip();
+        string gif = Path.Combine(_dir, "fast.gif");
+
+        LibavGifTranscoder.TranscodeToGif(clip, gif, GifFps, maxWidth: 0, ranges: [new LibavClipExporter.SourceRange(0, 2, 2.0)]);
+
+        using SKCodec codec = OpenGif(gif);
+        Assert.Equal(GifFps, codec.FrameCount);
+        for (int k = 0; k < GifFps; k++)
+        {
+            Assert.True(MaxDeviation(DecodeFrame(codec, k), RgbOfLuma(KeptLumas[(2 * k) % KeptLumas.Length])) <= 3, $"GIF frame {k}");
+        }
+    }
+
+    [Fact]
+    public void AHeightLimit_ScalesTheGifDownKeepingItsShape()
+    {
+        string clip = WriteFlatClip(); // 96 x 64
+        string gif = Path.Combine(_dir, "small.gif");
+
+        LibavGifTranscoder.TranscodeToGif(clip, gif, GifFps, maxWidth: 0, maxHeight: 32);
+
+        using SKCodec codec = OpenGif(gif);
+        Assert.Equal(48, codec.Info.Width);
+        Assert.Equal(32, codec.Info.Height);
+    }
+
+    [Fact]
+    public void WithRanges_ProgressStillRisesToOne()
+    {
+        string clip = WriteFlatClip();
+        var reported = new List<double>();
+
+        LibavGifTranscoder.TranscodeToGif(
+            clip, Path.Combine(_dir, "cut.gif"), GifFps, maxWidth: 0, progress: new InlineProgress(reported.Add),
+            ranges: [new LibavClipExporter.SourceRange(0.5, 1.5), new LibavClipExporter.SourceRange(2.5, 3.5)]);
+
+        Assert.Equal(1.0, reported[^1]);
+        Assert.True(reported.Zip(reported.Skip(1)).All(pair => pair.First < pair.Second), "progress went back or repeated itself");
+        Assert.Contains(reported, value => value > 0.2 && value < LibavGifTranscoder.PalettePassShare);
+    }
+
     [Fact]
     public void Progress_RisesThroughBothPasses_AndEndsAtOne()
     {

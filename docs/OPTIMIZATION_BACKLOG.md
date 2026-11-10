@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.75.0, `## Unreleased` holds 2 entries (2026-11-10).
+- Since v0.75.0, `## Unreleased` holds 3 entries (2026-11-10).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+84937434`, installed by hand late on 2026-11-09 over
   `0.74.0+7b98611c` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1437,6 +1437,15 @@ tool.
   had added up (+56 ms after two pieces); `ToLengthAtTempo` gives the missing part back in front as silence, within 20 ms
   of its place and no longer adding up. Recordings go through the same mux and were not measured.
   `LibavMuxerMuxTests`, `LibavClipExporterSpeedTests`.
+- Done since batch 1 (2026-11-10, "拉最新後再繼續優化"): **a GIF of a cut goes straight from the source** (Pins, Compress
+  and the editor; the item left by the 2026-11-06 GIF work). `GifFrameSource` takes the kept ranges and their speeds, and a
+  height limit. On `GimmeCapture_20260803_160036.mp4` (34.6 s, 1450x900 HEVC) with the middle fifth cut, at Medium, in turn
+  (`PinGifCutProbeTests`): through an MP4 8.2 s (6.5-8.2), 4742 KB; straight 4.6 s (4.4-4.8), 3384 KB, 29% smaller for
+  one generation of loss fewer, and 27.34 s long, the picture there is, where the MP4 held its last frame up to the range's
+  nominal end (27.74). Against the 4K clip with frame marks every frame is the one it should be. Decoding what it is made
+  from twice, a GIF from 4K to 360p took 21 s against 10 through a small intermediate, so the Compress tab goes from the
+  source only up to twice the height cap (`GifSourceScaleLimit`). Crop, rotation, drawings, redaction and filters still go
+  through the intermediate, and so does every WebM.
 - Done since batch 1 (2026-11-09, "繼續優化影片編輯"): **an MP4 split over thousands of top-level atoms took 36-46 s to
   open** (Compress and the editor). The user's log over five runs (11-03 to 11-08): the first open of the window in a
   run probed its 78-file folder, on a hard disk, in 66-72 s, and the same four files took over 10 s each, up to 45.8,

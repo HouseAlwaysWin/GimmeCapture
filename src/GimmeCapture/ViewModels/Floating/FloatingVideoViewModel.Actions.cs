@@ -478,10 +478,20 @@ public partial class FloatingVideoViewModel
         BeginExport();
         try
         {
+            // A GIF takes a cut or a speed straight from the recording, which was encoded once more into an MP4 first: 2.8
+            // of the 7.9 s a 21-second cut's GIF took. With something to burn in, and for a WebM, the edit goes through that MP4.
+            bool gif = targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase);
+            if (gif && EditChangesOutput && !HasRedaction)
+            {
+                LibavClipExporter.SourceRange[] ranges = KeptRuns()
+                    .Select(run => new LibavClipExporter.SourceRange(run.SourceStart, run.SourceEnd, run.Speed))
+                    .ToArray();
+                return await TranscodeGifWebmAsync(VideoPath, null, targetExt, quality, keepAudio: false, ranges: ranges);
+            }
+
             // The transcode source is a trimmed mp4 when the edit changes the output (cut or speed),
             // else the original recording.
             string? trimmed = null;
-            bool gif = targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase);
             if (EditChangesOutput)
             {
                 trimmed = await ExportTrimmedInProcessAsync(".mp4", withoutSound: gif);
@@ -512,7 +522,7 @@ public partial class FloatingVideoViewModel
     /// </summary>
     internal static Task<string?> TranscodeGifWebmAsync(
         string source, string? intermediate, string targetExt, VideoQuality quality, bool keepAudio,
-        string? tempRoot = null) => Task.Run(() =>
+        string? tempRoot = null, IReadOnlyList<LibavClipExporter.SourceRange>? ranges = null) => Task.Run(() =>
     {
         string tempDir = Path.Combine(tempRoot ?? Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
         string outputPath = Path.Combine(tempDir, "output" + targetExt);
@@ -523,7 +533,7 @@ public partial class FloatingVideoViewModel
             if (targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase))
             {
                 (int gifFps, int maxWidth) = LibavGifTranscoder.QualityLadder(quality);
-                ok = GifWebmVideoExporter.TranscodeToGif(source, outputPath, gifFps, maxWidth, quality);
+                ok = GifWebmVideoExporter.TranscodeToGif(source, outputPath, gifFps, maxWidth, quality, ranges: ranges);
             }
             else
             {

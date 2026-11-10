@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using GimmeCapture.Models;
@@ -25,15 +26,17 @@ internal static class GifWebmVideoExporter
     /// GIF via the two-pass palette encoder. <paramref name="maxWidth"/> 0 keeps the source width;
     /// <paramref name="gifFps"/> decimates to that rate. Dithered as a GIF recording of <paramref name="quality"/> is
     /// (<see cref="LibavGifTranscoder.QualityDither"/>). Returns true when a non-empty file is produced; cancelling throws
-    /// <see cref="OperationCanceledException"/>.
+    /// <see cref="OperationCanceledException"/>. With <paramref name="ranges"/> it is made of those stretches of the clip,
+    /// and <paramref name="maxHeight"/> limits its height; no intermediate file is needed for either.
     /// </summary>
     public static bool TranscodeToGif(
         string sourcePath, string outputPath, int gifFps, int maxWidth, VideoQuality quality,
-        IProgress<double>? progress = null, CancellationToken ct = default, ManualResetEventSlim? pauseGate = null)
+        IProgress<double>? progress = null, CancellationToken ct = default, ManualResetEventSlim? pauseGate = null,
+        IReadOnlyList<LibavClipExporter.SourceRange>? ranges = null, int maxHeight = 0)
     {
         LibavGifTranscoder.TranscodeToGif(
             sourcePath, outputPath, gifFps, maxWidth, LibavGifTranscoder.QualityDither(quality), progress: progress,
-            cancellationToken: ct, pauseGate: pauseGate);
+            cancellationToken: ct, pauseGate: pauseGate, ranges: ranges, maxHeight: maxHeight);
         return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
     }
 

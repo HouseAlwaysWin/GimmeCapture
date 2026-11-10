@@ -7,10 +7,9 @@ using Xunit.Abstractions;
 namespace GimmeCapture.Tests;
 
 /// <summary>
-/// A pinned recording with a cut, saved or copied as a GIF, the way the pin makes it: the cut goes to an MP4 first, which
-/// the GIF is then made from at Medium quality. As it was (the MP4 with its sound, each GIF pass decoding in turn) against
-/// as it is (no sound in the MP4, each pass decoding ahead on a thread of its own), alternately, and whether the two GIFs
-/// are the same. Opt-in (PIN_GIF_CUT_CLIP names a recording); it writes only to a folder of its own.
+/// A pinned recording with a cut, saved or copied as a GIF, at Medium quality. As it was (the cut encoded into an MP4 first,
+/// which the GIF is then made from) against as it is (the GIF made straight from the recording's kept stretches),
+/// alternately. Opt-in (PIN_GIF_CUT_CLIP names a recording); it writes only to a folder of its own.
 /// </summary>
 public sealed class PinGifCutProbeTests
 {
@@ -19,7 +18,7 @@ public sealed class PinGifCutProbeTests
     public PinGifCutProbeTests(ITestOutputHelper output) => _output = output;
 
     [OptInFact("PIN_GIF_CUT_CLIP")]
-    public async Task ACutGif_AsItWas_AgainstAsItIs()
+    public async Task ACutGif_ThroughAnMp4_AgainstStraightFromTheRecording()
     {
         string clip = Environment.GetEnvironmentVariable("PIN_GIF_CUT_CLIP")!;
         double duration = await CompressPipeline.ProbeInputDurationAsync(clip);
@@ -37,34 +36,38 @@ public sealed class PinGifCutProbeTests
         Directory.CreateDirectory(folder);
         try
         {
-            var cut = new Dictionary<bool, List<double>> { [false] = new(), [true] = new() };
-            var gif = new Dictionary<bool, List<double>> { [false] = new(), [true] = new() };
+            var total = new Dictionary<bool, List<double>> { [false] = new(), [true] = new() };
             var made = new Dictionary<bool, string>();
             for (int round = 0; round < 4; round++)
             {
-                foreach (bool now in round % 2 == 0 ? new[] { false, true } : new[] { true, false })
+                foreach (bool straight in round % 2 == 0 ? new[] { false, true } : new[] { true, false })
                 {
-                    string mid = Path.Combine(folder, $"mid{round}{now}.mp4");
-                    string result = Path.Combine(folder, $"out{round}{now}.gif");
-                    var options = now ? new LibavExportOptions { DropAudio = true } : null;
+                    string result = Path.Combine(folder, $"out{round}{straight}.gif");
                     var stopwatch = Stopwatch.StartNew();
-                    Assert.True(LibavClipExporter.TryExport(clip, ranges, mid, VideoQuality.Medium, options: options));
-                    cut[now].Add(stopwatch.Elapsed.TotalMilliseconds);
-                    stopwatch.Restart();
-                    LibavGifTranscoder.TranscodeToGif(mid, result, gifFps, maxWidth, dither, decodeAhead: now);
-                    gif[now].Add(stopwatch.Elapsed.TotalMilliseconds);
-                    made[now] = result;
+                    if (straight)
+                    {
+                        LibavGifTranscoder.TranscodeToGif(clip, result, gifFps, maxWidth, dither, ranges: ranges);
+                    }
+                    else
+                    {
+                        string mid = Path.Combine(folder, $"mid{round}.mp4");
+                        Assert.True(LibavClipExporter.TryExport(
+                            clip, ranges, mid, VideoQuality.Medium, options: new LibavExportOptions { DropAudio = true }));
+                        LibavGifTranscoder.TranscodeToGif(mid, result, gifFps, maxWidth, dither);
+                    }
+
+                    total[straight].Add(stopwatch.Elapsed.TotalMilliseconds);
+                    made[straight] = result;
                 }
             }
 
-            foreach (bool now in new[] { false, true })
+            foreach (bool straight in new[] { false, true })
             {
+                VideoTestClips.Timeline timeline = VideoTestClips.Read(made[straight]);
                 _output.WriteLine(
-                    $"{(now ? "as it is" : "as it was"),-10} cut {Describe(cut[now])}, GIF {Describe(gif[now])}, " +
-                    $"total {Median(cut[now]) + Median(gif[now]):0} ms; {new FileInfo(made[now]).Length / 1024} KB");
+                    $"{(straight ? "straight" : "through an MP4"),-15} {Describe(total[straight])}; " +
+                    $"{new FileInfo(made[straight]).Length / 1024} KB, {timeline.Frames} frames over {timeline.DurationSeconds:F2} s");
             }
-
-            Assert.Equal(File.ReadAllBytes(made[false]), File.ReadAllBytes(made[true]));
         }
         finally
         {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using FFmpeg.AutoGen;
 
@@ -55,7 +56,9 @@ internal static class LibavGifTranscoder
     /// <paramref name="pauseGate"/> is reset, the transcode waits before its next packet. <paramref name="mapThreads"/>
     /// is how many threads map frames to the palette, half the processor's by default, and
     /// <paramref name="decodeAhead"/> whether each pass decodes on a thread of its own a few frames ahead
-    /// (<see cref="FrameFeed"/>); the GIF is the same either way.
+    /// (<see cref="FrameFeed"/>); the GIF is the same either way. With <paramref name="ranges"/> the GIF is those stretches
+    /// of the clip one after the other, each at its speed, and <paramref name="maxHeight"/> limits its height as
+    /// <paramref name="maxWidth"/> does its width (0 for neither).
     /// </summary>
     public static void TranscodeToGif(
         string inputPath,
@@ -67,7 +70,9 @@ internal static class LibavGifTranscoder
         CancellationToken cancellationToken = default,
         ManualResetEventSlim? pauseGate = null,
         int mapThreads = 0,
-        bool decodeAhead = true)
+        bool decodeAhead = true,
+        IReadOnlyList<LibavClipExporter.SourceRange>? ranges = null,
+        int maxHeight = 0)
     {
         FFmpegRuntime.EnsureInitialized();
         cancellationToken.ThrowIfCancellationRequested();
@@ -80,12 +85,12 @@ internal static class LibavGifTranscoder
         {
             TranscodeToGifWithPalette(
                 inputPath, outputPath, targetFps, maxWidth, paletteuseArgs, reporter, pauseGate, cancellationToken,
-                threads, decodeAhead);
+                threads, decodeAhead, ranges, maxHeight);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             AppLog.Warning("Gif.PaletteTranscode", ex); // falls back to single-pass RGB8
-            TranscodeToGifRgb8(inputPath, outputPath, targetFps, maxWidth, reporter, pauseGate, cancellationToken);
+            TranscodeToGifRgb8(inputPath, outputPath, targetFps, maxWidth, reporter, pauseGate, cancellationToken, ranges, maxHeight);
         }
     }
 
@@ -97,9 +102,12 @@ internal static class LibavGifTranscoder
         int maxWidth,
         GifProgress progress,
         ManualResetEventSlim? pauseGate,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<LibavClipExporter.SourceRange>? ranges,
+        int maxHeight)
     {
-        using var source = new GifFrameSource(inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB8, evenSize: false);
+        using var source = new GifFrameSource(
+            inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB8, evenSize: false, ranges, maxHeight);
         using var writer = new GifWriter(outputPath, source.Width, source.Height, source.Fps, AVPixelFormat.AV_PIX_FMT_RGB8);
         AVFrame* frame = ffmpeg.av_frame_alloc();
         if (frame == null)
@@ -141,7 +149,9 @@ internal static class LibavGifTranscoder
         ManualResetEventSlim? pauseGate,
         CancellationToken cancellationToken,
         int mapThreads,
-        bool decodeAhead)
+        bool decodeAhead,
+        IReadOnlyList<LibavClipExporter.SourceRange>? ranges,
+        int maxHeight)
     {
         AVFilter* bufferF = ffmpeg.avfilter_get_by_name("buffer");
         AVFilter* palettegenF = ffmpeg.avfilter_get_by_name("palettegen");
@@ -169,7 +179,7 @@ internal static class LibavGifTranscoder
             int height;
             int fps;
             using (var firstPass = new GifFrameSource(
-                inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB24, evenSize: true))
+                inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB24, evenSize: true, ranges, maxHeight))
             {
                 width = firstPass.Width;
                 height = firstPass.Height;
@@ -222,7 +232,7 @@ internal static class LibavGifTranscoder
             mapper.SetPalette(pulled);
 
             using var secondPass = new GifFrameSource(
-                inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB24, evenSize: true);
+                inputPath, targetFps, maxWidth, AVPixelFormat.AV_PIX_FMT_RGB24, evenSize: true, ranges, maxHeight);
             using var secondFrames = new FrameFeed(secondPass, decodeAhead, pauseGate, cancellationToken);
             using var writer = new GifWriter(outputPath, width, height, fps, AVPixelFormat.AV_PIX_FMT_PAL8);
             mapper.Start();
@@ -715,6 +725,9 @@ internal static class LibavGifTranscoder
 
     private sealed unsafe class GifFrameSource : IDisposable
     {
+        // As the clip exporter: a frame this close to a stretch's start or end counts as at it.
+        private const double RangeEpsilon = 0.0005;
+
         private readonly AVPixelFormat _format;
         private readonly GifFrameTimeline _timeline;
         private readonly int _videoStream;
@@ -729,9 +742,21 @@ internal static class LibavGifTranscoder
         private long? _firstTimestamp;
         private double _decodedSeconds;
 
-        public GifFrameSource(string inputPath, int targetFps, int maxWidth, AVPixelFormat format, bool evenSize)
+        // The stretches a cut clip's GIF is made of, in the order they play; null for the whole clip.
+        private readonly IReadOnlyList<LibavClipExporter.SourceRange>? _ranges;
+        private readonly double _inputStartSeconds;
+        private int _range = -1;             // the one being read
+        private double _rangeOutputStart;    // where it starts in the GIF, in seconds
+        private double _rangesDoneSeconds;   // of the source, in the ones before it
+        private double _lastFrameSeconds = double.NaN;
+        private readonly double _sourceFrameSeconds;
+
+        public GifFrameSource(
+            string inputPath, int targetFps, int maxWidth, AVPixelFormat format, bool evenSize,
+            IReadOnlyList<LibavClipExporter.SourceRange>? ranges = null, int maxHeight = 0)
         {
             _format = format;
+            _ranges = ranges;
             try
             {
                 AVFormatContext* input = null;
@@ -779,6 +804,12 @@ internal static class LibavGifTranscoder
                     outH = Math.Max(1, (int)Math.Round(srcH * scale));
                 }
 
+                if (maxHeight > 0 && outH > maxHeight)
+                {
+                    outW = Math.Max(1, (int)Math.Round(outW * (maxHeight / (double)outH)));
+                    outH = maxHeight;
+                }
+
                 if (evenSize)
                 {
                     outW = Math.Max(2, outW & ~1);
@@ -792,9 +823,15 @@ internal static class LibavGifTranscoder
                 double sourceFps = guessed.num > 0 && guessed.den > 0 ? ffmpeg.av_q2d(guessed) : Fps;
                 _timeBaseSeconds = ffmpeg.av_q2d(inStream->time_base);
                 _timeline = new GifFrameTimeline(_timeBaseSeconds, Fps, sourceFps);
-                _durationSeconds = inStream->duration > 0 && _timeBaseSeconds > 0
-                    ? inStream->duration * _timeBaseSeconds
-                    : _input->duration > 0 ? _input->duration / (double)ffmpeg.AV_TIME_BASE : 0;
+                _sourceFrameSeconds = 1.0 / (sourceFps > 0 ? sourceFps : Fps);
+                _inputStartSeconds = _input->start_time != ffmpeg.AV_NOPTS_VALUE
+                    ? _input->start_time / (double)ffmpeg.AV_TIME_BASE
+                    : 0;
+                _durationSeconds = ranges != null
+                    ? ranges.Sum(range => range.Duration)
+                    : inStream->duration > 0 && _timeBaseSeconds > 0
+                        ? inStream->duration * _timeBaseSeconds
+                        : _input->duration > 0 ? _input->duration / (double)ffmpeg.AV_TIME_BASE : 0;
 
                 _scaler = ffmpeg.sws_getContext(
                     srcW, srcH, _decoder->pix_fmt,
@@ -841,11 +878,21 @@ internal static class LibavGifTranscoder
         /// </summary>
         public bool NextFrame(AVFrame* output, ManualResetEventSlim? pauseGate, CancellationToken cancellationToken)
         {
+            if (_ranges != null && _range < 0 && !MoveToNextRange())
+            {
+                return false;
+            }
+
             while (true)
             {
                 int gr = ffmpeg.avcodec_receive_frame(_decoder, _decoded);
                 if (gr == ffmpeg.AVERROR_EOF)
                 {
+                    if (_ranges != null && MoveToNextRange())
+                    {
+                        continue;
+                    }
+
                     return false;
                 }
 
@@ -853,6 +900,11 @@ internal static class LibavGifTranscoder
                 {
                     if (_flushed)
                     {
+                        if (_ranges != null && MoveToNextRange())
+                        {
+                            continue;
+                        }
+
                         return false;
                     }
 
@@ -867,15 +919,49 @@ internal static class LibavGifTranscoder
                 long? ts = _decoded->best_effort_timestamp != ffmpeg.AV_NOPTS_VALUE
                     ? _decoded->best_effort_timestamp
                     : null;
-                if (ts.HasValue)
+                long outputPts;
+                if (_ranges != null)
                 {
-                    _firstTimestamp ??= ts.Value;
-                    _decodedSeconds = Math.Max(_decodedSeconds, (ts.Value - _firstTimestamp.Value) * _timeBaseSeconds);
-                }
+                    double seconds = ts.HasValue
+                        ? ts.Value * _timeBaseSeconds
+                        : double.IsNaN(_lastFrameSeconds) ? _ranges[_range].StartSeconds : _lastFrameSeconds + _sourceFrameSeconds;
+                    _lastFrameSeconds = seconds;
+                    LibavClipExporter.SourceRange range = _ranges[_range];
+                    if (seconds < range.StartSeconds - RangeEpsilon)
+                    {
+                        continue;
+                    }
 
-                if (!_timeline.TrySchedule(ts, out long outputPts))
+                    if (seconds >= range.EndSeconds - RangeEpsilon)
+                    {
+                        if (MoveToNextRange())
+                        {
+                            continue;
+                        }
+
+                        return false;
+                    }
+
+                    // From where the range starts, or the file's start when the range reaches back past it, as an export does.
+                    double origin = Math.Max(range.StartSeconds, _inputStartSeconds);
+                    _decodedSeconds = _rangesDoneSeconds + Math.Max(0, seconds - range.StartSeconds);
+                    if (!_timeline.TryScheduleAt(_rangeOutputStart + ((seconds - origin) / range.EffectiveSpeed), out outputPts))
+                    {
+                        continue;
+                    }
+                }
+                else
                 {
-                    continue;
+                    if (ts.HasValue)
+                    {
+                        _firstTimestamp ??= ts.Value;
+                        _decodedSeconds = Math.Max(_decodedSeconds, (ts.Value - _firstTimestamp.Value) * _timeBaseSeconds);
+                    }
+
+                    if (!_timeline.TrySchedule(ts, out outputPts))
+                    {
+                        continue;
+                    }
                 }
 
                 ffmpeg.av_frame_unref(output);
@@ -887,6 +973,31 @@ internal static class LibavGifTranscoder
                 output->pts = outputPts;
                 return true;
             }
+        }
+
+        // On to the next kept stretch, from the keyframe before it; false when there is none.
+        private bool MoveToNextRange()
+        {
+            if (_range >= 0)
+            {
+                LibavClipExporter.SourceRange finished = _ranges![_range];
+                _rangesDoneSeconds += finished.Duration;
+                _rangeOutputStart += finished.Duration / finished.EffectiveSpeed;
+            }
+
+            if (++_range >= _ranges!.Count)
+            {
+                return false;
+            }
+
+            ThrowIfErr(
+                ffmpeg.av_seek_frame(
+                    _input, _videoStream, (long)(_ranges[_range].StartSeconds / _timeBaseSeconds), ffmpeg.AVSEEK_FLAG_BACKWARD),
+                "gif_seek_range");
+            ffmpeg.avcodec_flush_buffers(_decoder);
+            _flushed = false;
+            _lastFrameSeconds = double.NaN;
+            return true;
         }
 
         // Hands the decoder the clip's next video packet, or tells it the clip has ended.
@@ -1144,9 +1255,18 @@ internal sealed class GifFrameTimeline
         }
 
         _decodedFrameIndex++;
+        return TryScheduleAt(elapsedSeconds, out outputPts);
+    }
+
+    /// <summary>
+    /// As <see cref="TrySchedule"/>, for a frame whose place in the GIF is known: a frame of a cut clip, placed by what is
+    /// kept before it.
+    /// </summary>
+    public bool TryScheduleAt(double outputSeconds, out long outputPts)
+    {
         long candidatePts = Math.Max(
             0,
-            (long)Math.Floor((elapsedSeconds * _targetFps) + 0.000001));
+            (long)Math.Floor((outputSeconds * _targetFps) + 0.000001));
         if (candidatePts <= _lastOutputPts)
         {
             outputPts = 0;

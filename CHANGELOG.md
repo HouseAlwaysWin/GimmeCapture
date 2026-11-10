@@ -19,6 +19,10 @@
   H.264, H.265 and AV1, as MP4, MOV and MKV), the picture was 21 ms ahead of the sound and is now level with it.
 - **A piece at another speed keeps its sound where it belongs.** Its sound came out 3-60 ms short, taken from its start, so
   that piece played early and every piece after it earlier still. It now has exactly the length of the piece.
+- **A GIF of a cut recording is made straight from the recording.** A cut or a speed change was first encoded into an
+  MP4 and the GIF made from that. On a 34-second 1450x900 recording with a piece cut out, a pinned recording's GIF now
+  takes 4.6 s instead of 8.2, and comes out 3.4 MB instead of 4.7, since it no longer picks up one encoder's noise on the
+  way. The Compress tab's GIF does the same, unless the source is more than twice the size asked for.
 
 ## v0.75.0 - 2026-11-09
 

@@ -48,6 +48,22 @@ public sealed class FloatingVideoGifWebmExportTests : IDisposable
     }
 
     [Fact]
+    public async Task ACutGif_IsMadeStraightFromTheRecording_FromWhatIsKept()
+    {
+        string recording = VideoTestClips.WriteConstantRate(Path.Combine(_root, "recording.mkv"), 64, 48, 90, 30);
+        var ranges = new[] { new LibavClipExporter.SourceRange(0, 1), new LibavClipExporter.SourceRange(2, 3) };
+
+        string? gif = await FloatingVideoViewModel.TranscodeGifWebmAsync(
+            recording, intermediate: null, ".gif", VideoQuality.Low, keepAudio: false, _root, ranges);
+
+        Assert.NotNull(gif);
+        VideoTestClips.Timeline timeline = VideoTestClips.Read(gif);
+        (int fps, _) = LibavGifTranscoder.QualityLadder(VideoQuality.Low);
+        Assert.Equal(2 * fps, timeline.Frames);
+        Assert.True(File.Exists(recording));
+    }
+
+    [Fact]
     public async Task AGifOfTheWholeRecording_LeavesTheRecordingAlone()
     {
         string recording = VideoTestClips.WriteConstantRate(Path.Combine(_root, "recording.mkv"), 64, 48, 30, 30);

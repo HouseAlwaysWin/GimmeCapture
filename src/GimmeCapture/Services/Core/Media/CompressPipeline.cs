@@ -311,21 +311,17 @@ internal static class CompressPipeline
     internal const double WebmIntermediateShare = 0.15;
 
     /// <summary>
-    /// Whether a GIF or WebM can be transcoded from the source itself, with no intermediate: the whole clip at its own
-    /// speed, uncropped and unrotated with nothing drawn on it and no filter, and for a WebM keeping its sound stereo
-    /// (the transcoders apply none of those; the intermediate's AAC is stereo unless mono is asked for, and so is the
-    /// WebM's sound decoded from the source). The size and frame-rate caps are <see cref="CapsLeaveTheSource"/>'s.
+    /// Whether a GIF or WebM can be transcoded from the source itself, with no intermediate: uncropped and unrotated with
+    /// nothing drawn on it and no filter. A GIF takes the kept stretches, their speeds, the size and the frame rate itself;
+    /// a WebM has to be the whole clip at its own speed keeping its sound stereo (the intermediate's AAC is stereo unless
+    /// mono is asked for, and so is the WebM's sound decoded from the source), its caps being
+    /// <see cref="CapsLeaveTheSource"/>'s.
     /// </summary>
     internal static bool NeedsNoIntermediate(
         LibavClipExporter.SourceRange[] ranges, double durationSeconds, int rotationDegrees, VideoEditCrop? crop,
         bool burnsIn, CompressSettingsSnapshot s, bool isGif)
     {
-        double end = durationSeconds > 0 ? durationSeconds : UnknownLengthEndSeconds;
-        bool wholeClip = ranges.Length == 1
-            && ranges[0].StartSeconds <= 0.001
-            && ranges[0].EndSeconds >= end - 0.001
-            && Math.Abs(ranges[0].Speed - 1.0) <= 0.001;
-        return wholeClip
+        return (isGif || IsWholeClip(ranges, durationSeconds))
             && LibavClipExporter.NormalizeRotation(rotationDegrees) == 0
             && crop == null
             && !burnsIn
@@ -336,13 +332,27 @@ internal static class CompressPipeline
             && (isGif || s.DropAudio || s.AudioChannels != 1);
     }
 
+    /// <summary>How many times its height cap a source can be and a GIF still be made from it directly.</summary>
+    internal const int GifSourceScaleLimit = 2;
+
+    private static bool IsWholeClip(LibavClipExporter.SourceRange[] ranges, double durationSeconds)
+    {
+        double end = durationSeconds > 0 ? durationSeconds : UnknownLengthEndSeconds;
+        return ranges.Length == 1
+            && ranges[0].StartSeconds <= 0.001
+            && ranges[0].EndSeconds >= end - 0.001
+            && Math.Abs(ranges[0].Speed - 1.0) <= 0.001;
+    }
+
     /// <summary>
-    /// Whether the size cap, and for a WebM the frame-rate cap, leave a source of this height and rate as it is: the
-    /// intermediate only scales down to the cap and lowers the rate to it. A GIF's rate is a setting of the GIF's own.
-    /// A size or rate not known (0) counts as capped.
+    /// Whether to go from the source given the size cap, and for a WebM the frame-rate cap. A WebM takes neither, so it
+    /// needs a source within them. A GIF scales and sets its rate itself, but decodes what it is made from twice: far above
+    /// the GIF's size that costs more than a small intermediate saves (a 4K clip made into a 360p GIF took 21 s against
+    /// 10), so it goes from the source up to <see cref="GifSourceScaleLimit"/> times the cap. A size or rate not known (0)
+    /// counts as capped.
     /// </summary>
     internal static bool CapsLeaveTheSource(CompressSettingsSnapshot s, bool isGif, int sourceHeight, int sourceFps) =>
-        (s.MaxHeight <= 0 || (sourceHeight > 0 && sourceHeight <= s.MaxHeight))
+        (s.MaxHeight <= 0 || (sourceHeight > 0 && sourceHeight <= s.MaxHeight * (isGif ? GifSourceScaleLimit : 1)))
         && (isGif || s.MaxFps <= 0 || (sourceFps > 0 && sourceFps <= s.MaxFps));
 
     // GIF/WebM output for the compress pipeline, through GifWebmVideoExporter as the pin's. The transcoders take a whole
@@ -420,7 +430,7 @@ internal static class CompressPipeline
 
             // 2. Transcode to the final format INTO the temp dir, then copy to the real output only on success — so a
             //    mid-transcode failure never leaves a partial file at the user's location. An intermediate already has
-            //    MaxHeight/MaxFps baked in, and a source taken as it is is within them, so the GIF ladder only kicks
+            //    MaxHeight/MaxFps baked in, and a GIF from the source takes them itself, so the GIF ladder only kicks
             //    in when the user left resolution/fps at Original.
             //    The transcode gets the token too: it only kept the transcode from starting, so a cancel during it
             //    ran it to the end and the file came out as done. It waits while paused, as the intermediate does.
@@ -433,7 +443,8 @@ internal static class CompressPipeline
                 int gifFps = s.MaxFps > 0 ? s.MaxFps : ladderFps;
                 int maxWidth = s.MaxHeight > 0 ? 0 : ladderWidth;
                 ok = await Task.Run(() => GifWebmVideoExporter.TranscodeToGif(
-                    transcodeSource, finalTemp, gifFps, maxWidth, quality, transcodeProgress, token, pauseGate), token);
+                    transcodeSource, finalTemp, gifFps, maxWidth, quality, transcodeProgress, token, pauseGate,
+                    straight && !IsWholeClip(ranges, durationSeconds) ? ranges : null, straight ? s.MaxHeight : 0), token);
             }
             else
             {

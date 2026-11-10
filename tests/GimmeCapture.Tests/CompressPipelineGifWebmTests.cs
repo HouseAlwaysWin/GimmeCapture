@@ -13,8 +13,9 @@ using Xunit.Abstractions;
 namespace GimmeCapture.Tests;
 
 /// <summary>
-/// A compress to GIF or WebM transcodes an unedited clip from the source, and an edited one from an H.264 intermediate
-/// with the edits applied. The intermediate used to be made for every clip; it reported the whole progress bar and the
+/// A compress to GIF or WebM transcodes an unedited clip from the source, a GIF also a cut, a speed, a size or a rate, which
+/// it applies itself, and anything else from an H.264 intermediate with the edits applied. The intermediate used to be made
+/// for every clip; it reported the whole progress bar and the
 /// transcode nothing, and the transcode never saw the cancel token or the pause, so a cancel during it ran it to the end
 /// and the file came out as done. The tests tell the steps apart by the files they write in the pipeline's temporary
 /// folder. Real libav on tiny synthetic clips (<see cref="VideoTestClips"/>), so like
@@ -113,11 +114,13 @@ public sealed class CompressPipelineGifWebmTests : IDisposable
     }
 
     [Theory]
-    [InlineData(".gif", "trimmed")]
+    [InlineData(".webm", "trimmed")]
     [InlineData(".webm", "sped up")]
     [InlineData(".gif", "rotated")]
     [InlineData(".webm", "a filter")]
-    [InlineData(".gif", "scaled down")]
+    [InlineData(".gif", "a filter")]
+    [InlineData(".gif", "scaled far down")]
+    [InlineData(".webm", "scaled down")]
     [InlineData(".webm", "fewer frames")]
     [InlineData(".webm", "mono")]
     public async Task AnEditedClip_StillGoesThroughTheIntermediate(string extension, string edit)
@@ -130,6 +133,7 @@ public sealed class CompressPipelineGifWebmTests : IDisposable
             "rotated" => (Settings(), null, 90),
             "a filter" => (Settings() with { Grayscale = true }, null, 0),
             "scaled down" => (Settings() with { MaxHeight = 24 }, null, 0), // the clip is 48 tall
+            "scaled far down" => (Settings() with { MaxHeight = 16 }, null, 0), // more than twice over
             "fewer frames" => (Settings() with { MaxFps = 15 }, null, 0),  // the clip has 30 a second
             "mono" => (Settings() with { AudioChannels = 1 }, ((double, double, double)[]?)null, 0),
             _ => throw new ArgumentOutOfRangeException(nameof(edit)),
@@ -140,6 +144,52 @@ public sealed class CompressPipelineGifWebmTests : IDisposable
 
         Assert.True(ok);
         Assert.True(intermediate);
+    }
+
+    // The encode of the whole clip into an intermediate was most of what a cut GIF of a long video took.
+    [Theory]
+    [InlineData("trimmed")]
+    [InlineData("cut")]
+    [InlineData("sped up")]
+    [InlineData("scaled down")]
+    [InlineData("fewer frames")]
+    public async Task AGif_TakesTheCutTheSpeedAndTheSizeItself_WithNoIntermediate(string edit)
+    {
+        string clip = VideoTestClips.WriteWithTone(Path.Combine(_dir, "clip.mkv"), 64, 48, 90, 30, detailed: true);
+        (CompressSettingsSnapshot settings, (double, double, double)[]? keptRuns) = edit switch
+        {
+            "trimmed" => (Settings(), [(0.5, 2.5, 1.0)]),
+            "cut" => (Settings(), [(0, 1, 1.0), (2, 3, 1.0)]),
+            "sped up" => (Settings(), [(0, 3.0, 2.0)]),
+            "scaled down" => (Settings() with { MaxHeight = 24 }, null),
+            "fewer frames" => (Settings() with { MaxFps = 10 }, ((double, double, double)[]?)null),
+            _ => throw new ArgumentOutOfRangeException(nameof(edit)),
+        };
+
+        (bool ok, bool intermediate) = await EncodeWatchingTheIntermediateAsync(clip, "out.gif", settings, keptRuns);
+
+        Assert.True(ok);
+        Assert.False(intermediate);
+        VideoTestClips.Timeline gif = VideoTestClips.Read(Path.Combine(_dir, "out.gif"));
+        using var player = new LibavVideoFramePlayer();
+        switch (edit)
+        {
+            case "trimmed":
+                Assert.Equal(2.0, gif.DurationSeconds, 1);
+                break;
+            case "cut":
+                Assert.Equal(2.0, gif.DurationSeconds, 1);
+                break;
+            case "sped up":
+                Assert.Equal(1.5, gif.DurationSeconds, 1);
+                break;
+            case "scaled down":
+                Assert.Equal((32, 24), await player.ProbeVideoSizeAsync(Path.Combine(_dir, "out.gif")));
+                break;
+            case "fewer frames":
+                Assert.Equal(30, gif.Frames);
+                break;
+        }
     }
 
     // Each with a frame-rate cap of 30, the clip's own rate.
@@ -266,6 +316,14 @@ public sealed class CompressPipelineGifWebmTests : IDisposable
         Assert.False(CompressPipeline.NeedsNoIntermediate(
             whole, 3.0, 0, null, false, Settings() with { Sharpen = SharpenMode.Light }, false));
 
+        // A GIF takes what is kept and at what speed itself, but not a turn, a crop, a drawing or a filter.
+        Assert.True(CompressPipeline.NeedsNoIntermediate([new(0.5, 2.5)], 3.0, 0, null, false, Settings(), isGif: true));
+        Assert.True(CompressPipeline.NeedsNoIntermediate([new(0, 1), new(2, 3, 1.5)], 3.0, 0, null, false, Settings(), isGif: true));
+        Assert.False(CompressPipeline.NeedsNoIntermediate(whole, 3.0, 90, null, false, Settings(), isGif: true));
+        Assert.False(CompressPipeline.NeedsNoIntermediate(whole, 3.0, 0, new VideoEditCrop(0, 0, 32, 24), false, Settings(), isGif: true));
+        Assert.False(CompressPipeline.NeedsNoIntermediate(whole, 3.0, 0, null, burnsIn: true, Settings(), isGif: true));
+        Assert.False(CompressPipeline.NeedsNoIntermediate(whole, 3.0, 0, null, false, Settings() with { Grayscale = true }, isGif: true));
+
         // Mono matters only to a WebM's sound, and not once the sound is dropped.
         CompressSettingsSnapshot mono = Settings() with { AudioChannels = 1 };
         Assert.False(CompressPipeline.NeedsNoIntermediate(whole, 3.0, 0, null, false, mono, isGif: false));
@@ -281,6 +339,9 @@ public sealed class CompressPipelineGifWebmTests : IDisposable
     [InlineData(0, 30, false, 900, 30, true)]     // the rate cap is the source's rate
     [InlineData(0, 30, false, 900, 60, false)]    // fewer frames
     [InlineData(0, 30, true, 900, 60, true)]      // a GIF's rate is its own setting
+    [InlineData(480, 0, true, 900, 30, true)]     // a GIF scales down itself, up to twice over
+    [InlineData(480, 0, true, 2160, 30, false)]   // beyond that an intermediate costs less than decoding it twice
+    [InlineData(480, 0, true, 0, 30, false)]      // a size not known
     public void CapsLeaveTheSource_WhenItIsWithinThem(
         int maxHeight, int maxFps, bool isGif, int sourceHeight, int sourceFps, bool expected)
     {
