@@ -136,6 +136,50 @@ public sealed class LibavStillFrameDecoderPiecesTests : IDisposable
     }
 
     [Fact]
+    public async Task APieceRunningPastThePicture_EndsWhereThePictureDoes()
+    {
+        // A recording's sound runs on 0.2-1 s past its last frame, so the file is longer than its picture, and a piece to
+        // the end of the file would hold that frame through the rest.
+        var started = new List<PlaybackPiece>();
+        using var cts = new CancellationTokenSource(Timeout);
+
+        using var decoder = new LibavStillFrameDecoder(WriteEncodedClip(), Width, Height);
+        await decoder.PlayPiecesAsync(
+            new PlaybackPieces([Piece(25, EncodedFrames + 30)], 0, 25 * FrameSeconds, () => false),
+            (_, _) => { }, cts.Token, Noting(started));
+
+        Assert.InRange(Assert.Single(started).EndSeconds, (EncodedFrames - 1) * FrameSeconds, (EncodedFrames + 1) * FrameSeconds);
+    }
+
+    [Theory]
+    [InlineData(10)] // a short way on, decoded on to
+    [InlineData(50)] // too far for that, a seek
+    public async Task ThePlayersOwnDecode_PlaysThePiecesTheSameWay(int secondPieceFrame)
+    {
+        // What a pin plays a timeline with cuts through, each piece's sound starting as the decode reaches it.
+        PlaybackPiece first = Piece(2, 6);
+        PlaybackPiece second = Piece(secondPieceFrame, secondPieceFrame + 4);
+        var frames = new List<int>();
+        var started = new List<PlaybackPiece>();
+        using var cts = new CancellationTokenSource(Timeout);
+
+        using var player = new LibavVideoFramePlayer();
+        await player.PlayFramesAsync(
+            WriteRawClip(), RawWidth, RawHeight, first.StartSeconds, first.Speed, false,
+            (_, seconds) => frames.Add(FrameIndexAt(seconds)),
+            cts.Token,
+            pieces: new PlaybackPieces([first, second], 0, first.StartSeconds, () => false),
+            onPieceStarts: Noting(started));
+
+        Assert.False(cts.IsCancellationRequested, "the call did not end after the last piece");
+        Assert.Equal([first, second], started);
+        Assert.Equal(2, frames[0]);
+        Assert.Contains(secondPieceFrame, frames);
+        Assert.All(frames, frame => Assert.True(
+            (frame >= 2 && frame < 6) || (frame >= secondPieceFrame && frame < secondPieceFrame + 4), $"frame {frame} of {string.Join(",", frames)}"));
+    }
+
+    [Fact]
     public async Task ThePieceBefore_HasItsLastFramesTime_BeforeTheNextShows()
     {
         // The next piece's first frame is decoded within a millisecond here. A frame lasts 33 ms, and without the wait

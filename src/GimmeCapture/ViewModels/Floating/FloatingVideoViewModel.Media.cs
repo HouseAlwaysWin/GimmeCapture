@@ -4,6 +4,7 @@ using Avalonia.Platform;
 using ReactiveUI;
 using ReactiveUI.Reactive;
 using System;
+using System.Collections.Generic;
 using System.Reactive;
 using System.Threading.Tasks;
 using System.Globalization;
@@ -11,6 +12,7 @@ using System.Threading;
 using System.Diagnostics;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using NAudio.Wave;
 
@@ -179,8 +181,11 @@ public partial class FloatingVideoViewModel
         }
 
         // Read before the generation moves on, after which the decoder's last position no longer counts.
-        double startSeconds = _seekTargetSeconds >= 0 ? _seekTargetSeconds : PlayheadSeconds();
+        bool seekAsked = _seekTargetSeconds >= 0;
+        double startSeconds = seekAsked ? _seekTargetSeconds : PlayheadSeconds();
         _seekTargetSeconds = -1;
+        bool playedToTheEnd = _playedToTheEnd;
+        _playedToTheEnd = false;
 
         // Cancel old playback in background (never blocks)
         CancelPlaybackInBackground();
@@ -192,7 +197,7 @@ public partial class FloatingVideoViewModel
         var effectiveEnd = TotalDuration;
         double effectiveStart = keptForStart.Length > 0 ? keptForStart[0].SourceStart : 0;
 
-        bool wrapped = effectiveEnd > TimeSpan.Zero && startSeconds >= effectiveEnd.TotalSeconds;
+        bool wrapped = StartsOver(playedToTheEnd, seekAsked, startSeconds, effectiveEnd.TotalSeconds);
         if (wrapped)
         {
             startSeconds = effectiveStart;
@@ -265,9 +270,7 @@ public partial class FloatingVideoViewModel
                     _seamlessUnavailable = true;
                     if (!IsLooping)
                     {
-                        _isPlaybackActive = false;
-                        StopAudioPlayback();
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
+                        EndPlayback();
                         break;
                     }
 
@@ -276,6 +279,43 @@ public partial class FloatingVideoViewModel
                     continue;
                 }
 
+                // Pieces cut out or at other speeds: all of them in one decode, each with its sound.
+                if (!playSingleFrame
+                    && !_seamlessUnavailable
+                    && kept.Length > 0
+                    && TotalDuration > TimeSpan.Zero)
+                {
+                    IReadOnlyList<VideoEditSegment> runs = VideoSegmentEditor.CoalesceContiguous(kept);
+                    if (PiecesFor(runs, nextStartSeconds, _playbackSpeed, () => IsLooping) is not { } pieces)
+                    {
+                        EndPlayback();
+                        break;
+                    }
+
+                    if (pieces.Current.StartSeconds != nextStartSeconds)
+                    {
+                        MovePlayhead(pieces.Current.StartSeconds, generation); // snapped out of a cut gap
+                    }
+
+                    bool playedThrough = await PlayKeptPiecesAsync(ct, generation, pieces, runs).ConfigureAwait(false);
+                    if (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    if (playedThrough)
+                    {
+                        EndPlayback();
+                        break;
+                    }
+
+                    // It could not go on in one decode, as a file that cannot seek does not. Pass by pass from here.
+                    _seamlessUnavailable = true;
+                    nextStartSeconds = pieces.Current.StartSeconds;
+                    continue;
+                }
+
+                // Below: a clip with no timeline, not looping or at another speed, and a file that could not do the above.
                 bool multi = !playSingleFrame && kept.Length >= 1;
 
                 double startSeconds = nextStartSeconds;
@@ -290,9 +330,7 @@ public partial class FloatingVideoViewModel
                         // Past the last kept piece: behave like end of clip.
                         if (!IsLooping)
                         {
-                            _isPlaybackActive = false;
-                            StopAudioPlayback();
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
+                            EndPlayback();
                             break;
                         }
 
@@ -396,9 +434,7 @@ public partial class FloatingVideoViewModel
 
                     if (!IsLooping)
                     {
-                        _isPlaybackActive = false;
-                        StopAudioPlayback();
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
+                        EndPlayback();
                         break;
                     }
 
@@ -409,9 +445,7 @@ public partial class FloatingVideoViewModel
 
                 if (!IsLooping)
                 {
-                    _isPlaybackActive = false;
-                    StopAudioPlayback();
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
+                    EndPlayback();
                     break;
                 }
 
@@ -501,6 +535,23 @@ public partial class FloatingVideoViewModel
     }
 
     private void StopAudioPlayback() => _audioPreview.Stop();
+
+    /// <summary>
+    /// Whether Play starts over from the beginning: once the playback has reached its end by itself, where the playhead
+    /// stands on the last frame, or from at or past the clip's length. A pause goes on from the playhead, and a seek goes
+    /// where it was asked to.
+    /// </summary>
+    internal static bool StartsOver(bool playedToTheEnd, bool seekAsked, double startSeconds, double endSeconds) =>
+        (playedToTheEnd && !seekAsked) || (endSeconds > 0 && startSeconds >= endSeconds);
+
+    // The playback loop: the end of the clip or of its last kept piece, with nothing to go round to.
+    private void EndPlayback()
+    {
+        _playedToTheEnd = true;
+        _isPlaybackActive = false;
+        StopAudioPlayback();
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
+    }
 
     // Playback loop: the frame a paused seek lands on, from the decoder kept between seeks (KeptStillFrames), which a
     // seek a little further on decodes on from instead of opening the file again. Shown even inside the frame throttle.

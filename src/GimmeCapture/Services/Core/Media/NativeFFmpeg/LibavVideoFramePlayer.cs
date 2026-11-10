@@ -640,6 +640,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     /// loop alike. Frames are then shown by <paramref name="soundClock"/> while it plays, at 1×
     /// (<see cref="PlaybackMediaClock"/>), and by a stopwatch otherwise. A file that does not say how long its picture
     /// is, or cannot seek back, cannot be looped that way: it plays to its end once, and the call returns.</para>
+    /// <para>With <paramref name="pieces"/> it plays those one after the other in this one decode, as
+    /// <see cref="RunFrames"/> says; <paramref name="startSeconds"/> and <paramref name="speed"/> are then the first
+    /// piece's.</para>
     /// </summary>
     public async Task PlayFramesAsync(
         string videoPath,
@@ -653,7 +656,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         Action<double>? onDurationKnown = null,
         PlaybackLoop? loopRange = null,
         Func<SoundClockReading>? soundClock = null,
-        Action<PlaybackLoop>? onLoopKnown = null)
+        Action<PlaybackLoop>? onLoopKnown = null,
+        PlaybackPieces? pieces = null,
+        Func<PlaybackPiece, Func<SoundClockReading>?>? onPieceStarts = null)
     {
         await Task.Run(() =>
         {
@@ -811,7 +816,8 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                             Downloaded = swFrame,
                             Bgra = outFrame,
                         },
-                        converter, outputWidth, outputHeight, startSeconds, speed, loop, onFrame, ct, timeline, soundClock);
+                        converter, outputWidth, outputHeight, startSeconds, speed, loop, onFrame, ct, timeline, soundClock,
+                        pieces, onPieceStarts);
                 }
                 finally
                 {
@@ -899,6 +905,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         int hwTransferFailures = 0;
         var playbackClock = Stopwatch.StartNew();
         var frameWaiter = FrameDeadlineWaiter.Create(ct);
+
+        // A piece to the end of the file ends where the picture does: a recording's sound runs on past its last frame.
+        pieces?.EndAtMost(PictureEndSeconds(st, fmt->duration > 0 ? fmt->duration / (double)ffmpeg.AV_TIME_BASE : 0));
 
         // A loop's frames and a preview's pieces are shown by the sound's clock, or a stopwatch; the first frame at once.
         PlaybackMediaClock? mediaClock = timeline != null || pieces != null ? new PlaybackMediaClock(speed) : null;

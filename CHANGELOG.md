@@ -23,6 +23,11 @@
   MP4 and the GIF made from that. On a 34-second 1450x900 recording with a piece cut out, a pinned recording's GIF now
   takes 4.6 s instead of 8.2, and comes out 3.4 MB instead of 4.7, since it no longer picks up one encoder's noise on the
   way. The Compress tab's GIF does the same, unless the source is more than twice the size asked for.
+- **A pinned recording plays through its cuts.** With pieces cut out or set to other speeds, each piece opened the file
+  again: the last frame before a cut stood 190-290 ms, and the sound came up to 110 ms off the picture, by another amount
+  each piece. All the pieces now play in one decode, the picture keeping to each piece's sound: 50-90 ms at a cut, and
+  the sound within 3 ms of the picture.
+- **Play at the end of a clip starts it over.** With Loop off, it showed the last frame again and stopped.
 
 ## v0.75.0 - 2026-11-09
 

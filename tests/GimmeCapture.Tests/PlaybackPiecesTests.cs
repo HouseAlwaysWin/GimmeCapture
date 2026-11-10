@@ -89,4 +89,39 @@ public sealed class PlaybackPiecesTests
         Assert.True(pieces.MoveNext(pieceShowedAFrame: false));
         Assert.Equal(First, pieces.Current);
     }
+
+    [Fact]
+    public void ThePieceUnderWay_EndsWhereThePictureDoes()
+    {
+        // A recording's sound runs on past its last frame, so its length says more than its picture has.
+        var pieces = new PlaybackPieces([new PlaybackPiece(1, 34.6, 1.0)], 0, 1, () => false);
+
+        pieces.EndAtMost(34.27);
+
+        Assert.Equal(34.27, pieces.Current.EndSeconds);
+        Assert.True(pieces.EndsPiece(34.27));
+        Assert.False(pieces.EndsPiece(34.2));
+    }
+
+    [Fact]
+    public void ALaterPiece_EndsWhereThePictureDoes_AndAnEarlierOneIsLeftAlone()
+    {
+        var pieces = new PlaybackPieces([new PlaybackPiece(1, 3, 1.0), new PlaybackPiece(8, 34.6, 1.0)], 0, 1, () => false);
+
+        pieces.EndAtMost(34.27);
+
+        Assert.Equal(3, pieces.Current.EndSeconds);
+        Assert.True(pieces.MoveNext(pieceShowedAFrame: true));
+        Assert.Equal(new PlaybackPiece(8, 34.27, 1.0), pieces.Current);
+    }
+
+    [Fact]
+    public void APictureThatDoesNotSayHowLongItIs_ChangesNothing()
+    {
+        var pieces = new PlaybackPieces([new PlaybackPiece(1, 34.6, 1.0)], 0, 1, () => false);
+
+        pieces.EndAtMost(0);
+
+        Assert.Equal(34.6, pieces.Current.EndSeconds);
+    }
 }

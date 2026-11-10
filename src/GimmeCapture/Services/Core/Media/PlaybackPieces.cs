@@ -15,7 +15,7 @@ internal sealed class PlaybackPieces
     // A frame within half a millisecond of a time counts as at it: the decoder's timestamps are rounded.
     private const double Epsilon = 0.0005;
 
-    private readonly IReadOnlyList<PlaybackPiece> _pieces;
+    private IReadOnlyList<PlaybackPiece> _pieces;
     private readonly Func<bool> _goesRound;
     private int _index;
     private bool _roundIsWhole; // false for the first, which may have begun partway
@@ -35,6 +35,27 @@ internal sealed class PlaybackPieces
 
     /// <summary>The piece under way, starting where it plays from: the first one played may begin partway.</summary>
     public PlaybackPiece Current { get; private set; }
+
+    /// <summary>
+    /// Ends every piece where the picture ends at the latest: past that, a piece would hold its last frame through a sound
+    /// that runs on (0.2-1 s on a recording). A time of 0 means the file did not say, and changes nothing.
+    /// </summary>
+    public void EndAtMost(double pictureEndSeconds)
+    {
+        if (pictureEndSeconds <= 0)
+        {
+            return;
+        }
+
+        var ended = new PlaybackPiece[_pieces.Count];
+        for (int i = 0; i < ended.Length; i++)
+        {
+            ended[i] = _pieces[i] with { EndSeconds = Math.Min(_pieces[i].EndSeconds, pictureEndSeconds) };
+        }
+
+        _pieces = ended;
+        Current = Current with { EndSeconds = Math.Min(Current.EndSeconds, pictureEndSeconds) };
+    }
 
     /// <summary>A frame at or past the end of the piece, which ends the piece instead of being shown.</summary>
     public bool EndsPiece(double frameSeconds) => frameSeconds >= Current.EndSeconds - Epsilon;

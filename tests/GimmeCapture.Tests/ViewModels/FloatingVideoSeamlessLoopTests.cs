@@ -7,7 +7,7 @@ namespace GimmeCapture.Tests.ViewModels;
 
 /// <summary>
 /// Which timelines a video pin loops in one decode, the sound looping in step (<see cref="FloatingVideoViewModel"/>):
-/// the whole clip, or one stretch of it, at 1×. Anything else still plays a pass per piece.
+/// the whole clip, or one stretch of it, at 1×. Anything else is not one loop (FloatingVideoKeptPiecesTests).
 /// </summary>
 public class FloatingVideoSeamlessLoopTests
 {
@@ -41,22 +41,22 @@ public class FloatingVideoSeamlessLoopTests
     }
 
     [Fact]
-    public void PiecesWithAGapBetween_PlayAPassEach()
+    public void PiecesWithAGapBetween_AreNotOneLoop()
     {
         Assert.Null(FloatingVideoViewModel.SeamlessLoopFor([Piece(0, 2), Piece(4, 6)], looping: true, playbackSpeed: 1.0));
     }
 
     [Theory]
     [InlineData(false, 1.0, 1.0)] // not looping: it plays to the end and stops
-    [InlineData(true, 1.5, 1.0)]  // the speed button: the sound is retimed, pass by pass
+    [InlineData(true, 1.5, 1.0)]  // the speed button: the sound is retimed
     [InlineData(true, 1.0, 2.0)]  // a piece's own speed
-    public void OtherSpeedsAndNoLoop_PlayPassByPass(bool looping, double playbackSpeed, double pieceSpeed)
+    public void OtherSpeedsAndNoLoop_AreNotOneLoop(bool looping, double playbackSpeed, double pieceSpeed)
     {
         Assert.Null(FloatingVideoViewModel.SeamlessLoopFor([Piece(0, 6, speed: pieceSpeed)], looping, playbackSpeed));
     }
 
     [Fact]
-    public void AStretchOfAFrameOrTwo_PlaysPassByPass()
+    public void AStretchOfAFrameOrTwo_IsNotALoop()
     {
         Assert.Null(FloatingVideoViewModel.SeamlessLoopFor([Piece(1.0, 1.03)], looping: true, playbackSpeed: 1.0));
     }

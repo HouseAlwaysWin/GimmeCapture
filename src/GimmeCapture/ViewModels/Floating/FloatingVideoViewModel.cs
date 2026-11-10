@@ -135,6 +135,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public bool IsPlaying => _isPlaybackActive;
     private bool _isPlaybackActive = true;
 
+    // The playback reached its end by itself, with Loop off: the playback loop sets it, the next start takes it.
+    private volatile bool _playedToTheEnd;
+
     private bool _isLooping = true;
     public bool IsLooping
     {

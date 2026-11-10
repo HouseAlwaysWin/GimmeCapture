@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
@@ -10,8 +11,8 @@ namespace GimmeCapture.ViewModels.Floating;
 // A plain pin's loop in one decode. Played pass by pass, every pass opened the file, the decoder, its GPU device and the
 // sound again: the picture stood still 70-120 ms at each loop, and the sound, started anew each time, began a different
 // 30-150 ms off the picture every pass. Now the file stays open across each jump back, the sound loops in step without
-// being reopened, and the picture keeps to the sound's clock. Edited timelines with several pieces or other speeds
-// still play a pass per piece.
+// being reopened, and the picture keeps to the sound's clock. Timelines with pieces cut out or at other speeds play in one
+// decode as well (FloatingVideoViewModel.KeptPieces.cs).
 public partial class FloatingVideoViewModel
 {
     // The loop being played that way, while one is: any thread reads it, the playback loop sets it.
@@ -71,7 +72,7 @@ public partial class FloatingVideoViewModel
     // as the sound must begin where the picture is. False when no such loop plays, for the pass-by-pass handling.
     private bool OnMutedChangedInSeamlessLoop()
     {
-        if (ActiveSeamlessLoop() is null)
+        if (ActiveSeamlessLoop() is null && ActivePiecesRun() is null)
         {
             return false;
         }
@@ -95,6 +96,15 @@ public partial class FloatingVideoViewModel
         if (!IsLooping && ActiveSeamlessLoop() is not null)
         {
             StartPlayback();
+            return;
+        }
+
+        // Turned on, what can loop without being opened again does so from here.
+        if (IsLooping
+            && ActivePiecesRun() is not null
+            && SeamlessLoopFor(_keptForPlayback.Kept, IsLooping, _playbackSpeed) is not null)
+        {
+            StartPlayback();
         }
     }
 
@@ -103,6 +113,13 @@ public partial class FloatingVideoViewModel
     {
         if (ActiveSeamlessLoop() is { } running
             && !IsSameLoop(running, SeamlessLoopFor(_keptForPlayback.Kept, IsLooping, _playbackSpeed)))
+        {
+            StartPlayback();
+            return;
+        }
+
+        if (ActivePiecesRun() is { } playing
+            && !playing.Runs.SequenceEqual(VideoSegmentEditor.CoalesceContiguous(_keptForPlayback.Kept)))
         {
             StartPlayback();
         }

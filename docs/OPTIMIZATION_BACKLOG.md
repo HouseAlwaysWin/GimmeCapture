@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.75.0, `## Unreleased` holds 3 entries (2026-11-10).
+- Since v0.75.0, `## Unreleased` holds 5 entries (2026-11-10).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+84937434`, installed by hand late on 2026-11-09 over
   `0.74.0+7b98611c` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1425,6 +1425,27 @@ tool.
   coming off before the compressed frame (opt-in COMPARE_SEEK_PROBE=1). Left: in the first window of a playback, the one
   that starts partway, the compressed side runs 1-2 frames behind the original; it is 0 from the second window on. Space
   and the arrows do nothing in the compare (`TakesTransportKeys`), and Space closes it only with the toggle focused by Tab.
+- Done since batch 1 (2026-11-10, "繼續優化"): **a pin's cut timeline in one decode** (Pins). The user records, pins and
+  cuts, and a timeline with pieces dropped or at other speeds played a pass per piece, each opening the file, its decoder
+  and its GPU device and starting the sound on its own. `FloatingVideoViewModel.KeptPieces.cs` plays them through
+  `PlayFramesAsync(pieces:, onPieceStarts:)`, the editor's `RunFrames` path, each piece's sound started as the decode
+  reaches it and the picture keeping to it at 1×. On the user's recordings, volume 0, ABBA inside one build, frame times
+  taken on the decode thread: 1450x900 HEVC (a keyframe every 2 s) the last frame before a cut held 179-226 ms, median
+  189, and now 83-135, median 87; 1134x624 H.264 151-322, median 284-289, and now 41-70, median 47-50 (a frame lasts 33).
+  Sound minus picture was -29..+14 ms and -111..+65, another amount each piece, and is +2..+3 ms now on both. What is left
+  at a cut is the decode from the keyframe before it (about 1.5 ms a frame). Walked through the real view model with
+  headless Avalonia (`PinCutPlaybackProbeTests`, not committed): no frame from a cut, mute (the picture goes on, no sound
+  at the next piece), unmute (starts again from the playhead with sound), pause and resume, a seek into a cut and past
+  the last piece, a piece dropped while it plays (`OnKeptPiecesChanged` restarts from the playhead), the speed button,
+  pieces at 2× and 0.5×, Loop off in the last piece, Loop on with one stretch left (the seamless loop takes over). A
+  piece to the end of the file now ends where the picture does (`PlaybackPieces.EndAtMost`, in `RunFrames`, so the editor
+  gets it too): a recording's sound runs on 0.2-1 s and the last frame would hold through it. A file that cannot go on
+  in one decode falls back to the passes. Found on the way: with Loop off, Play at the end showed the last frame and
+  stopped, a clip with no timeline as well (`StartsOver`). Left: at a cut the sound stops and starts again (a device open,
+  30-150 ms); a sound stitched across the pieces, as `LoopingWaveProvider` does for a loop, would leave no gap, and the
+  picture would have to catch up the 50 ms it holds. Real speakers not checked. OCR's load and unload were ruled out as
+  a leak first (40 cycles in a test host, Windows heaps flat at 46-53 MB committed; the 2-5 MB a capture in the log is
+  elsewhere).
 - Done since batch 1 (2026-11-10, "拉最新後再繼續優化"): **what an export holds, checked against the clip itself**
   (Compress and the editor). The real `CompressPipeline.EncodeOneFileAsync` on the 4K clip with frame marks, flashes and
   beeps in twelve shapes (whole at a CRF and at a target size, trimmed, one and six cuts, three speeds, turned, H.265, AV1,
@@ -1868,12 +1889,12 @@ are in the assistant's memory note "integrating-parallel-agent-worktrees".
 
 ### Pins
 
-- **A video pin still reopens at every seek, and a cut timeline at every piece** (M). The loop of a plain or trimmed
-  pin at 1× plays in one decode with its sound in step (Status); a seek, pause/resume, unmute or speed change still
+- **A video pin still reopens at every seek** (M). The loop of a plain or trimmed pin at 1× and a timeline with cuts or
+  speeds play in one decode with their sound in step (Status); a seek, pause/resume, unmute or speed change still
   starts a new `PlayFramesAsync` (68-123 ms to the first frame with D3D11VA on the user's recordings, measured
-  2026-11-03, 13-44 on the CPU), and so does every piece of a timeline with cuts or speeds, whose sound restarts per
-  piece. Seeking inside the kept decode would need the sound clock's ticket to change mid-run
-  (`PlaybackMediaClock` follows one). A paused pin's seeks keep a decoder now (Status).
+  2026-11-03, 13-44 on the CPU). Seeking inside the kept decode would need the sound clock's ticket to change mid-run
+  (`PlaybackMediaClock` follows one); the editor's `LibavStillFrameDecoder.PlayPiecesAsync` plays from the decoder its
+  paused frames come from. A paused pin's seeks keep a decoder now (Status). At a cut the sound still restarts.
 - **Each copy from a pin writes a `GimmeCapture_Copy_*` folder** (S, disk), swept only at start-up after 12 h, each
   holding the copy's file (1 MB for a 4K picture of colour blocks as a fast PNG; not measured for photos). Deleting the
   last one at the next copy would break a paste of the older file from Win+V's history. The rest of that item is done
