@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.75.0, `## Unreleased` holds 5 entries (2026-11-10).
+- Since v0.75.0, `## Unreleased` holds 6 entries (2026-11-10).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+84937434`, installed by hand late on 2026-11-09 over
   `0.74.0+7b98611c` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1496,6 +1496,13 @@ tool.
   reads with every row and picture there at once; the file is 168 KB. A file that cannot be opened is tried again each
   run, as before. What moved: with nothing reading those files at the first open, the OS no longer has them cached
   when the editor opens one. `CompressProbeCacheTests`, two cases in `CompressFirstOpenTests`.
+- Checked 2026-11-10 ("先pull最新,再繼續優化"), nothing more to take from the log in video editing: over the week's 32
+  runs there is no compress run, the window and the editor opened with no stall over 0.35 s, and the only error was a
+  zero-byte `.mp4` in the folder, which had a row that did nothing (fixed). An encode decodes in software on frame and
+  slice threads and leaves the encoder's threads to it; on this 16-thread processor x265 is the bottleneck, so what
+  would change the time is a hardware encoder, which trades file size and is the user's call. The chunks and the
+  staged output are written under the app's root on C: and the result copied to the output's drive: about twice the
+  output's size for as long as that file takes, against an encode many times longer than the copy.
 
 ## Next session: what the app itself holds (left off 2026-10-30)
 

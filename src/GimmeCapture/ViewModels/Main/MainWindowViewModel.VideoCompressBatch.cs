@@ -693,6 +693,7 @@ public partial class MainWindowViewModel
         try
         {
             LibavVideoFramePlayer.BgraThumbnail? thumbnail = null;
+            bool unreadable = false;
             try
             {
                 using var probe = new LibavVideoFramePlayer();
@@ -710,11 +711,18 @@ public partial class MainWindowViewModel
             catch (Exception ex)
             {
                 AppLog.Error("Compress.ProbeQueueItem", ex);
+                unreadable = true;
             }
 
             if (queueToken.IsCancellationRequested)
             {
                 return; // the queue was cleared while probing: the item is gone
+            }
+
+            // Its row says so: it looked ready, while its Edit did nothing for want of a length and it failed when started.
+            if (unreadable && item.Status == CompressQueueStatus.Queued)
+            {
+                item.Status = CompressQueueStatus.Failed;
             }
 
             item.RaiseEditSummary(); // ProbedDuration now known → the edit summary reflects the real length
@@ -763,13 +771,12 @@ public partial class MainWindowViewModel
             if (Directory.Exists(path))
             {
                 return new DirectoryInfo(path).EnumerateFiles("*.*", SearchOption.TopDirectoryOnly)
-                    .Where(file => IsVideoFile(file.Name))
+                    .Where(file => file.Length > 0 && IsVideoFile(file.Name)) // an empty file is no video, whatever its name
                     .Select(file => new QueuedVideo(file.FullName, file.Length, file.LastWriteTimeUtc));
             }
 
-            if (File.Exists(path) && IsVideoFile(path))
+            if (File.Exists(path) && IsVideoFile(path) && new FileInfo(path) is { Length: > 0 } file)
             {
-                var file = new FileInfo(path);
                 return new[] { new QueuedVideo(path, file.Length, file.LastWriteTimeUtc) };
             }
         }

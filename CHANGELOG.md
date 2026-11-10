@@ -13,6 +13,8 @@
 
 ### 🎬 Video editing
 
+- **A video that cannot be read says so in the queue.** Its row looked ready, while its Edit button did nothing and it
+  failed only once started. An empty file no longer gets a row at all.
 - **An exported video's sound now comes with its picture to the millisecond.** Every export with AAC sound started that
   sound 21 ms late: the encoder writes 21 ms of priming ahead of the sound itself, which a file is meant to skip and these
   played. On a clip with a flash and a beep each second, in every way of exporting it (whole, trimmed, cut, turned, at
