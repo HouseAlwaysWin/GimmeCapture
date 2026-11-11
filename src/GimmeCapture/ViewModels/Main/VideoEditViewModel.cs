@@ -45,6 +45,10 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     // already decoded over the one a seek shows.
     private int _playGeneration;
 
+    // The playback whose sound runs through all its pieces as one (SoundAcrossPieces), laid out as it started: the
+    // generation it has, or 0. Unmuting it, or switching Loop, starts it again from where it is.
+    private int _oneSoundGeneration;
+
     // Playback hands its newest decoded frame to the UI thread here; the UI thread draws it into _frameBitmap, the one
     // bitmap Frame shows once a frame is decoded, reused while the frame size holds (see VideoFrameBitmap).
     private readonly LatestFrameSlot _playedFrames = new();
@@ -595,6 +599,8 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         var pieces = new PlaybackPieces(
             runs.Select(r => new PlaybackPiece(r.SourceStart, r.SourceEnd, (r.Speed > 0 ? r.Speed : 1.0) * _playbackSpeed)).ToArray(),
             startIdx, startWithin, () => IsLooping);
+        bool oneSound = pieces.AreAllAtTheFilesSpeed;
+        _oneSoundGeneration = oneSound ? gen : 0;
 
         _ = Task.Run(async () =>
         {
@@ -612,17 +618,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
                         }
                     },
                     ct,
-                    piece =>
-                    {
-                        // (Re)start preview audio at this piece's start, retimed to its effective speed.
-                        if (IsMuted)
-                        {
-                            return null;
-                        }
-
-                        long ticket = _audioPreview.Start(_sourcePath, piece.StartSeconds, piece.Speed);
-                        return () => _audioPreview.ReadClock(ticket);
-                    });
+                    SoundForPieces(pieces, oneSound, ct));
             }
             catch (OperationCanceledException) { /* paused */ }
             catch (Exception ex) { AppLog.Error("Compress.EditPlay", ex); }
@@ -639,6 +635,57 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         }, ct);
 
         return Task.CompletedTask;
+    }
+
+    // The decode thread's handler as it reaches each piece. At the speed of the file one sound plays straight through the
+    // cuts, as a pinned recording's does; started anew at each piece, it stopped at every cut for as long as its file and
+    // output device took to open. Pieces at other speeds have a sound each, retimed to its speed.
+    private Func<PlaybackPiece, Func<SoundClockReading>?> SoundForPieces(PlaybackPieces pieces, bool oneSound, CancellationToken ct)
+    {
+        if (oneSound)
+        {
+            return new SoundAcrossPieces(
+                () => StartedUnlessPaused(() => _audioPreview.Start(_sourcePath, pieces.ForOneSound(IsLooping)), ct),
+                ticket => _audioPreview.ReadClock(ticket)).OnPieceStarts;
+        }
+
+        return piece =>
+        {
+            long ticket = StartedUnlessPaused(() => _audioPreview.Start(_sourcePath, piece.StartSeconds, piece.Speed), ct);
+            return ticket == 0 ? null : () => _audioPreview.ReadClock(ticket);
+        };
+    }
+
+    // A sound for the playback `ct` belongs to, or 0: none while muted, and none once paused, a pause between the check
+    // and the start having stopped the sound ahead of this one.
+    private long StartedUnlessPaused(Func<long> start, CancellationToken ct)
+    {
+        if (IsMuted || ct.IsCancellationRequested)
+        {
+            return 0;
+        }
+
+        long ticket = start();
+        if (ct.IsCancellationRequested)
+        {
+            _audioPreview.Stop();
+            return 0;
+        }
+
+        return ticket;
+    }
+
+    // UI thread: one sound through the pieces was laid out as the playback started, for Loop as it was and with the
+    // sound on; changing either starts the playback again from where it is.
+    private bool RestartedForOneSound()
+    {
+        if (!IsPlaying || _oneSoundGeneration == 0 || _oneSoundGeneration != _playGeneration)
+        {
+            return false;
+        }
+
+        _ = PlayAsync();
+        return true;
     }
 
     private void Pause()

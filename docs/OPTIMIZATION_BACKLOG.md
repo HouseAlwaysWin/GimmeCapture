@@ -19,7 +19,7 @@ tool.
   starts over, and the CHANGELOG has none until the next change adds it. A tag pushed by hand fails
   `verify-release-metadata`: v0.71.0's first one did, on 2026-11-02, and was deleted, as nothing had been published
   under it.
-- Since v0.75.0, `## Unreleased` holds 7 entries (2026-11-10).
+- Since v0.75.0, `## Unreleased` holds the entries of 2026-11-10 and -11 (see CHANGELOG.md).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
   backlog's sign-in figures come from) runs `0.74.0+84937434`, installed by hand late on 2026-11-09 over
   `0.74.0+7b98611c` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
@@ -1425,6 +1425,20 @@ tool.
   coming off before the compressed frame (opt-in COMPARE_SEEK_PROBE=1). Left: in the first window of a playback, the one
   that starts partway, the compressed side runs 1-2 frames behind the original; it is 0 from the second window on. Space
   and the arrows do nothing in the compare (`TakesTransportKeys`), and Space closes it only with the toggle focused by Tab.
+- Measured 2026-11-11 ("繼續優化"), nothing changed: **what the idle app holds on the GPU** (Idle, start-up and memory).
+  The user's log: 80 MB at a launch to the tray, 287 MB by noon, 324 after a scrolling capture's pin, 354 after a
+  recording's pin, 370 by evening (`MemoryTrim.After`). In a test host on the real platform, a pin of a 1282x6000
+  picture off screen, GPU against software: the host alone 109 MB against 49; the first pin closed left 203-211 against
+  45-52, later ones nothing more (207-222), and about 20 more went by itself 10 s on. So a high-water mark of the GPU
+  path, not a leak: Windows heaps 49 -> 72-88 MB committed (in use 46 -> 57-76), other private memory 27 -> 90-100.
+  Skia's GPU cache held 15.9 MB of its 28, and purging it changed nothing; `IDXGIDevice3::Trim` on ANGLE's device (from
+  the compositor's `EglContext`: `QueryDisplayAttribExt(EGL_DEVICE_EXT)`, `QueryDeviceAttribExt(EGL_D3D11_DEVICE_ANGLE)`)
+  ran and changed nothing; marking the context lost (`EglContext.NotifyContextLost`) grew the heaps by 25-45 MB a time
+  until the old devices went, 10 s on (147 MB). Left: software rendering stays the way to hold less. Also measured and
+  left: a warm-up of OCR while idle after a start (load, one detection on a blank screen, unload) changed the next first
+  scan by 0-50 ms in fresh processes (load 181-231 ms against 224-251, detection the same), for 12-15 MB; the slower
+  first scan in the app comes with the overlay's own first open. And one recording start's `systemAudio=443` (the first
+  after the restart into the elevated copy, 2026-11-11 09:29; 25-53 everywhere else), not seen again.
 - Done since batch 1 (2026-11-10, "繼續優化"): **a pin's cut timeline in one decode** (Pins). The user records, pins and
   cuts, and a timeline with pieces dropped or at other speeds played a pass per piece, each opening the file, its decoder
   and its GPU device and starting the sound on its own. `FloatingVideoViewModel.KeptPieces.cs` plays them through
@@ -1448,8 +1462,10 @@ tool.
   (`SoundAcrossPieces`). The picture still holds 86-124 ms at a cut on that recording, and catches up the sound in two or
   three frames (4-10 ms each): sound minus picture +2..+4 ms round after round, including a piece that ends past the
   picture (34.23 s of 34.62). Pieces at other speeds keep a sound each. Going round is fixed when the sound starts, as it
-  is decoded ahead, so a change to Loop starts the playback again from the playhead. The editor's preview still restarts
-  its sound at each piece. Real speakers not checked. OCR's load and unload were ruled out as a leak first (40 cycles in
+  is decoded ahead, so a change to Loop starts the playback again from the playhead. Real speakers not checked. The
+  editor's preview does the same since 2026-11-11 (`VideoEditViewModel.SoundForPieces`): on the 1450x900 recording with
+  two cuts, two looped rounds on one sound, 87-132 ms held at a cut, the sound going on; unmuting or switching Loop while
+  it plays starts it again from the position (`RestartedForOneSound`), as one sound was laid out for them. OCR's load and unload were ruled out as a leak first (40 cycles in
   a test host, Windows heaps flat at 46-53 MB committed; the 2-5 MB a capture in the log is elsewhere).
 - Done since batch 1 (2026-11-10, "拉最新後再繼續優化"): **what an export holds, checked against the clip itself**
   (Compress and the editor). The real `CompressPipeline.EncodeOneFileAsync` on the 4K clip with frame marks, flashes and

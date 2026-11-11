@@ -155,12 +155,28 @@ internal sealed partial class VideoEditViewModel
         set
         {
             this.RaiseAndSetIfChanged(ref _isMuted, value);
-            UpdateAudioForPlayback();
+            if (value || !RestartedForOneSound())
+            {
+                UpdateAudioForPlayback();
+            }
         }
     }
 
     private bool _isLooping;
-    public bool IsLooping { get => _isLooping; set => this.RaiseAndSetIfChanged(ref _isLooping, value); }
+    public bool IsLooping
+    {
+        get => _isLooping;
+        set
+        {
+            if (_isLooping == value)
+            {
+                return;
+            }
+
+            this.RaiseAndSetIfChanged(ref _isLooping, value);
+            RestartedForOneSound();
+        }
+    }
 
     private double _previewVolume = 1.0;
     /// <summary>Preview playback volume (0–1). Preview-only — does not change the encoded output.</summary>

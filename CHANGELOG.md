@@ -36,6 +36,9 @@
   again: the last frame before a cut stood 190-290 ms, the sound stopped for about 100 ms, and it came up to 110 ms off
   the picture, by another amount each piece. All the pieces now play in one decode: 50-90 ms at a cut. At normal speed
   one sound runs straight through the cuts and round the loop, with no gap, and the picture stays within 4 ms of it.
+- **The video editor's preview keeps its sound through the cuts too.** It started the sound again at every piece, which
+  left a gap of about 100 ms at each cut. Turning the sound back on, or Loop on or off, while it plays now picks up from
+  where it is.
 - **Play at the end of a clip starts it over.** With Loop off, it showed the last frame again and stopped.
 
 ### 🛡️ Reliability
