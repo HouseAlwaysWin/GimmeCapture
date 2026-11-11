@@ -41,6 +41,14 @@
   where it is.
 - **Play at the end of a clip starts it over.** With Loop off, it showed the last frame again and stopped.
 
+### ⚡ Performance
+
+- **Opening the app's window no longer undoes the sign-in's read-ahead of its idle warm-up.** Since v0.75.0 a start
+  to the tray adds the files the capture overlay's warm-up loads to its start-up list, but a start with the window
+  wrote that list again without them, and the next sign-in read them from the hard disk in the middle of the warm-up.
+  Here a window start came between every two sign-ins, and each sign-in's warm-up took 0.4-0.8 s against 0.13 s
+  otherwise. A start with the window now adds them too.
+
 ### 🛡️ Reliability
 
 - **Reset Defaults asks first.** One click on the button beside Video Editing reset the settings, and nothing undoes

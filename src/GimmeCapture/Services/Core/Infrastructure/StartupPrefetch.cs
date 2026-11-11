@@ -135,10 +135,12 @@ internal static class StartupPrefetch
     }
 
     /// <summary>
-    /// After the idle warm-up of a start to the tray (<c>SnipWindowFactory.ScheduleWarmUp</c>): adds the files the app
-    /// has loaded since <see cref="Record"/> to the list it wrote, so the next sign-in's launcher reads them with the rest.
+    /// After the idle warm-up of a start (<c>SnipWindowFactory.ScheduleWarmUp</c>): adds the files the app has loaded
+    /// since <see cref="Record"/> to the list it wrote, so the next sign-in's launcher reads them with the rest.
     /// At the 2026-11-06 sign-in the warm-up, 11 s in, held the UI thread for 637 ms, 2% of it on the CPU and 1,343 page
-    /// faults, loading HarfBuzz, Avalonia.Markup and UI Automation's files, which no start-up read had read.
+    /// faults, loading HarfBuzz, Avalonia.Markup and UI Automation's files, which no start-up read had read. Only a start
+    /// to the tray did this at first, and a start with the window between two sign-ins wrote the list without them: the
+    /// sign-ins of 2026-11-07, -09 and -11 each added the same four files again, after warm-ups of 408-804 ms.
     /// </summary>
     internal static void RecordWarmUp()
     {

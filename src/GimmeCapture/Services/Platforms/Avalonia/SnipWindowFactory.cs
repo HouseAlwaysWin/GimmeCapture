@@ -304,18 +304,17 @@ public sealed class SnipWindowFactory : ISnipWindowFactory, IDisposable
                 WarmUpOverlay();
                 // Then the first capture's own window, unseen, so that it too skips the build.
                 _preparedWindow.PrepareSoon();
-                // At sign-in the warm-up waited on the hard disk for files no start-up read had read: a start to the tray
-                // adds what it loaded to the start-up list, unless a real overlay opened meanwhile and loaded its own.
-                if (StartupTrace.IsTrayLaunch)
+                // At sign-in the warm-up waited on the hard disk for files no start-up read had read: a start adds what it
+                // loaded to the start-up list, unless a real overlay opened meanwhile and loaded its own. A start with the
+                // window too, whose list the next sign-in reads: it wrote the list without them, and every sign-in after
+                // one loaded them again in its warm-up.
+                DispatcherTimer.RunOnce(() =>
                 {
-                    DispatcherTimer.RunOnce(() =>
+                    if (!_openedOnce)
                     {
-                        if (!_openedOnce)
-                        {
-                            _ = System.Threading.Tasks.Task.Run(StartupPrefetch.RecordWarmUp);
-                        }
-                    }, WarmUpRecordDelay, DispatcherPriority.Background);
-                }
+                        _ = System.Threading.Tasks.Task.Run(StartupPrefetch.RecordWarmUp);
+                    }
+                }, WarmUpRecordDelay, DispatcherPriority.Background);
             }
 
             if (mainViewModel is MainWindowViewModel vm)

@@ -21,8 +21,9 @@ tool.
   under it.
 - Since v0.75.0, `## Unreleased` holds the entries of 2026-11-10 and -11 (see CHANGELOG.md).
 - The installed copy on the user's desktop (`D:\GimmeCapture_win-x64`, instance `b0337ff88a000ffc`, the machine this
-  backlog's sign-in figures come from) runs `0.74.0+84937434`, installed by hand late on 2026-11-09 over
-  `0.74.0+7b98611c` (by hand, that evening), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
+  backlog's sign-in figures come from) runs `0.75.0+b141bdc6`, installed by hand on 2026-11-10 over
+  `0.75.0+41b0b74f` (by hand, that evening, the first build of 0.75.0 there: `versions\0.74.0\config.json` carried to
+  `versions\0.75.0` by hand, as the updater would), started at sign-in by the launcher its Run value names. It draws on the CPU: its config has
   `SoftwareRendering` true since 2026-11-05 20:16, and every start since logs `Startup.Renderer: software`.
 - Done since batch 1: **first recording of a run starts slowly**. Every start now logs `Recording.StartTimings`, which
   showed where the time went (`RecordingAvSyncTests` probe, three fresh processes each): FFmpeg 46-49 ms and an NVENC
@@ -1230,7 +1231,19 @@ tool.
   ms` right after), so those were not its cause. Its clock starts at `UiThreadStallMonitor.Start`, and the stages known
   to be in it come to about 170 ms. `Startup.AfterHotkeys` now splits the rest (`activation icon trayIcon menu
   trayAttached init hostShown firstPump`, each wall/cpu): read it at the next cold start before changing anything. Only
-  a hotkey pressed in those seconds waits for it.
+  a hotkey pressed in those seconds waits for it. The next cold start, the sign-in of 2026-11-11 at 20:33 on b141bdc6,
+  had none: `launcher=10138ms/87MB beforeMain=2459/62 hotkeysAt=803 systemCpu=62% hardFaults=308/20500` (13.4 s from
+  the launcher's start to the hotkeys, its read at 8.6 MB/s on a busy disk), then 372 ms at 71% of a processor and
+  `Startup.AfterHotkeys: activation=2 icon=8 trayIcon=3 menu=9 trayAttached=12 init=3 hostShown=42 firstPump=27`
+  (wall ms). Nothing to change until the stall comes back; the split will then say where it is.
+- Done since batch 1 (2026-11-11, "先pull最新後再優化"): **every sign-in loaded the overlay warm-up's files from the
+  disk again** (Idle, start-up and memory). A start to the tray adds what its warm-up loaded to the start-up list
+  (`StartupPrefetch.RecordWarmUp`), but a start with the window wrote the list at its timings line without them, and
+  a window start came between every two sign-ins. The sign-ins of 2026-11-07, -09 and -11 each logged
+  `StartupPrefetch.WarmUp: the start-up list gained 4 files, 0.5 MB` (System.Runtime.Intrinsics, Avalonia.Markup,
+  System.Diagnostics.TraceSource, Avalonia.Win32.Automation) after a warm-up of 408, 524 and 804 ms (`build` + `bind`),
+  against 120-140 ms at window starts. A start with the window now adds them as well. Next: the first sign-in after a
+  window start, with no `gained` line and the warm-up's `build` + `bind`.
 - Seen 2026-11-07 18:32, not acted on: an overlay took 1227 ms to open (`services=509 viewModel=493`, the UI thread
   blocked at 5%, 13,174 page faults, a 345 ms gen2 GC), and the keyboard hook had got the key 171 ms late
   (`Hotkey.HookLate`): the whole machine was slow then, not the overlay's own work (61-117 ms at other opens that day).
